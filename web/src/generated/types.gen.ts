@@ -9820,6 +9820,8 @@ export type GetApiFfmpegSettingsResponses = {
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
         hdhrClosedCaptions: boolean;
+        hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionBackground: 'player' | 'semiTransparent' | 'transparent';
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9871,6 +9873,8 @@ export type PostApiFfmpegSettingsResponses = {
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
         hdhrClosedCaptions: boolean;
+        hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionBackground: 'player' | 'semiTransparent' | 'transparent';
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9901,6 +9905,8 @@ export type PutApiFfmpegSettingsData = {
         hlsInitialSegmentCount?: number;
         hlsTsInitialBurstSeconds?: number;
         hdhrClosedCaptions?: boolean;
+        hdhrCaptionAlignment?: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionBackground?: 'player' | 'semiTransparent' | 'transparent';
         enableSubtitleExtraction?: boolean;
     };
     path?: never;
@@ -9948,6 +9954,8 @@ export type PutApiFfmpegSettingsResponses = {
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
         hdhrClosedCaptions: boolean;
+        hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionBackground: 'player' | 'semiTransparent' | 'transparent';
         enableSubtitleExtraction: boolean;
     };
 };

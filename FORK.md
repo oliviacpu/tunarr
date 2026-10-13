@@ -34,6 +34,36 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Closed captions keep italics, underline and top placement, with a choice of alignment (2026-10-13)
+
+- **What you saw:** captions dropped the subtitle file's italics (off-screen voices, narration, songs) and its
+  top-of-screen placement, and every caption was block-centred at the bottom.
+- **Cause:** `layoutCaption` in `server/src/stream/captions/Cea608Encoder.ts` stripped every tag, and `loadSequence`
+  always used rows 14–15 with one shared indent.
+- **Fix:**
+  - **Styles:** cues are parsed into styled characters. `<i>`, `<u>`, ASS `{\i1}`, `{\u1}` and `{\r}` become 608
+    mid-row codes. A change at a space takes the space's column; one inside a word takes its own. Punctuation right
+    after a styled word keeps its style, so `<i>Hello</i>,` opens no gap. Width counts the codes when wrapping.
+  - **Placement:** `{\an7}`–`{\an9}` (or SSA `{\a5}`–`{\a7}`) put the whole cue on rows 1–2. Every part of a long top
+    cue stays at the top.
+  - **Alignment:** a new FFmpeg setting, **Caption Alignment** (`hdhrCaptionAlignment`): centred block (the default,
+    unchanged), each line centred (preamble indent plus Tab Offset 1–3 for exact columns), or left.
+  - **Background (experimental, no UI):** `hdhrCaptionBackground` = `player` (default, sends nothing),
+    `semiTransparent` (black semi-transparent attribute, `0x10 0x2f`) or `transparent` (`0x17 0x2d`). Each line
+    starts with a space and then the attribute. Set it through `PUT /api/ffmpeg-settings` to test a player.
+  - **Plumbing:** `HlsSession.addCaptions` reads both settings per program, so a change applies from the next
+    program.
+- **What the player decides:** text size, font and background opacity have no 608 codes. Native Apple TV playback
+  follows tvOS's caption style. When Plex burns captions in for a device, it decodes the 608 itself
+  (`inlineass=…:atsc_cc=1`) and applies its own style (Noto Sans, outline, shadow).
+- **Checked:** with ffmpeg's own 608 decoder (jellyfin-ffmpeg 8.1.3), which Plex's burn-in shares a lineage with,
+  italics and underline come out as `{\i1}`/`{\u1}`. The top cue comes out at the top (`\pos(…,28)` against 228/243
+  at the bottom), and each centred line gets its own leading spaces. The background attribute only shifts the line
+  by one column there: ffmpeg maps background codes to an outline colour and ignores transparent. Tests:
+  `Cea608Encoder.test.ts` (with a small decoder for rows, columns and styles), `CaptionInsertion.local.test.ts`
+  (the ffmpeg round trip), `ProgramCaptions.test.ts`.
+- **Upstream:** not sent.
+
 ### Music rescans only save tracks that changed, and mark removed tracks missing (2026-10-13)
 
 - **What you saw:** every rescan of a music library took as long as the first scan (about 45 minutes for 7,000 Plex

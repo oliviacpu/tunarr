@@ -24,8 +24,12 @@ import type {
   TupleToUnion,
 } from '@tunarr/types';
 import { defaultFfmpegSettings } from '@tunarr/types';
-import type { TonemapAlgorithm } from '@tunarr/types/schemas';
-import { FfmpegLogLevels, TonemapAlgorithms } from '@tunarr/types/schemas';
+import type { CaptionAlignment, TonemapAlgorithm } from '@tunarr/types/schemas';
+import {
+  CaptionAlignments,
+  FfmpegLogLevels,
+  TonemapAlgorithms,
+} from '@tunarr/types/schemas';
 import { capitalize, isEmpty, isEqual, isNull, map, some } from 'lodash-es';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
@@ -92,6 +96,13 @@ export default function FfmpegSettingsPage() {
     'enableLogging',
     'enableFileLogging',
   ]);
+  const hdhrClosedCaptions = watch('hdhrClosedCaptions');
+
+  const captionAlignmentNames: Record<CaptionAlignment, string> = {
+    centeredBlock: t`Centered block (lines start in the same column)`,
+    centeredLines: t`Each line centered`,
+    left: t`Left`,
+  };
 
   let logSelectValue: FfmpegLogOptions = 'disable';
   if (ffmpegFileLoggingEnabled) {
@@ -465,6 +476,39 @@ export default function FfmpegSettingsPage() {
                 subtitles. Forced and image-based subtitles stay burned in.
                 Applies to channels in the HLS stream mode with subtitles
                 enabled, from the next program.
+              </Trans>
+            </FormHelperText>
+          </FormControl>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel id="hdhr-caption-alignment-label">
+              <Trans>Caption Alignment</Trans>
+            </InputLabel>
+            <Controller
+              control={control}
+              name="hdhrCaptionAlignment"
+              render={({ field }) => (
+                <Select
+                  id="hdhr-caption-alignment"
+                  label={t`Caption Alignment`}
+                  labelId="hdhr-caption-alignment-label"
+                  {...field}
+                  disabled={!hdhrClosedCaptions}
+                >
+                  {map(CaptionAlignments, (alignment) => (
+                    <MenuItem key={alignment} value={alignment}>
+                      {captionAlignmentNames[alignment]}
+                    </MenuItem>
+                  ))}
+                </Select>
+              )}
+            />
+            <FormHelperText>
+              <Trans>
+                Where closed caption lines sit across the screen. Italics,
+                underline and top-of-screen placement follow the subtitle file.
+                Text size, font and background are up to the player: on Apple
+                TV, under Settings, Accessibility, Subtitles and Captioning,
+                Style. Takes effect from the next program.
               </Trans>
             </FormHelperText>
           </FormControl>

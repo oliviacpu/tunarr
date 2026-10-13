@@ -4,6 +4,7 @@ import type { OutputFormat } from '@/ffmpeg/builder/constants.js';
 import type { OnDemandChannelService } from '@/services/OnDemandChannelService.js';
 import type { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StreamProgramCalculator } from '@/stream/StreamProgramCalculator.js';
+import { defaultFfmpegSettings } from '@tunarr/types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import tmp from 'tmp';
@@ -62,7 +63,7 @@ function makeSession(
     channel,
     options,
     {} as StreamProgramCalculator,
-    {} as ISettingsDB,
+    { ffmpegSettings: () => defaultFfmpegSettings } as unknown as ISettingsDB,
     {} as OnDemandChannelService,
     (() => ({}) as unknown as ProgramStream) as (
       ctx: PlayerContext,

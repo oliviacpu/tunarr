@@ -70,6 +70,14 @@ describe('parseSubtitleCues', () => {
     ]);
   });
 
+  test('keeps the formatting tags the caption encoder reads', () => {
+    const srt = '1\n00:00:01,000 --> 00:00:02,000\n{\\an8}<i>Up here</i>\n';
+
+    expect(parseSubtitleCues(srt, 'subrip')).toEqual([
+      { startMs: 1000, endMs: 2000, text: '{\\an8}<i>Up here</i>' },
+    ]);
+  });
+
   test('has nothing for image-based formats', () => {
     expect(parseSubtitleCues('', 'hdmv_pgs_subtitle')).toBeUndefined();
   });

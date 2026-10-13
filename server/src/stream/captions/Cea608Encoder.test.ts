@@ -1,4 +1,8 @@
-import type { CcPair } from './Cea608Encoder.ts';
+import type {
+  CaptionLayout,
+  CaptionLayoutOptions,
+  CcPair,
+} from './Cea608Encoder.ts';
 import {
   buildCaptionSchedule,
   layoutCaption,
@@ -28,10 +32,12 @@ function framePairs(
   cues: Parameters<typeof buildCaptionSchedule>[0],
   frames: number,
   firstFrameMs = 0,
+  layout?: CaptionLayoutOptions,
 ) {
   const schedule = buildCaptionSchedule(cues, {
     firstFrameMs,
     frameRate: FrameRate,
+    layout,
   });
   return Array.from({ length: frames }, (_, k) =>
     withoutParity(schedule.pairAt(firstFrameMs + k * frameMs)),
@@ -53,15 +59,112 @@ function textBetween(pairs: number[][], from: number, to: number) {
     .join('');
 }
 
+// Each caption's lines as plain text
+const texts = (captions: CaptionLayout[]) =>
+  captions.map((caption) =>
+    caption.lines.map((line) => line.map((c) => c.ch).join('')),
+  );
+
+// Preamble address codes per row (first byte, second byte without indent bits)
+const PacRows = [
+  [0x11, 0x40],
+  [0x11, 0x60],
+  [0x12, 0x40],
+  [0x12, 0x60],
+  [0x15, 0x40],
+  [0x15, 0x60],
+  [0x16, 0x40],
+  [0x16, 0x60],
+  [0x17, 0x40],
+  [0x17, 0x60],
+  [0x10, 0x40],
+  [0x13, 0x40],
+  [0x13, 0x60],
+  [0x14, 0x40],
+  [0x14, 0x60],
+];
+const MidRowLabels: Record<number, string> = {
+  0x20: '[-]',
+  0x21: '[u]',
+  0x2e: '[i]',
+  0x2f: '[iu]',
+};
+
+type DecodedRow = { row: number; column: number; width: number; text: string };
+
+// A small 608 decoder for the tests: each caption shown (up to its End of
+// Caption), as rows with their start column, width in columns, and text. Style
+// changes show as [i] italics, [u] underline, [iu] both, [-] plain;
+// background attributes as [bg:semi] and [bg:transparent].
+function decodeCaptions(pairs: number[][]): DecodedRow[][] {
+  const captions: DecodedRow[][] = [];
+  let rows: DecodedRow[] = [];
+  let row: DecodedRow | undefined;
+  const add = (text: string, columns: number) => {
+    if (row) {
+      row.text += text;
+      row.width += columns;
+    }
+  };
+  for (const [a = 0, b = 0] of pairs) {
+    if (a === 0x14 && b === 0x2f) {
+      captions.push(rows);
+      rows = [];
+      row = undefined;
+    } else if (a >= 0x10 && a <= 0x17 && b >= 0x40) {
+      const index = PacRows.findIndex(
+        ([first, second]) => first === a && second === (b & 0x60),
+      );
+      row = {
+        row: index + 1,
+        column: b & 0x10 ? ((b & 0x0e) >> 1) * 4 : 0,
+        width: 0,
+        text: '',
+      };
+      rows.push(row);
+    } else if (a === 0x17 && b >= 0x21 && b <= 0x23) {
+      if (row) {
+        row.column += b - 0x20;
+      }
+    } else if (a === 0x11 && b >= 0x20 && b <= 0x2f) {
+      add(MidRowLabels[b] ?? '[?]', 1);
+    } else if (a === 0x10 && b === 0x2f) {
+      add('[bg:semi]', 0);
+    } else if (a === 0x17 && b === 0x2d) {
+      add('[bg:transparent]', 0);
+    } else if (a === 0x11 && b === 0x37) {
+      add('♪', 1);
+    } else if (a >= 0x20) {
+      for (const byte of [a, b].filter((x) => x >= 0x20)) {
+        add(String.fromCharCode(byte), 1);
+      }
+    }
+  }
+  return captions;
+}
+
+const decode = (
+  text: string,
+  layout?: CaptionLayoutOptions,
+  endMs = 6000,
+): DecodedRow[][] =>
+  decodeCaptions(
+    framePairs([{ startMs: 3000, endMs, text }], 30 * 12, 0, layout),
+  );
+
 describe('layoutCaption', () => {
   test('wraps at 32 columns on word boundaries, two lines per caption', () => {
     const captions = layoutCaption(
       'The quick brown fox jumps over the lazy dog, then keeps on running far away from here',
     );
 
-    expect(captions.flat().every((line) => line.length <= 32)).toBe(true);
-    expect(captions.every((lines) => lines.length <= 2)).toBe(true);
-    expect(captions.flat().join(' ')).toBe(
+    expect(
+      texts(captions)
+        .flat()
+        .every((line) => line.length <= 32),
+    ).toBe(true);
+    expect(captions.every(({ lines }) => lines.length <= 2)).toBe(true);
+    expect(texts(captions).flat().join(' ')).toBe(
       'The quick brown fox jumps over the lazy dog, then keeps on running far away from here',
     );
     expect(captions).toHaveLength(2);
@@ -70,18 +173,32 @@ describe('layoutCaption', () => {
   test('rewraps a cue whose lines are too wide, keeping it to two lines', () => {
     // One source line is 36 columns; rewrapping the whole cue fits it in two
     expect(
-      layoutCaption('Well, that is\na problem he thinks you can resolve.'),
+      texts(
+        layoutCaption('Well, that is\na problem he thinks you can resolve.'),
+      ),
     ).toEqual([['Well, that is a problem he', 'thinks you can resolve.']]);
   });
 
-  test('removes SRT, ASS and WebVTT formatting', () => {
-    expect(layoutCaption('{\\an8}<i>Hello</i>\\Nthere  <b>you</b>')).toEqual([
-      ['Hello', 'there you'],
-    ]);
+  test('keeps italics and top placement, and drops other formatting', () => {
+    const [caption] = layoutCaption('{\\an8}<i>Hello</i>\\Nthere  <b>you</b>');
+
+    expect(texts(caption ? [caption] : [])).toEqual([['Hello', 'there you']]);
+    expect(caption?.top).toBe(true);
+    expect(caption?.lines[0]?.every((c) => c.italic)).toBe(true);
+    expect(caption?.lines[1]?.some((c) => c.italic)).toBe(false);
+  });
+
+  test('keeps every part of a long top-of-screen cue at the top', () => {
+    const captions = layoutCaption(
+      '{\\an8}One two three four five six seven eight nine ten eleven twelve thirteen fourteen',
+    );
+
+    expect(captions.length).toBeGreaterThan(1);
+    expect(captions.every((c) => c.top)).toBe(true);
   });
 
   test("keeps the cue's own line breaks", () => {
-    expect(layoutCaption('First line\nSecond line')).toEqual([
+    expect(texts(layoutCaption('First line\nSecond line'))).toEqual([
       ['First line', 'Second line'],
     ]);
   });
@@ -218,5 +335,148 @@ describe('buildCaptionSchedule', () => {
     for (let k = 60; k < 180; k++) {
       expect(schedule.pairAt(k * frameMs)).toEqual(PaddingPair);
     }
+  });
+});
+
+describe('caption styles', () => {
+  test('switches italics on and off in the spaces around them', () => {
+    expect(decode('He said <i>hello there</i> to me')).toEqual([
+      [
+        {
+          row: 15,
+          column: 4,
+          width: 25,
+          text: 'He said[i]hello there[-]to me',
+        },
+      ],
+    ]);
+  });
+
+  test('reads ASS italics, starting a line with the code', () => {
+    expect(decode('{\\i1}Thinking{\\i0} out loud')[0]?.[0]?.text).toBe(
+      '[i]Thinking[-]out loud',
+    );
+  });
+
+  test('carries italics across the lines of a cue', () => {
+    expect(
+      decode('<i>First line\nsecond line</i>')[0]?.map((r) => r.text),
+    ).toEqual(['[i]First line', '[i]second line']);
+  });
+
+  test('sends underline, italics with underline, and a reset', () => {
+    expect(
+      decode('<u>Under</u> plain {\\i1\\u1}both{\\r} reset')[0]?.[0]?.text,
+    ).toBe('[u]Under[-]plain[iu]both[-]reset');
+  });
+
+  test('keeps punctuation after a styled word in its style', () => {
+    expect(decode('<i>Hello</i>, world')[0]?.[0]?.text).toBe(
+      '[i]Hello,[-]world',
+    );
+  });
+
+  test('gives a change inside a word a column of its own', () => {
+    expect(decode('un<i>believ</i>able')[0]?.[0]).toMatchObject({
+      text: 'un[i]believ[-]able',
+      width: 14,
+    });
+  });
+
+  test('drops formatting 608 has no code for', () => {
+    expect(
+      decode(
+        '<b>Bold</b> <font color="red">red</font> {\\pos(1,2)\\c&H00FF00&}text',
+      )[0]?.[0]?.text,
+    ).toBe('Bold red text');
+  });
+
+  test('counts style codes when wrapping', () => {
+    const left = { alignment: 'left', background: 'player' } as const;
+    // The italics code takes the first column: 31 characters fill the line
+    const fits = decode(`<i>${'x'.repeat(31)}</i>`, left).flat();
+    const wraps = decode(`<i>${'x'.repeat(32)}</i>`, left).flat();
+
+    expect(fits).toHaveLength(1);
+    expect(fits[0]?.width).toBe(32);
+    expect(wraps).toHaveLength(2);
+    expect(wraps.every((r) => r.column + r.width <= 32)).toBe(true);
+  });
+});
+
+describe('caption placement', () => {
+  test('puts a cue with a top alignment override at the top', () => {
+    expect(decode('{\\an8}Top of the screen')[0]?.map((r) => r.row)).toEqual([
+      1,
+    ]);
+    expect(decode('{\\an7}Upper\nleft')[0]?.map((r) => r.row)).toEqual([1, 2]);
+    expect(decode('{\\a6}Old SSA top')[0]?.map((r) => r.row)).toEqual([1]);
+  });
+
+  test('reads an override block with several tags', () => {
+    expect(decode('{\\an8\\i1}Top italic')[0]?.[0]).toMatchObject({
+      row: 1,
+      text: '[i]Top italic',
+    });
+  });
+
+  test('keeps other alignments at the bottom', () => {
+    expect(decode('{\\an2}Bottom')[0]?.map((r) => r.row)).toEqual([15]);
+    expect(decode('{\\an5}Middle')[0]?.map((r) => r.row)).toEqual([15]);
+  });
+
+  test('centres each line on its own with tab offsets', () => {
+    const rows = decode('Short\nA much longer second line', {
+      alignment: 'centeredLines',
+      background: 'player',
+    })[0];
+
+    // (32 - 5) / 2 = 13: preamble indent 12 and TO1; (32 - 25) / 2 = 3: indent 0 and TO3
+    expect(rows?.map((r) => r.column)).toEqual([13, 3]);
+  });
+
+  test('starts every line at the left edge', () => {
+    expect(
+      decode('Short\nA much longer second line', {
+        alignment: 'left',
+        background: 'player',
+      })[0]?.map((r) => r.column),
+    ).toEqual([0, 0]);
+  });
+});
+
+describe('caption background', () => {
+  test('sends no background code by default', () => {
+    expect(decode('Hi')[0]?.[0]?.text).toBe('Hi');
+  });
+
+  test('starts each line with a space and the background attribute', () => {
+    expect(
+      decode('Hi\nthere', {
+        alignment: 'centeredBlock',
+        background: 'semiTransparent',
+      })[0]?.map((r) => r.text),
+    ).toEqual([' [bg:semi]Hi', ' [bg:semi]there']);
+    expect(
+      decode('Hi', {
+        alignment: 'centeredBlock',
+        background: 'transparent',
+      })[0]?.[0]?.text,
+    ).toBe(' [bg:transparent]Hi');
+  });
+
+  test('counts the background column when wrapping', () => {
+    const line = 'x'.repeat(32);
+
+    expect(
+      decode(line, { alignment: 'left', background: 'player' }).flat(),
+    ).toHaveLength(1);
+    // 31 characters and the background column fit a line, so 32 take two
+    expect(
+      decode(line, {
+        alignment: 'left',
+        background: 'semiTransparent',
+      }).flat(),
+    ).toHaveLength(2);
   });
 });

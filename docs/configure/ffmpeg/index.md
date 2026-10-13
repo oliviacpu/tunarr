@@ -101,7 +101,10 @@ Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. T
 - **No longer burned in:** full text subtitles that would have been burned in for the whole program are sent as captions instead, so viewers who want them must turn captions on. Tunarr's own players get them as selectable WebVTT subtitles.
 - **Always burned in:** image-based subtitles (PGS, VobSub) can't become captions and are still burned in.
 - **Requirements:** text subtitles on disk, either sidecar files or [extracted](#subtitle-extraction) ones. The channel must use the **HLS** stream mode and have subtitles enabled.
-- **Format limits:** captions are drawn by the player in its own style, at the bottom of the picture. Lines hold up to 32 characters, and long cues are split over time. Characters outside the caption character set (most non-Latin scripts) are dropped.
+- **Formatting:** italics and underline from the subtitle file (`<i>`, `<u>`, and ASS `{\i1}`, `{\u1}`) are kept. A cue the file places at the top of the screen (`{\an7}`, `{\an8}` or `{\an9}`) is shown at the top; all others go at the bottom. Other formatting (bold, colors, exact positions) is dropped.
+- **Caption Alignment:** where lines sit across the screen. **Centered block** (the default) starts every line in the same column, with the block centered. **Each line centered** centers each line on its own. **Left** starts every line at the left edge.
+- **Look:** text size, font and background are the player's, not Tunarr's. On Apple TV they follow **Settings → Accessibility → Subtitles and Captioning → Style**. When Plex burns captions into the picture for a device that can't show them itself, Plex's own subtitle style applies.
+- **Format limits:** lines hold up to 32 characters, two lines at a time, and long cues are split over time. A style change in the middle of a word takes a column of its own. Characters outside the caption character set (most non-Latin scripts) are dropped.
 - **Every frame carries caption data,** even when nothing is being said, so players detect the caption track as soon as they tune in.
 
 The setting takes effect from the next program, and the HDHomeRun stream picks it up the next time it is started.
