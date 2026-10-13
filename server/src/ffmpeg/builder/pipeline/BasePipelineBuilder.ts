@@ -792,6 +792,8 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
           new Libx264Encoder(
             this.desiredState.videoProfile,
             this.desiredState.videoPreset,
+            // getThreadCountOption's global -threads only reaches the first input's decoder
+            this.context.pipelineOptions.encoderThreadCount,
           ),
       )
       .with(

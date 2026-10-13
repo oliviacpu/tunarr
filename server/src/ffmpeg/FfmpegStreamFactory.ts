@@ -279,7 +279,10 @@ export class FfmpegStreamFactory {
         videoFormat: playbackParams.videoFormat,
         videoPreset: playbackParams.videoPreset ?? null,
       }),
-      DefaultPipelineOptions,
+      {
+        ...DefaultPipelineOptions,
+        encoderThreadCount: this.transcodeConfig.threadCount,
+      },
     );
 
     pipeline.inputs.concatInput?.addOptions(
@@ -886,7 +889,10 @@ export class FfmpegStreamFactory {
         videoProfile: null, // TODO:
         deinterlace: false,
       }),
-      DefaultPipelineOptions,
+      {
+        ...DefaultPipelineOptions,
+        encoderThreadCount: this.transcodeConfig.threadCount,
+      },
     );
 
     return this.wrapInSession(
@@ -973,7 +979,10 @@ export class FfmpegStreamFactory {
         deinterlace: false,
         infiniteLoop: true,
       }),
-      DefaultPipelineOptions,
+      {
+        ...DefaultPipelineOptions,
+        encoderThreadCount: this.transcodeConfig.threadCount,
+      },
     );
 
     return this.wrapInSession(

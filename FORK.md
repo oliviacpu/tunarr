@@ -28,6 +28,20 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The transcode config's thread count now limits the encoder (2026-10-13)
+
+- **What you saw:** setting **Thread count** in a transcode config didn't limit how many threads libx264 used. On a box
+  with many cores, or a tight per-user thread limit, each watched channel still started about 1.5x the visible cores
+  in encoder threads.
+- **Cause:** the value was written only as a global `-threads N` before the inputs, which ffmpeg applies to the first
+  input's decoder. `PipelineOptions.encoderThreadCount` was filled in for the main transcode path but never read, and
+  the offline, error and `hls_slower` concat sessions didn't pass it at all.
+- **Fix:** `Libx264Encoder` takes an optional thread count and writes it as the output option `-threads:v N`;
+  `BasePipelineBuilder.setupEncoder` passes `pipelineOptions.encoderThreadCount`, and `FfmpegStreamFactory` now sets it
+  for the offline, error and `hls_slower` concat sessions too. The decoder's `-threads` is unchanged. 0 still means
+  "let ffmpeg decide". Tests: `Libx264Encoder.test.ts`, `SoftwarePipelineBuilder.test.ts`.
+- **Upstream:** not sent.
+
 ### 10-bit sources no longer come out as H.264 High 10 (2026-10-13)
 
 - **What you saw:** 10-bit sources (most x265/HEVC files, HDR or not) were transcoded to H.264 **High 10** on the

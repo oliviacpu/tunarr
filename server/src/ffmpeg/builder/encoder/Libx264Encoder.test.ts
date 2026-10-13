@@ -52,4 +52,19 @@ describe('Libx264Encoder', () => {
     const encoder = new Libx264Encoder(null, 'veryfast');
     expect(encoder.options()).not.toContain('-profile:v');
   });
+
+  test('outputs -threads:v when a thread count is set', () => {
+    const opts = new Libx264Encoder(null, null, 4).options();
+    const threadsIdx = opts.indexOf('-threads:v');
+    expect(threadsIdx).toBeGreaterThan(-1);
+    expect(opts[threadsIdx + 1]).toBe('4');
+  });
+
+  test.each([null, 0])(
+    'does not output -threads:v when the thread count is %s',
+    (threads) => {
+      const encoder = new Libx264Encoder(null, null, threads);
+      expect(encoder.options()).not.toContain('-threads:v');
+    },
+  );
 });
