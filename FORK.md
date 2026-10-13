@@ -34,6 +34,67 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### On/off subtitles in Plex Live TV: closed captions in the HDHomeRun stream (2026-10-13)
+
+- **What you saw:**
+  - Plex Live TV viewers couldn't turn subtitles on or off. Tunarr burned them into the picture, and Plex's CC button
+    had nothing to show.
+  - Turning on the WebVTT sidecar feature made it worse: Plex got no subtitles at all.
+- **Cause:**
+  - Plex reads a channel as an HDHomeRun, through one MPEG-TS stream (the `.ts` URL, a copy of the channel's HLS
+    session). MPEG-TS can't carry a text subtitle track. The only switchable subtitles Plex Live TV offers are CEA-608
+    closed captions inside the video.
+  - ffmpeg can only read 608 captions, not create them. There is no encoder, filter or bitstream filter for it (checked
+    in jellyfin-ffmpeg 8.1.3 and ffmpeg 9.0.2).
+- **Fix:** a global FFmpeg setting, **Closed captions for HDHomeRun clients (Plex)** (`hdhrClosedCaptions`, off by
+  default), under Settings > FFmpeg > Audio & Subtitle Options.
+
+  - **Captions** (`Cea608Encoder.ts`): cues become one 608 byte pair per frame, in pop-on mode. Each caption loads
+    ahead of time and appears with End of Caption on its start frame. Captions sit on the bottom rows, centred, 32
+    columns, with special and extended characters. Every other frame gets null padding, so players always find the track.
+  - **Into the stream** (`MpegTsCaptionInserter.ts`): an ATSC A/53 caption SEI goes before the first slice of every
+    H.264 frame of a TS segment. The video PES is re-split into packets, keeping PCR, PTS and continuity counters. The
+    PMT gets a caption service descriptor naming the language.
+  - **Which subtitles** (`FfmpegStreamFactory`, `ProgramCaptions.ts`, HLS channels with subtitles enabled):
+    - When the profile picks full text subtitles, they become captions. They're sent as WebVTT (the sidecar path)
+      instead of burned in, so Tunarr's own players keep them.
+    - Forced and image-based subtitles stay burned in.
+    - Otherwise the full text track in the preferred language (regular before SDH) becomes the captions. One example is
+      English audio whose forced subtitles are burned in.
+    - Cues come from the SRT, WebVTT or ASS file on disk, moved onto the program's clock (minus the seek).
+    - If they can't be read, the subtitles are burned in as before.
+  - **Timing** (`HlsSession`): each program's captions are laid out at the session's `ptsOffset` (the video's
+    `-output_ts_offset`). This handles the 33-bit timestamp wrap and uses the exact frame rate (`24000/1001`, not
+    23.976).
+    - A segment whose frames are spaced more than 1% away from the schedule gets padding only, rather than garbled
+      text. Deinterlacing that doubles the rate is one cause.
+  - **Serving:** only the `.ts` stream gets captions. Its reader asks for the playlist with `captions=1`, and those
+    segment links are served through the inserter. Any failure serves the segment as it is.
+
+  Tests:
+
+  - `Cea608Encoder.test.ts`: timing, parity, layout, repeated characters.
+  - `MpegTsCaptionInserter.test.ts`: SEI placement, packets, counters, PCR, PMT CRC, refusals.
+  - `ProgramCaptions.test.ts`: parsers, NTSC rates, track choice, playlist marking.
+  - `FfmpegStreamFactory.test.ts`: burn vs captions, forced, fallback, setting off, non-HLS.
+  - `HlsSession.test.ts`: frame placement, PTS wrap, rate mismatch, unreadable segment.
+  - `CaptionInsertion.local.test.ts`: a real libx264 round trip through ffmpeg's 608 decoder.
+
+  Docs: `docs/configure/ffmpeg/index.md` ("Closed Captions for HDHomeRun Clients").
+
+- **Checked** on a throwaway server: a clip with embedded English subtitles, extracted, channel subtitles on.
+  - **The `.ts` URL** Plex uses carried caption data on 603 of 603 frames. ffmpeg decoded the subtitles from it, each
+    1.5 s long and 2 s apart, as in the source.
+  - **Timing:** in a served segment, the frames showing each caption were within 14 ms (half a frame) of the WebVTT cues
+    that the same encode wrote.
+  - **Not yet checked on the Apple TV:** CC toggling, the label from the caption service descriptor, and whether Plex
+    turns captions on by itself for foreign-audio programs.
+- **Known limits:**
+  - The `mpegts` stream mode and hls_direct modes get no captions; hls_direct copies the source's video, often HEVC.
+  - Captions use the player's own style. Non-Latin text is dropped.
+  - Two cues closer together than a caption's load time (about 1 s for two full lines) show a few frames late.
+- **Upstream:** not sent.
+
 ### Changing the FFmpeg path applies without a restart (2026-10-13)
 
 - **What you saw:** after changing the FFmpeg executable path, Tunarr kept probing the old path until it restarted. A

@@ -444,6 +444,30 @@ export default function FfmpegSettingsPage() {
               </Trans>
             </FormHelperText>
           </FormControl>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <Controller
+              control={control}
+              name="hdhrClosedCaptions"
+              render={({ field }) => (
+                <FormControlLabel
+                  control={<Switch {...field} checked={field.value} />}
+                  label={t`Closed captions for HDHomeRun clients (Plex)`}
+                />
+              )}
+            />
+
+            <FormHelperText>
+              <Trans>
+                Sends a program's full text subtitles as closed captions in the
+                stream HDHomeRun clients such as Plex Live TV read, so viewers
+                can switch them on and off. Instead of being burned in, those
+                subtitles also reach Tunarr's own players as selectable
+                subtitles. Forced and image-based subtitles stay burned in.
+                Applies to channels in the HLS stream mode with subtitles
+                enabled, from the next program.
+              </Trans>
+            </FormHelperText>
+          </FormControl>
         </Box>
 
         <Divider />

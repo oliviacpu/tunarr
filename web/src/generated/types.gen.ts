@@ -9819,6 +9819,7 @@ export type GetApiFfmpegSettingsResponses = {
         hlsSegmentSeconds: number;
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
+        hdhrClosedCaptions: boolean;
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9869,6 +9870,7 @@ export type PostApiFfmpegSettingsResponses = {
         hlsSegmentSeconds: number;
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
+        hdhrClosedCaptions: boolean;
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9898,6 +9900,7 @@ export type PutApiFfmpegSettingsData = {
         hlsSegmentSeconds?: number;
         hlsInitialSegmentCount?: number;
         hlsTsInitialBurstSeconds?: number;
+        hdhrClosedCaptions?: boolean;
         enableSubtitleExtraction?: boolean;
     };
     path?: never;
@@ -9944,6 +9947,7 @@ export type PutApiFfmpegSettingsResponses = {
         hlsSegmentSeconds: number;
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
+        hdhrClosedCaptions: boolean;
         enableSubtitleExtraction: boolean;
     };
 };
@@ -14224,6 +14228,10 @@ export type GetStreamChannelsByIdM3U8Data = {
          * For hls and hls_direct_v2, return the variant playlist instead of the master. The .ts wrapper uses this so ffmpeg reads only the muxed streams.
          */
         variant?: boolean | 'true' | 'false' | number;
+        /**
+         * With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on.
+         */
+        captions?: boolean | 'true' | 'false' | number;
     };
     url: '/stream/channels/{id}.m3u8';
 };
@@ -14246,6 +14254,10 @@ export type HeadStreamChannelsByIdM3U8Data = {
          * For hls and hls_direct_v2, return the variant playlist instead of the master. The .ts wrapper uses this so ffmpeg reads only the muxed streams.
          */
         variant?: boolean | 'true' | 'false' | number;
+        /**
+         * With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on.
+         */
+        captions?: boolean | 'true' | 'false' | number;
     };
     url: '/stream/channels/{id}.m3u8';
 };

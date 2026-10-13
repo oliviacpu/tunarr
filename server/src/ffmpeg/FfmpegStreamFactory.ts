@@ -14,6 +14,7 @@ import type {
   StreamDetails,
   StreamRenditions,
   SubtitleRenditionInfo,
+  SubtitleStreamDetails,
 } from '@/stream/types.js';
 import { FileStreamSource, HttpStreamSource } from '@/stream/types.js';
 import type { Maybe, Nullable } from '@/types/util.js';
@@ -35,6 +36,12 @@ import { match, P } from 'ts-pattern';
 import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLineup.ts';
 import type { IChannelDB } from '../db/interfaces/IChannelDB.ts';
 import { FeatureFlagService } from '../services/FeatureFlagService.ts';
+import type { ProgramCaptions } from '../stream/captions/ProgramCaptions.ts';
+import {
+  exactFrameRate,
+  loadProgramCaptions,
+  pickCaptionTrack,
+} from '../stream/captions/ProgramCaptions.ts';
 import { isImageBasedSubtitle } from '../stream/util.ts';
 import { KEYS } from '../types/inject.ts';
 import { assisted, injected } from '../util/assistedInject.ts';
@@ -370,16 +377,22 @@ export class FfmpegStreamFactory {
     let watermarkSource: Nullable<WatermarkInputSource> = null;
     let subtitleSource: Nullable<SubtitlesInputSource> = null;
     let subtitleRendition: SubtitleRenditionInfo | undefined;
+    let captions: ProgramCaptions | undefined;
 
     if (!isPassthrough) {
-      ({ audioInput, subtitleSource, subtitleRendition, watermarkSource } =
-        await this.buildTranscodeInputs(
-          streamSource,
-          streamDetails,
-          lineupItem,
-          playbackParams!,
-          { duration, streamMode, watermark },
-        ));
+      ({
+        audioInput,
+        subtitleSource,
+        subtitleRendition,
+        watermarkSource,
+        captions,
+      } = await this.buildTranscodeInputs(
+        streamSource,
+        streamDetails,
+        lineupItem,
+        playbackParams!,
+        { duration, startTime, streamMode, watermark },
+      ));
     } else {
       ({ subtitleSource, subtitleRendition } =
         await this.buildPassthroughSubtitles(
@@ -505,11 +518,14 @@ export class FfmpegStreamFactory {
 
     return {
       session: transcodeSession,
-      renditions: this.buildRenditions(
-        streamDetails,
-        subtitleRendition,
-        isPassthrough,
-      ),
+      renditions: {
+        ...this.buildRenditions(
+          streamDetails,
+          subtitleRendition,
+          isPassthrough,
+        ),
+        captions,
+      },
     };
   }
 
@@ -525,6 +541,7 @@ export class FfmpegStreamFactory {
     playbackParams: FfmpegPlaybackParams,
     options: {
       duration: Duration;
+      startTime: Duration;
       streamMode: ChannelStreamMode;
       watermark?: Watermark;
     },
@@ -533,8 +550,16 @@ export class FfmpegStreamFactory {
     subtitleSource: Nullable<SubtitlesInputSource>;
     subtitleRendition: SubtitleRenditionInfo | undefined;
     watermarkSource: Nullable<WatermarkInputSource>;
+    captions: ProgramCaptions | undefined;
   }> {
-    const { duration, streamMode, watermark } = options;
+    const { duration, startTime, streamMode, watermark } = options;
+    // Captions go into the .ts stream HDHomeRun clients read, which wraps an
+    // HLS session; other modes keep today's subtitles
+    const captionsOn =
+      this.ffmpegSettings.hdhrClosedCaptions &&
+      streamMode === ChannelStreamModes.Hls &&
+      this.channel.subtitlesEnabled;
+    let captions: ProgramCaptions | undefined;
 
     const audioState = this.createAudioState(
       playbackParams,
@@ -578,7 +603,17 @@ export class FfmpegStreamFactory {
           'webvttSidecarEnabled',
         );
         const canUseSidecar = !isImageBasedSubtitle(subtitleStream.codec);
-        const useSidecar = sidecarEnabled && canUseSidecar;
+        // With captions, full text subtitles become switchable captions (and
+        // WebVTT for HLS players) instead of being burned in; forced ones stay.
+        // If they can't be read as captions, they're burned in as before.
+        if (captionsOn && canUseSidecar && !subtitleStream.forced) {
+          captions = await this.loadCaptions(subtitleStream, streamDetails, {
+            startTime,
+            duration,
+          });
+        }
+        const useSidecar =
+          (sidecarEnabled || captions !== undefined) && canUseSidecar;
         const method = useSidecar
           ? SubtitleMethods.Convert
           : SubtitleMethods.Burn;
@@ -625,6 +660,19 @@ export class FfmpegStreamFactory {
       });
     }
 
+    // Otherwise caption from the program's full text track, if it has one
+    // (e.g. English audio whose forced subtitles are burned in)
+    if (captionsOn && captions === undefined) {
+      captions = await this.loadCaptions(
+        pickCaptionTrack(
+          streamDetails.subtitleDetails ?? [],
+          this.ffmpegSettings.languagePreferences.preferences,
+        ),
+        streamDetails,
+        { startTime, duration },
+      );
+    }
+
     let watermarkSource: Nullable<WatermarkInputSource> = null;
     if (watermark?.enabled) {
       const watermarkUrl = watermark.url ?? makeLocalUrl('/images/tunarr.png');
@@ -641,7 +689,45 @@ export class FfmpegStreamFactory {
       );
     }
 
-    return { audioInput, subtitleSource, subtitleRendition, watermarkSource };
+    return {
+      audioInput,
+      subtitleSource,
+      subtitleRendition,
+      watermarkSource,
+      captions,
+    };
+  }
+
+  // A subtitle track's cues on the program's clock, for captions
+  private async loadCaptions(
+    track: SubtitleStreamDetails | undefined,
+    streamDetails: StreamDetails,
+    program: { startTime: Duration; duration: Duration },
+  ): Promise<ProgramCaptions | undefined> {
+    if (!track) {
+      return;
+    }
+    const frameRate = exactFrameRate(
+      streamDetails.videoDetails?.[0]?.framerate,
+    );
+    if (frameRate === undefined) {
+      this.logger.debug('No frame rate for this program; no captions');
+      return;
+    }
+    try {
+      return await loadProgramCaptions(track, {
+        seekMs: program.startTime.asMilliseconds(),
+        durationMs: program.duration.asMilliseconds(),
+        frameRate,
+      });
+    } catch (e) {
+      this.logger.warn(
+        e,
+        'Could not read subtitles %s for captions',
+        track.path,
+      );
+      return;
+    }
   }
 
   /**

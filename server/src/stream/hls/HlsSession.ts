@@ -11,6 +11,13 @@ import type { OnDemandChannelService } from '@/services/OnDemandChannelService.j
 import { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StopOptions } from '@/stream/Session.js';
 import type { StreamProgramCalculator } from '@/stream/StreamProgramCalculator.js';
+import type { CaptionSchedule } from '@/stream/captions/Cea608Encoder.js';
+import {
+  buildCaptionSchedule,
+  PaddingPair,
+} from '@/stream/captions/Cea608Encoder.js';
+import { insertCaptions } from '@/stream/captions/MpegTsCaptionInserter.js';
+import type { ProgramCaptions } from '@/stream/captions/ProgramCaptions.js';
 import type { HlsSlowerSession } from '@/stream/hls/HlsSlowerSession.js';
 import type {
   AudioRenditionInfo,
@@ -47,6 +54,21 @@ export type HlsSlowerSessionProvider = (
   options: BaseHlsSessionOptions,
 ) => HlsSlowerSession;
 
+// One program's captions on the session's output clock (90 kHz MPEG-TS PTS)
+type CaptionTimelineEntry = {
+  startPts: number;
+  durationPts: number;
+  framePts: number;
+  schedule: CaptionSchedule;
+  language: string;
+  rateMismatchLogged: boolean;
+};
+
+// MPEG-TS timestamps are 33 bits and wrap after about 26.5 hours
+const PtsWrap = 2 ** 33;
+// Captions of this many recent programs are kept, for segments still being served
+const CaptionTimelineLength = 10;
+
 export interface HlsSessionOptions extends BaseHlsSessionOptions {
   streamMode: 'hls' | 'hls_direct_v2';
   // Segment length in hls mode, fixed for the session's lifetime so the
@@ -74,6 +96,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   #lastDiscontinuitySequence: number | undefined;
   #currentSubtitleRendition: SubtitleRenditionInfo | undefined;
   #currentAudioRenditions: AudioRenditionInfo[] = [];
+  #captionTimeline: CaptionTimelineEntry[] = [];
 
   constructor(
     channel: ChannelOrmWithTranscodeConfig,
@@ -369,6 +392,10 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         this.#currentSession = transcodeSession;
         this.#currentSubtitleRendition = programStream.renditions?.subtitle;
         this.#currentAudioRenditions = programStream.renditions?.audio ?? [];
+        const captions = programStream.renditions?.captions;
+        if (captions) {
+          this.addCaptions(ptsOffset, captions);
+        }
       });
 
       if (this.sessionOptions.streamMode === 'hls') {
@@ -392,6 +419,114 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     return this.#currentSubtitleRendition
       ? [this.getHlsOptions().subtitleStreamNameFormat]
       : [];
+  }
+
+  // Lays a program's caption cues out on the session's output clock, which
+  // starts the program at `ptsOffset` (the video's -output_ts_offset, 90 kHz)
+  private addCaptions(ptsOffset: number, captions: ProgramCaptions) {
+    const startMs = ptsOffset / 90;
+    const schedule = buildCaptionSchedule(
+      captions.cues.map((cue) => ({
+        ...cue,
+        startMs: cue.startMs + startMs,
+        endMs: cue.endMs + startMs,
+      })),
+      {
+        firstFrameMs: startMs,
+        frameRate: captions.frameRate,
+        endMs: startMs + captions.durationMs,
+      },
+    );
+    this.#captionTimeline = [
+      ...this.#captionTimeline,
+      {
+        startPts: ptsOffset,
+        durationPts: captions.durationMs * 90,
+        framePts: 90_000 / captions.frameRate,
+        schedule,
+        language: captions.language,
+        rateMismatchLogged: false,
+      },
+    ].slice(-CaptionTimelineLength);
+  }
+
+  private captionEntryAt(pts: number) {
+    for (const entry of this.#captionTimeline.toReversed()) {
+      const offset = (((pts - entry.startPts) % PtsWrap) + PtsWrap) % PtsWrap;
+      if (offset < entry.durationPts) {
+        return { entry, timeMs: (entry.startPts + offset) / 90 };
+      }
+    }
+    return;
+  }
+
+  /**
+   * A video segment with CEA-608 captions added for the .ts stream that
+   * HDHomeRun clients read. Every frame carries caption data (null padding
+   * when nothing is being said), so clients always find the caption track.
+   * Undefined when the segment can't be captioned; serve it as it is.
+   */
+  async captionedSegment(file: string): Promise<Buffer | undefined> {
+    const segment = await fs.readFile(path.join(this.workingDirectory, file));
+    const language =
+      this.#captionTimeline.at(-1)?.language ??
+      this.settingsDB.ffmpegSettings().languagePreferences.preferences[0]
+        ?.iso6392 ??
+      'eng';
+
+    const framesByEntry = new Map<CaptionTimelineEntry, number[]>();
+    const captioned = insertCaptions(segment, {
+      language,
+      pairForPts: (pts) => {
+        const hit = this.captionEntryAt(pts);
+        if (!hit) {
+          return PaddingPair;
+        }
+        framesByEntry.set(hit.entry, [
+          ...(framesByEntry.get(hit.entry) ?? []),
+          pts,
+        ]);
+        return hit.entry.schedule.pairAt(hit.timeMs);
+      },
+    });
+    if (!captioned.ok) {
+      this.logger.debug(
+        'Serving segment %s without captions: %s',
+        file,
+        captioned.reason,
+      );
+      return;
+    }
+
+    // The schedule assumes the program's frame rate. If the frames are spaced
+    // differently (deinterlacing that doubles the rate, variable frame rate),
+    // characters would be dropped or repeated, so send padding only.
+    for (const [entry, frames] of framesByEntry) {
+      const sorted = frames.toSorted((a, b) => a - b);
+      const steps = sorted.slice(1).map((pts, i) => pts - (sorted[i] ?? pts));
+      const step = steps.toSorted((a, b) => a - b)[
+        Math.floor(steps.length / 2)
+      ];
+      if (
+        step !== undefined &&
+        Math.abs(step - entry.framePts) > entry.framePts / 100
+      ) {
+        if (!entry.rateMismatchLogged) {
+          entry.rateMismatchLogged = true;
+          this.logger.warn(
+            'Frames are %d ticks apart but captions were laid out for %d; sending this program without caption text',
+            step,
+            Math.round(entry.framePts),
+          );
+        }
+        const padded = insertCaptions(segment, {
+          language,
+          pairForPts: () => PaddingPair,
+        });
+        return padded.ok ? padded.segment : undefined;
+      }
+    }
+    return captioned.segment;
   }
 
   protected getHlsOptions(): DeepRequired<HlsOptions> {

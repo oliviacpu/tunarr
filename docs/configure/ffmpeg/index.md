@@ -93,6 +93,19 @@ When using the **HLS Direct** stream mode, sidecar text-based subtitles are serv
 !!! note
     Sidecar subtitle support is currently experimental. To enable it, go to **Settings > Features** and turn on the sidecar subtitles option.
 
+### Closed Captions for HDHomeRun Clients
+
+Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. That stream can't carry a selectable subtitle track, so Tunarr normally burns subtitles into the picture. With **Closed captions for HDHomeRun clients (Plex)** turned on, Tunarr sends them as CEA-608 closed captions instead. Viewers switch them on and off with their player's subtitles or CC button.
+
+- **Which subtitles:** the program's full text subtitles become captions. If the channel's subtitle selection picks forced subtitles (for example, only the foreign-language lines of an English program), those stay burned in, and the program's full subtitles in your preferred language become the captions.
+- **No longer burned in:** full text subtitles that would have been burned in for the whole program are sent as captions instead, so viewers who want them must turn captions on. Tunarr's own players get them as selectable WebVTT subtitles.
+- **Always burned in:** image-based subtitles (PGS, VobSub) can't become captions and are still burned in.
+- **Requirements:** text subtitles on disk, either sidecar files or [extracted](#subtitle-extraction) ones. The channel must use the **HLS** stream mode and have subtitles enabled.
+- **Format limits:** captions are drawn by the player in its own style, at the bottom of the picture. Lines hold up to 32 characters, and long cues are split over time. Characters outside the caption character set (most non-Latin scripts) are dropped.
+- **Every frame carries caption data,** even when nothing is being said, so players detect the caption track as soon as they tune in.
+
+The setting takes effect from the next program, and the HDHomeRun stream picks it up the next time it is started.
+
 ### Language Preference
 
 Currently, language preferences can only be configured globally. Use this setting to set an ordered list of preferred audio languages. The first matching audio language stream for a given piece of content will be chosen.

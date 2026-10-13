@@ -122,6 +122,10 @@ export const FfmpegSettingsSchema = z.object({
   // HDHomeRun clients such as Plex get) may read ahead at start, instead of
   // real-time pace from the first byte
   hlsTsInitialBurstSeconds: z.number().int().min(0).max(60).default(0),
+  // Closed captions (CEA-608) in the .ts stream HDHomeRun clients such as Plex
+  // read, for HLS channels. Text subtitles that would be burned in for the full
+  // program are sent as captions (and WebVTT) instead; forced ones stay burned.
+  hdhrClosedCaptions: z.boolean().default(false),
   enableSubtitleExtraction: z.boolean().optional().default(false),
 });
 

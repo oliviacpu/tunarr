@@ -33,6 +33,9 @@ import {
 import { InfiniteLoopInputOption } from '@/ffmpeg/builder/options/input/InfiniteLoopInputOption.ts';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import tmp from 'tmp';
 import { describe, expect, test, vi } from 'vitest';
 import { GapMusicLoudnorm } from './builder/filter/LoudnormFilter.ts';
 import {
@@ -1393,6 +1396,145 @@ describe('FfmpegStreamFactory', () => {
         const stream = subtitleInput!.streams[0];
         expect(stream.inputKind).toBe('external');
         expect(stream.index).toBe(0);
+      });
+    });
+
+    describe('HDHomeRun closed captions', () => {
+      let dir: tmp.DirResult;
+      let fullSubs: string;
+      let forcedSubs: string;
+
+      beforeEach(() => {
+        dir = tmp.dirSync({ unsafeCleanup: true });
+        fullSubs = path.join(dir.name, 'full.srt');
+        forcedSubs = path.join(dir.name, 'forced.srt');
+        fs.writeFileSync(
+          fullSubs,
+          '1\n00:00:02,000 --> 00:00:04,000\nBefore the seek\n\n' +
+            '2\n00:00:12,000 --> 00:00:14,500\nHello there\n',
+        );
+        fs.writeFileSync(
+          forcedSubs,
+          '1\n00:00:20,000 --> 00:00:21,000\nSign\n',
+        );
+      });
+
+      afterEach(() => {
+        dir.removeCallback();
+      });
+
+      const fullTrack = (): SubtitleStreamDetails => ({
+        ...textSubtitleStream,
+        path: fullSubs,
+      });
+      const forcedTrack = (): SubtitleStreamDetails => ({
+        ...textSubtitleStream,
+        index: 4,
+        forced: true,
+        title: 'English Forced',
+        path: forcedSubs,
+      });
+
+      async function run(opts: {
+        selected: SubtitleStreamDetails | null;
+        hdhrClosedCaptions?: boolean;
+        streamMode?: 'hls' | 'mpegts';
+      }) {
+        const capturing = createCapturingPipelineBuilderFactory();
+        const details = makeStreamDetails();
+        details.subtitleDetails = [fullTrack(), forcedTrack()];
+        const sut = new FfmpegStreamFactory(
+          makeMockFfmpegInfo(),
+          makeMockSettingsDB({
+            ...makeFfmpegSettings(),
+            hdhrClosedCaptions: opts.hdhrClosedCaptions ?? true,
+          }),
+          capturing.factory,
+          makeMockChannelDB(),
+          makeMockFeatureFlagService({ webvttSidecarEnabled: false }),
+          makeMockStreamSelector(opts.selected),
+          makeTranscodeConfig(),
+          makeChannel({ subtitlesEnabled: true }),
+        );
+        const result = await sut.createStreamSession({
+          stream: {
+            source: new HttpStreamSource('http://example.com/video.ts'),
+            details,
+          },
+          options: {
+            startTime: dayjs.duration({ seconds: 10 }),
+            duration: dayjs.duration({ seconds: 30 }),
+            outputFormat: { type: 'mpegts' as const },
+            ptsOffset: 0,
+            realtime: true,
+            streamMode: opts.streamMode ?? 'hls',
+          },
+          lineupItem: makeLineupItem(),
+        });
+        return {
+          method: capturing.getCapturedSubtitleInput()?.method,
+          captions: result?.renditions.captions,
+        };
+      }
+
+      test('sends full text subtitles as captions and WebVTT instead of burning them in', async () => {
+        const { method, captions } = await run({ selected: fullTrack() });
+
+        expect(method).toBe(SubtitleMethods.Convert);
+        // Cue times on the program's clock: the 10 s seek is taken off, and
+        // the cue before it is dropped
+        expect(captions).toEqual({
+          cues: [{ startMs: 2000, endMs: 4500, text: 'Hello there' }],
+          frameRate: 24,
+          durationMs: 30000,
+          language: 'eng',
+        });
+      });
+
+      test('keeps forced subtitles burned in and captions the full track', async () => {
+        const { method, captions } = await run({ selected: forcedTrack() });
+
+        expect(method).toBe(SubtitleMethods.Burn);
+        expect(captions?.cues).toEqual([
+          { startMs: 2000, endMs: 4500, text: 'Hello there' },
+        ]);
+      });
+
+      test('captions the full track when the profile picks no subtitles', async () => {
+        const { method, captions } = await run({ selected: null });
+
+        expect(method).toBeUndefined();
+        expect(captions?.cues).toHaveLength(1);
+      });
+
+      test('burns subtitles in as before when they cannot be read as captions', async () => {
+        const { method, captions } = await run({
+          selected: { ...textSubtitleStream, path: '/no/such/file.srt' },
+        });
+
+        expect(method).toBe(SubtitleMethods.Burn);
+        // The full track on disk still provides captions
+        expect(captions?.cues).toHaveLength(1);
+      });
+
+      test('changes nothing when the setting is off', async () => {
+        const { method, captions } = await run({
+          selected: fullTrack(),
+          hdhrClosedCaptions: false,
+        });
+
+        expect(method).toBe(SubtitleMethods.Burn);
+        expect(captions).toBeUndefined();
+      });
+
+      test('only applies to the HLS stream mode', async () => {
+        const { method, captions } = await run({
+          selected: fullTrack(),
+          streamMode: 'mpegts',
+        });
+
+        expect(method).toBe(SubtitleMethods.Burn);
+        expect(captions).toBeUndefined();
       });
     });
 

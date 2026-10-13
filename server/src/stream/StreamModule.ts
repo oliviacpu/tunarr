@@ -81,8 +81,14 @@ const configure = ({ bind }: ContainerModuleLoadOptions) => {
     KEYS.ConcatStreamFactory,
   ).toFactory((ctx) => {
     const ffmpegFactory = ctx.get<FFmpegAssistedFactory>(KEYS.FFmpegFactory);
+    const settingsDB = ctx.get<ISettingsDB>(KEYS.SettingsDB);
     return (channel, streamMode) => {
-      return new ConcatStream(channel, streamMode, ffmpegFactory);
+      return new ConcatStream(
+        channel,
+        streamMode,
+        ffmpegFactory,
+        settingsDB.ffmpegSettings().hdhrClosedCaptions,
+      );
     };
   });
 

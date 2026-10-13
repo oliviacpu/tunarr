@@ -23,6 +23,7 @@ import { format } from 'node:util';
 import { match } from 'ts-pattern';
 import { v4 } from 'uuid';
 import z from 'zod/v4';
+import { markSegmentsForCaptions } from '../stream/captions/ProgramCaptions.ts';
 import { container } from '../container.ts';
 
 // Inject X-TIMESTAMP-MAP after the WEBVTT header line so AVPlayer/IINA
@@ -273,6 +274,9 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
           id: z.uuid(),
           file: z.string(),
         }),
+        querystring: z.object({
+          captions: TruthyQueryParam.optional().default(false),
+        }),
       },
       config: {
         disableRequestLogging: 'only-errors',
@@ -378,6 +382,23 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
         return res.type('application/vnd.apple.mpegurl').send(content);
       }
 
+      // The HDHomeRun .ts stream's segments, with CEA-608 captions added
+      if (
+        req.query.captions &&
+        req.params.sessionType === 'hls' &&
+        req.params.file.endsWith('.ts')
+      ) {
+        const captioned = await (session as HlsSession)
+          .captionedSegment(req.params.file)
+          .catch((e: unknown) => {
+            logger.warn(e, 'Could not caption segment %s', req.params.file);
+            return undefined;
+          });
+        if (captioned) {
+          return res.type('video/mp2t').send(captioned);
+        }
+      }
+
       return res.sendFile(req.params.file, session.workingDirectory);
     },
   );
@@ -401,6 +422,11 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
           .default(false)
           .describe(
             'For hls and hls_direct_v2, return the variant playlist instead of the master. The .ts wrapper uses this so ffmpeg reads only the muxed streams.',
+          ),
+        captions: TruthyQueryParam.optional()
+          .default(false)
+          .describe(
+            'With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on.',
           ),
       }),
     },
@@ -464,7 +490,11 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
 
                   return res
                     .type('application/vnd.apple.mpegurl')
-                    .send(variant.playlist);
+                    .send(
+                      req.query.captions
+                        ? markSegmentsForCaptions(variant.playlist)
+                        : variant.playlist,
+                    );
                 }
 
                 const masterResult = await session.getMasterPlaylist();

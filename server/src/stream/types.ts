@@ -1,3 +1,4 @@
+import type { ProgramCaptions } from './captions/ProgramCaptions.ts';
 import type { MediaChapter } from '@tunarr/types';
 import type { Duration } from 'dayjs/plugin/duration.js';
 import type { Dictionary, NonEmptyArray } from 'ts-essentials';
@@ -167,4 +168,6 @@ export type SubtitleRenditionInfo = {
 export type StreamRenditions = {
   audio: AudioRenditionInfo[];
   subtitle?: SubtitleRenditionInfo;
+  // Cues for CEA-608 captions in the HDHomeRun .ts stream
+  captions?: ProgramCaptions;
 };

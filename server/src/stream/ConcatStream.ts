@@ -15,6 +15,8 @@ export class ConcatStream {
     private channel: ChannelOrmWithTranscodeConfig,
     private streamMode: ChannelConcatStreamMode,
     private ffmpegFactory: FFmpegAssistedFactory,
+    // Read when the stream starts; a change applies from the next tune-in
+    private hdhrClosedCaptions: boolean = false,
   ) {}
 
   async createSession(): Promise<FfmpegTranscodeSession> {
@@ -37,6 +39,12 @@ export class ConcatStream {
             // The master playlist can list renditions that point back at the
             // same variant, which makes ffmpeg read the muxed streams twice.
             variant: true,
+            // CEA-608 captions go into this .ts stream, which HDHomeRun
+            // clients such as Plex read, not into Tunarr's own HLS
+            captions:
+              this.streamMode === 'hls_concat' && this.hdhrClosedCaptions
+                ? true
+                : undefined,
           });
 
     return ffmpeg.createConcatSession(streamUrl, {

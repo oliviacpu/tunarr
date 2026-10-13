@@ -8,6 +8,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import tmp from 'tmp';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import {
+  framePts,
+  makeTsSegment,
+  parseTsSegment,
+} from '../../testing/captions/MpegTsSegmentFixture.ts';
+import type { ProgramCaptions } from '../captions/ProgramCaptions.ts';
 import { ProgramStream } from '../ProgramStream.ts';
 import type { HlsSessionOptions } from './HlsSession.js';
 import { HlsSession } from './HlsSession.js';
@@ -65,6 +71,123 @@ function makeSession(
   );
 }
 describe('HlsSession', () => {
+  describe('captionedSegment', () => {
+    let dir: tmp.DirResult;
+
+    beforeEach(() => {
+      dir = tmp.dirSync({ unsafeCleanup: true });
+    });
+
+    afterEach(() => {
+      dir.removeCallback();
+    });
+
+    const ntscFrame = 1001 / 30; // ms per frame at 29.97 fps
+    // End of Caption on channel 1, with parity bits
+    const EndOfCaption = [0x94, 0x2f];
+
+    // The caption pair each video frame of a served segment carries
+    function framePairs(segment: Buffer) {
+      return parseTsSegment(segment).videoPes.map((pes) => {
+        const sei = pes.indexOf(Buffer.from([0x06, 0x04, 17, 0xb5]));
+        return [pes.readUInt8(sei + 14), pes.readUInt8(sei + 15)];
+      });
+    }
+
+    async function serve(
+      captions: ProgramCaptions,
+      ptsOffset: number,
+      segmentOptions: Parameters<typeof makeTsSegment>[0],
+    ) {
+      const session = makeSession(dir.name);
+      await fs.mkdir(session.workingDirectory, { recursive: true });
+      await fs.writeFile(
+        path.join(session.workingDirectory, 'data000001.ts'),
+        makeTsSegment(segmentOptions),
+      );
+      (
+        session as unknown as {
+          addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+        }
+      ).addCaptions(ptsOffset, captions);
+      return session.captionedSegment('data000001.ts');
+    }
+
+    const captions = (frameRate: number): ProgramCaptions => ({
+      // Starts on the program's 40th frame
+      cues: [{ startMs: 40 * ntscFrame, endMs: 50 * ntscFrame, text: 'Hi' }],
+      frameRate,
+      durationMs: 60_000,
+      language: 'eng',
+    });
+
+    test('puts the caption on its frame of the program the segment belongs to', async () => {
+      const ptsOffset = 900_000;
+      const served = await serve(captions(30000 / 1001), ptsOffset, {
+        firstPts: ptsOffset,
+        frames: 60,
+      });
+      if (!served) {
+        throw new Error('not captioned');
+      }
+
+      const pairs = framePairs(served);
+      expect(pairs).toHaveLength(60);
+      expect(pairs[0]).toEqual([0x80, 0x80]);
+      expect(pairs[40]).toEqual(EndOfCaption);
+      expect(pairs[41]).toEqual(EndOfCaption);
+      expect(pairs.findIndex((p) => p[0] === 0x94 && p[1] === 0x2f)).toBe(40);
+    });
+
+    test('follows the program across the 33-bit timestamp wrap', async () => {
+      // The program starts 30 frames before PTS wraps to 0
+      const ptsOffset = 2 ** 33 - 30 * 3003;
+      const served = await serve(captions(30000 / 1001), ptsOffset, {
+        firstPts: ptsOffset,
+        frames: 60,
+      });
+      if (!served) {
+        throw new Error('not captioned');
+      }
+
+      expect(framePts(40, { firstPts: ptsOffset }) % 2 ** 33).toBeLessThan(
+        ptsOffset,
+      );
+      expect(framePairs(served)[40]).toEqual(EndOfCaption);
+    });
+
+    test('sends padding only when frames are spaced unlike the schedule', async () => {
+      // Captions laid out for 24 fps, frames arriving at 29.97
+      const served = await serve(captions(24), 900_000, {
+        firstPts: 900_000,
+        frames: 60,
+      });
+      if (!served) {
+        throw new Error('not captioned');
+      }
+
+      expect(
+        framePairs(served).every((p) => p[0] === 0x80 && p[1] === 0x80),
+      ).toBe(true);
+    });
+
+    test('serves nothing for a segment it cannot caption', async () => {
+      const session = makeSession(dir.name);
+      await fs.mkdir(session.workingDirectory, { recursive: true });
+      await fs.writeFile(
+        path.join(session.workingDirectory, 'data000001.ts'),
+        'not a transport stream',
+      );
+      (
+        session as unknown as {
+          addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+        }
+      ).addCaptions(0, captions(30));
+
+      expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
+    });
+  });
+
   describe('segment length', () => {
     function hlsTime(overrides: Partial<HlsSessionOptions>) {
       const session = makeSession('/tmp', overrides);
