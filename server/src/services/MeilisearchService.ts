@@ -38,6 +38,7 @@ import type {
   Task,
 } from 'meilisearch';
 import { MeiliSearch, MeiliSearchApiError } from 'meilisearch';
+import { randomBytes } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -395,6 +396,7 @@ export class MeilisearchService implements ISearchService {
   private started = false;
   private proc?: ChildProcessWrapper;
   private port?: number;
+  #masterKey?: string;
   #client?: MeiliSearch;
 
   @InjectLogger() declare private readonly logger: Logger;
@@ -444,6 +446,7 @@ export class MeilisearchService implements ISearchService {
         getNumericEnvVar(TUNARR_ENV_VARS.SEARCH_PORT) ??
         this.serverOptions.searchPort ??
         (await getAvailablePort());
+      this.#masterKey = await this.loadMasterKey();
 
       // Main thread in charge
       if (isMainThread) {
@@ -566,13 +569,20 @@ export class MeilisearchService implements ISearchService {
           executablePath,
           args.join(' '),
         );
-        this.proc = await this.childProcessHelper.spawn(executablePath, args, {
-          name: 'meilisearch',
-          maxAttempts: 3,
-          additionalOpts: {
-            cwd: this.serverOptions.databaseDirectory,
+        // The key goes in the environment, not the arguments, so it never
+        // shows up in a process listing
+        this.proc = await this.childProcessHelper.spawn(
+          executablePath,
+          args,
+          {
+            name: 'meilisearch',
+            maxAttempts: 3,
+            additionalOpts: {
+              cwd: this.serverOptions.databaseDirectory,
+            },
           },
-        });
+          { ...process.env, MEILI_MASTER_KEY: this.#masterKey },
+        );
         this.logger.info('Meilisearch service started on port %d', this.port);
         await this.writePidFile(this.proc.process?.pid);
         const outStream = createWriteStream(searchServerLogFile);
@@ -605,6 +615,40 @@ export class MeilisearchService implements ISearchService {
 
   private get pidFilePath(): string {
     return path.join(this.serverOptions.databaseDirectory, 'meilisearch.pid');
+  }
+
+  private get masterKeyPath(): string {
+    return path.join(
+      this.serverOptions.databaseDirectory,
+      'meilisearch-master-key',
+    );
+  }
+
+  /**
+   * The key Meilisearch requires on every request. Without one, anything that
+   * can reach localhost (other users of a shared machine, other containers on
+   * the host network) can read and change the index. The main thread creates
+   * it once, readable only by Tunarr's user, before Meilisearch starts;
+   * workers read the same file.
+   */
+  private async loadMasterKey(): Promise<string> {
+    const existing = await fs
+      .readFile(this.masterKeyPath, 'utf-8')
+      .then((key) => key.trim())
+      .catch(() => '');
+    // Meilisearch requires at least 16 bytes
+    if (existing.length >= 16) {
+      return existing;
+    }
+    if (!isMainThread) {
+      throw new Error(
+        `No Meilisearch key at ${this.masterKeyPath}; the main thread creates it`,
+      );
+    }
+    const key = randomBytes(32).toString('hex');
+    await fs.writeFile(this.masterKeyPath, key, { mode: 0o600 });
+    this.logger.info('Created a key for the search server');
+    return key;
   }
 
   /**
@@ -769,7 +813,10 @@ export class MeilisearchService implements ISearchService {
       throw new Error('Service was not started yet');
     }
     if (!this.#client) {
-      this.#client = new MeiliSearch({ host: `http://localhost:${this.port}` });
+      this.#client = new MeiliSearch({
+        host: `http://localhost:${this.port}`,
+        apiKey: this.#masterKey,
+      });
     }
 
     return this.#client;

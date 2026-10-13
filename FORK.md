@@ -34,6 +34,24 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The search server requires a key (2026-10-13)
+
+- **What you saw:** Tunarr's bundled Meilisearch listened on `localhost:<port>` with no key. Anything that could
+  reach localhost could read and change the search index. That includes other users of a shared machine, and other
+  containers when Tunarr runs on the host network.
+- **Cause:** `MeilisearchService.start` launched Meilisearch without a master key, and `client()` connected without
+  one.
+- **Fix:**
+  - **Key file:** on first start the main thread writes a random 32-byte key to `meilisearch-master-key` in the data
+    directory, readable only by its owner (mode `0600`).
+  - **Meilisearch:** gets the key through `MEILI_MASTER_KEY` in its environment, not its arguments, so the key
+    never shows in a process listing. Every request then needs it.
+  - **Clients:** the client and worker threads read the same file.
+  - **Existing installs:** an existing index keeps working; Meilisearch only enforces the key on requests.
+- **Test:** `MeilisearchService.local.test.ts` runs the real binary. A request without the key gets 401, a wrong
+  key 403, Tunarr's client works, and a restart reuses the key.
+- **Upstream:** not sent.
+
 ### Closed captions keep italics, underline and top placement, with a choice of alignment (2026-10-13)
 
 - **What you saw:** captions dropped the subtitle file's italics (off-screen voices, narration, songs) and its
