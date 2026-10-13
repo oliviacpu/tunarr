@@ -71,6 +71,35 @@ describe('TonemapFilter', () => {
     );
   });
 
+  test('uses the chosen curve', () => {
+    const currentState = new FrameState({
+      scaledSize: FrameSize.FHD,
+      paddedSize: FrameSize.FHD,
+      isAnamorphic: false,
+      pixelFormat: new PixelFormatYuv420P10Le(),
+      frameDataLocation: FrameDataLocation.Software,
+    });
+
+    const filter = new TonemapFilter(currentState, 'mobius');
+
+    expect(filter.filter).toContain('tonemap=tonemap=mobius:desat=0:peak=1000');
+  });
+
+  test('uses hable for bt2390, which only tonemapx has', () => {
+    const currentState = new FrameState({
+      scaledSize: FrameSize.FHD,
+      paddedSize: FrameSize.FHD,
+      isAnamorphic: false,
+      pixelFormat: new PixelFormatYuv420P10Le(),
+      frameDataLocation: FrameDataLocation.Software,
+    });
+
+    const filter = new TonemapFilter(currentState, 'bt2390');
+
+    expect(filter.filter).toContain('tonemap=tonemap=hable:desat=0:peak=1000');
+    expect(filter.filter).not.toContain('bt2390');
+  });
+
   test('affectsFrameState is true', () => {
     const currentState = new FrameState({
       scaledSize: FrameSize.FHD,

@@ -3,6 +3,7 @@ import { PixelFormatYuv420P } from '@/ffmpeg/builder/format/PixelFormat.js';
 import { DefaultTonemapPeakNits } from '@/ffmpeg/builder/options/KnownFfmpegOptions.js';
 import type { FrameState } from '@/ffmpeg/builder/state/FrameState.js';
 import { FrameDataLocation } from '@/ffmpeg/builder/types.js';
+import type { TonemapAlgorithm } from '@tunarr/types/schemas';
 import { ColorFormat } from '../format/ColorFormat.ts';
 
 // Tone mapped frames are SDR but still carry the source's HDR10 side data.
@@ -12,7 +13,10 @@ export const StripHdr10SideData =
   'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA';
 
 export class TonemapFilter extends FilterOption {
-  constructor(private currentState: FrameState) {
+  constructor(
+    private currentState: FrameState,
+    private algorithm: TonemapAlgorithm = 'hable',
+  ) {
     super();
   }
 
@@ -22,7 +26,9 @@ export class TonemapFilter extends FilterOption {
     const transfer = this.currentState.colorFormat?.colorTransfer;
     // DV Profile 5 may have `color_transfer = null/unknown` explicitly specify so zscale does not incorrectly convert PQ when color transfer is unknown
     const tinParam = transfer ? `:tin=${transfer}` : '';
-    const tonemap = `zscale=t=linear${tinParam}:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0:peak=${DefaultTonemapPeakNits},zscale=t=bt709:m=bt709:r=tv,format=yuv420p,${StripHdr10SideData}`;
+    // ffmpeg's tonemap filter has no bt2390 curve (only tonemapx does)
+    const algorithm = this.algorithm === 'bt2390' ? 'hable' : this.algorithm;
+    const tonemap = `zscale=t=linear${tinParam}:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=${algorithm}:desat=0:peak=${DefaultTonemapPeakNits},zscale=t=bt709:m=bt709:r=tv,format=yuv420p,${StripHdr10SideData}`;
     return this.currentState.frameDataLocation === FrameDataLocation.Hardware
       ? `hwdownload,format=p010le|nv12,${tonemap}`
       : tonemap;

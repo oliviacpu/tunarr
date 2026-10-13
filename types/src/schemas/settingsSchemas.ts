@@ -58,6 +58,17 @@ export const FfmpegLogLevels = [
 
 export type FfmpegLogLevel = TupleToUnion<typeof FfmpegLogLevels>;
 
+// Curves for the software HDR -> SDR tone map. bt2390 needs jellyfin-ffmpeg's
+// tonemapx filter; ffmpeg's own tonemap filter falls back to hable for it.
+export const TonemapAlgorithms = [
+  'hable',
+  'bt2390',
+  'mobius',
+  'reinhard',
+] as const;
+
+export type TonemapAlgorithm = TupleToUnion<typeof TonemapAlgorithms>;
+
 export const FfmpegNumericLogLevels: Record<
   TupleToUnion<typeof FfmpegLogLevels>,
   number
@@ -102,6 +113,7 @@ export const FfmpegSettingsSchema = z.object({
     .enum(['none', 'bwdif=0', 'bwdif=1', 'w3fdif', 'yadif=0', 'yadif=1'])
     .default('none'),
   hlsDirectOutputFormat: z.enum(['mkv', 'mpegts', 'mp4']).default('mpegts'),
+  tonemapAlgorithm: z.enum(TonemapAlgorithms).default('hable'),
   enableSubtitleExtraction: z.boolean().optional().default(false),
 });
 

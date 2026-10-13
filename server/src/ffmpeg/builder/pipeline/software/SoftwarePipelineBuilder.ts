@@ -9,8 +9,10 @@ import { PadFilter } from '@/ffmpeg/builder/filter/PadFilter.js';
 import { ScaleFilter } from '@/ffmpeg/builder/filter/ScaleFilter.js';
 import { isHdrContent } from '@/ffmpeg/builder/filter/HdrDetection.js';
 import { TonemapFilter } from '@/ffmpeg/builder/filter/TonemapFilter.js';
+import { TonemapxFilter } from '@/ffmpeg/builder/filter/TonemapxFilter.js';
 import { OverlayWatermarkFilter } from '@/ffmpeg/builder/filter/watermark/OverlayWatermarkFilter.js';
 import { ColorFormat } from '@/ffmpeg/builder/format/ColorFormat.js';
+import { KnownFfmpegFilters } from '@/ffmpeg/builder/options/KnownFfmpegOptions.js';
 import { PixelFormatOutputOption } from '@/ffmpeg/builder/options/OutputOption.js';
 import type { FrameState } from '@/ffmpeg/builder/state/FrameState.js';
 import { FrameDataLocation } from '@/ffmpeg/builder/types.js';
@@ -293,18 +295,36 @@ export class SoftwarePipelineBuilder extends BasePipelineBuilder {
     }
     // DV Profile 5 may report color_transfer = null even though it uses PQ
     // encoding. Explicitly set smpte2084 so zscale can correctly invert the curve.
-    const effectiveState =
-      videoStream.isDolbyVision() && !currentState.colorFormat?.colorTransfer
-        ? currentState.update({
-            colorFormat: new ColorFormat({
-              colorTransfer: ColorTransferFormats.Smpte2084,
-              colorRange: currentState.colorFormat?.colorRange ?? null,
-              colorSpace: currentState.colorFormat?.colorSpace ?? null,
-              colorPrimaries: currentState.colorFormat?.colorPrimaries ?? null,
-            }),
-          })
-        : currentState;
-    const filter = new TonemapFilter(effectiveState);
+    const missingPqTransfer =
+      videoStream.isDolbyVision() && !currentState.colorFormat?.colorTransfer;
+    const { tonemapAlgorithm } = this.ffmpegState;
+
+    if (this.ffmpegCapabilities.hasFilter(KnownFfmpegFilters.Tonemapx)) {
+      const filter = new TonemapxFilter(
+        currentState,
+        tonemapAlgorithm,
+        missingPqTransfer,
+      );
+      this.videoInputSource.filterSteps.push(filter);
+      return filter.nextState(currentState);
+    }
+
+    if (tonemapAlgorithm === 'bt2390') {
+      this.logger.debug(
+        'ffmpeg has no tonemapx filter; tone mapping with hable instead of bt2390',
+      );
+    }
+    const effectiveState = missingPqTransfer
+      ? currentState.update({
+          colorFormat: new ColorFormat({
+            colorTransfer: ColorTransferFormats.Smpte2084,
+            colorRange: currentState.colorFormat?.colorRange ?? null,
+            colorSpace: currentState.colorFormat?.colorSpace ?? null,
+            colorPrimaries: currentState.colorFormat?.colorPrimaries ?? null,
+          }),
+        })
+      : currentState;
+    const filter = new TonemapFilter(effectiveState, tonemapAlgorithm);
     this.videoInputSource.filterSteps.push(filter);
     return filter.nextState(currentState);
   }

@@ -462,6 +462,9 @@ export class FfmpegStreamFactory {
         softwareScalingAlgorithm: isPassthrough
           ? undefined
           : this.ffmpegSettings.scalingAlgorithm,
+        tonemapAlgorithm: isPassthrough
+          ? undefined
+          : this.ffmpegSettings.tonemapAlgorithm,
         vaapiDevice: isPassthrough ? null : this.getVaapiDevice(),
         vaapiDriver: isPassthrough ? null : this.getVaapiDriver(),
         logLevel: this.ffmpegSettings.logLevel,

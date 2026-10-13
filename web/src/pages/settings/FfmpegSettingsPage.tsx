@@ -24,7 +24,8 @@ import type {
   TupleToUnion,
 } from '@tunarr/types';
 import { defaultFfmpegSettings } from '@tunarr/types';
-import { FfmpegLogLevels } from '@tunarr/types/schemas';
+import type { TonemapAlgorithm } from '@tunarr/types/schemas';
+import { FfmpegLogLevels, TonemapAlgorithms } from '@tunarr/types/schemas';
 import { capitalize, isEmpty, isEqual, isNull, map, some } from 'lodash-es';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
@@ -50,6 +51,13 @@ const FfmpegLogOptions = ['disable', 'console', 'file'] as const;
 type FfmpegLogOptions = TupleToUnion<typeof FfmpegLogOptions>;
 
 type FfmpegFormValues = DeepRequired<Omit<FfmpegSettings, 'configVersion'>>;
+
+const TonemapAlgorithmNames: Record<TonemapAlgorithm, string> = {
+  hable: 'Hable',
+  bt2390: 'BT.2390',
+  mobius: 'Möbius',
+  reinhard: 'Reinhard',
+};
 
 export default function FfmpegSettingsPage() {
   const { t } = useLingui();
@@ -305,6 +313,38 @@ export default function FfmpegSettingsPage() {
             <Trans>
               Channels configured to use the HLS Direct stream mode will output
               in the selected container format.
+            </Trans>
+          </FormHelperText>
+        </FormControl>
+        <FormControl sx={{ flexBasis: { xs: '100%', md: '50%' } }}>
+          <InputLabel id="tonemap-algorithm-label">
+            <Trans>HDR Tone-map Curve</Trans>
+          </InputLabel>
+          <Controller
+            control={control}
+            name="tonemapAlgorithm"
+            render={({ field }) => (
+              <Select
+                id="tonemap-algorithm"
+                label={t`HDR Tone-map Curve`}
+                labelId="tonemap-algorithm-label"
+                {...field}
+              >
+                {map(TonemapAlgorithms, (algorithm) => (
+                  <MenuItem key={algorithm} value={algorithm}>
+                    {TonemapAlgorithmNames[algorithm]}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
+          />
+          <FormHelperText>
+            <Trans>
+              How HDR programs are converted to SDR when HDR Tonemapping is
+              enabled. Hable is filmic and a little darker. BT.2390, the
+              broadcast standard, is brighter and closer to the source. Takes
+              effect from the next program. BT.2390 needs jellyfin-ffmpeg; other
+              ffmpeg builds use Hable instead.
             </Trans>
           </FormHelperText>
         </FormControl>

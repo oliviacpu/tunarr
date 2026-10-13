@@ -9815,6 +9815,7 @@ export type GetApiFfmpegSettingsResponses = {
         scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
+        tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9861,6 +9862,7 @@ export type PostApiFfmpegSettingsResponses = {
         scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
+        tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9886,6 +9888,7 @@ export type PutApiFfmpegSettingsData = {
         scalingAlgorithm?: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter?: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat?: 'mkv' | 'mpegts' | 'mp4';
+        tonemapAlgorithm?: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
         enableSubtitleExtraction?: boolean;
     };
     path?: never;
@@ -9928,6 +9931,7 @@ export type PutApiFfmpegSettingsResponses = {
         scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
+        tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
         enableSubtitleExtraction: boolean;
     };
 };

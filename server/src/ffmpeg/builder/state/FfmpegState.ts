@@ -2,7 +2,7 @@ import { HardwareAccelerationMode } from '@/db/schema/TranscodeConfig.js';
 import type { FfmpegVersionResult } from '@/ffmpeg/ffmpegInfo.js';
 import type { DataProps, Maybe, Nullable } from '@/types/util.js';
 import type { TupleToUnion } from '@tunarr/types';
-import type { FfmpegLogLevel } from '@tunarr/types/schemas';
+import type { FfmpegLogLevel, TonemapAlgorithm } from '@tunarr/types/schemas';
 import type { Duration } from 'dayjs/plugin/duration.js';
 import { merge } from 'lodash-es';
 import path from 'node:path';
@@ -106,6 +106,7 @@ export class FfmpegState {
    */
   emitEndList: boolean = false;
   tonemapHdr: boolean = false;
+  tonemapAlgorithm: TonemapAlgorithm = 'hable';
 
   /**
    * When true, maps all streams from the input and copies them,

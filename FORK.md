@@ -28,6 +28,35 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Software tone mapping uses `tonemapx`, with a choice of curve (2026-10-13)
+
+- **What you saw:** HDR tone mapping on the software pipeline was slow, and its look was fixed to Hable. Using
+  jellyfin-ffmpeg's much faster `tonemapx`, or trying the BT.2390 curve, meant rewriting ffmpeg's command line outside
+  Tunarr.
+- **Cause:** `SoftwarePipelineBuilder.setTonemap` always used `TonemapFilter` (`zscale` to linear float RGB, then
+  ffmpeg's plain-C `tonemap=tonemap=hable`), and nothing chose the curve.
+- **Fix:**
+
+  - A global FFmpeg setting, `tonemapAlgorithm` (`hable` default, `bt2390`, `mobius`, `reinhard`), shown as **HDR
+    Tone-map Curve** under Settings > FFmpeg > Global Options. It reaches the builder through `FfmpegState`, like the
+    scaling algorithm, and takes effect from the next program.
+  - When ffmpeg has the `tonemapx` filter (`KnownFfmpegFilters.Tonemapx`, found by the usual filter probe), `setTonemap`
+    uses the new `TonemapxFilter`: `tonemapx=tonemap=<curve>:desat=0:t=bt709:m=bt709:p=bt709:r=tv:format=yuv420p`,
+    with `hwdownload` first for hardware frames. It reads the peak from the frame's HDR10 metadata, applies Dolby
+    Vision RPUs, and drops the HDR10 side data itself. Dolby Vision with no transfer is tagged PQ with `setparams`
+    first, as the zscale chain does with `tin=`.
+  - Without `tonemapx`, the zscale chain stays, with the chosen curve; `bt2390`, which ffmpeg's `tonemap` lacks,
+    becomes `hable`.
+  - The VAAPI builder's software fallback goes through the same method.
+  - Settings files without the field load as `hable`, so nothing changes until it's set.
+
+  Checked with jellyfin-ffmpeg 8.1.3 on an HDR10 test clip: `tonemapx` output is 8-bit High-profile H.264, bt709,
+  without mastering display or light level side data. jellyfin-ffmpeg's version string (`8.1.3-Jellyfin`) parses as
+  8.1.3. Tests: `TonemapxFilter.test.ts`, `TonemapFilter.test.ts`, `SoftwarePipelineBuilder.test.ts`,
+  `ffmpegInfo.test.ts`. Docs: `docs/configure/ffmpeg/index.md`, `docs/configure/ffmpeg/transcode_config.md`.
+
+- **Upstream:** not sent.
+
 ### Tone-mapped HDR10 no longer keeps its HDR metadata (2026-10-13)
 
 - **What you saw:** with HDR tone mapping on, some HDR10 programs never started. ffmpeg exited with code 187 and

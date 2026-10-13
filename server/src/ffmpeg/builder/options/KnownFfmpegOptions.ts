@@ -20,6 +20,8 @@ export const KnownFfmpegFilters = {
   TonemapVaapi: 'tonemap_vaapi',
   TonemapOpencl: 'tonemap_opencl',
   Libplacebo: 'libplacebo',
+  // jellyfin-ffmpeg's SIMD software tone mapper
+  Tonemapx: 'tonemapx',
   PadVaapi: 'pad_vaapi',
   PadOpencl: 'pad_opencl',
   OverlayQsv: 'overlay_qsv',

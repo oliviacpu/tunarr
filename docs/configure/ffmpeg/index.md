@@ -22,6 +22,19 @@ Printing or persisting FFmpeg logs to disk is useful when debugging streaming is
 
 When using the HLS Direct stream mode in a channel (see [channel stream modes](../channels/transcoding/#hls-direct)), use this setting to change the output container format for the stream.
 
+### HDR Tone-map Curve
+
+The curve used to convert HDR programs to SDR when [HDR tonemapping](transcode_config.md#hdr-tonemapping) is enabled on the software pipeline. It is a matter of taste:
+
+| Curve | Look |
+|---|---|
+| **Hable** (default) | Filmic. Keeps detail in shadows and highlights, but darkens the whole picture a little. |
+| **BT.2390** | The ITU broadcast standard. Brighter than Hable, and closer to the source. |
+| **Möbius** | Keeps in-range colors as they are and compresses only the brightest highlights. |
+| **Reinhard** | A simple, soft curve that can look flat. |
+
+The setting takes effect from the next program; no restart is needed. BT.2390 needs an FFmpeg with jellyfin-ffmpeg's `tonemapx` filter. Other FFmpeg builds use Hable instead.
+
 ### FFmpeg Transcode Path
 
 Configure the path where FFmpeg writes HLS segments for a channel's stream. For instance, if running the standalone Linux binary, Tunarr can write transcoded segments to RAM by setting this option to `/dev/shm`. 

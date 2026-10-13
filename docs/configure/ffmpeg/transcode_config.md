@@ -103,7 +103,7 @@ When enabled, Tunarr automatically selects the best available tonemapping method
 | **VAAPI** | `tonemap_opencl` → `tonemap_vaapi` → software | Tunarr uses `tonemap_opencl` only when FFmpeg can create an OpenCL device from the VAAPI device. It tests this when it first detects VAAPI capabilities. If the test fails (common on Intel iGPUs whose OpenCL runtime lacks VAAPI sharing, and on all AMD GPUs), Tunarr uses `tonemap_vaapi`, then software. |
 | **CUDA** | Hardware tonemapping via Vulkan | Requires Vulkan support on the host. If Vulkan is unavailable or causing stream errors, set `TUNARR_DISABLE_VULKAN=true` to fall back to software tonemapping. |
 | **QSV** | Hardware tonemapping | Experimental. May not work reliably on all hardware. |
-| **None (Software)** | Software tonemapping | Used as the final fallback for all modes. More CPU-intensive than hardware paths. |
+| **None (Software)** | `tonemapx` → `zscale` + `tonemap` | Used as the final fallback for all modes. More CPU-intensive than hardware paths. Tunarr uses `tonemapx`, a much faster SIMD tone mapper, when the FFmpeg build has it ([jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) does); otherwise `zscale` with FFmpeg's `tonemap` filter. Either way the HDR10 metadata is removed from the SDR output. The curve is set with **HDR Tone-map Curve** in FFmpeg settings (see [FFmpeg](index.md#hdr-tone-map-curve)). |
 
 Tonemapping is only applied to content Tunarr identifies as HDR (HDR10 or HLG). SDR content is unaffected.
 
