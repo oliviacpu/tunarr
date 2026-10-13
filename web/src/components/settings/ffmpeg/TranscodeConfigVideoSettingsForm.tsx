@@ -60,6 +60,25 @@ const VideoHardwareAccelerationOptions: DropdownOption<SupportedHardwareAccels>[
     },
   ] as const;
 
+// libx264/libx265 presets offered for software encoding, fastest first. The server uses veryfast when the config has
+// none (or an unknown one), so an empty value is shown as veryfast.
+const VideoPresetOptions: DropdownOption<string>[] = [
+  { description: 'ultrafast', value: 'ultrafast' },
+  { description: 'superfast', value: 'superfast' },
+  { description: 'veryfast (default)', value: 'veryfast' },
+  { description: 'faster', value: 'faster' },
+  { description: 'fast', value: 'fast' },
+  { description: 'medium', value: 'medium' },
+];
+
+const videoPresetConverter: Converter<string | null, string> = {
+  to: (preset) =>
+    VideoPresetOptions.some(({ value }) => value === preset)
+      ? (preset ?? 'veryfast')
+      : 'veryfast',
+  from: (preset) => preset,
+};
+
 const resolutionConverter: Converter<Resolution, string> = {
   to: (res) => resolutionToString(res),
   from: (str) => resolutionFromAnyString(str)!,
@@ -148,6 +167,29 @@ export const TranscodeConfigVideoSettingsForm = ({
                       on Linux and blank otherwise)
                     </Trans>
                   }
+                />
+              )}
+            />
+          )
+        }
+      />
+
+      <form.Subscribe
+        selector={(s) => ({
+          hwAccel: s.values.hardwareAccelerationMode,
+          videoFormat: s.values.videoFormat,
+        })}
+        children={({ hwAccel, videoFormat }) =>
+          hwAccel === 'none' &&
+          (videoFormat === 'h264' || videoFormat === 'hevc') && (
+            <form.AppField
+              name="videoPreset"
+              children={(field) => (
+                <field.SelectInput
+                  options={VideoPresetOptions}
+                  converter={videoPresetConverter}
+                  selectProps={{ label: t`Video Preset` }}
+                  helperText={t`How hard the software encoder works per frame. Faster presets use less CPU but need a higher bitrate for the same quality. Takes effect when the next program starts.`}
                 />
               )}
             />

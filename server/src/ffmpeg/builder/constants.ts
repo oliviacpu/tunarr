@@ -57,9 +57,19 @@ export const VideoFormats = {
 
 export type VideoFormat = (typeof VideoFormats)[keyof typeof VideoFormats];
 
+// libx264/libx265 presets, fastest first. Software H.264/HEVC uses the transcode config's preset when it is one of
+// these, otherwise veryfast.
 export const VideoPresets = {
+  UltraFast: 'ultrafast',
+  SuperFast: 'superfast',
   VeryFast: 'veryfast',
-};
+  Faster: 'faster',
+  Fast: 'fast',
+  Medium: 'medium',
+  Slow: 'slow',
+  Slower: 'slower',
+  VerySlow: 'veryslow',
+} as const;
 
 export type VideoPreset = (typeof VideoPresets)[keyof typeof VideoPresets];
 

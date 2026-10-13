@@ -102,6 +102,51 @@ describe('FfmpegPlaybackParamsCalculator', () => {
       expect(params.videoPreset).toBe(VideoPresets.VeryFast);
     });
 
+    test.each(['h264', 'hevc'] as const)(
+      "uses the transcode config's preset for software %s encoding",
+      (videoFormat) => {
+        const config = makeTranscodeConfig({
+          hardwareAccelerationMode: 'none',
+          videoFormat,
+          videoPreset: 'superfast',
+        });
+
+        const calculator = new FfmpegPlaybackParamsCalculator(config, 'hls');
+        const params = calculator.calculateForStream(makeStreamDetails());
+
+        expect(params.videoPreset).toBe(VideoPresets.SuperFast);
+      },
+    );
+
+    test.each(['', 'turbo', null])(
+      'falls back to veryfast when the configured preset is %j',
+      (videoPreset) => {
+        const config = makeTranscodeConfig({
+          hardwareAccelerationMode: 'none',
+          videoFormat: 'h264',
+          videoPreset,
+        });
+
+        const calculator = new FfmpegPlaybackParamsCalculator(config, 'hls');
+        const params = calculator.calculateForStream(makeStreamDetails());
+
+        expect(params.videoPreset).toBe(VideoPresets.VeryFast);
+      },
+    );
+
+    test('ignores the configured preset for hardware-accelerated encoding', () => {
+      const config = makeTranscodeConfig({
+        hardwareAccelerationMode: 'cuda',
+        videoFormat: 'h264',
+        videoPreset: 'superfast',
+      });
+
+      const calculator = new FfmpegPlaybackParamsCalculator(config, 'hls');
+      const params = calculator.calculateForStream(makeStreamDetails());
+
+      expect(params.videoPreset).toBeUndefined();
+    });
+
     test('does not set videoPreset for hardware-accelerated encoding', () => {
       const config = makeTranscodeConfig({
         hardwareAccelerationMode: 'cuda',

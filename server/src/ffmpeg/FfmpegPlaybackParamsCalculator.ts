@@ -20,6 +20,21 @@ import type { PixelFormat } from './builder/format/PixelFormat.ts';
 import { PixelFormatYuv420P } from './builder/format/PixelFormat.ts';
 import { FrameSize } from './builder/types.ts';
 
+const KnownVideoPresets: ReadonlySet<string> = new Set(
+  Object.values(VideoPresets),
+);
+
+function isVideoPreset(preset: string): preset is VideoPreset {
+  return KnownVideoPresets.has(preset);
+}
+
+// The transcode config's preset for libx264/libx265, if it is one they know; otherwise veryfast, the long-standing
+// default (the config field was ignored before, so existing configs keep their behavior).
+function softwareVideoPreset(configured: string | null): VideoPreset {
+  const preset = configured?.trim().toLowerCase() ?? '';
+  return isVideoPreset(preset) ? preset : VideoPresets.VeryFast;
+}
+
 export class FfmpegPlaybackParamsCalculator {
   constructor(
     private transcodeConfig: TranscodeConfigOrm,
@@ -77,7 +92,7 @@ export class FfmpegPlaybackParamsCalculator {
       ])
         .with(
           ['none', P.union(VideoFormats.H264, VideoFormats.Hevc), P._],
-          () => VideoPresets.VeryFast,
+          () => softwareVideoPreset(this.transcodeConfig.videoPreset),
         )
         .otherwise(() => undefined);
 

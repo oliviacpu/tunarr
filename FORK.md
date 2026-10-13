@@ -28,6 +28,21 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Pick the software encoder's preset in the transcode config (2026-10-13)
+
+- **What you saw:** software H.264/HEVC always encoded with `-preset veryfast`. Transcode configs have a `videoPreset`
+  field, but the settings page didn't show it and the stream code ignored it. Trying a faster preset meant rewriting
+  ffmpeg's command line outside Tunarr.
+- **Cause:** `FfmpegPlaybackParamsCalculator` hard-coded `VideoPresets.VeryFast` for hardware acceleration "none".
+- **Fix:** the calculator uses the transcode config's preset when it's a known libx264/libx265 preset, and keeps
+  `veryfast` when it's empty or unknown, so existing configs behave as before. The transcode config page shows a **Video
+  Preset** dropdown (ultrafast to medium) under Video Options when Hardware Acceleration is Software and the format is
+  H.264 or HEVC. A change takes effect when the next ffmpeg process starts; no restart. Hardware encoders are unchanged.
+  Files: `server/src/ffmpeg/FfmpegPlaybackParamsCalculator.ts`, `server/src/ffmpeg/builder/constants.ts`,
+  `web/src/components/settings/ffmpeg/TranscodeConfigVideoSettingsForm.tsx`. Tests:
+  `FfmpegPlaybackParamsCalculator.test.ts`.
+- **Upstream:** not sent.
+
 ### The transcode config's thread count now limits the encoder (2026-10-13)
 
 - **What you saw:** setting **Thread count** in a transcode config didn't limit how many threads libx264 used. On a box
