@@ -34,6 +34,25 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Music rescans only save tracks that changed, and mark removed tracks missing (2026-10-13)
+
+- **What you saw:** every rescan of a music library took as long as the first scan (about 45 minutes for 7,000 Plex
+  tracks), and a track removed from an album on the media server stayed listed as available in Tunarr.
+- **Cause:** `MediaSourceMusicArtistScanner.scanTracks` looked up the library's existing programs with
+  `ProgramType.Episode`. A music library has none, so no track was ever recognised: each one was saved and
+  re-indexed in search on every scan, and none were found missing. Using `ProgramType.Track` alone would have been
+  worse: the lookup covered the whole library while the missing check runs per album, so every other album's tracks
+  would have been marked missing.
+- **Fix:** the lookup asks for this album's tracks only (`ProgramType.Track`, scoped to the album, as the TV scanner
+  does for seasons). An unchanged track is skipped, and a track the album no longer lists is marked missing. The
+  lookup now also returns each program's `state`. A missing track that comes back unchanged is saved again, which
+  returns it to `ok`; previously the save on every scan did that. Applies to Plex, Jellyfin and Emby. Tests:
+  `MediaSourceMusicArtistScanner.test.ts` (a rescan only saves tracks that changed; a track Plex no longer lists is
+  marked missing, and recovers when it returns).
+- **Still fetched:** each track's full metadata is still requested (about 50 ms per track from Plex), because the
+  stored content hash includes stream IDs that only the full metadata has. Skipping that needs a hash of the listing.
+- **Upstream:** not sent.
+
 ### Plex music scans import EPs and singles (2026-10-13)
 
 - **What you saw:** after a full Plex music scan, many releases were missing from Tunarr. In one library, 187 of 797
@@ -50,8 +69,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   paging is unchanged.
 - **After upgrading:** run a scan of the music library. Scans walk every artist's releases, so the missing ones are
   added.
-- **Not changed:** browsing an artist in the media picker (`getLibraryItems` with a parent) still uses the children
-  listing.
+- **Media picker:** the web app picks music from Tunarr's own database, so EPs and singles appear there after the
+  scan. The live Plex browse routes (`/api/plex/:id/search` with a parent, `/api/plex/:id/items/:id/children`) still
+  use the children listing, but the web app no longer calls them.
 - **Upstream:** not sent.
 
 ### On/off subtitles in Plex Live TV: closed captions in the HDHomeRun stream (2026-10-13)
@@ -294,10 +314,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   streams at all.
 - **Fix:** tracks pass `requireVideoStream: false`, so their audio streams are stored. Test: `PlexApiClient.test.ts`
   (`getMusicTrack` keeps an audio-only track's stream).
-- **Known, not fixed:** `MediaSourceMusicArtistScanner.scanTracks` looks up existing items with `ProgramType.Episode`,
-  so it never finds existing tracks: every scan re-fetches every track from Plex, and removed tracks are never marked
-  missing. Switching the type alone would be destructive (the lookup is per library but the "missing" check is per
-  album, so every other album's tracks would be marked missing); it needs an album-scoped lookup.
+- **Fixed later:** rescans used to save every track again and never marked removed ones missing. See "Music rescans
+  only save tracks that changed" above.
 - **Upstream:** not sent.
 
 ### "Normalize Frame Rate" works again (2026-10-13)

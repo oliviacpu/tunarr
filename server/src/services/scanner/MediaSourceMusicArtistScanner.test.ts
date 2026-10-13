@@ -7,7 +7,7 @@ import { test as baseTest, expect, vi } from 'vitest';
 import { bootstrapTunarr } from '../../bootstrap.ts';
 import type { GetProgramGroupingById } from '../../commands/GetProgramGroupingById.ts';
 import { ProgramGroupingMinter } from '../../db/converters/ProgramGroupingMinter.ts';
-import type { ProgramDaoMinter } from '../../db/converters/ProgramMinter.ts';
+import { ProgramDaoMinter } from '../../db/converters/ProgramMinter.ts';
 import { DBAccess } from '../../db/DBAccess.ts';
 import type { IProgramDB } from '../../db/interfaces/IProgramDB.ts';
 import type { MediaSourceDB } from '../../db/mediaSourceDB.ts';
@@ -39,6 +39,7 @@ import { copyPreMigratedDb } from '../../testing/testDbFactory.ts';
 import type { PlexAlbum, PlexArtist, PlexTrack } from '../../types/Media.ts';
 import { Result } from '../../types/result.ts';
 import type { MeilisearchService } from '../MeilisearchService.ts';
+import { PlexMediaCanonicalizer } from '../PlexMediaCanonicalizers.ts';
 import { MediaSourceMusicArtistScanner } from './MediaSourceMusicArtistScanner.ts';
 import type { MediaSourceProgressService } from './MediaSourceProgressService.ts';
 import type { ScanContext } from './MediaSourceScanner.ts';
@@ -112,7 +113,7 @@ const test = baseTest.extend<Fixture>({
   },
 });
 
-// Exposes the protected album upsert path so we can drive it directly.
+// Exposes the protected album and track scan paths so we can drive them directly.
 class TestMusicScanner extends MediaSourceMusicArtistScanner<
   'plex',
   PlexArtist,
@@ -132,7 +133,7 @@ class TestMusicScanner extends MediaSourceMusicArtistScanner<
       {} as MediaSourceDB,
       programDb,
       programGroupingMinter,
-      {} as ProgramDaoMinter,
+      new ProgramDaoMinter(),
       searchService,
       {
         scanStarted: vi.fn(),
@@ -164,8 +165,16 @@ class TestMusicScanner extends MediaSourceMusicArtistScanner<
     return (async function* () {})();
   }
 
-  protected getAlbumTracks(): AsyncIterable<PlexTrack> {
-    return (async function* () {})();
+  /** What Plex lists for each album, by album key: track keys only, like the listing. */
+  readonly albumTracks = new Map<string, string[]>();
+
+  protected getAlbumTracks(album: PlexAlbum): AsyncIterable<PlexTrack> {
+    const keys = this.albumTracks.get(album.externalId) ?? [];
+    return (async function* () {
+      for (const externalId of keys) {
+        yield { externalId } as unknown as PlexTrack;
+      }
+    })();
   }
 
   protected getFullTrackMetadata(): Promise<Result<PlexTrack>> {
@@ -186,6 +195,14 @@ class TestMusicScanner extends MediaSourceMusicArtistScanner<
     scanContext: ScanContext<PlexApiClient>,
   ) {
     return this.updateAlbum(album, artist, undefined, scanContext);
+  }
+
+  scanTracksForTest(
+    artist: PlexArtist,
+    album: PlexAlbum,
+    scanContext: ScanContext<PlexApiClient>,
+  ) {
+    return this.scanTracks(artist, { ...album, artist }, scanContext);
   }
 }
 
@@ -358,5 +375,256 @@ describe('MediaSourceMusicArtistScanner album/artist association', () => {
     expect(albumRow?.type).toBe('album');
     expect(albumRow?.artistUuid).toBe(persistedArtistUuid);
     expect(albumRow?.artistUuid).not.toBe(ephemeralArtistUuid);
+  });
+});
+
+async function insertAlbum(
+  programDb: IProgramDB,
+  library: MediaSourceLibraryOrm,
+  mediaSource: MediaSourceOrm,
+  artistUuid: string,
+  externalKey: string,
+): Promise<PlexAlbum> {
+  const now = +dayjs();
+  const grouping: NewProgramGroupingWithRelations<'album'> = {
+    programGrouping: {
+      uuid: v4(),
+      canonicalId: `plex://album/${externalKey}`,
+      createdAt: now,
+      updatedAt: now,
+      title: `Album ${externalKey}`,
+      type: ProgramGroupingType.Album,
+      sourceType: 'plex',
+      externalKey,
+      mediaSourceId: mediaSource.uuid,
+      artistUuid,
+      showUuid: null,
+      libraryId: library.uuid,
+      state: 'ok',
+    },
+    externalIds: [],
+    artwork: [],
+    credits: [],
+    genres: [],
+    studios: [],
+    tags: [],
+  };
+
+  const result = await programDb.upsertProgramGrouping(grouping);
+  return {
+    type: 'album',
+    uuid: result.entity.uuid,
+    externalId: externalKey,
+    title: `Album ${externalKey}`,
+  } as unknown as PlexAlbum;
+}
+
+// Track metadata shaped like Plex's full /library/metadata/<track> response.
+function plexTrackMetadata(
+  ratingKey: string,
+  albumKey: string,
+  updatedAt: number = 1_700_000_000,
+) {
+  return {
+    ratingKey,
+    key: `/library/metadata/${ratingKey}`,
+    guid: `plex://track/${ratingKey}`,
+    librarySectionID: Number(externalLibraryKey),
+    type: 'track' as const,
+    title: `Track ${ratingKey}`,
+    index: 1,
+    duration: 241_000,
+    addedAt: 1_700_000_000,
+    updatedAt,
+    parentRatingKey: albumKey,
+    parentTitle: `Album ${albumKey}`,
+    parentKey: `/library/metadata/${albumKey}`,
+    grandparentRatingKey: '156406',
+    grandparentTitle: 'Darren Korb',
+    grandparentKey: '/library/metadata/156406',
+    Media: [
+      {
+        id: Number(ratingKey),
+        duration: 241_000,
+        bitrate: 900,
+        audioChannels: 2,
+        audioCodec: 'flac',
+        container: 'flac',
+        Part: [
+          {
+            id: Number(ratingKey),
+            key: `/library/parts/${ratingKey}/file.flac`,
+            duration: 241_000,
+            file: `/media/music/${ratingKey}.flac`,
+            size: 30_000_000,
+            container: 'flac',
+            Stream: [
+              {
+                id: Number(ratingKey) * 10,
+                streamType: 2,
+                index: 0,
+                codec: 'flac',
+                channels: 2,
+                selected: true,
+                displayTitle: 'FLAC (Stereo)',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** A real PlexApiClient, with the real canonicalizer, serving each track's full metadata. */
+function makeTrackApiClient(
+  mediaSource: MediaSourceOrm,
+  library: MediaSourceLibraryOrm,
+  tracks: Map<string, ReturnType<typeof plexTrackMetadata>>,
+): PlexApiClient {
+  const client = new PlexApiClient(new PlexMediaCanonicalizer(), {
+    mediaSource: {
+      ...mediaSource,
+      libraries: [{ ...library, type: 'tracks' as const }],
+    },
+  } as never);
+
+  vi.spyOn(client, 'getItemMetadataInternal' as never).mockImplementation(((
+    key: string,
+  ) => {
+    const metadata = tracks.get(key);
+    return Promise.resolve(
+      metadata
+        ? Result.success(metadata)
+        : Result.forError(new Error(`No track ${key}`)),
+    );
+  }) as never);
+
+  return client;
+}
+
+describe('MediaSourceMusicArtistScanner track rescans', () => {
+  async function setup(
+    drizzle: NonNullable<DBAccess['drizzle']>,
+    programDb: IProgramDB,
+  ) {
+    const { mediaSource, library } =
+      await createTestMediaSourceLibrary(drizzle);
+    const artistUuid = await insertArtist(programDb, library, mediaSource);
+    const artist = makeArtist('156406', artistUuid);
+    const tracks = new Map([
+      ['301', plexTrackMetadata('301', '300')],
+      ['302', plexTrackMetadata('302', '300')],
+      ['401', plexTrackMetadata('401', '400')],
+    ]);
+    const apiClient = makeTrackApiClient(mediaSource, library, tracks);
+    const searchService = {
+      indexMusicTracks: vi.fn().mockResolvedValue(undefined),
+      updatePrograms: vi.fn().mockResolvedValue(undefined),
+    } as unknown as MeilisearchService;
+    const scanner = new TestMusicScanner(
+      programDb,
+      new ProgramGroupingMinter(),
+      searchService,
+      apiClient,
+    );
+    scanner.albumTracks.set('300', ['301', '302']);
+    scanner.albumTracks.set('400', ['401']);
+
+    const albumA = await insertAlbum(
+      programDb,
+      library,
+      mediaSource,
+      artistUuid,
+      '300',
+    );
+    const albumB = await insertAlbum(
+      programDb,
+      library,
+      mediaSource,
+      artistUuid,
+      '400',
+    );
+
+    const context: ScanContext<PlexApiClient> = {
+      library,
+      mediaSource,
+      force: false,
+      apiClient,
+      scannedEntities: 0,
+      totalEntities: 0,
+    };
+
+    const scan = async (album: PlexAlbum) => {
+      const result = await scanner.scanTracksForTest(artist, album, context);
+      expect(result.isSuccess()).toBe(true);
+    };
+
+    const trackStates = async () => {
+      const rows = await drizzle.query.program.findMany({
+        where: (fields, { eq }) => eq(fields.libraryId, library.uuid),
+        columns: { externalKey: true, state: true },
+      });
+      return Object.fromEntries(
+        rows.map((row) => [row.externalKey, row.state]),
+      );
+    };
+
+    return { scanner, tracks, albumA, albumB, scan, trackStates };
+  }
+
+  test('a rescan only saves tracks that changed', async ({
+    drizzle,
+    programDb,
+  }) => {
+    const { tracks, albumA, scan } = await setup(drizzle, programDb);
+    const upserts = vi.spyOn(programDb, 'upsertPrograms');
+
+    await scan(albumA);
+    expect(upserts).toHaveBeenCalledTimes(2);
+
+    await scan(albumA);
+    expect(upserts).toHaveBeenCalledTimes(2);
+
+    // Plex reports an edit to one track
+    tracks.set('302', plexTrackMetadata('302', '300', 1_800_000_000));
+    await scan(albumA);
+    expect(upserts).toHaveBeenCalledTimes(3);
+  });
+
+  test('a track Plex no longer lists is marked missing, and recovers when it returns', async ({
+    drizzle,
+    programDb,
+  }) => {
+    const { scanner, albumA, albumB, scan, trackStates } = await setup(
+      drizzle,
+      programDb,
+    );
+
+    await scan(albumA);
+    await scan(albumB);
+    expect(await trackStates()).toEqual({
+      '301': 'ok',
+      '302': 'ok',
+      '401': 'ok',
+    });
+
+    // Another album's tracks are not part of this album's scan
+    scanner.albumTracks.set('300', ['301']);
+    await scan(albumA);
+    expect(await trackStates()).toEqual({
+      '301': 'ok',
+      '302': 'missing',
+      '401': 'ok',
+    });
+
+    // Unchanged in Plex, but it has to leave the missing state
+    scanner.albumTracks.set('300', ['301', '302']);
+    await scan(albumA);
+    expect(await trackStates()).toEqual({
+      '301': 'ok',
+      '302': 'ok',
+      '401': 'ok',
+    });
   });
 });

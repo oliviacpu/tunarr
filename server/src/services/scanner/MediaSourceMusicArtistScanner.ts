@@ -531,9 +531,12 @@ export abstract class MediaSourceMusicArtistScanner<
   ): Promise<Result<void>> {
     return Result.attemptAsync(async () => {
       const { mediaSource, library, force } = scanContext;
+      // Only this album's tracks: anything listed here that Plex no longer
+      // returns for the album is marked missing below.
       const existing = await this.programDB.getProgramInfoForMediaSourceLibrary(
         library.uuid,
-        ProgramType.Episode,
+        ProgramType.Track,
+        [ProgramGroupingType.Album, album.uuid],
       );
 
       const seenTracks = new Set<string>();
@@ -561,9 +564,13 @@ export abstract class MediaSourceMusicArtistScanner<
         track.releaseDate ??= album.releaseDate;
         track.releaseDateString ??= album.releaseDateString;
 
+        // A track that was marked missing and came back unchanged is still
+        // saved, so it returns to 'ok'.
+        const existingTrack = existing[externalKey];
         if (
           !force &&
-          existing[externalKey]?.canonicalId === fullMetadata.canonicalId
+          existingTrack?.state === 'ok' &&
+          existingTrack.canonicalId === fullMetadata.canonicalId
         ) {
           this.logger.debug(
             "Skipping track key = %s because it hasn't changed",
