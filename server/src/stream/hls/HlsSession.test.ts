@@ -135,7 +135,6 @@ describe('HlsSession', () => {
       expect(pairs).toHaveLength(60);
       expect(pairs[0]).toEqual([0x80, 0x80]);
       expect(pairs[40]).toEqual(EndOfCaption);
-      expect(pairs[41]).toEqual(EndOfCaption);
       expect(pairs.findIndex((p) => p[0] === 0x94 && p[1] === 0x2f)).toBe(40);
     });
 

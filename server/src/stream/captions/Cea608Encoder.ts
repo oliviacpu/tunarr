@@ -65,11 +65,6 @@ function preambleAddress(row: number, indent: number): CcPair {
   return pair(codes[0], codes[1] | 0x10 | ((indent / 4) << 1));
 }
 
-// Tab offset 1-3 columns
-function tabOffset(columns: number): CcPair {
-  return pair(0x17, 0x20 + columns);
-}
-
 // The basic character set is ASCII except for these positions
 const BasicOverrides: Record<number, string> = {
   0x2a: 'á',
@@ -212,8 +207,14 @@ export function layoutCaption(text: string): string[][] {
 
   // Width in 608 columns: transliteration can widen a character ('…' is 3)
   const width = (s: string) => separateRepeatedCodes(toUnits(s)).length;
+  // The cue's own line breaks are kept when every line fits. Otherwise the
+  // whole cue is rewrapped, so a 2-line cue with one long line usually stays
+  // one caption instead of becoming 3 lines split over two captions.
+  const sourceLines = words.every((line) => width(line) <= Columns)
+    ? words
+    : [words.join(' ')];
   const lines: string[] = [];
-  for (const sourceLine of words) {
+  for (const sourceLine of sourceLines) {
     let line = '';
     for (const word of sourceLine.split(' ')) {
       const chunks = splitToWidth(word, width);
@@ -240,27 +241,32 @@ export function layoutCaption(text: string): string[][] {
   return captions;
 }
 
-// The pairs that load one caption into hidden memory, bottom-aligned and
-// centred, in atoms: runs of pairs that must reach the decoder back to back
-// (a doubled control code, or a fallback character and the extended character
-// that replaces it). Other commands may go between atoms.
+// The pairs that load one caption into hidden memory, in atoms: runs of pairs
+// that must reach the decoder back to back (a fallback character and the
+// extended character that replaces it). Other commands may go between atoms.
+//
+// Control codes are sent once. Broadcasters send each twice so one survives a
+// transmission error; this stream is never damaged in transit, and the second
+// copy costs a frame each, which made captions late in fast dialogue.
 function loadSequence(lines: string[]): CcPair[][] {
   const atoms: CcPair[][] = [];
-  // Control codes are sent twice, as the standard expects
-  const pushCode = (code: CcPair) => atoms.push([code, code]);
+  const pushCode = (code: CcPair) => atoms.push([code]);
 
   pushCode(ResumeCaptionLoading);
   pushCode(EraseNonDisplayedMemory);
 
+  // Block-centred: every line starts at the same column, the block centred as
+  // nearly as a preamble's 4-column steps allow (no tab offsets to send)
+  const lineUnits = lines.map((line) => separateRepeatedCodes(toUnits(line)));
+  const widest = Math.max(0, ...lineUnits.map((units) => units.length));
+  const indent = Math.min(
+    Math.max(0, Math.round((Columns - widest) / 2 / 4) * 4),
+    Math.max(0, Math.floor((Columns - widest) / 4) * 4),
+  );
+
   const firstRow = 15 - lines.length + 1;
-  for (const [i, line] of lines.entries()) {
-    const units = separateRepeatedCodes(toUnits(line));
-    const startColumn = Math.max(0, Math.floor((Columns - units.length) / 2));
-    const indent = Math.floor(startColumn / 4) * 4;
+  for (const [i, units] of lineUnits.entries()) {
     pushCode(preambleAddress(firstRow + i, indent));
-    if (startColumn > indent) {
-      pushCode(tabOffset(startColumn - indent));
-    }
 
     // Basic characters go two to a pair
     let pending: number | undefined;
@@ -279,7 +285,7 @@ function loadSequence(lines: string[]): CcPair[][] {
           pending === undefined
             ? pair(unit.fallback, 0)
             : pair(pending, unit.fallback);
-        atoms.push([charPair, unit.code, unit.code]);
+        atoms.push([charPair, unit.code]);
       } else {
         if (pending !== undefined) {
           atoms.push([pair(pending, 0)]);
@@ -360,13 +366,20 @@ export function buildCaptionSchedule(
   // Each cue becomes one or more captions of up to 2 lines, sharing its time
   const captions = cues
     .flatMap((cue) => {
+      // A cue too long for one caption is shown in parts, each for a share of
+      // the cue's time in proportion to its text
       const parts = layoutCaption(cue.text);
-      const partMs = (cue.endMs - cue.startMs) / Math.max(parts.length, 1);
-      return parts.map((lines, i) => ({
-        startMs: cue.startMs + i * partMs,
-        endMs: cue.startMs + (i + 1) * partMs,
-        lines,
-      }));
+      const lengths = parts.map((lines) => lines.join(' ').length);
+      const total = Math.max(
+        lengths.reduce((a, b) => a + b, 0),
+        1,
+      );
+      let at = cue.startMs;
+      return parts.map((lines, i) => {
+        const startMs = at;
+        at += ((cue.endMs - cue.startMs) * (lengths[i] ?? 0)) / total;
+        return { startMs, endMs: at, lines };
+      });
     })
     .filter((c) => c.endMs > options.firstFrameMs && c.startMs < endMs)
     .sort((a, b) => a.startMs - b.startMs);
@@ -433,23 +446,21 @@ export function buildCaptionSchedule(
     if (!placeBefore(load, wanted, loadAfter)) {
       showAt = Math.max(wanted, placeFrom(load, loadAfter));
     }
-    while (!isFree(showAt) || !isFree(showAt + 1)) {
+    while (!isFree(showAt)) {
       showAt++;
     }
     take(showAt, EndOfCaption);
-    take(showAt + 1, EndOfCaption);
-    loadAfter = showAt + 2;
+    loadAfter = showAt + 1;
 
     // Clear the screen at the end, unless the next caption replaces it right away
     const next = captions[i + 1];
-    const endSlot = Math.max(slotOf(caption.endMs), showAt + 2);
-    if (!next || slotOf(next.startMs) > endSlot + 2) {
+    const endSlot = Math.max(slotOf(caption.endMs), showAt + 1);
+    if (!next || slotOf(next.startMs) > endSlot + 1) {
       let clearAt = endSlot;
-      while (!isFree(clearAt) || !isFree(clearAt + 1)) {
+      while (!isFree(clearAt)) {
         clearAt++;
       }
       take(clearAt, EraseDisplayedMemory);
-      take(clearAt + 1, EraseDisplayedMemory);
     }
   }
 

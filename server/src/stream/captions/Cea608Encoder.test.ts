@@ -67,6 +67,13 @@ describe('layoutCaption', () => {
     expect(captions).toHaveLength(2);
   });
 
+  test('rewraps a cue whose lines are too wide, keeping it to two lines', () => {
+    // One source line is 36 columns; rewrapping the whole cue fits it in two
+    expect(
+      layoutCaption('Well, that is\na problem he thinks you can resolve.'),
+    ).toEqual([['Well, that is a problem he', 'thinks you can resolve.']]);
+  });
+
   test('removes SRT, ASS and WebVTT formatting', () => {
     expect(layoutCaption('{\\an8}<i>Hello</i>\\Nthere  <b>you</b>')).toEqual([
       ['Hello', 'there you'],
@@ -100,10 +107,10 @@ describe('buildCaptionSchedule', () => {
     const pairs = framePairs([{ startMs: 2000, endMs: 4000, text: 'Hi' }], 150);
 
     expect(pairs[60]).toEqual(EndOfCaption);
-    expect(pairs[61]).toEqual(EndOfCaption);
     expect(indexOfPair(pairs, EndOfCaption)).toBe(60);
+    expect(indexOfPair(pairs, EndOfCaption, 61)).toBe(-1);
     expect(pairs[120]).toEqual(EraseDisplayedMemory);
-    expect(pairs[121]).toEqual(EraseDisplayedMemory);
+    expect(indexOfPair(pairs, EraseDisplayedMemory, 121)).toBe(-1);
   });
 
   test('loads the caption before its start frame', () => {
@@ -150,14 +157,56 @@ describe('buildCaptionSchedule', () => {
     const pairs = framePairs([{ startMs: 2000, endMs: 3000, text: '♪♪' }], 90);
     const first = indexOfPair(pairs, MusicNote);
 
-    // ♪ (sent twice), a space, ♪ (sent twice)
-    expect(pairs.slice(first, first + 5)).toEqual([
-      MusicNote,
+    // ♪, a space, ♪: a decoder would take a second ♪ right after the first for
+    // a transmission repeat and skip it
+    expect(pairs.slice(first, first + 3)).toEqual([
       MusicNote,
       [0x20, 0x00],
       MusicNote,
-      MusicNote,
     ]);
+  });
+
+  test('starts both lines of a caption at the same column', () => {
+    const pairs = framePairs(
+      [
+        {
+          startMs: 3000,
+          endMs: 5000,
+          text: 'Short\nA much longer second line',
+        },
+      ],
+      150,
+    );
+    // Preamble address codes with an indent: rows 14 (0x14 0x50-0x5f) and 15 (0x14 0x70-0x7f)
+    const row14 = pairs.find(
+      (p) => p[0] === 0x14 && (p[1] ?? 0) >= 0x50 && (p[1] ?? 0) <= 0x5f,
+    );
+    const row15 = pairs.find(
+      (p) => p[0] === 0x14 && (p[1] ?? 0) >= 0x70 && (p[1] ?? 0) <= 0x7f,
+    );
+
+    expect(row14).toBeDefined();
+    expect((row14?.[1] ?? 0) & 0x0f).toBe((row15?.[1] ?? 1) & 0x0f);
+    // No tab offsets
+    expect(
+      pairs.some(
+        (p) => p[0] === 0x17 && (p[1] ?? 0) >= 0x21 && (p[1] ?? 0) <= 0x23,
+      ),
+    ).toBe(false);
+  });
+
+  test('gives each part of a long cue time in proportion to its text', () => {
+    // Three lines, so two captions: 55 characters, then 21
+    const text =
+      'One two three four five six seven eight nine ten eleven twelve thirteen. Bye.';
+    const pairs = framePairs([{ startMs: 3000, endMs: 9000, text }], 400);
+    const firstShown = indexOfPair(pairs, EndOfCaption);
+    const secondShown = indexOfPair(pairs, EndOfCaption, firstShown + 1);
+
+    expect(firstShown).toBe(90);
+    // About 72% of the 6 s (180 frames) goes to the first caption, not half
+    expect(secondShown).toBeGreaterThan(90 + 0.65 * 180);
+    expect(secondShown).toBeLessThan(90 + 0.8 * 180);
   });
 
   test('sends nothing at or after the end of the program', () => {
