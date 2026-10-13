@@ -28,6 +28,21 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Tone-mapped HDR10 no longer keeps its HDR metadata (2026-10-13)
+
+- **What you saw:** with HDR tone mapping on, some HDR10 programs never started. ffmpeg exited with code 187 and
+  libx264 logged "content light levels out of range". The ones that did play sent an SDR (bt709) picture labeled with
+  the source's HDR10 mastering display and light level metadata. This was worked around outside Tunarr by appending
+  `sidedata=mode=delete` filters to ffmpeg's command.
+- **Cause:** the software tone map (`zscale` + `tonemap`) converts the pixels but leaves the frames' HDR10 side data
+  attached. Since ffmpeg 7, libx264 writes that side data into the H.264 stream as SEI, and refuses to open when its
+  light levels fall outside 0–65535.
+- **Fix:** `TonemapFilter` ends its chain with
+  `sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA`
+  (`StripHdr10SideData`). Checked with ffmpeg 8.1: without it the tone-mapped H.264 still carries mastering display and
+  content light level side data; with it, neither. Test: `TonemapFilter.test.ts`.
+- **Upstream:** not sent.
+
 ### Gap music: a channel's music list plays under its offline picture (2026-10-13)
 
 - **What you saw:** during flex gaps a channel showed its offline picture over silence. The channel's

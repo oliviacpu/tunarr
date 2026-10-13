@@ -5,6 +5,12 @@ import type { FrameState } from '@/ffmpeg/builder/state/FrameState.js';
 import { FrameDataLocation } from '@/ffmpeg/builder/types.js';
 import { ColorFormat } from '../format/ColorFormat.ts';
 
+// Tone mapped frames are SDR but still carry the source's HDR10 side data.
+// libx264 would write it into the SDR stream, and it refuses to open at all
+// when the light levels are out of range ("content light levels out of range").
+export const StripHdr10SideData =
+  'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA';
+
 export class TonemapFilter extends FilterOption {
   constructor(private currentState: FrameState) {
     super();
@@ -16,7 +22,7 @@ export class TonemapFilter extends FilterOption {
     const transfer = this.currentState.colorFormat?.colorTransfer;
     // DV Profile 5 may have `color_transfer = null/unknown` explicitly specify so zscale does not incorrectly convert PQ when color transfer is unknown
     const tinParam = transfer ? `:tin=${transfer}` : '';
-    const tonemap = `zscale=t=linear${tinParam}:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0:peak=${DefaultTonemapPeakNits},zscale=t=bt709:m=bt709:r=tv,format=yuv420p`;
+    const tonemap = `zscale=t=linear${tinParam}:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0:peak=${DefaultTonemapPeakNits},zscale=t=bt709:m=bt709:r=tv,format=yuv420p,${StripHdr10SideData}`;
     return this.currentState.frameDataLocation === FrameDataLocation.Hardware
       ? `hwdownload,format=p010le|nv12,${tonemap}`
       : tonemap;

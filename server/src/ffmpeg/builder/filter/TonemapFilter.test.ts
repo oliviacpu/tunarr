@@ -28,7 +28,9 @@ describe('TonemapFilter', () => {
     expect(filter.filter).to.eq(
       'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,' +
         'tonemap=tonemap=hable:desat=0:peak=1000,' +
-        'zscale=t=bt709:m=bt709:r=tv,format=yuv420p',
+        'zscale=t=bt709:m=bt709:r=tv,format=yuv420p,' +
+        'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,' +
+        'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
     );
   });
 
@@ -47,7 +49,25 @@ describe('TonemapFilter', () => {
       'hwdownload,format=p010le|nv12,' +
         'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,' +
         'tonemap=tonemap=hable:desat=0:peak=1000,' +
-        'zscale=t=bt709:m=bt709:r=tv,format=yuv420p',
+        'zscale=t=bt709:m=bt709:r=tv,format=yuv420p,' +
+        'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,' +
+        'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
+    );
+  });
+
+  test('removes HDR10 side data after tone mapping', () => {
+    const currentState = new FrameState({
+      scaledSize: FrameSize.FHD,
+      paddedSize: FrameSize.FHD,
+      isAnamorphic: false,
+      pixelFormat: new PixelFormatYuv420P10Le(),
+      frameDataLocation: FrameDataLocation.Software,
+    });
+
+    const filter = new TonemapFilter(currentState);
+
+    expect(filter.filter).toMatch(
+      /format=yuv420p,sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA$/,
     );
   });
 
