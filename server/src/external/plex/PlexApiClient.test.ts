@@ -207,6 +207,50 @@ describe('PlexApiClient', () => {
     });
   });
 
+  describe('getArtistAlbums', () => {
+    it("lists an artist's EPs and singles through the library section", async () => {
+      // Plex's /library/metadata/<artist>/children only returns full albums, so EPs and singles were never
+      // scanned. Artists with nothing else were imported with no albums at all.
+      const { client, externalLibraryKey } = makeMinimalPlexClient();
+      const librarySectionID = Number(externalLibraryKey);
+      const release = (ratingKey: string, title: string) => ({
+        ratingKey,
+        key: `/library/metadata/${ratingKey}/children`,
+        guid: `plex://album/${ratingKey}`,
+        librarySectionID,
+        type: 'album' as const,
+        title,
+        parentRatingKey: '100',
+        parentTitle: 'Artist',
+      });
+      const doGetSpy = mockPagedItems(client, [
+        release('201', 'An Album'),
+        release('202', 'An EP'),
+        release('203', 'A Single'),
+      ]);
+
+      const albums = await Array.fromAsync(
+        client.getArtistAlbums('100', 50, externalLibraryKey),
+      );
+
+      expect(albums.map((album) => album.title)).toEqual([
+        'An Album',
+        'An EP',
+        'A Single',
+      ]);
+      expect(doGetSpy).toHaveBeenCalledWith(
+        `/library/sections/${externalLibraryKey}/all?type=9&artist.id=100`,
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(doGetSpy).not.toHaveBeenCalledWith(
+        '/library/metadata/100/children',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+  });
+
   describe('getItemChildren', () => {
     it('pages exactly to totalSize when the server reports it', async () => {
       const { client, externalLibraryKey } = makeMinimalPlexClient();

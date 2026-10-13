@@ -77,7 +77,11 @@ export class PlexMediaSourceMusicScanner extends MediaSourceMusicArtistScanner<
     show: PlexArtist,
     context: ScanContext<PlexApiClient>,
   ): AsyncIterable<PlexAlbum> {
-    return context.apiClient.getArtistAlbums(show.externalId);
+    return context.apiClient.getArtistAlbums(
+      show.externalId,
+      50,
+      context.library.externalKey,
+    );
   }
 
   protected getAlbumTracks(

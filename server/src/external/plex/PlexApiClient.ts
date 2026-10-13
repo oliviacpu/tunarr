@@ -313,16 +313,24 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
     );
   }
 
+  /**
+   * An artist's releases. Pass the artist's library section key whenever it
+   * is known: the artist's own children listing only returns full albums, and
+   * leaves out EPs, singles and other release types.
+   */
   getArtistAlbums(
     artistKey: string,
     pageSize: number = 50,
+    librarySectionKey?: string,
   ): AsyncIterable<PlexAlbum> {
     return this.iterateChildItems(
-      artistKey,
+      librarySectionKey ?? artistKey,
       PlexMusicAlbumMediaContainerResponseSchema,
       (album, library) => this.plexAlbumInjection(album, library),
       pageSize,
-      `/library/metadata/${artistKey}/children`,
+      librarySectionKey
+        ? `/library/sections/${librarySectionKey}/all?type=9&artist.id=${artistKey}`
+        : `/library/metadata/${artistKey}/children`,
     );
   }
 

@@ -34,6 +34,26 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Plex music scans import EPs and singles (2026-10-13)
+
+- **What you saw:** after a full Plex music scan, many releases were missing from Tunarr. In one library, 187 of 797
+  releases (459 of 7,314 tracks) never arrived. Artists with only EPs and singles were imported with no albums at all.
+- **Cause:** `PlexApiClient.getArtistAlbums` listed `/library/metadata/<artist>/children`. Plex returns only full
+  albums there and leaves out EPs, singles and other release types. Neither `excludeAllLeaves=0` nor `includeAll=1`
+  brings them back.
+- **Fix:** `getArtistAlbums` takes the library section key and lists
+  `/library/sections/<section>/all?type=9&artist.id=<artist>`, which returns every release by that album artist.
+  `PlexMediaSourceMusicScanner.getAlbums` passes `context.library.externalKey`. Without a section key it keeps the
+  old listing. Test: `PlexApiClient.test.ts` (`getArtistAlbums` lists EPs and singles through the library section).
+- **Checked** against a real Plex server: the section listing returned all 5 of Foodman's releases (the children
+  listing returned 0), and 7 for Air (the children listing missed the EP _Casanova 70_). Its `totalSize` matches, so
+  paging is unchanged.
+- **After upgrading:** run a scan of the music library. Scans walk every artist's releases, so the missing ones are
+  added.
+- **Not changed:** browsing an artist in the media picker (`getLibraryItems` with a parent) still uses the children
+  listing.
+- **Upstream:** not sent.
+
 ### On/off subtitles in Plex Live TV: closed captions in the HDHomeRun stream (2026-10-13)
 
 - **What you saw:**
