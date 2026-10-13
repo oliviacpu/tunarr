@@ -23,8 +23,6 @@ const KEYS = {
   ),
   MediaSourceLibraryRefresher: Symbol.for('MediaSourceLibraryRefresher'),
   ProgramDaoMinterFactory: Symbol.for('ProgramDaoMinterFactory'),
-  FFmpegPath: Symbol.for('FFmpegPath'),
-  FFprobePath: Symbol.for('FFprobePath'),
 
   // Streaming
   HlsSession: Symbol.for('HlsSession'),

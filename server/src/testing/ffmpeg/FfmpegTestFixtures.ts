@@ -99,7 +99,11 @@ export const vaapiOpenclSupported =
 
 function makeFfmpegInfo(): FfmpegInfo {
   // Instantiate directly, ignoring Inversify DI bindings
-  return new FfmpegInfo(binaries!.ffmpeg, binaries!.ffprobe);
+  const paths = {
+    ffmpegExecutablePath: binaries!.ffmpeg,
+    ffprobeExecutablePath: binaries!.ffprobe,
+  };
+  return new FfmpegInfo({ ffmpegSettings: () => paths });
 }
 
 export type FfmpegTestFixtures = {

@@ -1,3 +1,4 @@
+import type { ReadableFfmpegSettings } from '@/db/interfaces/ISettingsDB.js';
 import { FfprobeMediaInfoSchema } from '@/types/ffmpeg.js';
 import { KEYS } from '@/types/inject.js';
 import { Result } from '@/types/result.js';
@@ -56,6 +57,15 @@ const CoderExtractionPattern = /[A-Z.]+\s([a-z0-9_-]+)\s*(.*)$/;
 export const FFmpegOptionsExtractionPattern = /^-([a-z_]+)\s+.*/m;
 const FfmpegFilterExtractionPattern = /^\s*?[A-Z.]+\s+(\w+).*/m;
 
+// The settings FfmpegInfo needs: the executable paths, read on every call so
+// that changing them in the FFmpeg settings applies without a restart.
+export type FfmpegPathSettings = {
+  ffmpegSettings(): Pick<
+    ReadableFfmpegSettings,
+    'ffmpegExecutablePath' | 'ffprobeExecutablePath'
+  >;
+};
+
 @injectable()
 export class FfmpegInfo {
   private static resultCache: NodeCache = new NodeCache({
@@ -74,10 +84,15 @@ export class FfmpegInfo {
 
   @InjectLogger() declare private readonly logger: Logger;
 
-  constructor(
-    @inject(KEYS.FFmpegPath) private ffmpegPath: string,
-    @inject(KEYS.FFprobePath) private ffprobePath: string,
-  ) {}
+  constructor(@inject(KEYS.SettingsDB) private settings: FfmpegPathSettings) {}
+
+  private get ffmpegPath(): string {
+    return this.settings.ffmpegSettings().ffmpegExecutablePath;
+  }
+
+  private get ffprobePath(): string {
+    return this.settings.ffmpegSettings().ffprobeExecutablePath;
+  }
 
   async seed() {
     this.logger.debug('Seeding ffmpeg info');

@@ -34,6 +34,34 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Changing the FFmpeg path applies without a restart (2026-10-13)
+
+- **What you saw:** after changing the FFmpeg executable path, Tunarr kept probing the old path until it restarted. A
+  symlink had to stay at the old path so that nothing broke in the meantime.
+- **Cause:** `FfmpegInfo` received both paths once, in its constructor (`KEYS.FFmpegPath`, `KEYS.FFprobePath`).
+  Long-lived holders keep one instance:
+
+  - the pipeline builder factory, an Inversify factory binding created once, whose `FfmpegInfo` supplies the encoders,
+    filters and options every stream's command is built from;
+  - `TroubleshootService`, a singleton;
+  - ffprobe for stream details, and the health checks.
+
+  The ffmpeg processes themselves run the current path (`FfmpegProcess`), so commands were built from the old binary's
+  capabilities and then run on the new binary.
+
+- **Fix:** `FfmpegInfo` takes the settings DB and reads both paths on every call. Its probe caches are already keyed
+  by path, so a new path is probed fresh. The two path bindings and keys are gone.
+- **Why it matters now:** the image has two ffmpegs (jellyfin-ffmpeg at `/usr/bin`, ErsatzTV 7.1.1 at
+  `/usr/local/bin`). Before this fix, switching to 7.1.1 without a restart kept the stale "has `tonemapx`" capability,
+  so HDR programs would have been sent a filter 7.1.1 doesn't have.
+- **Checked:**
+  - Test: `ffmpegInfo.test.ts` switches one `FfmpegInfo` between two stand-in ffmpeg scripts; version and filters follow.
+  - On a throwaway server, with one HDR10 program, no restart: jellyfin-ffmpeg → `tonemapx`; Homebrew ffmpeg (no
+    `tonemapx`) → the zscale chain; back to jellyfin → `tonemapx` again.
+- **Known limit:** probe results are cached per path for an hour. Replacing the binary behind the same path, for
+  example by editing a wrapper script to call another ffmpeg, still shows the old capabilities for up to an hour.
+- **Upstream:** not sent.
+
 ### Faster tune-in: HLS segment length, segments before playback, and a start-up burst (2026-10-13)
 
 - **What you saw:** a cold channel took 5–10 s to send its first byte to Plex's tuner. It was sped up outside Tunarr by
