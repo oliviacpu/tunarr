@@ -14,6 +14,12 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   every fork commit on top of upstream. To roll back, deploy an older release's `:<tag>` image.
 - The version Tunarr reports is `<upstream version>-<tag>`, e.g. `2026.10.2-oliviacpu-2026.10.13`.
 - Upstream updates come in with `git fetch upstream && git merge upstream/main`.
+- **ffmpeg:** the image's `/usr/bin/ffmpeg` and `/usr/bin/ffprobe` are jellyfin-ffmpeg (see below). The base image's
+  ErsatzTV ffmpeg 7.1.1 stays at `/usr/local/bin/ffmpeg`. To fall back to it without a new image, set the FFmpeg paths
+  to `/usr/local/bin/ffmpeg` and `/usr/local/bin/ffprobe`. The settings page hides them in a container, so use the API
+  (`PUT /api/ffmpeg-settings`) or `tunarr settings update`. To bump jellyfin-ffmpeg, change `jellyfin_ffmpeg_version` and
+  `jellyfin_ffmpeg_sha256` in the `Dockerfile`. The digest is the release asset's:
+  `gh api repos/jellyfin/jellyfin-ffmpeg/releases/tags/v<version> --jq '.assets[] | select(.name | test("portable_linux64-gpl")) | .digest'`.
 
 ## Changes in this fork
 
@@ -27,6 +33,21 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:** what changed, with the files.
 - **Upstream:** not sent / issue or PR link.
 -->
+
+### The image ships jellyfin-ffmpeg 8.1.3-1 as its ffmpeg (2026-10-13)
+
+- **What you saw:** the image's only ffmpeg was ErsatzTV's 7.1.1, which has no `tonemapx`. The faster tone mapping ran
+  only through a hand-installed jellyfin-ffmpeg and a wrapper script that rewrote Tunarr's command.
+- **Cause:** upstream's image builds on `ghcr.io/ersatztv/ersatztv-ffmpeg` and links its ffmpeg into `/usr/bin`.
+- **Fix:** a `jellyfin-ffmpeg` build stage downloads the static `portable_linux64-gpl` release, checks its sha256, and
+  `ffmpeg-base` copies its `ffmpeg` and `ffprobe` to `/usr/bin` in place of the symlinks. The build fails unless that
+  ffmpeg runs and lists `tonemapx`. Tunarr's default paths already point at `/usr/bin`, so it then picks `tonemapx` by
+  itself (previous entry).
+  - **Checked:** in a local linux/amd64 build of `ffmpeg-base`, `/usr/bin/ffmpeg` reports `8.1.3-Jellyfin` (binary
+    sha256 `79a8d05b…`) and has libx264, libx265, ac3, aac, `tonemapx`, `zscale`, `sidedata`, `loudnorm` and `afade`.
+  - **Not checked:** hardware acceleration (VAAPI, QSV, NVENC) through the static build. The fork's deployment is
+    software-only.
+- **Upstream:** fork-only; upstream chose the ErsatzTV build.
 
 ### Software tone mapping uses `tonemapx`, with a choice of curve (2026-10-13)
 

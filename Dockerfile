@@ -1,6 +1,22 @@
 ARG base_image=ghcr.io/ersatztv/ersatztv-ffmpeg
 ARG base_image_tag=7.1.1
 
+# jellyfin-ffmpeg: FFmpeg with Jellyfin's patches, including the tonemapx tone
+# mapper. A static build; it replaces the base image's ffmpeg as /usr/bin/ffmpeg.
+FROM debian:bookworm-slim AS jellyfin-ffmpeg
+ARG jellyfin_ffmpeg_version=8.1.3-1
+ARG jellyfin_ffmpeg_sha256=b86dc023c64a5a9a410e6e3a938a970460214fae78f31c1553c9f88f1c289b6a
+RUN <<EOF
+set -e
+apt-get update
+apt-get install -y --no-install-recommends ca-certificates curl xz-utils
+curl -fsSL -o /tmp/jellyfin-ffmpeg.tar.xz \
+  "https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v${jellyfin_ffmpeg_version}/jellyfin-ffmpeg_${jellyfin_ffmpeg_version}_portable_linux64-gpl.tar.xz"
+echo "${jellyfin_ffmpeg_sha256}  /tmp/jellyfin-ffmpeg.tar.xz" | sha256sum -c -
+mkdir /out
+tar --no-same-owner -xJf /tmp/jellyfin-ffmpeg.tar.xz -C /out
+EOF
+
 # Setup a node + ffmpeg + nvidia base
 FROM ${base_image}:${base_image_tag} AS ffmpeg-base
 ENV NODE_MAJOR=22
@@ -36,8 +52,10 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN npm install -g corepack@latest
 RUN corepack enable && corepack enable pnpm
 RUN pnpm --version
-RUN ln -s /usr/local/bin/ffmpeg /usr/bin/ffmpeg
-RUN ln -s /usr/local/bin/ffprobe /usr/bin/ffprobe
+# Tunarr runs /usr/bin/ffmpeg by default. The base image's own build stays at
+# /usr/local/bin/ffmpeg as a fallback.
+COPY --from=jellyfin-ffmpeg /out/ffmpeg /out/ffprobe /usr/bin/
+RUN /usr/bin/ffmpeg -hide_banner -filters | grep -q tonemapx
 RUN curl -sfS https://dotenvx.sh | sh
 ENTRYPOINT [ "dotenvx", "run", "--", "/tunarr/tunarr" ]
 CMD [ "server" ]
