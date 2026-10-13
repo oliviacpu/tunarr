@@ -1945,6 +1945,8 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
       mediaItem: this.plexMediaStreamsInject(
         plexTrack.ratingKey,
         plexTrack,
+        // tracks are audio-only; requiring a video stream left them with no streams at all
+        false,
       ).getOrElse(() => emptyMediaItem(plexTrack)),
       // TODO:
       // genres: plexJoinItemInject(plexTrack.Genre),

@@ -95,6 +95,57 @@ function makePlexMovieMetadata(ratingKey: string, librarySectionID: number) {
   };
 }
 
+function makePlexTrackMetadata(ratingKey: string, librarySectionID: number) {
+  return {
+    ratingKey,
+    key: `/library/metadata/${ratingKey}`,
+    guid: `plex://track/${ratingKey}`,
+    librarySectionID,
+    type: 'track' as const,
+    title: `Track ${ratingKey}`,
+    index: 3,
+    duration: 241_000,
+    addedAt: Date.now(),
+    parentRatingKey: '200',
+    parentTitle: 'Album',
+    parentKey: '/library/metadata/200',
+    grandparentRatingKey: '100',
+    grandparentTitle: 'Artist',
+    grandparentKey: '/library/metadata/100',
+    Media: [
+      {
+        id: Number(ratingKey),
+        duration: 241_000,
+        bitrate: 900,
+        audioChannels: 2,
+        audioCodec: 'flac',
+        container: 'flac',
+        Part: [
+          {
+            id: Number(ratingKey),
+            key: `/library/parts/${ratingKey}/file.flac`,
+            duration: 241_000,
+            file: `/media/music/Artist/Album/03 Track.flac`,
+            size: 30_000_000,
+            container: 'flac',
+            Stream: [
+              {
+                id: 1,
+                streamType: 2,
+                index: 0,
+                codec: 'flac',
+                channels: 2,
+                selected: true,
+                displayTitle: 'FLAC (Stereo)',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 /**
  * Serves `allMetadata` the way a Plex server does: honoring
  * X-Plex-Container-Start/Size and returning an empty container once the
@@ -131,6 +182,31 @@ function mockPagedItems(
 }
 
 describe('PlexApiClient', () => {
+  describe('getMusicTrack', () => {
+    it("keeps an audio-only track's audio stream", async () => {
+      // Tracks have no video stream. The media-stream import used to require one, so every track fell back to an
+      // item with no streams and could not be played.
+      const { client, externalLibraryKey } = makeMinimalPlexClient();
+      vi.spyOn(client, 'getItemMetadataInternal' as never).mockResolvedValue(
+        Result.success(
+          makePlexTrackMetadata('300', Number(externalLibraryKey)),
+        ) as never,
+      );
+
+      const result = await client.getMusicTrack('300');
+
+      expect(result.isSuccess()).toBe(true);
+      const streams = result.get().mediaItem?.streams ?? [];
+      expect(streams).toHaveLength(1);
+      expect(streams[0]).toMatchObject({
+        streamType: 'audio',
+        codec: 'flac',
+        channels: 2,
+        index: 0,
+      });
+    });
+  });
+
   describe('getItemChildren', () => {
     it('pages exactly to totalSize when the server reports it', async () => {
       const { client, externalLibraryKey } = makeMinimalPlexClient();

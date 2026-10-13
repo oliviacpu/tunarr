@@ -28,6 +28,21 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Plex music tracks keep their audio stream (2026-10-13)
+
+- **What you saw:** music tracks imported from a Plex music library couldn't be played; streams failed with "Streams
+  with no video" or played nothing.
+- **Cause:** `PlexApiClient.plexTrackInjection` called `plexMediaStreamsInject` with its default
+  `requireVideoStream = true`. Tracks have no video stream, so the import failed and fell back to an item with no
+  streams at all.
+- **Fix:** tracks pass `requireVideoStream: false`, so their audio streams are stored. Test: `PlexApiClient.test.ts`
+  (`getMusicTrack` keeps an audio-only track's stream).
+- **Known, not fixed:** `MediaSourceMusicArtistScanner.scanTracks` looks up existing items with `ProgramType.Episode`,
+  so it never finds existing tracks: every scan re-fetches every track from Plex, and removed tracks are never marked
+  missing. Switching the type alone would be destructive (the lookup is per library but the "missing" check is per
+  album, so every other album's tracks would be marked missing); it needs an album-scoped lookup.
+- **Upstream:** not sent.
+
 ### "Normalize Frame Rate" works again (2026-10-13)
 
 - **What you saw:** the transcode config's **Normalize Frame Rate** checkbox ("Output video at a constant frame rate")
