@@ -40,7 +40,7 @@ import type { ProgramCaptions } from '../stream/captions/ProgramCaptions.ts';
 import {
   exactFrameRate,
   loadProgramCaptions,
-  pickCaptionTrack,
+  captionTrackCandidates,
 } from '../stream/captions/ProgramCaptions.ts';
 import { isImageBasedSubtitle } from '../stream/util.ts';
 import { KEYS } from '../types/inject.ts';
@@ -663,14 +663,29 @@ export class FfmpegStreamFactory {
     // Otherwise caption from the program's full text track, if it has one
     // (e.g. English audio whose forced subtitles are burned in)
     if (captionsOn && captions === undefined) {
-      captions = await this.loadCaptions(
-        pickCaptionTrack(
-          streamDetails.subtitleDetails ?? [],
-          this.ffmpegSettings.languagePreferences.preferences,
-        ),
-        streamDetails,
-        { startTime, duration },
-      );
+      for (const candidate of captionTrackCandidates(
+        streamDetails.subtitleDetails ?? [],
+        this.ffmpegSettings.languagePreferences.preferences,
+      )) {
+        // Embedded tracks are read from their extracted copy, as burn-in does
+        const track =
+          candidate.path === undefined && candidate.type === 'embedded'
+            ? await SubtitleStreamPicker.getSubtitleDetailsWithExtractedPath(
+                lineupItem,
+                candidate,
+              )
+            : candidate;
+        if (track?.path === undefined) {
+          continue;
+        }
+        captions = await this.loadCaptions(track, streamDetails, {
+          startTime,
+          duration,
+        });
+        if (captions) {
+          break;
+        }
+      }
     }
 
     let watermarkSource: Nullable<WatermarkInputSource> = null;

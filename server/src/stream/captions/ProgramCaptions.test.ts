@@ -3,7 +3,7 @@ import {
   exactFrameRate,
   markSegmentsForCaptions,
   parseSubtitleCues,
-  pickCaptionTrack,
+  captionTrackCandidates,
 } from './ProgramCaptions.ts';
 
 describe('exactFrameRate', () => {
@@ -75,7 +75,7 @@ describe('parseSubtitleCues', () => {
   });
 });
 
-describe('pickCaptionTrack', () => {
+describe('captionTrackCandidates', () => {
   const track = (
     overrides: Partial<SubtitleStreamDetails>,
   ): SubtitleStreamDetails => ({
@@ -90,15 +90,18 @@ describe('pickCaptionTrack', () => {
   });
   const english = [{ iso6391: 'en', iso6392: 'eng' }];
 
-  test('skips forced, image-based and unreadable tracks', () => {
+  test('skips forced and image-based tracks', () => {
     const tracks = [
       track({ forced: true, title: 'forced' }),
       track({ codec: 'hdmv_pgs_subtitle', title: 'image' }),
-      track({ path: undefined, title: 'no file' }),
+      track({ type: 'embedded', path: undefined, index: 3, title: 'embedded' }),
       track({ title: 'full' }),
     ];
 
-    expect(pickCaptionTrack(tracks, english)?.title).toBe('full');
+    // Embedded tracks stay in: their extracted copy is looked up later
+    expect(captionTrackCandidates(tracks, english).map((t) => t.title)).toEqual(
+      ['embedded', 'full'],
+    );
   });
 
   test('follows the language preferences, regular before SDH', () => {
@@ -108,13 +111,18 @@ describe('pickCaptionTrack', () => {
       track({ title: 'english' }),
     ];
 
-    expect(pickCaptionTrack(tracks, english)?.title).toBe('english');
+    expect(captionTrackCandidates(tracks, english).map((t) => t.title)).toEqual(
+      ['english', 'english sdh'],
+    );
     expect(
-      pickCaptionTrack(tracks, [{ iso6391: 'es', iso6392: 'spa' }])?.title,
-    ).toBe('spanish');
+      captionTrackCandidates(tracks, [
+        { iso6391: 'es', iso6392: 'spa' },
+        { iso6391: 'en', iso6392: 'eng' },
+      ]).map((t) => t.title),
+    ).toEqual(['spanish', 'english', 'english sdh']);
     expect(
-      pickCaptionTrack(tracks, [{ iso6391: 'fr', iso6392: 'fra' }]),
-    ).toBeUndefined();
+      captionTrackCandidates(tracks, [{ iso6391: 'fr', iso6392: 'fra' }]),
+    ).toEqual([]);
   });
 });
 

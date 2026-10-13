@@ -137,29 +137,29 @@ export function parseSubtitleCues(
 type LanguagePreference = { iso6391: string; iso6392: string };
 
 /**
- * The subtitle track to caption from when the selected one can't be used:
- * a full (not forced) text track with a file on disk, in the first preferred
- * language that has one, regular before SDH.
+ * The tracks to caption from when the selected one can't be used, best first:
+ * full (not forced) text tracks in the preferred languages' order, regular
+ * before SDH. A track may still need its file found (an embedded track's
+ * extracted copy in the subtitle cache).
  */
-export function pickCaptionTrack(
+export function captionTrackCandidates(
   subtitles: SubtitleStreamDetails[],
   languages: readonly LanguagePreference[],
-): SubtitleStreamDetails | undefined {
+): SubtitleStreamDetails[] {
   const usable = subtitles.filter(
-    (s) => !s.forced && !isImageBasedSubtitle(s.codec) && s.path !== undefined,
+    (s) => !s.forced && !isImageBasedSubtitle(s.codec),
   );
-  for (const language of languages) {
+  return languages.flatMap((language) => {
     const matching = usable.filter(
       (s) =>
         s.languageCodeISO6392 === language.iso6392 ||
         s.languageCodeISO6391 === language.iso6391,
     );
-    const pick = matching.find((s) => !s.sdh) ?? matching[0];
-    if (pick) {
-      return pick;
-    }
-  }
-  return;
+    return [
+      ...matching.filter((s) => !s.sdh),
+      ...matching.filter((s) => s.sdh),
+    ];
+  });
 }
 
 /**

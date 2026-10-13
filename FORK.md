@@ -50,8 +50,14 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   default), under Settings > FFmpeg > Audio & Subtitle Options.
 
   - **Captions** (`Cea608Encoder.ts`): cues become one 608 byte pair per frame, in pop-on mode. Each caption loads
-    ahead of time and appears with End of Caption on its start frame. Captions sit on the bottom rows, centred, 32
-    columns, with special and extended characters. Every other frame gets null padding, so players always find the track.
+    ahead of time and appears with End of Caption on its start frame.
+    - **Layout:** the bottom rows, block-centred (every line starts at the same column), 32 columns, with special and
+      extended characters.
+    - **Long cues:** a cue whose lines are wider than 32 columns is rewrapped as a whole. Only a cue that still needs
+      more than two lines is shown as several captions, each for a share of its time in proportion to its text.
+    - **Speed:** control codes are sent once, not twice as broadcasters do to survive transmission errors. The stream
+      is never damaged in transit, and the second copy delayed captions in fast dialogue.
+    - **Padding:** every other frame gets null padding, so players always find the track.
   - **Into the stream** (`MpegTsCaptionInserter.ts`): an ATSC A/53 caption SEI goes before the first slice of every
     H.264 frame of a TS segment. The video PES is re-split into packets, keeping PCR, PTS and continuity counters. The
     PMT gets a caption service descriptor naming the language.
@@ -61,6 +67,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     - Forced and image-based subtitles stay burned in.
     - Otherwise the full text track in the preferred language (regular before SDH) becomes the captions. One example is
       English audio whose forced subtitles are burned in.
+    - An embedded track is read from its extracted copy in the subtitle cache, as burn-in does
+      (`SubtitleStreamPicker.getSubtitleDetailsWithExtractedPath`). Embedded tracks have no path of their own, and
+      the first version only looked at tracks with one, so only sidecar files became captions.
     - Cues come from the SRT, WebVTT or ASS file on disk, moved onto the program's clock (minus the seek).
     - If they can't be read, the subtitles are burned in as before.
   - **Timing** (`HlsSession`): each program's captions are laid out at the session's `ptsOffset` (the video's
@@ -98,7 +107,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Known limits:**
   - The `mpegts` stream mode and hls_direct modes get no captions; hls_direct copies the source's video, often HEVC.
   - Captions use the player's own style. Non-Latin text is dropped.
-  - Two cues closer together than a caption's load time (about 1 s for two full lines) show a few frames late.
+  - Two cues closer together than a caption's load time show late: two full lines are 64 characters at 2 per frame,
+    plus 4 commands, so 36 frames (1.5 s at 23.976 fps).
+  - Captions keep the subtitle file's timing. A sidecar timed for another release of the episode is just as far off
+    as in any other player. Tools like Bazarr's subtitle sync fix the file.
 - **Upstream:** not sent.
 
 ### Changing the FFmpeg path applies without a restart (2026-10-13)

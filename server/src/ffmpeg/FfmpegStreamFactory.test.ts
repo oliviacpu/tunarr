@@ -43,6 +43,7 @@ import {
   NullAudioInputSource,
 } from './builder/input/AudioInputSource.ts';
 import { FfmpegStreamFactory, gapMusicFades } from './FfmpegStreamFactory.ts';
+import { SubtitleStreamPicker } from './SubtitleStreamPicker.ts';
 
 vi.mock('@/util/serverUtil.ts', () => ({
   makeLocalUrl: (path: string) => `http://localhost:8000${path}`,
@@ -1505,6 +1506,59 @@ describe('FfmpegStreamFactory', () => {
 
         expect(method).toBeUndefined();
         expect(captions?.cues).toHaveLength(1);
+      });
+
+      test('captions an embedded track from its extracted copy', async () => {
+        // Embedded tracks reach the factory without a path; burn-in finds their
+        // extracted file in the subtitle cache, and so must captions
+        const embedded: SubtitleStreamDetails = {
+          ...textSubtitleStream,
+          path: undefined,
+        };
+        const lookup = vi
+          .spyOn(SubtitleStreamPicker, 'getSubtitleDetailsWithExtractedPath')
+          .mockResolvedValue({
+            ...embedded,
+            type: 'external',
+            index: 0,
+            path: fullSubs,
+          });
+        const capturing = createCapturingPipelineBuilderFactory();
+        const details = makeStreamDetails();
+        details.subtitleDetails = [embedded];
+        const sut = new FfmpegStreamFactory(
+          makeMockFfmpegInfo(),
+          makeMockSettingsDB({
+            ...makeFfmpegSettings(),
+            hdhrClosedCaptions: true,
+          }),
+          capturing.factory,
+          makeMockChannelDB(),
+          makeMockFeatureFlagService({ webvttSidecarEnabled: false }),
+          makeMockStreamSelector(null),
+          makeTranscodeConfig(),
+          makeChannel({ subtitlesEnabled: true }),
+        );
+        const result = await sut.createStreamSession({
+          stream: {
+            source: new HttpStreamSource('http://example.com/video.ts'),
+            details,
+          },
+          options: {
+            startTime: dayjs.duration({ seconds: 10 }),
+            duration: dayjs.duration({ seconds: 30 }),
+            outputFormat: { type: 'mpegts' as const },
+            ptsOffset: 0,
+            realtime: true,
+            streamMode: 'hls',
+          },
+          lineupItem: makeLineupItem(),
+        });
+        lookup.mockRestore();
+
+        expect(result?.renditions.captions?.cues).toEqual([
+          { startMs: 2000, endMs: 4500, text: 'Hello there' },
+        ]);
       });
 
       test('burns subtitles in as before when they cannot be read as captions', async () => {
