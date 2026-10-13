@@ -88,6 +88,43 @@ describe('insertCaptions', () => {
     expect(firstVideoAdaptation).toEqual(parse(input).firstVideoAdaptation);
   });
 
+  test('ends on the original continuity counter, so the next segment continues it', () => {
+    // A reader that drops corrupt packets (Tunarr's .ts wrapper) would lose the
+    // frame at every join if counters jumped between segments
+    // Frames that fill their packets exactly, so each caption adds a packet
+    const first = segment({ frames: 3, sliceBytes: 343 });
+    const firstCcs = parse(first).videoCcs;
+    const next = segment({
+      frames: 3,
+      sliceBytes: 343,
+      firstPts: framePts(3),
+      firstVideoCc: ((firstCcs.at(-1) ?? 0) + 1) & 0x0f,
+    });
+    const captionedFirst = insertCaptions(first, {
+      pairForPts: pairFor,
+      language: 'eng',
+    });
+    const captionedNext = insertCaptions(next, {
+      pairForPts: pairFor,
+      language: 'eng',
+    });
+    if (!captionedFirst.ok || !captionedNext.ok) {
+      throw new Error('not captioned');
+    }
+
+    expect(parse(captionedFirst.segment).videoCcs.at(-1)).toBe(firstCcs.at(-1));
+    const joined = parse(
+      Buffer.concat([captionedFirst.segment, captionedNext.segment]),
+    ).videoCcs;
+    joined.forEach((cc, i) => {
+      if (i > 0) {
+        expect(cc).toBe(((joined[i - 1] ?? 0) + 1) & 0x0f);
+      }
+    });
+    // The extra packets carry the frame's last bytes, which still decode
+    expect(parse(captionedFirst.segment).videoPes.at(-1)?.at(-1)).toBe(0x55);
+  });
+
   test("names the captions' language in the PMT, with a valid CRC", () => {
     const result = insertCaptions(segment(), {
       pairForPts: pairFor,

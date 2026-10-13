@@ -273,14 +273,17 @@ function packetizePes(
   pid: number,
   firstAdaptation: Buffer | undefined,
   priorityBit: number,
+  // Packets to add beyond the minimum: the PES's last bytes go one per packet
+  extraPackets: number = 0,
 ): Buffer[] {
   const packets: Buffer[] = [];
+  const spreadFrom = pes.length - Math.min(extraPackets, pes.length - 1);
   let pos = 0;
   let first = true;
   while (pos < pes.length) {
     const adaptation = first ? firstAdaptation : undefined;
     const room = PacketSize - 4 - (adaptation?.length ?? 0);
-    const take = Math.min(room, pes.length - pos);
+    const take = pos >= spreadFrom ? 1 : Math.min(room, spreadFrom - pos);
     const stuffing = room - take;
 
     let field: Buffer | undefined = adaptation;
@@ -381,6 +384,14 @@ export function insertCaptions(
 
   // Rebuild each PES with its caption SEI
   const rebuilt = new Map<number, Buffer[]>(); // first payload packet index -> packets
+  let lastRebuilt:
+    | {
+        firstIndex: number;
+        pes: Buffer;
+        adaptation: Buffer | undefined;
+        priority: number;
+      }
+    | undefined;
   let framesCaptioned = 0;
   for (const pes of pesList) {
     const firstIndex = pes.payloadIndexes[0];
@@ -433,16 +444,42 @@ export function insertCaptions(
           ),
         )
       : undefined;
+    const priority = segment.readUInt8(first.offset + 1) & 0x20;
     rebuilt.set(
       firstIndex,
+      packetizePes(newPes, video.pid, adaptation, priority),
+    );
+    lastRebuilt = { firstIndex, pes: newPes, adaptation, priority };
+    framesCaptioned++;
+  }
+
+  // The segment's video must end on the same continuity counter it did before,
+  // so the next segment continues without a jump: a reader that discards
+  // corrupt packets (Tunarr's .ts wrapper does) would otherwise drop the frame
+  // at every join. Counters run modulo 16, so the last PES gets enough extra
+  // packets to keep the payload packet count the same modulo 16.
+  const originalPayloadPackets = packets.filter(
+    (p) => p.pid === video.pid && p.hasPayload,
+  ).length;
+  let newPayloadPackets = 0;
+  for (const pes of pesList) {
+    const first = pes.payloadIndexes[0];
+    const replacement = first === undefined ? undefined : rebuilt.get(first);
+    newPayloadPackets += replacement?.length ?? pes.payloadIndexes.length;
+  }
+  const extraPackets =
+    (((originalPayloadPackets - newPayloadPackets) % 16) + 16) % 16;
+  if (lastRebuilt && extraPackets > 0) {
+    rebuilt.set(
+      lastRebuilt.firstIndex,
       packetizePes(
-        newPes,
+        lastRebuilt.pes,
         video.pid,
-        adaptation,
-        segment.readUInt8(first.offset + 1) & 0x20,
+        lastRebuilt.adaptation,
+        lastRebuilt.priority,
+        extraPackets,
       ),
     );
-    framesCaptioned++;
   }
 
   const newPmt = withCaptionDescriptor(

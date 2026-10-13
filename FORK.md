@@ -68,6 +68,11 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     23.976).
     - A segment whose frames are spaced more than 1% away from the schedule gets padding only, rather than garbled
       text. Deinterlacing that doubles the rate is one cause.
+  - **Continuity:** each captioned segment ends on its original continuity counter. The last frame gets up to 15
+    extra packets, keeping the video packet count the same modulo 16, so the next segment continues without a jump.
+    Without this, Tunarr's `.ts` wrapper (`-fflags +discardcorrupt`) dropped the frame at every segment join, and the
+    frames that depend on it decoded with errors. This was found on the deployment's test copy: 8 of 17 two-second
+    pieces of a capture had errors with captions on, 0 of 13 with them off.
   - **Serving:** only the `.ts` stream gets captions. Its reader asks for the playlist with `captions=1`, and those
     segment links are served through the inserter. Any failure serves the segment as it is.
 
@@ -87,6 +92,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     1.5 s long and 2 s apart, as in the source.
   - **Timing:** in a served segment, the frames showing each caption were within 14 ms (half a frame) of the WebVTT cues
     that the same encode wrote.
+  - **Decoding:** after the continuity fix, 0 of 14 two-second pieces of a 30 s `.ts` capture had decode errors.
   - **Not yet checked on the Apple TV:** CC toggling, the label from the caption service descriptor, and whether Plex
     turns captions on by itself for foreign-audio programs.
 - **Known limits:**

@@ -72,14 +72,18 @@ function ptsField(unwrapped: number): number[] {
   ];
 }
 
-export function videoAccessUnit(idr: boolean, extra: number[] = []): Buffer {
+export function videoAccessUnit(
+  idr: boolean,
+  extra: number[] = [],
+  sliceBytes = 400,
+): Buffer {
   const slice = [
     0,
     0,
     0,
     1,
     idr ? 0x65 : 0x41,
-    ...Array<number>(400).fill(0x55),
+    ...Array<number>(sliceBytes).fill(0x55),
   ];
   return Buffer.from([
     ...[0, 0, 0, 1, 0x09, 0xf0], // access unit delimiter
@@ -148,6 +152,11 @@ export type SegmentOptions = {
   // PTS ticks between frames (90 kHz): 3003 is 29.97 fps
   frameStep?: number;
   frames?: number;
+  // Continuity counter of the first video packet, to continue an earlier segment
+  firstVideoCc?: number;
+  // Slice payload per frame; 343 makes a non-IDR frame's PES fill exactly two
+  // packets, so any added bytes need a third
+  sliceBytes?: number;
 };
 
 export const framePts = (k: number, options: SegmentOptions = {}) =>
@@ -155,14 +164,14 @@ export const framePts = (k: number, options: SegmentOptions = {}) =>
 
 export function makeTsSegment(options: SegmentOptions = {}): Buffer {
   const parts: Buffer[] = [pat(), pmt(options.videoStreamType)];
-  let videoCc = 5;
+  let videoCc = options.firstVideoCc ?? 5;
   for (let k = 0; k < (options.frames ?? 3); k++) {
     const packets = tsPackets(
       VideoPid,
       pes(
         0xe0,
         framePts(k, options),
-        videoAccessUnit(k === 0, options.extraNals),
+        videoAccessUnit(k === 0, options.extraNals, options.sliceBytes),
       ),
       videoCc,
       k === 0,
