@@ -403,6 +403,52 @@ describe('BasePipelineBuilder', () => {
     expect(loudnormFilter).toBeUndefined();
   });
 
+  describe('audio language tag', () => {
+    function argsForAudioLanguage(language: string | undefined) {
+      const audio = AudioInputSource.withStream(
+        new FileStreamSource('/path/to/movie.mkv'),
+        AudioStream.create({
+          channels: 6,
+          codec: 'ac3',
+          index: 1,
+          language,
+        }),
+        AudioState.create({
+          audioEncoder: 'ac3',
+          audioBitrate: 640,
+          audioBufferSize: 1280,
+          audioChannels: 6,
+        }),
+      );
+
+      return new NoopPipelineBuilder(
+        video,
+        audio,
+        null,
+        null,
+        null,
+        EmptyFfmpegCapabilities,
+      )
+        .build(state, frameState, DefaultPipelineOptions)
+        .getCommandArgs();
+    }
+
+    test("tags the output audio with the source track's language", () => {
+      // Without it clients like Plex treat every program as foreign-language audio
+      const args = argsForAudioLanguage('eng');
+      const idx = args.indexOf('-metadata:s:a:0');
+      expect(idx).toBeGreaterThan(args.lastIndexOf('-i'));
+      expect(args[idx + 1]).toBe('language=eng');
+    });
+
+    test.each([undefined, '', 'english', 'EN'])(
+      'adds no language tag for %j (not an ISO 639-2 code)',
+      (language) => {
+        expect(argsForAudioLanguage(language)).not.toContain('-metadata:s:a:0');
+      },
+    );
+  });
+
   test('always add channel count for Opus', () => {
     const audio = AudioInputSource.withStream(
       new FileStreamSource('/path/to/movie.mkv'),

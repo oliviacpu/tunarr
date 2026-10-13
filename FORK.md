@@ -28,6 +28,18 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Tag the output audio's language (2026-10-13)
+
+- **What you saw:** Tunarr's streams carried no audio language, so Plex logged every program as foreign-language audio
+  ("foreign film") and couldn't match audio or subtitle language preferences.
+- **Cause:** the stream selector picks the audio track knowing its ISO 639-2 language, but `AudioStream` had no field
+  for it and the audio pipeline wrote no stream metadata.
+- **Fix:** `AudioStream` carries `language`, `FfmpegStreamFactory` sets it from the selected track's
+  `languageCodeISO6392`, and `BasePipelineBuilder.buildAudioPipeline` writes `-metadata:s:a:0 language=<code>`
+  (`AudioLanguageOutputOption`) when it's a valid 3-letter code. MPEG-TS turns this into the stream's ISO 639 language
+  descriptor, and it survives the `.ts` remux (checked with ffmpeg 7). Test: `BasePipelineBuilder.test.ts`.
+- **Upstream:** not sent.
+
 ### Pick the software encoder's preset in the transcode config (2026-10-13)
 
 - **What you saw:** software H.264/HEVC always encoded with `-preset veryfast`. Transcode configs have a `videoPreset`

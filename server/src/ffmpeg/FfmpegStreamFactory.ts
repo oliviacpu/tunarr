@@ -541,6 +541,7 @@ export class FfmpegStreamFactory {
             index: audioStream.index,
             codec: audioStream.codec ?? 'unknown',
             channels: audioStream.channels ?? -2,
+            language: audioStream.languageCodeISO6392,
           }),
         ],
         audioState,

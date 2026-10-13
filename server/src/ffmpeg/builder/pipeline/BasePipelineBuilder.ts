@@ -94,6 +94,7 @@ import {
   AudioBitrateOutputOption,
   AudioBufferSizeOutputOption,
   AudioChannelsOutputOption,
+  AudioLanguageOutputOption,
   AudioSampleRateOutputOption,
 } from '../options/AudioOutputOptions.ts';
 import {
@@ -670,6 +671,12 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
       this.context.desiredAudioState.audioEncoder,
     );
     this.pipelineSteps.push(encoder);
+
+    // Only a real ISO 639-2 code; anything else would make a misleading tag
+    const language = this.context.audioStream.language;
+    if (language !== undefined && /^[a-z]{3}$/.test(language)) {
+      this.pipelineSteps.push(AudioLanguageOutputOption(language));
+    }
 
     if (this.context.desiredAudioState.audioEncoder === AudioFormats.Copy) {
       return;

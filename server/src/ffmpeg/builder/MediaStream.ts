@@ -36,11 +36,14 @@ export class AudioStream implements MediaStream {
   index: number;
   codec: string;
   channels: number;
+  // ISO 639-2 code of the source track (e.g. "eng"), written to the output audio's metadata
+  language?: string;
 
   private constructor(fields: AudioStreamFields) {
     this.index = fields.index;
     this.codec = fields.codec;
     this.channels = fields.channels;
+    this.language = fields.language;
   }
 
   static create(fields: AudioStreamFields) {
