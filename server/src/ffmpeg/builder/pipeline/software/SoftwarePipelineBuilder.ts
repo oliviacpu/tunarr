@@ -39,12 +39,15 @@ export class SoftwarePipelineBuilder extends BasePipelineBuilder {
     const { desiredState, videoStream, filterChain, pipelineSteps } =
       this.context;
 
+    // Start from the source's pixel format, as the hardware builders do. Without it the state already claims the
+    // desired format, setPixelFormat sees no difference, and libx264 encodes 10-bit sources as H.264 High 10.
     let currentState = desiredState.update({
       frameDataLocation: FrameDataLocation.Software,
       isAnamorphic: videoStream.isAnamorphic,
       scaledSize: videoStream.frameSize,
       paddedSize: videoStream.frameSize,
       colorFormat: videoStream.colorFormat,
+      pixelFormat: videoStream.pixelFormat,
     });
 
     if (desiredState.videoFormat !== VideoFormats.Copy) {

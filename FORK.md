@@ -27,3 +27,19 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:** what changed, with the files.
 - **Upstream:** not sent / issue or PR link.
 -->
+
+### 10-bit sources no longer come out as H.264 High 10 (2026-10-13)
+
+- **What you saw:** 10-bit sources (most x265/HEVC files, HDR or not) were transcoded to H.264 **High 10** on the
+  software (no GPU) pipeline. Almost no player decodes High 10, so those programs failed or fell back to another
+  transcode. It had to be worked around outside Tunarr by adding `-pix_fmt yuv420p` to the ffmpeg command.
+- **Cause:** `SoftwarePipelineBuilder.setupVideoFilters` started its frame state from the desired output state without
+  the source's pixel format, so it believed frames were already `yuv420p`. `setPixelFormat` then saw no difference and
+  never added `-pix_fmt yuv420p`, and libx264 encoded the decoder's `yuv420p10le` frames as High 10. The Nvidia, QSV and
+  VAAPI builders already seed the state with `videoStream.pixelFormat`. Tone mapping hid the bug for HDR sources,
+  because its filter chain ends in `format=yuv420p`.
+- **Fix:** seed the software pipeline's starting state with `videoStream.pixelFormat`, as the hardware builders do
+  (`server/src/ffmpeg/builder/pipeline/software/SoftwarePipelineBuilder.ts`). Test:
+  `SoftwarePipelineBuilder.test.ts` (a 10-bit source gets `-pix_fmt yuv420p`; an 8-bit source gets no conversion).
+- **Upstream:** not sent. Related: upstream PR #1559 (an unconditional `-pix_fmt yuv420p`) was closed on the grounds
+  that the pipeline builder already forces 8-bit output; on the software path it didn't.
