@@ -28,6 +28,34 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Gap music: a channel's music list plays under its offline picture (2026-10-13)
+
+- **What you saw:** during flex gaps a channel showed its offline picture over silence. The channel's
+  `offline.soundtrack` setting was stored but never used, and there was no way to use your music library there.
+- **Cause:** `FfmpegStreamFactory.createOfflineSession` always used the placeholder audio (anullsrc, sine or noise).
+- **Fix:** a channel's offline settings take an optional `musicListId`, a filler list of tracks. It isn't attached to
+  the channel as ordinary filler, so its tracks never play as normal programs with album art. When a gap reaches the
+  offline picture:
+
+  - `GapMusicPicker` picks a track from the list: never played on this channel first (at random), otherwise the one
+    played longest ago (30-day history window).
+  - The gap item lasts `min(rest of gap, track length)`, so long gaps play track after track.
+  - The play is recorded in program play history with the list's id.
+  - The offline session uses the track as its audio, normalized to a TV-like `I=-24 LUFS, LRA=11, TP=-2`
+    (`GapMusicLoudnorm`; programs are not normalized). It fades in over 1 s, and out over the last 3 s when the gap cuts
+    the track short. The fades go after loudnorm (`AudioState.fades`, `AudioFadeFilter`) so its gain control can't
+    undo them.
+  - Anything that fails (empty list, unresolvable source, no audio stream) leaves the gap with the old placeholder
+    audio, and is logged.
+
+  Files: `StreamProgramCalculator.ts`, `ProgramStream.ts`, `FfmpegStreamFactory.ts`,
+  `services/scheduling/GapMusicPicker.ts`, `builder/filter/AudioFadeFilter.ts`, `builder/state/AudioState.ts`, the
+  channel offline schemas. Tests: `GapMusicPicker.test.ts`, `StreamProgramCalculator.test.ts`,
+  `FfmpegStreamFactory.test.ts`, `BasePipelineBuilder.test.ts`. The channel's list isn't validated on save; a deleted or
+  wrong list just gives the silent picture.
+
+- **Upstream:** not sent.
+
 ### Plex music tracks keep their audio stream (2026-10-13)
 
 - **What you saw:** music tracks imported from a Plex music library couldn't be played; streams failed with "Streams

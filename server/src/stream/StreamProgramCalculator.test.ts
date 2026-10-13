@@ -3,7 +3,7 @@ import { tag } from '@tunarr/types';
 import dayjs from 'dayjs';
 import { now, sum, sumBy } from 'lodash-es';
 import { DeepPartial } from 'ts-essentials';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { test as baseTest } from 'vitest';
 import { Lineup, LineupItem } from '../db/derived_types/Lineup.ts';
 import { StreamLineupItem } from '../db/derived_types/StreamLineup.ts';
@@ -804,6 +804,146 @@ describe('StreamProgramCalculator', () => {
         type: 'program',
         program: { uuid: programIdB },
       });
+    });
+  });
+
+  describe('gap music', () => {
+    // A=60s, a 30-minute flex gap, B=60s; the lookup is at the start of the gap
+    async function gapLookup(opts: {
+      musicListId?: string;
+      gapMs?: number;
+      trackMs?: number;
+    }) {
+      const fillerDB = mock<IFillerListDB>();
+      const channelDB = mock<IChannelDB>();
+      const programDB = mock<IProgramDB>();
+      const fillerPicker = mock<IFillerPicker>();
+      const playHistoryDB = mock<ProgramPlayHistoryDB>();
+
+      const gapMs = opts.gapMs ?? 30 * 60_000;
+      const channelId = faker.string.uuid();
+      const programIdA = faker.string.uuid();
+      const programIdB = faker.string.uuid();
+      const trackId = faker.string.uuid();
+      const lineup: LineupItem[] = [
+        { type: 'content', durationMs: 60_000, id: programIdA },
+        { type: 'offline', durationMs: gapMs },
+        { type: 'content', durationMs: 60_000, id: programIdB },
+      ];
+
+      const track = createFakeProgram({
+        uuid: trackId,
+        type: 'track',
+        duration: opts.trackMs ?? 200_000,
+        mediaSourceId: tag<MediaSourceId>('mediasource-123'),
+      });
+      when(programDB.getStreamProgramById(trackId)).thenReturn(
+        Promise.resolve(track),
+      );
+      when(fillerDB.getFillerPrograms(anything())).thenReturn(
+        Promise.resolve([{ ...track, state: 'ok' }] as never),
+      );
+      when(playHistoryDB.getFillerHistory(anything(), anything())).thenReturn(
+        Promise.resolve([]),
+      );
+
+      const channel = createChannelOrm({
+        uuid: channelId,
+        number: 1,
+        startTime: 0,
+        duration: sumBy(lineup, (i) => i.durationMs),
+        offline: { mode: 'pic', musicListId: opts.musicListId },
+      });
+      when(channelDB.getChannelOrm(1)).thenReturn(Promise.resolve(channel));
+      when(channelDB.loadLineup(channelId)).thenReturn(
+        Promise.resolve({
+          version: 1,
+          items: lineup,
+          startTimeOffsets: calculateStartTimeOffsets(lineup),
+          lastUpdated: now(),
+        }),
+      );
+      when(fillerDB.getFillersFromChannel(channelId)).thenReturn(
+        Promise.resolve([]),
+      );
+      when(
+        fillerPicker.pickFiller(
+          anything(),
+          anything(),
+          anything(),
+          anything(),
+          anything(),
+        ),
+      ).thenReturn(
+        Promise.resolve({
+          filler: null,
+          fillerListId: null,
+          minimumWait: Number.MAX_SAFE_INTEGER,
+        }),
+      );
+      when(
+        playHistoryDB.isProgramCurrentlyPlaying(
+          anything(),
+          anything(),
+          anything(),
+        ),
+      ).thenReturn(Promise.resolve(false));
+      when(playHistoryDB.create(anything())).thenReturn(
+        Promise.resolve(undefined),
+      );
+
+      const calc = new StreamProgramCalculator(
+        instance(fillerDB),
+        instance(channelDB),
+        instance(programDB),
+        instance(fillerPicker),
+        instance(playHistoryDB),
+      );
+      const out = await calc.getCurrentLineupItem({
+        allowSkip: false,
+        channelId: 1,
+        startTime: 60_000,
+      });
+      return { out: out.get(), trackId, playHistoryDB };
+    }
+
+    test('plays one track from the list under the offline picture', async () => {
+      const { out, trackId, playHistoryDB } = await gapLookup({
+        musicListId: 'music-list',
+      });
+      expect(out.lineupItem).toMatchObject<DeepPartial<StreamLineupItem>>({
+        type: 'offline',
+        streamDuration: 200_000,
+        backgroundMusic: {
+          program: { uuid: trackId },
+          fillerListId: 'music-list',
+        },
+      });
+      const [recorded] = capture(playHistoryDB.create).last();
+      expect(recorded).toMatchObject({
+        programUuid: trackId,
+        fillerListId: 'music-list',
+      });
+    });
+
+    test('ends the item with the gap when the gap is shorter than the track', async () => {
+      const { out } = await gapLookup({
+        musicListId: 'music-list',
+        gapMs: 45_000,
+      });
+      expect(out.lineupItem).toMatchObject<DeepPartial<StreamLineupItem>>({
+        type: 'offline',
+        streamDuration: 45_000,
+      });
+    });
+
+    test('keeps the plain offline item without a music list', async () => {
+      const { out, playHistoryDB } = await gapLookup({});
+      expect(out.lineupItem.type).toBe('offline');
+      expect(
+        (out.lineupItem as { backgroundMusic?: unknown }).backgroundMusic,
+      ).toBeUndefined();
+      verify(playHistoryDB.create(anything())).never();
     });
   });
 

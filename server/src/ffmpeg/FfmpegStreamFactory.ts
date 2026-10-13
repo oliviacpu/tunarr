@@ -82,6 +82,8 @@ import { VideoInputSource } from './builder/input/VideoInputSource.ts';
 import { WatermarkInputSource } from './builder/input/WatermarkInputSource.ts';
 import type { Pipeline } from './builder/pipeline/Pipeline.ts';
 import type { PipelineBuilderFactory } from './builder/pipeline/PipelineBuilderFactory.ts';
+import { GapMusicLoudnorm } from './builder/filter/LoudnormFilter.ts';
+import type { AudioFades } from './builder/state/AudioState.ts';
 import { AudioState } from './builder/state/AudioState.ts';
 import type {
   AudioCodecOverride,
@@ -95,11 +97,30 @@ import { FrameState } from './builder/state/FrameState.ts';
 import { FrameSize } from './builder/types.ts';
 import type {
   ConcatOptions,
+  OfflineBackgroundMusic,
   PlaceholderSessionOpts,
   StreamSessionCreateArgs,
   TranscodeSessionResult,
 } from './types.ts';
 import { FfmpegInfo } from './ffmpegInfo.ts';
+
+const GapMusicFadeInMs = 1000;
+const GapMusicFadeOutMs = 3000;
+
+// Fade gap music in, and out over the item's last seconds when the item ends
+// before the track does (the gap is over, or the 10-minute item cap).
+export function gapMusicFades(itemMs: number, trackMs: number): AudioFades {
+  const cutShort = itemMs < trackMs - 500;
+  return {
+    fadeInMs: Math.min(GapMusicFadeInMs, itemMs),
+    fadeOut: cutShort
+      ? {
+          startMs: Math.max(0, itemMs - GapMusicFadeOutMs),
+          durationMs: Math.min(GapMusicFadeOutMs, itemMs),
+        }
+      : null,
+  };
+}
 
 @injectable()
 @loggingDef({ category: 'streaming' })
@@ -779,6 +800,7 @@ export class FfmpegStreamFactory {
         opts.outputFormat,
         ptsOffset,
         realtime,
+        opts.backgroundMusic,
       );
     }
 
@@ -908,6 +930,7 @@ export class FfmpegStreamFactory {
     outputFormat: OutputFormat,
     ptsOffset: number = 0,
     realtime: boolean = true,
+    backgroundMusic?: OfflineBackgroundMusic,
   ): Promise<Maybe<FfmpegTranscodeSession>> {
     const offlineInput = VideoInputSource.withStream(
       new HttpStreamSource(
@@ -936,12 +959,31 @@ export class FfmpegStreamFactory {
       true,
     );
 
+    // Gap music is normalized to its own target (programs are left as they
+    // are), fades in, and fades out when the gap ends before the track does.
     const audioState = this.createAudioState(
       playbackParams,
       duration.asMilliseconds(),
+      backgroundMusic ? GapMusicLoudnorm : null,
+      backgroundMusic
+        ? gapMusicFades(
+            duration.asMilliseconds(),
+            backgroundMusic.trackDurationMs,
+          )
+        : null,
     );
 
-    const audioInput = this.createPlaceholderAudioInput(audioState);
+    const audioInput = backgroundMusic
+      ? AudioInputSource.withStream(
+          backgroundMusic.source,
+          AudioStream.create({
+            index: backgroundMusic.audioStream.index,
+            codec: backgroundMusic.audioStream.codec ?? 'unknown',
+            channels: backgroundMusic.audioStream.channels ?? -2,
+          }),
+          audioState,
+        )
+      : this.createPlaceholderAudioInput(audioState);
 
     const builder = await this.pipelineBuilderFactory(this.transcodeConfig)
       .setHardwareAccelerationMode(
@@ -1017,8 +1059,10 @@ export class FfmpegStreamFactory {
     playbackParams: FfmpegPlaybackParams,
     audioDuration: number | null,
     loudnormConfig?: LoudnormConfig | null,
+    fades?: AudioFades | null,
   ): AudioState {
     return AudioState.create({
+      fades: fades ?? null,
       audioEncoder: playbackParams.audioFormat,
       audioChannels: playbackParams.audioChannels,
       audioBitrate: playbackParams.audioBitrate,

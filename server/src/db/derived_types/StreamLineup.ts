@@ -91,6 +91,12 @@ export type OfflineStreamLineupItem = BaseStreamLineupItem & {
   type: 'offline';
   duration: number;
   fillerConfig?: OfflineFillerConfig;
+  // A track from the channel's gap music list (offline.musicListId), played under the offline picture. The item
+  // lasts at most the track's length, so a long gap plays one track per item.
+  backgroundMusic?: {
+    program: StreamLineupProgram;
+    fillerListId: string;
+  };
 };
 
 type BaseContentBackedStreamLineupItem = BaseStreamLineupItem & {

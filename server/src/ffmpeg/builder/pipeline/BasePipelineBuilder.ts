@@ -87,6 +87,7 @@ import { Mpeg2VideoEncoder } from '../encoder/Mpeg2VideoEncoder.ts';
 import { RawVideoEncoder } from '../encoder/RawVideoEncoder.ts';
 import { AudioVolumeFilter } from '../filter/AudioVolumeFilter.ts';
 import type { FilterOption } from '../filter/FilterOption.ts';
+import { AudioFadeFilter } from '../filter/AudioFadeFilter.ts';
 import { LoudnormFilter } from '../filter/LoudnormFilter.ts';
 import { StreamSeekFilter } from '../filter/StreamSeekFilter.ts';
 import type { SubtitlesInputSource } from '../input/SubtitlesInputSource.ts';
@@ -756,6 +757,25 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
           new LoudnormFilter(
             this.desiredAudioState.loudnormConfig,
             this.desiredAudioState.audioSampleRate ?? 48,
+          ),
+        );
+      }
+    }
+
+    // after loudnorm, so its gain control can't undo them
+    const fades = this.desiredAudioState.fades;
+    if (!isNull(fades) && encoder.name !== TranscodeAudioOutputFormat.Copy) {
+      if (fades.fadeInMs > 0) {
+        this.audioInputSource?.filterSteps.push(
+          new AudioFadeFilter('in', 0, fades.fadeInMs),
+        );
+      }
+      if (!isNull(fades.fadeOut)) {
+        this.audioInputSource?.filterSteps.push(
+          new AudioFadeFilter(
+            'out',
+            fades.fadeOut.startMs,
+            fades.fadeOut.durationMs,
           ),
         );
       }

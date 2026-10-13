@@ -21,7 +21,7 @@ import type {
 } from '../db/derived_types/StreamLineup.ts';
 import { MediaSourceDB } from '../db/mediaSourceDB.ts';
 import type { FFmpegAssistedFactory } from '../ffmpeg/FFmpegModule.ts';
-import type { StreamOptions } from '../ffmpeg/types.ts';
+import type { OfflineBackgroundMusic, StreamOptions } from '../ffmpeg/types.ts';
 import { KEYS } from '../types/inject.ts';
 import { assisted, injected, multiInjected } from '../util/assistedInject.ts';
 import {
@@ -204,12 +204,17 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       duration.asMilliseconds(),
     );
 
+    const backgroundMusic = lineupItem.backgroundMusic
+      ? await this.resolveBackgroundMusic(lineupItem.backgroundMusic)
+      : undefined;
+
     const result = await ffmpeg.createPlaceholderSession({
       kind: 'offline',
       duration,
       outputFormat: this.outputFormat,
       ptsOffset: this.opts?.ptsOffset,
       realtime: this.opts?.realtime,
+      backgroundMusic,
     });
 
     if (isUndefined(result)) {
@@ -217,6 +222,62 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
     }
 
     return Result.success(result);
+  }
+
+  // The gap music track's source and audio stream, resolved like any program
+  // (local file if present, else the media server). Undefined on any failure,
+  // which leaves the gap with the placeholder audio.
+  private async resolveBackgroundMusic(
+    music: NonNullable<OfflineStreamLineupItem['backgroundMusic']>,
+  ): Promise<OfflineBackgroundMusic | undefined> {
+    const server = await this.mediaSourceDB.getById(
+      music.program.mediaSourceId,
+    );
+    if (!server) {
+      this.logger.warn(
+        'Gap music track %s: media source %s not found',
+        music.program.uuid,
+        music.program.mediaSourceId,
+      );
+      return;
+    }
+
+    const streamResult = await this.programStreamDetails.getStream({
+      server,
+      lineupItem: music.program,
+    });
+    if (streamResult.isFailure()) {
+      this.logger.warn(
+        streamResult.error,
+        'Gap music track %s: could not resolve its stream',
+        music.program.uuid,
+      );
+      return;
+    }
+
+    const { streamDetails, streamSource } = streamResult.get();
+    if (streamSource.type !== 'file' && streamSource.type !== 'http') {
+      this.logger.warn(
+        'Gap music track %s: unsupported stream source %s',
+        music.program.uuid,
+        streamSource.type,
+      );
+      return;
+    }
+    const audioStream = streamDetails.audioDetails?.[0];
+    if (!audioStream) {
+      this.logger.warn(
+        'Gap music track %s has no audio stream',
+        music.program.uuid,
+      );
+      return;
+    }
+
+    return {
+      source: streamSource,
+      audioStream,
+      trackDurationMs: music.program.duration,
+    };
   }
 
   private async setupErrorItem(

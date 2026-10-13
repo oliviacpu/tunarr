@@ -13,6 +13,7 @@ import type { Lineup, LineupItem } from '../db/derived_types/Lineup.ts';
 import type {
   CommercialStreamLineupItem,
   FallbackStreamLineupItem,
+  OfflineStreamLineupItem,
   ProgramStreamLineupItem,
   StreamLineupItem,
 } from '../db/derived_types/StreamLineup.ts';
@@ -26,6 +27,7 @@ import type { IProgramDB } from '../db/interfaces/IProgramDB.ts';
 import { ProgramPlayHistoryDB } from '../db/ProgramPlayHistoryDB.ts';
 import { OneWeekMillis } from '../ffmpeg/builder/constants.ts';
 import type { IFillerPicker } from '../services/interfaces/IFillerPicker.ts';
+import { GapMusicPicker } from '../services/scheduling/GapMusicPicker.ts';
 import { WrappedError } from '../types/errors.ts';
 import { devAssert } from '../util/debug.ts';
 import { isNonEmptyString } from '../util/index.js';
@@ -86,7 +88,56 @@ export class StreamProgramCalculator {
     private fillerPicker: IFillerPicker,
     @inject(ProgramPlayHistoryDB)
     private programPlayHistoryDB: ProgramPlayHistoryDB,
-  ) {}
+  ) {
+    this.gapMusicPicker = new GapMusicPicker(fillerDB, programPlayHistoryDB);
+  }
+
+  private readonly gapMusicPicker: GapMusicPicker;
+
+  // A track from the channel's gap music list, or undefined (no list, nothing
+  // playable, or an error: the gap then gets the silent offline picture).
+  private async pickGapMusic(
+    channel: ChannelOrm,
+  ): Promise<OfflineStreamLineupItem['backgroundMusic']> {
+    const musicListId = channel.offline?.musicListId;
+    if (!isNonEmptyString(musicListId)) {
+      return;
+    }
+
+    try {
+      const track = await this.gapMusicPicker.pick(channel.uuid, musicListId);
+      if (!track) {
+        this.logger.debug(
+          'Gap music list %s has no playable tracks for channel %s',
+          musicListId,
+          channel.uuid,
+        );
+        return;
+      }
+
+      const program = await this.programDB.getStreamProgramById(track.uuid);
+      if (!program || !isNonEmptyString(program.mediaSourceId)) {
+        this.logger.warn(
+          'Gap music track %s has no stream program or media source',
+          track.uuid,
+        );
+        return;
+      }
+
+      return {
+        program: { ...program, mediaSourceId: program.mediaSourceId },
+        fillerListId: musicListId,
+      };
+    } catch (err) {
+      this.logger.warn(
+        err,
+        'Failed to pick gap music from list %s for channel %s',
+        musicListId,
+        channel.uuid,
+      );
+      return;
+    }
+  }
 
   async getCurrentLineupItem(
     req: GetCurrentLineupItemRequest,
@@ -236,14 +287,25 @@ export class StreamProgramCalculator {
     }
 
     // Record play history for content-backed items (programs and commercials/fillers)
+    // and for gap music tracks (so the music list rotates).
     // Only record if this is a new playback (not a duplicate request for an already-playing program)
-    if (
-      isContentBackedLineupItem(lineupItem) &&
-      lineupItem.type !== 'fallback'
-    ) {
-      const programUuid = lineupItem.program.uuid;
-      const fillerListId =
-        lineupItem.type === 'commercial' ? lineupItem.fillerListId : undefined;
+    const played =
+      isContentBackedLineupItem(lineupItem) && lineupItem.type !== 'fallback'
+        ? {
+            programUuid: lineupItem.program.uuid,
+            fillerListId:
+              lineupItem.type === 'commercial'
+                ? lineupItem.fillerListId
+                : undefined,
+          }
+        : lineupItem.type === 'offline' && lineupItem.backgroundMusic
+          ? {
+              programUuid: lineupItem.backgroundMusic.program.uuid,
+              fillerListId: lineupItem.backgroundMusic.fillerListId,
+            }
+          : null;
+    if (played) {
+      const { programUuid, fillerListId } = played;
       const streamDuration = lineupItem.streamDuration;
       const channelUuid = channel.uuid;
       const playedAt = new Date(req.startTime);
@@ -569,6 +631,18 @@ export class StreamProgramCalculator {
       //don't display the offline screen for longer than 10 minutes. Maybe the
       //channel's admin might change the schedule during that time and then
       //it would be better to start playing the content.
+
+      // With a gap music list, play one track under the offline picture; the
+      // item ends with the track (or the gap), and the next item picks the
+      // next track.
+      const backgroundMusic = await this.pickGapMusic(channel);
+      if (backgroundMusic) {
+        streamDuration = Math.max(
+          1,
+          Math.min(streamDuration, backgroundMusic.program.duration),
+        );
+      }
+
       return {
         type: 'offline',
         streamDuration,
@@ -576,6 +650,7 @@ export class StreamProgramCalculator {
         duration: streamDuration,
         startOffset: 0,
         programBeginMs: program.programBeginMs,
+        backgroundMusic,
       };
     }
 

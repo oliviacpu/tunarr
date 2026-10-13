@@ -6,6 +6,12 @@ import type { TranscodeAudioOutputFormat } from '../../../db/schema/TranscodeCon
 
 export type AudioStateFields = ExcludeByValueType<AudioState, AnyFunction>;
 
+// Fades applied after loudness normalization (so it can't undo them). Times are ms from the start of the audio.
+export type AudioFades = {
+  fadeInMs: number;
+  fadeOut: Nullable<{ startMs: number; durationMs: number }>;
+};
+
 const DefaultAudioState: AudioState = {
   audioEncoder: 'aac',
   audioChannels: 2,
@@ -16,6 +22,7 @@ const DefaultAudioState: AudioState = {
   audioVolume: null,
   normalizeLoudness: false,
   loudnormConfig: null,
+  fades: null,
 };
 
 export class AudioState {
@@ -28,6 +35,7 @@ export class AudioState {
   audioVolume: Nullable<number>;
   normalizeLoudness: boolean;
   loudnormConfig: Nullable<LoudnormConfig>;
+  fades: Nullable<AudioFades>;
 
   private constructor(fields: Partial<AudioStateFields> = {}) {
     const merged: AudioStateFields = {
@@ -43,6 +51,7 @@ export class AudioState {
     this.audioVolume = merged.audioVolume;
     this.normalizeLoudness = merged.normalizeLoudness ?? false;
     this.loudnormConfig = merged.loudnormConfig;
+    this.fades = merged.fades;
   }
 
   static create(fields: Partial<AudioStateFields> = {}) {

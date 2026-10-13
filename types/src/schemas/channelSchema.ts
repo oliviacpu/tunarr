@@ -83,6 +83,8 @@ export const ChannelOfflineSchema = z.object({
   picture: z.string().optional(),
   soundtrack: z.string().optional(),
   mode: z.union([z.literal('pic'), z.literal('clip')]),
+  // Filler list whose tracks play, loudness-normalized, under the offline picture during gaps
+  musicListId: z.string().optional(),
 });
 
 export const ChannelTranscodingOptionsSchema = z.object({

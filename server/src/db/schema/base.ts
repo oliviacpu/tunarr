@@ -112,6 +112,8 @@ export const ChannelOfflineSettingsSchema = z.object({
   picture: z.string().optional(),
   soundtrack: z.string().optional(),
   mode: z.enum(['pic', 'clip']).catch('clip'),
+  // Filler list whose tracks play, loudness-normalized, under the offline picture during gaps
+  musicListId: z.string().optional(),
 });
 
 export type ChannelOfflineSettings = z.infer<

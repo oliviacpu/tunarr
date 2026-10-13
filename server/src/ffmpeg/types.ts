@@ -3,6 +3,9 @@ import type { ChannelConcatStreamMode } from '@tunarr/types/schemas';
 import type { Duration } from 'dayjs/plugin/duration.js';
 import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLineup.ts';
 import type {
+  AudioStreamDetails,
+  FileStreamSource,
+  HttpStreamSource,
   StreamDetails,
   StreamRenditions,
   StreamSource,
@@ -20,12 +23,22 @@ export type ConcatOptions = {
   outputFormat: OutputFormat;
 };
 
+// A music track to play under the offline picture instead of the placeholder audio
+export type OfflineBackgroundMusic = {
+  source: FileStreamSource | HttpStreamSource;
+  audioStream: AudioStreamDetails;
+  trackDurationMs: number;
+};
+
 export type PlaceholderSessionOpts = {
   duration: Duration;
   outputFormat: OutputFormat;
   realtime?: boolean;
   ptsOffset?: number;
-} & ({ kind: 'error'; title: string; subtitle?: string } | { kind: 'offline' });
+} & (
+  | { kind: 'error'; title: string; subtitle?: string }
+  | { kind: 'offline'; backgroundMusic?: OfflineBackgroundMusic }
+);
 
 export const ConcatStreamModeToChildMode: Record<
   ChannelConcatStreamMode,

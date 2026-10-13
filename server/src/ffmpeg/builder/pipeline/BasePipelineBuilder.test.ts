@@ -7,6 +7,7 @@ import {
   HlsDirectOutputFormat,
   HlsOutputFormat,
 } from '../constants.ts';
+import { AudioFadeFilter } from '../filter/AudioFadeFilter.ts';
 import { AudioVolumeFilter } from '../filter/AudioVolumeFilter.ts';
 import { LoudnormFilter } from '../filter/LoudnormFilter.ts';
 import { PixelFormatYuv420P } from '../format/PixelFormat.ts';
@@ -401,6 +402,47 @@ describe('BasePipelineBuilder', () => {
     );
 
     expect(loudnormFilter).toBeUndefined();
+  });
+
+  test('adds gap music fades after loudness normalization', () => {
+    const audio = AudioInputSource.withStream(
+      new FileStreamSource('/path/to/track.flac'),
+      AudioStream.create({ channels: 2, codec: 'flac', index: 0 }),
+      AudioState.create({
+        audioEncoder: 'ac3',
+        audioChannels: 6,
+        audioDuration: 90_000,
+        loudnormConfig: { i: -24, lra: 11, tp: -2 },
+        fades: {
+          fadeInMs: 1000,
+          fadeOut: { startMs: 87_000, durationMs: 3000 },
+        },
+      }),
+    );
+
+    const steps =
+      new NoopPipelineBuilder(
+        video,
+        audio,
+        null,
+        null,
+        null,
+        EmptyFfmpegCapabilities,
+      ).build(state, frameState, DefaultPipelineOptions).inputs.audioInput
+        ?.filterSteps ?? [];
+
+    const loudnormIdx = steps.findIndex((s) => s instanceof LoudnormFilter);
+    const fades = steps
+      .filter((s) => s instanceof AudioFadeFilter)
+      .map((s) => s.filter);
+    expect(loudnormIdx).toBeGreaterThan(-1);
+    expect(
+      steps.findIndex((s) => s instanceof AudioFadeFilter),
+    ).toBeGreaterThan(loudnormIdx);
+    expect(fades).toEqual([
+      'afade=t=in:st=0.000:d=1.000',
+      'afade=t=out:st=87.000:d=3.000',
+    ]);
   });
 
   describe('audio language tag', () => {

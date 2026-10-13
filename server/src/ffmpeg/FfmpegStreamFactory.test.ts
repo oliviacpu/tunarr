@@ -23,7 +23,7 @@ import type { FfmpegInfo, FfmpegVersionResult } from '@/ffmpeg/ffmpegInfo.ts';
 import type { StreamSelector } from '@/ffmpeg/StreamSelector.ts';
 import type { FeatureFlagService } from '@/services/FeatureFlagService.ts';
 import type { StreamDetails, SubtitleStreamDetails } from '@/stream/types.ts';
-import { HttpStreamSource } from '@/stream/types.ts';
+import { FileStreamSource, HttpStreamSource } from '@/stream/types.ts';
 import type { SubtitlesInputSource } from '@/ffmpeg/builder/input/SubtitlesInputSource.ts';
 import type { VideoInputSource } from '@/ffmpeg/builder/input/VideoInputSource.ts';
 import {
@@ -34,7 +34,12 @@ import { InfiniteLoopInputOption } from '@/ffmpeg/builder/options/input/Infinite
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
 import { describe, expect, test, vi } from 'vitest';
-import { FfmpegStreamFactory } from './FfmpegStreamFactory.ts';
+import { GapMusicLoudnorm } from './builder/filter/LoudnormFilter.ts';
+import {
+  AudioInputSource,
+  NullAudioInputSource,
+} from './builder/input/AudioInputSource.ts';
+import { FfmpegStreamFactory, gapMusicFades } from './FfmpegStreamFactory.ts';
 
 vi.mock('@/util/serverUtil.ts', () => ({
   makeLocalUrl: (path: string) => `http://localhost:8000${path}`,
@@ -185,22 +190,27 @@ function createCapturingPipelineBuilderFactory(): {
   getCapturedHwAccel: () => string | undefined;
   getCapturedSubtitleInput: () => SubtitlesInputSource | null | undefined;
   getCapturedVideoInput: () => VideoInputSource | undefined;
+  getCapturedAudioInput: () => AudioInputSource | null | undefined;
 } {
   let capturedFrameState: FrameState | undefined;
   let capturedFfmpegState: FfmpegState | undefined;
   let capturedHwAccel: string | undefined;
   let capturedSubtitleInput: SubtitlesInputSource | null | undefined;
   let capturedVideoInput: VideoInputSource | undefined;
+  let capturedAudioInput: AudioInputSource | null | undefined;
 
   const factory: PipelineBuilderFactory = () => {
     const builderProxy: Record<string, unknown> = {};
-    for (const method of [
-      'setAudioInputSource',
-      'setWatermarkInputSource',
-      'setConcatInputSource',
-    ]) {
+    for (const method of ['setWatermarkInputSource', 'setConcatInputSource']) {
       builderProxy[method] = vi.fn().mockReturnValue(builderProxy);
     }
+
+    builderProxy.setAudioInputSource = vi.fn(
+      (input: AudioInputSource | null) => {
+        capturedAudioInput = input;
+        return builderProxy;
+      },
+    );
 
     builderProxy.setVideoInputSource = vi.fn((input: VideoInputSource) => {
       capturedVideoInput = input;
@@ -239,6 +249,7 @@ function createCapturingPipelineBuilderFactory(): {
   return {
     factory,
     getCapturedFrameState: () => capturedFrameState,
+    getCapturedAudioInput: () => capturedAudioInput,
     getCapturedFfmpegState: () => capturedFfmpegState,
     getCapturedHwAccel: () => capturedHwAccel,
     getCapturedSubtitleInput: () => capturedSubtitleInput,
@@ -517,6 +528,89 @@ describe('FfmpegStreamFactory', () => {
       // not the FfmpegState class defaults.
       expect(ffmpegState!.softwareDeinterlaceFilter).toBe('yadif=0');
       expect(ffmpegState!.softwareScalingAlgorithm).toBe('lanczos');
+    });
+  });
+
+  describe('gap music under the offline picture', () => {
+    function makeSut() {
+      const config = makeTranscodeConfig({
+        hardwareAccelerationMode: 'none',
+        videoFormat: 'h264',
+      });
+      const capture = createCapturingPipelineBuilderFactory();
+      const sut = new FfmpegStreamFactory(
+        makeMockFfmpegInfo(),
+        makeMockSettingsDB(makeFfmpegSettings()),
+        capture.factory,
+        makeMockChannelDB(),
+        makeMockFeatureFlagService(),
+        makeMockStreamSelector(),
+        config,
+        makeChannel(),
+      );
+      return { sut, ...capture };
+    }
+
+    test('plays the track, normalized, with fades, instead of the placeholder audio', async () => {
+      const { sut, getCapturedAudioInput } = makeSut();
+      const source = new FileStreamSource('/media/music/Artist/Album/01.flac');
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+        backgroundMusic: {
+          source,
+          audioStream: { index: 0, codec: 'flac', channels: 2 },
+          trackDurationMs: 240_000,
+        },
+      });
+
+      const audioInput = getCapturedAudioInput();
+      expect(audioInput).toBeInstanceOf(AudioInputSource);
+      expect(audioInput).not.toBeInstanceOf(NullAudioInputSource);
+      expect(audioInput?.source).toBe(source);
+      expect(audioInput?.streams[0]).toMatchObject({
+        index: 0,
+        codec: 'flac',
+        channels: 2,
+      });
+      expect(audioInput?.desiredState.loudnormConfig).toEqual(GapMusicLoudnorm);
+      expect(audioInput?.desiredState.fades).toEqual({
+        fadeInMs: 1000,
+        fadeOut: { startMs: 87_000, durationMs: 3000 },
+      });
+    });
+
+    test('keeps the placeholder audio without gap music', async () => {
+      const { sut, getCapturedAudioInput } = makeSut();
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+      });
+
+      const audioInput = getCapturedAudioInput();
+      expect(audioInput).toBeInstanceOf(NullAudioInputSource);
+      expect(audioInput?.desiredState.loudnormConfig).toBeNull();
+      expect(audioInput?.desiredState.fades).toBeNull();
+    });
+
+    test('gapMusicFades fades out only when the gap cuts the track short', () => {
+      expect(gapMusicFades(240_000, 240_000)).toEqual({
+        fadeInMs: 1000,
+        fadeOut: null,
+      });
+      expect(gapMusicFades(60_000, 240_000)).toEqual({
+        fadeInMs: 1000,
+        fadeOut: { startMs: 57_000, durationMs: 3000 },
+      });
+      // a 2-second remainder still fades, over its whole length
+      expect(gapMusicFades(2_000, 240_000)).toEqual({
+        fadeInMs: 1000,
+        fadeOut: { startMs: 0, durationMs: 2000 },
+      });
     });
   });
 
