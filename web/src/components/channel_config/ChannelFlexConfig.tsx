@@ -8,6 +8,7 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   IconButton,
   InputLabel,
   MenuItem,
@@ -448,6 +449,39 @@ export function ChannelFlexConfig() {
                     FormControlProps={{ fullWidth: true, sx: { mb: 1 } }}
                     value={field.value ?? ''}
                   />
+                )}
+              />
+              <Controller
+                name="offline.musicListId"
+                control={control}
+                render={({ field }) => (
+                  <FormControl fullWidth sx={{ mb: 1 }}>
+                    <InputLabel>{t`Gap music`}</InputLabel>
+                    <Select
+                      fullWidth
+                      label={t`Gap music`}
+                      value={field.value ?? ''}
+                      onChange={(e) => field.onChange(e.target.value)}
+                    >
+                      <MenuItem value="">
+                        <Trans>None</Trans>
+                      </MenuItem>
+                      {map(fillerLists, (list) => (
+                        <MenuItem key={list.id} value={list.id}>
+                          {list.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <FormHelperText>
+                      <Trans>
+                        Tracks from this filler list play under the image during
+                        gaps, one after another, at an even loudness. Build the
+                        list under Filler by adding artists, albums or tracks
+                        from your music library. Don't also add it as filler
+                        above, or its tracks play as programs.
+                      </Trans>
+                    </FormHelperText>
+                  </FormControl>
                 )}
               />
               <Controller

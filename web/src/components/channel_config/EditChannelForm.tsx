@@ -53,6 +53,8 @@ function getDefaultFormValues(channel: Channel): DeepRequired<SaveableChannel> {
       picture: channel.offline.picture ?? DefaultChannel.offline.picture ?? '',
       soundtrack:
         channel.offline.soundtrack ?? DefaultChannel.offline.soundtrack ?? '',
+      // '' = no gap music
+      musicListId: channel.offline.musicListId ?? '',
     },
     watermark: {
       ...(channel.watermark ?? {}),

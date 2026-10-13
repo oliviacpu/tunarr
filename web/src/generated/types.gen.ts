@@ -2964,6 +2964,7 @@ export type GetChannelsResponses = {
             picture?: string;
             soundtrack?: string;
             mode: 'pic' | 'clip';
+            musicListId?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3051,6 +3052,7 @@ export type CreateChannelV2Data = {
                 picture?: string;
                 soundtrack?: string;
                 mode: 'pic' | 'clip';
+                musicListId?: string;
             };
             startTime: number;
             stealth: boolean;
@@ -3170,6 +3172,7 @@ export type CreateChannelV2Responses = {
             picture?: string;
             soundtrack?: string;
             mode: 'pic' | 'clip';
+            musicListId?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3330,6 +3333,7 @@ export type GetChannelsByNumberV2Responses = {
             picture?: string;
             soundtrack?: string;
             mode: 'pic' | 'clip';
+            musicListId?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3415,6 +3419,7 @@ export type PutApiChannelsByIdData = {
             picture?: string;
             soundtrack?: string;
             mode: 'pic' | 'clip';
+            musicListId?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3536,6 +3541,7 @@ export type PutApiChannelsByIdResponses = {
             picture?: string;
             soundtrack?: string;
             mode: 'pic' | 'clip';
+            musicListId?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -6951,6 +6957,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         picture?: string;
                         soundtrack?: string;
                         mode: 'pic' | 'clip';
+                        musicListId?: string;
                     };
                     startTime: number;
                     stealth: boolean;
@@ -7362,6 +7369,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         picture?: string;
                         soundtrack?: string;
                         mode: 'pic' | 'clip';
+                        musicListId?: string;
                     };
                     startTime: number;
                     stealth: boolean;
@@ -13452,6 +13460,7 @@ export type PostApiTroubleshootResponses = {
                 picture?: string;
                 soundtrack?: string;
                 mode: 'pic' | 'clip';
+                musicListId?: string;
             };
             startTime: number;
             stealth: boolean;
