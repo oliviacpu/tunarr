@@ -34,6 +34,36 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Faster tune-in: HLS segment length, segments before playback, and a start-up burst (2026-10-13)
+
+- **What you saw:** a cold channel took 5–10 s to send its first byte to Plex's tuner. It was sped up outside Tunarr by
+  rewriting ffmpeg's arguments to 2 s segments and a read-ahead burst.
+- **Cause:** Tunarr hard-codes 4 s HLS segments (`HlsOutputFormat.SegmentSeconds`, `hlsTime: 4`). It serves a channel's
+  playlist only once 2 segments exist (`initialSegmentCount: 2` in `SessionManager`), so 8 s of video must be encoded
+  first. The `.ts` stream HDHomeRun clients read (`hlsWrap`, a copy of the HLS playlist) then reads at `-readrate 1` from
+  the first byte.
+- **Fix:** three global FFmpeg settings, under Settings > FFmpeg > Global Options. Each is read when a channel's session
+  starts.
+
+  - `hlsSegmentSeconds` (default 4, 1–10) reaches `HlsSession` (hls mode only) as `segmentSeconds`. `HlsOutputFormat`
+    then writes it as `-hls_time`, with `-g`, `-keyint_min` and `-force_key_frames` scaled to match. The playlist's
+    target duration follows. hls_direct_v2 keeps 4 s, because its copied video can only be cut at the source's keyframes.
+  - `hlsInitialSegmentCount` (default 2, 1–10) replaces the hard-coded 2 for hls and hls_slower sessions.
+  - `hlsTsInitialBurstSeconds` (default 0, 0–60) becomes `-readrate_initial_burst N` on the `hlsWrap` reader, through
+    `FfmpegState.readrateInitialBurstSeconds`.
+
+  The defaults keep the old behavior. `defaultHlsOptions.hlsTime` changed from an unused 2 to 4 so it matches the
+  sessions. Files: `HlsOutputFormat.ts`, `BasePipelineBuilder.ts`, `HlsSession.ts`, `SessionManager.ts`,
+  `FfmpegStreamFactory.ts`, `FfmpegState.ts`, the FFmpeg settings schema and page. Tests: `HlsOutputFormat.test.ts`,
+  `BasePipelineBuilder.test.ts`, `HlsSession.test.ts`. Docs: `docs/configure/ffmpeg/index.md` ("HLS Start-up").
+
+- **Checked** on a throwaway server (stream-repro, jellyfin-ffmpeg 8.1.3). The encoder was slowed to about real time
+  (1 thread, `medium`) to resemble the deployment. Over 3 cold starts each, the HDHomeRun `.ts` URL's first byte went
+  from 7.1–8.1 s (defaults) to 4.1 s (2 s segments, 10 s burst), and the 3 s after it carried 1.87 MB instead of
+  1.19 MB. The playlist read `#EXT-X-TARGETDURATION:2` with 2.000 s segments. To match the old wrapper, set segment length
+  2 and burst 10.
+- **Upstream:** not sent.
+
 ### The image ships jellyfin-ffmpeg 8.1.3-1 as its ffmpeg (2026-10-13)
 
 - **What you saw:** the image's only ffmpeg was ErsatzTV's 7.1.1, which has no `tonemapx`. The faster tone mapping ran

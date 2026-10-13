@@ -210,14 +210,14 @@ export class FfmpegStreamFactory {
       .setConcatInputSource(concatInput)
       .build();
 
-    const pipeline = pipelineBuilder.hlsWrap(
-      concatInput,
-      FfmpegState.forConcat(
-        await this.ffmpegInfo.getVersion(),
-        this.channel.name,
-        opts.outputFormat,
-      ),
+    const state = FfmpegState.forConcat(
+      await this.ffmpegInfo.getVersion(),
+      this.channel.name,
+      opts.outputFormat,
     );
+    state.readrateInitialBurstSeconds =
+      this.ffmpegSettings.hlsTsInitialBurstSeconds;
+    const pipeline = pipelineBuilder.hlsWrap(concatInput, state);
 
     return this.wrapInSession(
       pipeline,

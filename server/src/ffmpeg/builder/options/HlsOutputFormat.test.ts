@@ -83,4 +83,50 @@ describe('HlsOutputFormat', () => {
       expect(gopOptions(null)).toEqual({ gop: '96', keyintMin: '96' });
     });
   });
+  describe('segment length', () => {
+    function segmentOptions(segmentSeconds?: number) {
+      const state = new FrameState({
+        isAnamorphic: false,
+        scaledSize: FrameSize.FHD,
+        paddedSize: FrameSize.FHD,
+        frameDataLocation: FrameDataLocation.Software,
+      });
+      const opts = new HlsOutputFormat(
+        state,
+        24,
+        '/some/path/stream.m3u8',
+        '/some/path/data%06d.ts',
+        '/stream/channels/test-uuid/hls/',
+        true,
+        false,
+        false,
+        segmentSeconds,
+      ).options();
+      const after = (flag: string) => opts[opts.indexOf(flag) + 1];
+      return {
+        hlsTime: after('-hls_time'),
+        gop: after('-g'),
+        keyintMin: after('-keyint_min'),
+        forceKeyFrames: after('-force_key_frames'),
+      };
+    }
+
+    test('defaults to 4 s segments', () => {
+      expect(segmentOptions()).toEqual({
+        hlsTime: '4',
+        gop: '96',
+        keyintMin: '96',
+        forceKeyFrames: 'expr:gte(t,n_forced*4)',
+      });
+    });
+
+    test('keeps keyframes on segment boundaries for shorter segments', () => {
+      expect(segmentOptions(2)).toEqual({
+        hlsTime: '2',
+        gop: '48',
+        keyintMin: '48',
+        forceKeyFrames: 'expr:gte(t,n_forced*2)',
+      });
+    });
+  });
 });

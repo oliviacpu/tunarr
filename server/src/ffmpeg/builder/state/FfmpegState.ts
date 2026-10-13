@@ -107,6 +107,11 @@ export class FfmpegState {
   emitEndList: boolean = false;
   tonemapHdr: boolean = false;
   tonemapAlgorithm: TonemapAlgorithm = 'hable';
+  /**
+   * Seconds of input the HLS wrapper (the .ts stream made from an HLS
+   * channel's playlist) may read faster than real time at start.
+   */
+  readrateInitialBurstSeconds: number = 0;
 
   /**
    * When true, maps all streams from the input and copies them,

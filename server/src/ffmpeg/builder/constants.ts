@@ -16,7 +16,7 @@ export type HlsOptions = {
 };
 
 export const defaultHlsOptions: DeepRequired<HlsOptions> = {
-  hlsTime: 2,
+  hlsTime: 4,
   hlsListSize: 3,
   hlsDeleteThreshold: 3,
   segmentBaseDirectory: 'streams', // Relative to cwd

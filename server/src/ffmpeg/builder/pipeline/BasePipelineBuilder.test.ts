@@ -1,7 +1,10 @@
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
-import { FileStreamSource } from '../../../stream/types.ts';
-import { EmptyFfmpegCapabilities } from '../capabilities/FfmpegCapabilities.ts';
+import { FileStreamSource, HttpStreamSource } from '../../../stream/types.ts';
+import {
+  EmptyFfmpegCapabilities,
+  FfmpegCapabilities,
+} from '../capabilities/FfmpegCapabilities.ts';
 import {
   defaultHlsOptions,
   HlsDirectOutputFormat,
@@ -12,6 +15,7 @@ import { AudioVolumeFilter } from '../filter/AudioVolumeFilter.ts';
 import { LoudnormFilter } from '../filter/LoudnormFilter.ts';
 import { PixelFormatYuv420P } from '../format/PixelFormat.ts';
 import { AudioInputSource } from '../input/AudioInputSource.ts';
+import { ConcatInputSource } from '../input/ConcatInputSource.ts';
 import { SubtitlesInputSource } from '../input/SubtitlesInputSource.ts';
 import { VideoInputSource } from '../input/VideoInputSource.ts';
 import {
@@ -632,5 +636,98 @@ describe('BasePipelineBuilder', () => {
     // video/audio are still seeked (subtitle is not, so only 2 -ss flags)
     const seekCount = commandArgs.filter((arg) => arg === '-ss').length;
     expect(seekCount).toBe(2);
+  });
+});
+
+describe('BasePipelineBuilder HLS stream timing', () => {
+  const version = {
+    versionString: 'n7.1.1',
+    majorVersion: 7,
+    minorVersion: 1,
+    patchVersion: 1,
+    isUnknown: false,
+  };
+
+  test("writes the HLS options' segment length", () => {
+    const video = VideoInputSource.withStream(
+      new FileStreamSource('/path/to/video.mkv'),
+      VideoStream.create({
+        codec: 'h264',
+        displayAspectRatio: '16:9',
+        frameSize: FrameSize.FHD,
+        index: 0,
+        pixelFormat: new PixelFormatYuv420P(),
+        providedSampleAspectRatio: null,
+      }),
+    );
+    const hlsState = FfmpegState.create({
+      version,
+      outputFormat: HlsOutputFormat({ ...defaultHlsOptions, hlsTime: 2 }),
+    });
+
+    const args = new NoopPipelineBuilder(
+      video,
+      null,
+      null,
+      null,
+      null,
+      EmptyFfmpegCapabilities,
+    )
+      .build(
+        hlsState,
+        new FrameState({
+          isAnamorphic: false,
+          paddedSize: FrameSize.FHD,
+          scaledSize: FrameSize.FHD,
+        }),
+        DefaultPipelineOptions,
+      )
+      .getCommandArgs();
+
+    expect(args[args.indexOf('-hls_time') + 1]).toBe('2');
+    expect(args).toContain('expr:gte(t,n_forced*2)');
+  });
+
+  describe('HLS wrapper start-up burst', () => {
+    const withBurstOption = new FfmpegCapabilities(
+      new Set(['readrate_initial_burst']),
+      new Map(),
+      new Set(),
+      new Set(),
+    );
+
+    function wrapArgs(burstSeconds: number) {
+      const input = new ConcatInputSource(
+        new HttpStreamSource(
+          'http://localhost:8000/stream/channels/test-uuid.m3u8',
+        ),
+        FrameSize.FHD,
+      );
+      const wrapState = FfmpegState.forConcat(version, 'Test');
+      wrapState.readrateInitialBurstSeconds = burstSeconds;
+      return new NoopPipelineBuilder(
+        null,
+        null,
+        null,
+        null,
+        input,
+        withBurstOption,
+      )
+        .hlsWrap(input, wrapState)
+        .getCommandArgs();
+    }
+
+    test('reads the playlist at real-time pace by default', () => {
+      const args = wrapArgs(0);
+
+      expect(args[args.indexOf('-readrate') + 1]).toBe('1');
+      expect(args).not.toContain('-readrate_initial_burst');
+    });
+
+    test('bursts the configured seconds at start', () => {
+      const args = wrapArgs(10);
+
+      expect(args[args.indexOf('-readrate_initial_burst') + 1]).toBe('10');
+    });
   });
 });

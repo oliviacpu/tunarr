@@ -9,6 +9,7 @@ import path from 'node:path';
 import tmp from 'tmp';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { ProgramStream } from '../ProgramStream.ts';
+import type { HlsSessionOptions } from './HlsSession.js';
 import { HlsSession } from './HlsSession.js';
 
 vi.mock('@/util/logging/LoggerFactory.js', () => ({
@@ -35,16 +36,20 @@ vi.mock('@/stream/ConnectionTracker.ts', () => {
 
 const channelUuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-function makeSession(transcodeDirectory: string): HlsSession {
+function makeSession(
+  transcodeDirectory: string,
+  overrides: Partial<HlsSessionOptions> = {},
+): HlsSession {
   const channel = {
     uuid: channelUuid,
     transcodeConfig: {},
   } as ChannelOrmWithTranscodeConfig;
 
-  const options = {
-    streamMode: 'hls' as const,
+  const options: HlsSessionOptions = {
+    streamMode: 'hls',
     initialSegmentCount: 2,
     transcodeDirectory,
+    ...overrides,
   };
 
   return new HlsSession(
@@ -60,6 +65,29 @@ function makeSession(transcodeDirectory: string): HlsSession {
   );
 }
 describe('HlsSession', () => {
+  describe('segment length', () => {
+    function hlsTime(overrides: Partial<HlsSessionOptions>) {
+      const session = makeSession('/tmp', overrides);
+      return (
+        session as unknown as { getHlsOptions(): { hlsTime: number } }
+      ).getHlsOptions().hlsTime;
+    }
+
+    test("uses the session's segment length in hls mode", () => {
+      expect(hlsTime({ segmentSeconds: 2 })).toBe(2);
+    });
+
+    test('defaults to 4 s', () => {
+      expect(hlsTime({})).toBe(4);
+    });
+
+    test('keeps 4 s in hls_direct_v2, whose copied segments follow the source keyframes', () => {
+      expect(hlsTime({ streamMode: 'hls_direct_v2', segmentSeconds: 2 })).toBe(
+        4,
+      );
+    });
+  });
+
   describe('getMasterPlaylist', () => {
     let dir: tmp.DirResult;
 

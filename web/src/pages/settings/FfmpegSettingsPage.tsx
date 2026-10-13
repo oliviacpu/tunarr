@@ -34,6 +34,7 @@ import { Controller, useForm } from 'react-hook-form';
 import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert.tsx';
 
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
+import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { LanguagePreferencesList } from '@/components/LanguagePreferencesList';
 import type { DeepRequired } from 'ts-essentials';
 import { TranscodeConfigsTable } from '../../components/settings/ffmpeg/TranscodeConfigsTable.tsx';
@@ -348,6 +349,38 @@ export default function FfmpegSettingsPage() {
             </Trans>
           </FormHelperText>
         </FormControl>
+        <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
+          <NumericFormControllerText
+            control={control}
+            name="hlsSegmentSeconds"
+            rules={{ min: 1, max: 10 }}
+            TextFieldProps={{
+              label: t`HLS Segment Length (seconds)`,
+              fullWidth: true,
+              helperText: t`Length of each segment for channels in the HLS stream mode. Shorter segments let a channel start sooner. Applies when a channel's stream next starts.`,
+            }}
+          />
+          <NumericFormControllerText
+            control={control}
+            name="hlsInitialSegmentCount"
+            rules={{ min: 1, max: 10 }}
+            TextFieldProps={{
+              label: t`Segments Before Playback`,
+              fullWidth: true,
+              helperText: t`How many segments must be ready before a client gets an HLS channel's playlist.`,
+            }}
+          />
+          <NumericFormControllerText
+            control={control}
+            name="hlsTsInitialBurstSeconds"
+            rules={{ min: 0, max: 60 }}
+            TextFieldProps={{
+              label: t`MPEG-TS Start-up Burst (seconds)`,
+              fullWidth: true,
+              helperText: t`How far ahead an HLS channel's .ts stream (what HDHomeRun clients such as Plex read) may send at start, instead of real-time pace from the first byte. 0 turns it off.`,
+            }}
+          />
+        </Stack>
         <FormControl fullWidth>
           <Controller
             control={control}

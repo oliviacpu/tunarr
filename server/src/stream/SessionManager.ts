@@ -251,7 +251,8 @@ export class SessionManager {
       'hls_slower',
       (channel) =>
         this.hlsSlowerSessionFactory(channel, {
-          initialSegmentCount: 2, // 8 seconds of content
+          initialSegmentCount:
+            this.settingsDB.ffmpegSettings().hlsInitialSegmentCount,
           transcodeDirectory:
             this.settingsDB.ffmpegSettings().transcodeDirectory,
           stalenessMs:
@@ -274,7 +275,9 @@ export class SessionManager {
       options?.streamMode ?? 'hls',
       (channel) =>
         this.hlsSessionFactory(channel, {
-          initialSegmentCount: 2, // 8 seconds of content
+          initialSegmentCount:
+            this.settingsDB.ffmpegSettings().hlsInitialSegmentCount,
+          segmentSeconds: this.settingsDB.ffmpegSettings().hlsSegmentSeconds,
           transcodeDirectory:
             this.settingsDB.ffmpegSettings().transcodeDirectory,
           streamMode: options?.streamMode ?? 'hls',

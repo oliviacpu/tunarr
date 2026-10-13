@@ -49,6 +49,9 @@ export type HlsSlowerSessionProvider = (
 
 export interface HlsSessionOptions extends BaseHlsSessionOptions {
   streamMode: 'hls' | 'hls_direct_v2';
+  // Segment length in hls mode, fixed for the session's lifetime so the
+  // playlist's target duration stays true. hls_direct_v2 always uses 4 s.
+  segmentSeconds?: number;
 }
 
 /**
@@ -400,7 +403,10 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
       segmentBaseDirectory: dirname(this.workingDirectory),
       streamBasePath: basename(this.workingDirectory),
       streamBaseUrl: `/stream/channels/${this.channel.uuid}/${this.sessionType}/`,
-      hlsTime: 4,
+      hlsTime:
+        this.sessionOptions.streamMode === 'hls'
+          ? (this.sessionOptions.segmentSeconds ?? 4)
+          : 4,
       hlsListSize: 0,
       deleteThreshold: null,
       appendSegments: true,

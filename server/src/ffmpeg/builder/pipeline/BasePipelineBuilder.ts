@@ -318,7 +318,10 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
 
     input.addOption(new RealtimeBufferSizeInputOption('15M'));
     input.addOption(
-      new ReadrateInputOption(this.ffmpegCapabilities, 0 /*, 1.5*/),
+      new ReadrateInputOption(
+        this.ffmpegCapabilities,
+        state.readrateInitialBurstSeconds /*, 1.5*/,
+      ),
     );
     if (state.metadataServiceName) {
       pipelineSteps.push(
@@ -960,6 +963,7 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
               this.ffmpegState.encoderHwAccelMode ===
                 HardwareAccelerationMode.Qsv,
               this.ffmpegState.emitEndList,
+              this.ffmpegState.outputFormat.hlsOptions.hlsTime,
             ),
           );
           if (this.subtitleInputSource?.method === SubtitleMethods.Convert) {
