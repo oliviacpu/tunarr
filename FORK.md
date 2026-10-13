@@ -56,7 +56,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 
 - **Where to set it:** the channel's Flex settings, **Gap music**, next to the fallback image (any filler list).
   Documented in `docs/configure/channels/flex.md`.
-- **Checked end to end** on a throwaway server (stream-repro, local music library, ffmpeg 8): three tracks measuring
+- **Checked end to end** on a throwaway server (stream-repro, local music library, ffmpeg 9.0.2;
+  the deployed image ships 7.1.1, which has the same `loudnorm` and `afade`): three tracks measuring
   -6.2, -22.6 and -47.6 LUFS all came out at -24.0 LUFS. Gap items rotated tracks (never-played first, then the
   oldest), the track cut by the gap's end faded out over its last 3 s, each item faded in over 1 s, and a channel
   without a list still played digital silence.
