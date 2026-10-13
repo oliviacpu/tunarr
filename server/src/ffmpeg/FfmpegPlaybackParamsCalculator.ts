@@ -35,6 +35,23 @@ function softwareVideoPreset(configured: string | null): VideoPreset {
   return isVideoPreset(preset) ? preset : VideoPresets.VeryFast;
 }
 
+// A probed frame rate (24, 23.976, "24000/1001", "25") as frames per second rounded to 3 decimals, or undefined
+// when it's missing or not a plausible rate.
+function parseFrameRate(framerate: number | string | null | undefined) {
+  let rate: number;
+  if (typeof framerate === 'number') {
+    rate = framerate;
+  } else if (typeof framerate === 'string' && framerate.includes('/')) {
+    const [num, den] = framerate.split('/').map(Number);
+    rate = num !== undefined && den !== undefined ? num / den : NaN;
+  } else {
+    rate = parseFloat(framerate ?? '');
+  }
+  return Number.isFinite(rate) && rate > 0 && rate <= 240
+    ? Math.round(rate * 1000) / 1000
+    : undefined;
+}
+
 export class FfmpegPlaybackParamsCalculator {
   constructor(
     private transcodeConfig: TranscodeConfigOrm,
@@ -109,13 +126,11 @@ export class FfmpegPlaybackParamsCalculator {
         params.needsPad = true;
       }
 
-      // We only have an option for maxFPS right now...
-      // if (
-      //   isNil(videoStream.framerate) ||
-      //   round(videoStream.framerate, 3) > this.ffmpegOptions.maxFPS
-      // ) {
-      //   params.frameRate = this.ffmpegOptions.maxFPS;
-      // }
+      // "Normalize Frame Rate": a constant output frame rate at the source's own rate (the pipeline before #1349 used
+      // an fps filter for this). The builder turns it into -r <rate> -fps_mode cfr.
+      if (this.transcodeConfig.normalizeFrameRate) {
+        params.frameRate = parseFrameRate(videoStream.framerate);
+      }
 
       params.videoTrackTimeScale = 90000;
 

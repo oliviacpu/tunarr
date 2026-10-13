@@ -28,6 +28,21 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### "Normalize Frame Rate" works again (2026-10-13)
+
+- **What you saw:** the transcode config's **Normalize Frame Rate** checkbox ("Output video at a constant frame rate")
+  did nothing; output kept whatever timing the source had, including variable frame rates.
+- **Cause:** when the old ffmpeg pipeline was replaced (#1349), its `fps=<source rate>` filter for this setting wasn't
+  carried over. The new calculator only had a commented-out `maxFPS` stub. The builder could already write
+  `-r <rate> -fps_mode cfr` when the desired state has a frame rate, but nothing set one.
+- **Fix:** with the setting on, `FfmpegPlaybackParamsCalculator` sets the output frame rate to the source's own rate
+  (from `24`, `23.976`, `"24000/1001"` or `"25"`, rounded to 3 decimals; nothing for missing or implausible values).
+  `HlsOutputFormat` now rounds its keyframe interval to whole frames, since 23.976 x 4 s would otherwise be written as
+  `-g 95.904`. Checked with real ffmpeg: a variable-rate input comes out at exactly 24000/1001 with 96-frame segments.
+  Off by default, as before. Tests: `FfmpegPlaybackParamsCalculator.test.ts` (its `makeStreamDetails` helper now
+  applies its overrides, which it silently ignored), `HlsOutputFormat.test.ts`.
+- **Upstream:** not sent.
+
 ### Tag the output audio's language (2026-10-13)
 
 - **What you saw:** Tunarr's streams carried no audio language, so Plex logged every program as foreign-language audio

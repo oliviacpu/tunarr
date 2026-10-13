@@ -19,14 +19,18 @@ export class HlsOutputFormat extends OutputOption {
 
   options(): string[] {
     const frameRate = this.desiredState.frameRate ?? this.mediaFrameRate;
-    const gop = this.oneSecondGop
-      ? frameRate
-      : frameRate * HlsOutputFormat.SegmentSeconds;
+    // Whole frame counts: a fractional output rate (e.g. 23.976 from "Normalize Frame Rate") would give -g 95.904
+    const gop = Math.round(
+      this.oneSecondGop
+        ? frameRate
+        : frameRate * HlsOutputFormat.SegmentSeconds,
+    );
+    const keyintMin = Math.round(frameRate * HlsOutputFormat.SegmentSeconds);
     const opts = [
       '-g',
       `${gop}`,
       '-keyint_min',
-      `${frameRate * HlsOutputFormat.SegmentSeconds}`,
+      `${keyintMin}`,
       '-force_key_frames',
       `expr:gte(t,n_forced*${HlsOutputFormat.SegmentSeconds})`,
       '-f',

@@ -48,7 +48,7 @@ function makeTranscodeConfig(
 }
 
 function makeStreamDetails(
-  overrides: Partial<StreamDetails['videoDetails']> = {},
+  overrides: Partial<NonNullable<StreamDetails['videoDetails']>[number]> = {},
 ): StreamDetails {
   return {
     duration: dayjs.duration({ seconds: 30 }),
@@ -71,6 +71,7 @@ function makeStreamDetails(
         colorSpace: null,
         colorTransfer: null,
         colorPrimaries: null,
+        ...overrides,
       },
     ],
   };
@@ -229,6 +230,50 @@ describe('FfmpegPlaybackParamsCalculator', () => {
       const params = calculator.calculateForStream(streamDetails);
 
       expect(params.videoPreset).toBeUndefined();
+    });
+
+    describe('normalizeFrameRate', () => {
+      // "Normalize Frame Rate" means a constant output frame rate at the source's own rate (as the pipeline before #1349
+      // did with an fps filter), which turns variable-frame-rate sources into constant ones.
+      test.each([
+        [24, 24],
+        [23.976, 23.976],
+        ['24000/1001', 23.976],
+        ['30000/1001', 29.97],
+        ['25', 25],
+        ['59.94', 59.94],
+      ])('outputs the source rate %j as %j fps', (framerate, expected) => {
+        const config = makeTranscodeConfig({ normalizeFrameRate: true });
+        const calculator = new FfmpegPlaybackParamsCalculator(config, 'hls');
+        const params = calculator.calculateForStream(
+          makeStreamDetails({ framerate }),
+        );
+
+        expect(params.frameRate).toBe(expected);
+      });
+
+      test('leaves the frame rate alone when the setting is off', () => {
+        const config = makeTranscodeConfig({ normalizeFrameRate: false });
+        const calculator = new FfmpegPlaybackParamsCalculator(config, 'hls');
+        const params = calculator.calculateForStream(
+          makeStreamDetails({ framerate: '24000/1001' }),
+        );
+
+        expect(params.frameRate).toBeUndefined();
+      });
+
+      test.each([undefined, '', 'abc', '0/0', 0, -5])(
+        'sets no frame rate when the source rate %j is unusable',
+        (framerate) => {
+          const config = makeTranscodeConfig({ normalizeFrameRate: true });
+          const calculator = new FfmpegPlaybackParamsCalculator(config, 'hls');
+          const params = calculator.calculateForStream(
+            makeStreamDetails({ framerate }),
+          );
+
+          expect(params.frameRate).toBeUndefined();
+        },
+      );
     });
   });
 });

@@ -48,4 +48,39 @@ describe('HlsOutputFormat', () => {
     expect(outputIdx).toBeGreaterThan(-1);
     expect(masterIdx).toBeLessThan(outputIdx);
   });
+
+  describe('keyframe interval', () => {
+    function gopOptions(frameRate: number | null, oneSecondGop = false) {
+      const state = new FrameState({
+        isAnamorphic: false,
+        scaledSize: FrameSize.FHD,
+        paddedSize: FrameSize.FHD,
+        frameDataLocation: FrameDataLocation.Software,
+        frameRate,
+      });
+      const opts = new HlsOutputFormat(
+        state,
+        24,
+        '/some/path/stream.m3u8',
+        '/some/path/data%06d.ts',
+        '/stream/channels/test-uuid/hls/',
+        true,
+        oneSecondGop,
+      ).options();
+      return {
+        gop: opts[opts.indexOf('-g') + 1],
+        keyintMin: opts[opts.indexOf('-keyint_min') + 1],
+      };
+    }
+
+    test('uses whole frame counts for a fractional output frame rate', () => {
+      // 23.976 fps x 4 s segments would otherwise be written as -g 95.904
+      expect(gopOptions(23.976)).toEqual({ gop: '96', keyintMin: '96' });
+      expect(gopOptions(29.97, true)).toEqual({ gop: '30', keyintMin: '120' });
+    });
+
+    test('falls back to the media frame rate', () => {
+      expect(gopOptions(null)).toEqual({ gop: '96', keyintMin: '96' });
+    });
+  });
 });
