@@ -1,0 +1,113 @@
+# Fork-only (oliviacpu/tunarr): build the Docker image this fork deploys, when an oliviacpu-* tag is pushed
+# (e.g. oliviacpu-2026.10.13; add .2 for a second one the same day). Pushes to main build nothing.
+# linux/amd64 only (the deployment is x86_64). Pushes ghcr.io/<owner>/tunarr:<tag>, :sha-<commit> and :latest (the
+# newest), then creates the GitHub Release for the tag, listing the fork changes, so each image has a changelog.
+# Upstream's workflow files are unchanged. The ones triggered by releases or tags (Docker, binaries, release, docs,
+# translations, stale, PR policy) are disabled in this fork's Actions settings, so these releases don't start them.
+name: Fork image
+
+on:
+  push:
+    tags:
+      - "oliviacpu-*"
+  workflow_dispatch: # run it by hand on an oliviacpu-* tag (pick the tag as the ref)
+
+permissions:
+  contents: write # the release
+  packages: write # the image
+
+concurrency:
+  group: fork-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # never in the upstream repository, and only for oliviacpu-* tags
+    if: github.repository != 'chrisbenincasa/tunarr' && startsWith(github.ref, 'refs/tags/oliviacpu-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Version: newest upstream release in our history plus our tag, e.g. 2026.10.2-oliviacpu-2026.10.13.
+      # Upstream's tags are fetched here rather than pushed to the fork, so its tag-triggered workflows never run.
+      - name: Version
+        run: |
+          git fetch --quiet --tags https://github.com/chrisbenincasa/tunarr.git
+          git fetch --quiet https://github.com/chrisbenincasa/tunarr.git main:refs/remotes/upstream/main
+          base=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD)
+          sha=$(git rev-parse --short HEAD)
+          echo "TUNARR_VERSION=${base#v}-${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          echo "TUNARR_BUILD=${sha}" >> "$GITHUB_ENV"
+          echo "UPSTREAM_BASE=${base}" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tunarr" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          target: full-stack
+          build-args: |
+            base_image_tag=7.1.1
+            is_edge_build=false
+            tunarr_version=${{ env.TUNARR_VERSION }}
+            tunarr_build=${{ env.TUNARR_BUILD }}
+            exec_target=linux-x64
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:sha-${{ env.TUNARR_BUILD }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.TUNARR_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The changelog for this image: the fork commits since the previous oliviacpu-* tag, then every commit this fork
+      # adds on top of upstream (reachable from the tag but not from upstream's main). The why and how are in FORK.md.
+      - name: Release notes
+        run: |
+          repo="https://github.com/${GITHUB_REPOSITORY}"
+          fmt="- %s ([%h](${repo}/commit/%H))"
+          prev=$(git describe --tags --abbrev=0 --match 'oliviacpu-*' HEAD^ 2>/dev/null || true)
+          {
+            echo "Based on upstream [${UPSTREAM_BASE}](https://github.com/chrisbenincasa/tunarr/releases/tag/${UPSTREAM_BASE})."
+            echo
+            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\` (also \`:sha-${TUNARR_BUILD}\`, and \`:latest\` until the next release)."
+            echo
+            if [ -n "$prev" ]; then
+              echo "## New since ${prev}"
+              echo
+              git log --no-merges --reverse --format="$fmt" "${prev}..HEAD" --not refs/remotes/upstream/main
+              echo
+              prev_base=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$prev")
+              if [ "$prev_base" != "$UPSTREAM_BASE" ]; then
+                echo "Upstream moved from ${prev_base} to ${UPSTREAM_BASE}."
+              else
+                echo "Upstream base unchanged (${UPSTREAM_BASE})."
+              fi
+              echo
+            fi
+            echo "## All fork changes not in upstream"
+            echo
+            echo "What each one fixes, why, and how: [FORK.md](${repo}/blob/${GITHUB_SHA}/FORK.md)."
+            echo
+            git log --no-merges --reverse --format="$fmt" refs/remotes/upstream/main..HEAD
+          } > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$TUNARR_VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
