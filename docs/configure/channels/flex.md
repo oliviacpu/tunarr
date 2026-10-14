@@ -23,3 +23,7 @@ The channel fallback can play music under its image. Build a [filler list](/conf
 - Don't also add the list as filler on the same channel: filler tracks play as programs with their album art instead.
 
 The music library has to be enabled and scanned under Sources first.
+
+## Gaps in the guide
+
+In the XMLTV guide, a gap shows a picture: the **Guide Picture for Gaps** if you set one, otherwise the fallback image, otherwise the channel logo. Apps such as Plex keep one picture per guide entry and crop it to both tall and wide tiles. A wide fallback image with text across it loses its edges in tall tiles, so for the guide picture use a square image with its content in the middle third of the width and the middle half of the height.

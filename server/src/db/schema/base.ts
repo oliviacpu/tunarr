@@ -114,6 +114,8 @@ export const ChannelOfflineSettingsSchema = z.object({
   mode: z.enum(['pic', 'clip']).catch('clip'),
   // Filler list whose tracks play, loudness-normalized, under the offline picture during gaps
   musicListId: z.string().optional(),
+  // The picture gaps get in the guide (XMLTV), if not the offline picture
+  guidePicture: z.string().optional(),
 });
 
 export type ChannelOfflineSettings = z.infer<

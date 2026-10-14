@@ -32,6 +32,8 @@ Plex should now display your Tunarr channels in the Live TV section. Select "Vie
 
 Plex's apps load guide pictures (programme posters, channel logos) themselves, from the addresses in the XMLTV file. Those addresses start with the one Plex used to fetch the guide. If that address only works on the server, such as `http://127.0.0.1:8000`, the apps can't load the pictures and show plain titles instead.
 
+Gaps between programmes (flex) show the channel's offline picture, which is what airs during them, or the channel's logo when it has none.
+
 To fix this, set **Public Address for Guide Pictures** (Settings → XMLTV) to an address the apps can reach, such as `https://tunarr.example.com`. The guide's picture links then use it. Plex keeps fetching the guide from its usual address. The picture paths (`/api/programs/<id>/artwork/<type>`, `/api/credits/<id>/artwork/<type>` and `/images/…`) must be reachable at that address without a login.
 
 Play your channel by hovering over the channel icon and selecting the play icon.

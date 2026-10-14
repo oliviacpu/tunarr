@@ -138,7 +138,9 @@ export class XmlTvWriter {
       for (const batch of chunk(programs, SerializeBatchSize)) {
         await throttle();
         const body = writeXmltv({
-          programmes: batch.map((p) => this.makeXmlTvProgram(p, xmlChannelId)),
+          programmes: batch.map((p) =>
+            this.makeXmlTvProgram(p, xmlChannelId, channel),
+          ),
         });
 
         // The declaration and DOCTYPE before <tv> come and go with the content,
@@ -173,7 +175,7 @@ export class XmlTvWriter {
       ),
       programmes: flatMap(channels, ({ channel, programs }) =>
         map(programs, (p) =>
-          this.makeXmlTvProgram(p, xmlChannelIdById[channel.uuid]!),
+          this.makeXmlTvProgram(p, xmlChannelIdById[channel.uuid]!, channel),
         ),
       ),
     } satisfies Xmltv;
@@ -217,6 +219,7 @@ export class XmlTvWriter {
   private makeXmlTvProgram(
     guideItem: MaterializedGuideItem,
     xmlChannelId: string,
+    channel: Pick<ChannelOrm, 'offline' | 'icon'>,
   ): XmltvProgramme {
     const title = match(guideItem)
       .with(
@@ -270,6 +273,13 @@ export class XmlTvWriter {
 
     if (subTitle) {
       partial.subTitle = [{ _value: escape(subTitle) }];
+    }
+
+    if (guideItem.programming.type === 'flex') {
+      const icon = XmlTvWriter.flexIconUrl(channel);
+      if (icon) {
+        partial.icon = [{ src: escape(icon) }];
+      }
     }
 
     if (guideItem.programming.type === 'program') {
@@ -430,6 +440,26 @@ export class XmlTvWriter {
     }
 
     return partial;
+  }
+
+  /**
+   * The picture for a gap in the guide: the channel's guide picture for gaps if
+   * set, else its offline picture (what airs during the gap), else its logo.
+   */
+  static flexIconUrl(
+    channel: Pick<ChannelOrm, 'offline' | 'icon'>,
+  ): string | undefined {
+    const picture = isNonEmptyString(channel.offline?.guidePicture)
+      ? channel.offline.guidePicture
+      : channel.offline?.mode === 'pic'
+        ? channel.offline.picture
+        : undefined;
+    if (isNonEmptyString(picture)) {
+      return picture.startsWith('/') ? `{{host}}${picture}` : picture;
+    }
+    return (
+      resolveIconUrl(channel.icon, '{{host}}/images/tunarr.png') ?? undefined
+    );
   }
 
   static resolveArtworkUrl(

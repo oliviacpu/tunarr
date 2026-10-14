@@ -34,6 +34,20 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Gaps in the guide show the channel's offline picture (2026-10-13)
+
+- **What you saw:** gaps between programmes (flex, such as "<channel> · back soon") were blank tiles in Plex's "Shows
+  On Now" and guide, while programmes had posters.
+- **Cause:** `XmlTvWriter.makeXmlTvProgram` only wrote an `<icon>` for real programmes.
+- **Fix:** a flex programme gets the channel's guide picture for gaps (new optional `offline.guidePicture`,
+  **Guide Picture for Gaps** in the channel's Flex settings), else its offline picture when the offline mode is a
+  picture (what airs during the gap), else the channel's logo or Tunarr's default logo. Plex keeps one picture per
+  guide entry (`thumb`; `art` stays empty for XMLTV) and crops it to both tall and wide tiles. The guide picture is
+  there so a square tile can carry a wide card whole. A picture stored as a path
+  (`/images/...`) gets the guide address. (`XmlTvWriter.flexIconUrl`; the writer now passes the channel through.)
+  Test: `XmlTvWriter.test.ts` (gaps in the guide).
+- **Upstream:** not sent.
+
 ### Guide pictures can use a public address (2026-10-13)
 
 - **What you saw:** in Plex's apps, programmes in the guide and "Shows On Now" showed plain titles with no posters.

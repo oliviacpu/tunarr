@@ -4,6 +4,7 @@ import { tag } from '@tunarr/types';
 import { v4 } from 'uuid';
 import type { Artwork } from '../db/schema/Artwork.ts';
 import type { MediaSourceId } from '../db/schema/base.ts';
+import type { ChannelOrm } from '../db/schema/Channel.ts';
 import type {
   ProgramGroupingOrmWithRelations,
   ProgramWithRelationsOrm,
@@ -1280,5 +1281,74 @@ describe('xmlTvLinkHost', () => {
     expect(xmlTvLinkHost('https://example.com/tunarr', request)).toBe(
       'https://example.com/tunarr',
     );
+  });
+});
+
+describe('gaps in the guide', () => {
+  async function gapIcon(channel: Partial<ChannelOrm>) {
+    const writer = new XmlTvWriter(inMemorySettingsDB());
+    const xml = await writer.serialize([
+      {
+        channel: createChannelOrm({ number: 1, name: 'Channel 1', ...channel }),
+        programs: [
+          {
+            programming: { type: 'flex' },
+            title: 'Channel 1 · back soon',
+            start: 0,
+            stop: 1_800_000,
+            durationMs: 1_800_000,
+          },
+        ],
+      },
+    ]);
+    return parseXmltv(xml).programmes?.[0]?.icon?.[0]?.src;
+  }
+
+  test("show the channel's offline picture, which is what airs then", async () => {
+    expect(
+      await gapIcon({
+        offline: { mode: 'pic', picture: 'https://example.com/card.png' },
+        icon: {
+          path: 'https://example.com/logo.png',
+          width: 0,
+          duration: 0,
+          position: 'bottom-right',
+        },
+      }),
+    ).toBe('https://example.com/card.png');
+  });
+
+  test('prefer the guide picture for gaps when the channel has one', async () => {
+    expect(
+      await gapIcon({
+        offline: {
+          mode: 'pic',
+          picture: 'https://example.com/card.png',
+          guidePicture: 'https://example.com/tile.png',
+        },
+      }),
+    ).toBe('https://example.com/tile.png');
+  });
+
+  test('give a picture stored as a path the guide address', async () => {
+    expect(
+      await gapIcon({
+        offline: { mode: 'pic', picture: '/images/uploads/card.png' },
+      }),
+    ).toBe('{{host}}/images/uploads/card.png');
+  });
+
+  test('fall back to the channel logo without an offline picture', async () => {
+    expect(
+      await gapIcon({
+        offline: { mode: 'clip' },
+        icon: {
+          path: 'https://example.com/logo.png',
+          width: 0,
+          duration: 0,
+          position: 'bottom-right',
+        },
+      }),
+    ).toBe('https://example.com/logo.png');
   });
 });

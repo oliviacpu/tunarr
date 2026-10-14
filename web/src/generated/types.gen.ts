@@ -2965,6 +2965,7 @@ export type GetChannelsResponses = {
             soundtrack?: string;
             mode: 'pic' | 'clip';
             musicListId?: string;
+            guidePicture?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3053,6 +3054,7 @@ export type CreateChannelV2Data = {
                 soundtrack?: string;
                 mode: 'pic' | 'clip';
                 musicListId?: string;
+                guidePicture?: string;
             };
             startTime: number;
             stealth: boolean;
@@ -3173,6 +3175,7 @@ export type CreateChannelV2Responses = {
             soundtrack?: string;
             mode: 'pic' | 'clip';
             musicListId?: string;
+            guidePicture?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3334,6 +3337,7 @@ export type GetChannelsByNumberV2Responses = {
             soundtrack?: string;
             mode: 'pic' | 'clip';
             musicListId?: string;
+            guidePicture?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3420,6 +3424,7 @@ export type PutApiChannelsByIdData = {
             soundtrack?: string;
             mode: 'pic' | 'clip';
             musicListId?: string;
+            guidePicture?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -3542,6 +3547,7 @@ export type PutApiChannelsByIdResponses = {
             soundtrack?: string;
             mode: 'pic' | 'clip';
             musicListId?: string;
+            guidePicture?: string;
         };
         startTime: number;
         stealth: boolean;
@@ -6958,6 +6964,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         soundtrack?: string;
                         mode: 'pic' | 'clip';
                         musicListId?: string;
+                        guidePicture?: string;
                     };
                     startTime: number;
                     stealth: boolean;
@@ -7370,6 +7377,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         soundtrack?: string;
                         mode: 'pic' | 'clip';
                         musicListId?: string;
+                        guidePicture?: string;
                     };
                     startTime: number;
                     stealth: boolean;
@@ -13489,6 +13497,7 @@ export type PostApiTroubleshootResponses = {
                 soundtrack?: string;
                 mode: 'pic' | 'clip';
                 musicListId?: string;
+                guidePicture?: string;
             };
             startTime: number;
             stealth: boolean;

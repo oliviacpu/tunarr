@@ -452,6 +452,30 @@ export function ChannelFlexConfig() {
                 )}
               />
               <Controller
+                name="offline.guidePicture"
+                control={control}
+                render={({ field }) => (
+                  <ImageUploadInput
+                    fileRenamer={typedProperty('name')}
+                    label={t`Guide Picture for Gaps`}
+                    onFormValueChange={(newPath) => {
+                      field.onChange(newPath);
+                    }}
+                    onUploadError={console.error}
+                    FormControlProps={{ fullWidth: true, sx: { mb: 1 } }}
+                    value={field.value ?? ''}
+                  />
+                )}
+              />
+              <FormHelperText sx={{ mt: -1, mb: 1 }}>
+                <Trans>
+                  Optional. The picture gaps get in the guide. Apps such as Plex
+                  crop one picture to both tall and wide tiles, so a square
+                  picture with its content in the middle works best. Without
+                  one, gaps show the image above, or else the channel logo.
+                </Trans>
+              </FormHelperText>
+              <Controller
                 name="offline.musicListId"
                 control={control}
                 render={({ field }) => (
