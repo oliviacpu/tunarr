@@ -34,6 +34,26 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A replaced channel logo gets a new address, so Plex shows it (2026-10-14)
+
+- **What you saw:** after replacing all six channel logos, Plex and its Apple TV app kept showing the old ones, through
+  a guide refresh and an app restart.
+- **Cause:** an upload keeps its file name (a channel's logo is always `<channel id>_icon.<ext>`), and the upload route
+  returned the bare file URL. A replaced logo kept its exact address, and everything that caches images by address
+  (Plex's image cache, its apps, Tunarr's own cache for watermarks) went on serving the old picture.
+- **Fix:** `POST /api/upload/image` returns the URL with `?v=` and the first 12 hex digits of the image's SHA-256
+  (`uploadedImageUrl`, `util/iconUtil.ts`). A different image under the same name gets a new address; the same image
+  uploaded again keeps its address. Channel logos, offline pictures and watermarks all go through this route.
+  - **What still works:** the file is served without the query string. Clearing an icon still finds its file to
+    delete, because `extractLocalUploadFilename` reads only the path. Tunarr's image cache keys by the whole URL.
+  - **Docs:** `docs/configure/channels/properties.md` (versioned addresses) and `docs/configure/clients/plex.md` (a new
+    logo appears after Plex's next guide refresh, which ends a playing Live TV stream).
+  - **Existing logos:** ones uploaded before this keep their old address until uploaded again.
+- **Tests:** `iconUtil.test.ts`: the URL's shape, a different image gets a new URL, the same image keeps it, and the
+  file name can still be read back. Checked end to end on a throwaway server: two images uploaded under one name got
+  different URLs, and each served its own image.
+- **Upstream:** not sent.
+
 ### The nightly collection sync runs in a scan worker (2026-10-14)
 
 - **What you saw:** nothing specific. It was the last scan work left on the main thread: `SyncCollectionsTask` (daily,

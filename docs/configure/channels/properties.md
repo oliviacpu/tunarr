@@ -10,6 +10,8 @@ The channel icon has three states:
 - **Default logo** -- When no custom icon is set, Tunarr shows its default logo as a fallback. This is the default behavior.
 - **No icon** -- Click the **X** button next to the icon preview to remove the icon entirely. In this state, no icon is included in the M3U playlist, XMLTV guide data, or watermark overlay. To restore the default logo after removing the icon, click the **restore** button.
 
+An uploaded icon's address ends in a version taken from the image (`…_icon.png?v=…`). Uploading a different image gives it a new address, so clients that cache images by address, such as Plex and its apps, load the new one instead of keeping the old. Icons uploaded before this was added keep their old address until they are uploaded again.
+
 On-Demand will allow your channels to behave similar to streaming services, where the watch states will only progress while you're actively viewing the channel. This is disabled by default, which means by default channels will behave similar to traditional televison where watch states will progress without you actively viewing the channel.
 
 ![Channel properties](/assets/channel-properties.png)

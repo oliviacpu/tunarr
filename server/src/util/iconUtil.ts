@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { ChannelIcon } from '@tunarr/types';
 import { deleteUploadedFile } from './fsUtil.js';
@@ -26,6 +27,26 @@ export function extractLocalUploadFilename(url: string): string | null {
   }
 
   return parsed.pathname.slice(LocalUploadPathPrefix.length);
+}
+
+/**
+ * The URL for an uploaded image. Uploads keep their file name (a channel's logo
+ * is always `<channel id>_icon.<ext>`), so a replaced image would keep its URL,
+ * and everything that caches images by URL (Plex, its apps, Tunarr's own image
+ * cache) would go on showing the old one. A short hash of the contents in the
+ * query string gives each different image its own URL; uploading the same image
+ * again keeps it.
+ */
+export function uploadedImageUrl(
+  origin: string,
+  filename: string,
+  contents: Uint8Array,
+): string {
+  const version = createHash('sha256')
+    .update(contents)
+    .digest('hex')
+    .slice(0, 12);
+  return `${origin}${LocalUploadPathPrefix}${filename}?v=${version}`;
 }
 
 /**
