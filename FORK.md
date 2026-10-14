@@ -127,14 +127,15 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     frees the write lock.
   - **Crash:** a worker that dies mid-job fails that job without running it again; the next scan starts a new worker.
   - **Shutdown:** `MediaSourceScanCoordinator.shutdown(graceMs)` cancels every job and skips the reconcile. `Server`
-    gives the running scan 2 s, then its worker is terminated.
+    gives the running scan 2 s, then its worker is terminated. A worker still starting is terminated at once (found by
+    the Codex review).
   - **Switch:** `TUNARR_SCAN_IN_WORKER` (default on) needs `TUNARR_USE_WORKER_POOL` (default on). With either off,
     scans run on the main thread as before. `ServicesModule` picks the runner; worker threads always scan in-process.
   - **Docs:** `docs/getting-started/run.md` adds the switch and corrects the pool's defaults (on, at most 8 threads).
 - **Tests:**
   - new `WorkerScanJobRunner.test.ts` (fake worker): progress, a fresh worker per job, start-up fallback, the 3-failure
-    limit, a crash, a reported failure, cancels honored and ignored, a cancel during start-up, shutdown, and a worker
-    that won't exit;
+    limit, a crash, a reported failure, cancels honored and ignored, a cancel during start-up, shutdown during a job and
+    during start-up, and a worker that won't exit;
   - new `ScanWorkerRoundTrip.test.ts`: the runner and a real `ScanWorker` over a `MessageChannel`;
   - new `workerTerminateReleasesLock.test.ts`: a real worker thread holding a write transaction is terminated, and
     the lock is free and the row gone.

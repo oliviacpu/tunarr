@@ -247,6 +247,22 @@ describe('WorkerScanJobRunner', () => {
     expect(workers[0]?.terminated).toBe(true);
   });
 
+  test('shutdown terminates a worker that is still starting', async () => {
+    // Without the shutdown, this worker would be waited on for 10 s
+    const { runner, workers, fallback } = makeSut(
+      { starts: false },
+      { bootTimeoutMs: 10_000 },
+    );
+
+    const running = runner.run(job, new AbortController().signal);
+    await runner.shutdown(50);
+
+    expect(workers[0]?.terminated).toBe(true);
+    expect(await running).toBe('canceled');
+    // Not a failed start: nothing runs in-process instead
+    expect(fallback.run).not.toHaveBeenCalled();
+  });
+
   test('a worker that does not exit after its job is terminated', async () => {
     const { runner, workers } = makeSut({ exitsOnShutdown: false });
 

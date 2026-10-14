@@ -59,6 +59,8 @@ export class WorkerScanJobRunner implements ScanJobRunner {
   private readonly timings: ScanWorkerTimings;
   #bootFailures = 0;
   #current?: RunningJob;
+  // A worker that hasn't reported it started yet
+  #booting?: ScanWorkerHandle;
   #shuttingDown = false;
   #exited = new WeakSet<ScanWorkerHandle>();
 
@@ -84,6 +86,10 @@ export class WorkerScanJobRunner implements ScanJobRunner {
       worker = await this.boot();
       this.#bootFailures = 0;
     } catch (e) {
+      // Shutdown ended the start-up; that's not a failed start
+      if (signal.aborted || this.#shuttingDown) {
+        return 'canceled';
+      }
       this.#bootFailures++;
       if (this.#bootFailures >= MaxBootFailures) {
         this.logger.error(
@@ -111,6 +117,11 @@ export class WorkerScanJobRunner implements ScanJobRunner {
 
   async shutdown(graceMs: number): Promise<void> {
     this.#shuttingDown = true;
+    // A worker still starting has no job to wind down
+    const booting = this.#booting;
+    if (booting) {
+      await booting.terminate();
+    }
     const current = this.#current;
     if (!current) {
       return;
@@ -130,9 +141,11 @@ export class WorkerScanJobRunner implements ScanJobRunner {
     const started = performance.now();
     const worker = this.createWorker();
     worker.once('exit', () => this.#exited.add(worker));
+    this.#booting = worker;
 
     return new Promise<ScanWorkerHandle>((resolve, reject) => {
       const cleanup = () => {
+        this.#booting = undefined;
         clearTimeout(timer);
         worker.off('message', onMessage);
         worker.off('error', onError);
