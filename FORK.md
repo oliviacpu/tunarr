@@ -34,6 +34,26 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Scan jobs go through a runner, and re-check the library when they start (2026-10-14)
+
+- **Why:** this prepares for running scans in a worker thread, so the coordinator can hand a job to whichever runner
+  is configured. It also fixes a latent problem: a queued job checked whether its library was available only when it
+  was queued. A job that waited hours behind others could then scan a library the server no longer reports, which
+  marks every program in it missing.
+- **Change:**
+  - **The job:** `ScanJob` (`types/worker_schemas.ts`, zod) describes a scan by IDs and flags only. A local job is
+    `{kind: 'local', mediaSourceId, force, pathFilter?}`; a remote one is `{kind: 'library', libraryId, …}`.
+  - **The executor:** `ScanJobExecutor` re-reads the library or media source when the job starts. It skips the job
+    if the library is gone or unavailable, wires the abort signal to `scanner.cancel`, and runs the library scan,
+    then the collection scan (not after a cancel).
+  - **The runner:** `ScanJobRunner` (bound at `KEYS.ScanJobRunner`) runs one job. `InProcessScanJobRunner` runs it on
+    the calling thread, as before.
+  - **The coordinator:** `MediaSourceScanCoordinator` still refuses unsupported libraries up front and keeps the
+    queue, locks and progress. It doesn't reconcile durations after a skipped job.
+  - **`awaitAllFinished`:** now also waits for each job's cleanup, not just for the queue to go idle.
+- **Tests:** new `ScanJobExecutor.test.ts`; `MediaSourceScanCoordinator.test.ts` now uses a fake runner.
+- **Upstream:** not sent.
+
 ### A failed or canceled scan no longer leaves its library locked or "scanning" (2026-10-14)
 
 - **What you saw:** nothing obvious yet; found while planning to move scans into a worker thread.

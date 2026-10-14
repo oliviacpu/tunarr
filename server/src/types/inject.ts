@@ -79,6 +79,7 @@ const KEYS = {
   ExternalCollectionScannerFactory: Symbol.for(
     'ExternalCollectionScannerFactory',
   ),
+  ScanJobRunner: Symbol.for('ScanJobRunner'),
 
   // Tasks
   Task: Symbol.for('Task'),

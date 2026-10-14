@@ -4,25 +4,27 @@ import { E_ALREADY_LOCKED, tryAcquire } from 'async-mutex';
 import { inject, injectable } from 'inversify';
 import PQueue from 'p-queue';
 import { MediaSourceDB } from '../../db/mediaSourceDB.ts';
-import type { MediaSourceType } from '../../db/schema/base.ts';
 import { ReconcileProgramDurationsTask } from '../../tasks/ReconcileProgramDurationsTask.ts';
 import { autoFactoryKey, KEYS } from '../../types/inject.ts';
 import { Result } from '../../types/result.ts';
 import type { Maybe } from '../../types/util.ts';
+import type { ScanJob, ScanOutcome } from '../../types/worker_schemas.ts';
 import { InjectLogger } from '../../util/inject.ts';
 import type { Logger } from '../../util/logging/LoggerFactory.ts';
 import { EntityMutex } from '../EntityMutex.ts';
 import { GlobalScheduler } from '../Scheduler.ts';
-import type { GenericExternalCollectionScanner } from './ExternalCollectionScanner.ts';
 import type { GenericLocalMediaSourceScannerFactory } from './FileSystemScanner.ts';
 import { MediaSourceProgressService } from './MediaSourceProgressService.ts';
 import type { GenericMediaSourceScannerFactory } from './MediaSourceScanner.ts';
+import type { ScanJobRunner } from './ScanJobRunner.ts';
 
 @injectable()
 export class MediaSourceScanCoordinator {
   // One scan at a time. The coordinator is a singleton, so these are shared.
   private readonly queue = new PQueue({ concurrency: 1 });
   private readonly signalById = new Map<string, AbortController>();
+  // Each queued job including its cleanup, so callers can wait for both
+  private readonly inFlight = new Set<Promise<void>>();
 
   @InjectLogger() declare private readonly logger: Logger;
 
@@ -35,10 +37,7 @@ export class MediaSourceScanCoordinator {
     private localScannerFactory: GenericLocalMediaSourceScannerFactory,
     @inject(MediaSourceProgressService)
     private progressService: MediaSourceProgressService,
-    @inject(KEYS.ExternalCollectionScannerFactory)
-    private collectionScannerFactory: (
-      sourceType: MediaSourceType,
-    ) => Maybe<GenericExternalCollectionScanner>,
+    @inject(KEYS.ScanJobRunner) private runner: ScanJobRunner,
     @inject(autoFactoryKey(ReconcileProgramDurationsTask))
     private reconcileDurationsTaskFactory: () => ReconcileProgramDurationsTask,
   ) {}
@@ -71,10 +70,8 @@ export class MediaSourceScanCoordinator {
       return false;
     }
 
-    const scanner = Result.attempt(() =>
-      this.localScannerFactory(mediaType),
-    ).orNull();
-    if (!scanner) {
+    // Only to refuse unsupported sources up front; the runner makes its own
+    if (Result.attempt(() => this.localScannerFactory(mediaType)).isFailure()) {
       this.logger.error(
         'Could not create scanner for media source: %O',
         mediaSource,
@@ -86,8 +83,12 @@ export class MediaSourceScanCoordinator {
       id: mediaSource.uuid,
       label: `media source ${mediaSource.uuid}`,
       getLock: () => this.entityMutex.getLockForMediaSource(mediaSource),
-      cancel: () => scanner.cancel(),
-      run: () => scanner.scan({ mediaSource, force: forceScan, pathFilter }),
+      job: {
+        kind: 'local',
+        mediaSourceId: mediaSource.uuid,
+        force: forceScan,
+        pathFilter,
+      },
     });
   }
 
@@ -121,48 +122,39 @@ export class MediaSourceScanCoordinator {
       return false;
     }
 
-    const scanner = Result.attempt(() =>
-      this.scannerFactory(mediaSourceType, library.mediaType),
-    ).orNull();
-    if (!scanner) {
+    // Only to refuse unsupported libraries up front; the runner makes its own
+    if (
+      Result.attempt(() =>
+        this.scannerFactory(mediaSourceType, library.mediaType),
+      ).isFailure()
+    ) {
       this.logger.error('Could not create scanner for library: %O', library);
       return false;
     }
-
-    const collectionScanner = this.collectionScannerFactory(
-      library.mediaSource.type,
-    );
 
     return this.enqueue({
       id: library.uuid,
       label: `library ${library.uuid}`,
       getLock: () => this.entityMutex.getLockForLibrary(library),
-      cancel: () => scanner.cancel(library.uuid),
-      run: async (signal) => {
-        await scanner.scan({ library, force: forceScan, pathFilter });
-        // A canceled scan returns normally; don't follow it with a full
-        // collection scan
-        if (collectionScanner && !signal.aborted) {
-          await collectionScanner.scanLibrary({
-            libraryId: library.uuid,
-            force: forceScan,
-          });
-        }
+      job: {
+        kind: 'library',
+        libraryId: library.uuid,
+        force: forceScan,
+        pathFilter,
       },
     });
   }
 
   /**
-   * Takes the scan's lock and queues the scan. Whatever happens to the job,
-   * the lock is released, its progress ends and its abort controller is
-   * dropped; a job canceled while still queued never runs.
+   * Takes the scan's lock and queues the job for the runner. Whatever happens
+   * to the job, the lock is released, its progress ends and its abort
+   * controller is dropped; a job canceled while still queued never runs.
    */
   private async enqueue({
     id,
     label,
     getLock,
-    cancel,
-    run,
+    job,
   }: QueuedScan): Promise<boolean> {
     let releaser: MutexInterface.Releaser;
     try {
@@ -180,18 +172,16 @@ export class MediaSourceScanCoordinator {
     this.signalById.set(id, controller);
     this.progressService.scanQueued(id);
     let started = false;
+    let outcome: Maybe<ScanOutcome>;
 
-    this.queue
+    const done = this.queue
       .add(async () => {
         if (controller.signal.aborted) {
           this.logger.info('Scan of %s was canceled before it started', label);
           return;
         }
         started = true;
-        controller.signal.addEventListener('abort', () => cancel(), {
-          once: true,
-        });
-        await run(controller.signal);
+        outcome = await this.runner.run(job, controller.signal);
       })
       .catch((e) => this.logger.error(e, 'Error scanning %s', label))
       .finally(() => {
@@ -202,10 +192,14 @@ export class MediaSourceScanCoordinator {
         if (this.progressService.getScanProgress(id).state !== 'not_scanning') {
           this.progressService.scanEnded(id);
         }
-        if (started) {
+        // A skipped job (library gone or unavailable by the time it ran)
+        // changed nothing
+        if (started && outcome !== 'skipped') {
           this.reconcileProgramDurations();
         }
       });
+    this.inFlight.add(done);
+    void done.finally(() => this.inFlight.delete(done));
 
     return true;
   }
@@ -222,9 +216,10 @@ export class MediaSourceScanCoordinator {
     }
   }
 
-  // Resolves once the queue is empty and the running scan has finished
-  awaitAllFinished() {
-    return this.queue.onIdle();
+  // Resolves once every queued job has run and been cleaned up
+  async awaitAllFinished() {
+    await this.queue.onIdle();
+    await Promise.all(this.inFlight);
   }
 }
 
@@ -233,8 +228,7 @@ type QueuedScan = {
   id: string;
   label: string;
   getLock: () => Promise<MutexInterface>;
-  cancel: () => void;
-  run: (signal: AbortSignal) => Promise<void>;
+  job: ScanJob;
 };
 
 type ScanRequest = {

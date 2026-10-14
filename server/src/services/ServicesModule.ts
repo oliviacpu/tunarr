@@ -48,6 +48,9 @@ import type { GenericMediaSourceOtherVideoLibraryScanner } from './scanner/Media
 import { EmptyTrashService } from './EmptyTrashService.ts';
 import { MediaSourceProgressService } from './scanner/MediaSourceProgressService.ts';
 import { MediaSourceScanCoordinator } from './scanner/MediaSourceScanCoordinator.ts';
+import { ScanJobExecutor } from './scanner/ScanJobExecutor.ts';
+import type { ScanJobRunner } from './scanner/ScanJobRunner.ts';
+import { InProcessScanJobRunner } from './scanner/ScanJobRunner.ts';
 import type {
   GenericMediaSourceScanner,
   GenericMediaSourceScannerFactory,
@@ -225,6 +228,10 @@ export const ServicesModule = new ContainerModule(({ bind }) => {
   bind(MediaSourceProgressService).toSelf().inSingletonScope();
   bind(EmptyTrashService).toSelf().inSingletonScope();
   bind(MediaSourceScanCoordinator).toSelf().inSingletonScope();
+  bind(ScanJobExecutor).toSelf();
+  bind<ScanJobRunner>(KEYS.ScanJobRunner)
+    .to(InProcessScanJobRunner)
+    .inSingletonScope();
 
   bind(CelEvaluationService).toSelf().inSingletonScope();
   bind(StreamSelectionProfileResolver).toSelf().inSingletonScope();

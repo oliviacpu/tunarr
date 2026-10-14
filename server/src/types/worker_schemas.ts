@@ -9,6 +9,32 @@ import {
   ProgramsTimeSlotScheduleRequest,
 } from '../services/scheduling/TimeSlotSchedulerService.ts';
 
+/**
+ * A library scan as the scan coordinator hands it to a runner: IDs and flags
+ * only, so it can cross a thread boundary. The runner re-reads the library or
+ * media source when the job starts.
+ */
+export const ScanJob = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('library'),
+    libraryId: z.string(),
+    force: z.boolean(),
+    pathFilter: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal('local'),
+    mediaSourceId: z.string(),
+    force: z.boolean(),
+    pathFilter: z.string().optional(),
+  }),
+]);
+
+export type ScanJob = z.infer<typeof ScanJob>;
+
+export const ScanOutcome = z.enum(['completed', 'canceled', 'skipped']);
+
+export type ScanOutcome = z.infer<typeof ScanOutcome>;
+
 const BaseWorkerRequest = z.object({
   requestId: z.uuid(),
 });
