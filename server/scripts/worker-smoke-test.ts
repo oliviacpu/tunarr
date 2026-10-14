@@ -14,7 +14,7 @@
  * Exits non-zero if any check fails.
  */
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -28,16 +28,22 @@ const SERVER_READY_TIMEOUT_MS = 240_000;
 // decided turns a 30 second red into a four minute one.
 const WORKER_GRACE_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 60_000;
+// A library scan runs in its own worker thread (TUNARR_SCAN_IN_WORKER)
+const SCAN_CLIPS = 12;
+const SCAN_TIMEOUT_MS = 180_000;
+const SHUTDOWN_TIMEOUT_MS = 10_000;
 
+// pnpm forwards the `--` separator itself. parseArgs reads everything after a
+// `--` as positionals, so `pnpm test:worker-smoke -- --binary x` would quietly
+// test the dev server instead of the binary.
+const argv = process.argv.slice(2);
 const { values } = parseArgs({
+  args: argv[0] === '--' ? argv.slice(1) : argv,
   options: {
     binary: { type: 'string' },
     port: { type: 'string', default: '18094' },
     'keep-logs': { type: 'boolean', default: false },
   },
-  // pnpm forwards the `--` separator itself, which parseArgs otherwise treats
-  // as an unexpected positional and throws on.
-  allowPositionals: true,
 });
 
 const port = Number.parseInt(values.port, 10);
@@ -109,9 +115,10 @@ async function get(url: string): Promise<{ status: number; body: string }> {
 async function postJson(
   url: string,
   payload: unknown,
+  method: 'POST' | 'PUT' = 'POST',
 ): Promise<{ status: number; body: string }> {
   const res = await fetch(url, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -145,6 +152,7 @@ async function main() {
   // variable at a decoy and asserting it stays empty reproduces that bug
   // directly instead of inferring it from logs.
   const decoyDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-decoy-'));
+  const mediaDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-media-'));
 
   let child: ChildProcessWithoutNullStreams | undefined;
 
@@ -163,6 +171,8 @@ async function main() {
       // below lives on it. Without this the binary run 404s where the dev run
       // passes, which is exactly the divergence this harness exists to catch.
       TUNARR_MOUNT_DEBUG_ENDPOINTS: 'true',
+      // A throwaway server with debug endpoints: keep it off the network
+      TUNARR_BIND_ADDR: '127.0.0.1',
       NODE_ENV: values.binary ? 'production' : 'development',
     };
 
@@ -249,6 +259,7 @@ async function main() {
     if (booted) {
       await checkRoundTrip();
       await checkTimeSlotDispatch();
+      await checkScanInWorker(mediaDir);
 
       // Asserted only after every dispatch has happened. Checking the log
       // between the two exercises reads a buffer that does not yet contain
@@ -273,6 +284,7 @@ async function main() {
         'a channel can be scheduled through the pool',
         'a time-slots task is dispatched to a worker',
         'work is spread across every worker in the pool',
+        ...ScanChecks,
       ]) {
         check(label, false, 'skipped: server never booted');
       }
@@ -280,12 +292,20 @@ async function main() {
   } finally {
     if (child && child.exitCode === null) {
       // SIGTERM first so the server tears down its meilisearch child; SIGKILL
-      // only if it will not go quietly.
+      // only if it will not go quietly. A forced rescan may still be running
+      // in a scan worker (checkScanInWorker starts one): shutdown has to stop
+      // it rather than wait for it.
+      const stopping = Date.now();
       signalGroup(child, 'SIGTERM');
       await Promise.race([
         new Promise((r) => child?.once('exit', r)),
-        delay(10_000),
+        delay(SHUTDOWN_TIMEOUT_MS),
       ]);
+      check(
+        `the server exits within ${SHUTDOWN_TIMEOUT_MS / 1000} s of SIGTERM`,
+        child.exitCode !== null || child.signalCode !== null,
+        `still running after ${Date.now() - stopping} ms`,
+      );
       if (child.exitCode === null) {
         signalGroup(child, 'SIGKILL');
         await delay(500);
@@ -298,6 +318,7 @@ async function main() {
     }
     await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
     await fs.rm(decoyDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(mediaDir, { recursive: true, force: true }).catch(() => {});
   }
 
   console.log(`\n${checkCount - failures.length}/${checkCount} checks passed`);
@@ -312,7 +333,7 @@ async function main() {
  * WORKER_COUNT status calls reach every worker in the pool.
  */
 async function checkRoundTrip() {
-  const base = `http://localhost:${port}/api`;
+  const base = `http://127.0.0.1:${port}/api`;
   const results: string[] = [];
   for (let i = 0; i < WORKER_COUNT; i++) {
     try {
@@ -340,7 +361,7 @@ async function checkRoundTrip() {
  * else.
  */
 async function checkTimeSlotDispatch() {
-  const base = `http://localhost:${port}/api`;
+  const base = `http://127.0.0.1:${port}/api`;
 
   try {
     const configsRes = await get(`${base}/transcode_configs`);
@@ -423,6 +444,191 @@ async function checkTimeSlotDispatch() {
     );
   } catch (err) {
     check('a channel can be scheduled through the pool', false, String(err));
+  }
+}
+
+const ScanChecks = [
+  'a library scan runs in a scan worker',
+  "the scanner's log lines come from the worker thread",
+  'the scan worker saves every clip as a program',
+  "the scan's progress ends on the main thread",
+  'a forced rescan is scanning in a worker when SIGTERM is sent',
+] as const;
+
+// Where ffmpeg and ffprobe are on this machine; undefined if not installed
+function which(binary: string): string | undefined {
+  try {
+    return execFileSync('which', [binary]).toString().trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * One short clip, hard-linked into SCAN_CLIPS movie folders. Returns false
+ * when ffmpeg isn't installed.
+ */
+function makeClips(mediaDir: string): boolean {
+  const source = path.join(mediaDir, 'source.mkv');
+  try {
+    execFileSync('ffmpeg', [
+      ...['-hide_banner', '-loglevel', 'error', '-y'],
+      ...['-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=24'],
+      ...['-f', 'lavfi', '-i', 'sine=frequency=440'],
+      ...['-t', '3', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac'],
+      source,
+    ]);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+async function linkClips(mediaDir: string) {
+  const moviesDir = path.join(mediaDir, 'movies');
+  for (let i = 1; i <= SCAN_CLIPS; i++) {
+    const name = `Smoke Movie ${String(i).padStart(2, '0')} (2001)`;
+    await fs.mkdir(path.join(moviesDir, name), { recursive: true });
+    await fs.link(
+      path.join(mediaDir, 'source.mkv'),
+      path.join(moviesDir, name, `${name}.mkv`),
+    );
+  }
+  return moviesDir;
+}
+
+type MediaSourceSummary = {
+  id: string;
+  libraries: { id: string; lastScannedAt?: unknown; isLocked?: boolean }[];
+};
+
+/**
+ * Creating a local source queues its scan, which runs in a fresh scan worker:
+ * the worker has to boot, scan with its own database connection and report
+ * progress back, and the main thread must see the programs it saved. The
+ * forced rescan started at the end is left running for the SIGTERM check.
+ */
+async function checkScanInWorker(mediaDir: string) {
+  const base = `http://127.0.0.1:${port}/api`;
+  if (!makeClips(mediaDir)) {
+    for (const label of ScanChecks) {
+      check(label, false, 'skipped: ffmpeg is not installed');
+    }
+    return;
+  }
+  const moviesDir = await linkClips(mediaDir);
+  const workersBefore = countMatches(output, /Tunarr scan worker started/g);
+
+  try {
+    // The scanner probes each file. Tunarr's default paths (/usr/bin) aren't
+    // where every machine keeps them; a fresh scan worker reads these settings
+    // when it starts.
+    const ffmpeg = which('ffmpeg');
+    const ffprobe = which('ffprobe');
+    if (ffmpeg !== undefined && ffprobe !== undefined) {
+      const current = JSON.parse(
+        (await get(`${base}/ffmpeg-settings`)).body,
+      ) as Record<string, unknown>;
+      await postJson(
+        `${base}/ffmpeg-settings`,
+        {
+          ...current,
+          ffmpegExecutablePath: ffmpeg,
+          ffprobeExecutablePath: ffprobe,
+        },
+        'PUT',
+      );
+    }
+
+    const created = await postJson(`${base}/media-sources`, {
+      type: 'local',
+      name: 'Smoke movies',
+      mediaType: 'movies',
+      paths: [moviesDir],
+      pathReplacements: [],
+    });
+    if (created.status >= 300) {
+      for (const label of ScanChecks) {
+        check(label, false, `media source create returned ${created.status}`);
+      }
+      return;
+    }
+    const sourceId = (JSON.parse(created.body) as { id: string }).id;
+
+    let programs = 0;
+    const deadline = Date.now() + SCAN_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const sources = JSON.parse(
+        (await get(`${base}/media-sources`)).body,
+      ) as MediaSourceSummary[];
+      const library = sources.find((s) => s.id === sourceId)?.libraries[0];
+      if (
+        library !== undefined &&
+        library.lastScannedAt !== undefined &&
+        library.lastScannedAt !== null &&
+        !library.isLocked
+      ) {
+        const list = JSON.parse(
+          (await get(`${base}/media-libraries/${library.id}/programs`)).body,
+        ) as unknown[];
+        programs = list.length;
+        if (programs >= SCAN_CLIPS) {
+          break;
+        }
+      }
+      await delay(500);
+    }
+
+    check(
+      'a library scan runs in a scan worker',
+      countMatches(output, /Tunarr scan worker started/g) > workersBefore &&
+        /Scan worker ready in \d+ ms/.test(output),
+      'no "Tunarr scan worker started" / "Scan worker ready" in the server log',
+    );
+    // A worker's log lines end with {"worker":true}
+    check(
+      "the scanner's log lines come from the worker thread",
+      /<LocalMovieScanner>: Scanning local media source[^\n]*"worker":true/.test(
+        output,
+      ),
+      'no LocalMovieScanner line marked {"worker":true}',
+    );
+    check(
+      'the scan worker saves every clip as a program',
+      programs === SCAN_CLIPS,
+      `the library has ${programs} programs, expected ${SCAN_CLIPS}`,
+    );
+    const status = JSON.parse(
+      (await get(`${base}/media-sources/${sourceId}/all/status`)).body,
+    ) as { state?: string };
+    check(
+      "the scan's progress ends on the main thread",
+      status.state === 'not_scanning',
+      `status is ${JSON.stringify(status)}`,
+    );
+
+    // Left running on purpose: the SIGTERM check at teardown has to stop it.
+    // Its worker takes a while to start, so wait until it is scanning;
+    // otherwise SIGTERM only interrupts a worker that is still booting.
+    await postJson(
+      `${base}/media-sources/${sourceId}/libraries/all/scan?forceScan=true`,
+      {},
+    );
+    const forcedScan =
+      /<LocalMovieScanner>: Scanning local media source[^\n]*force=true[^\n]*"worker":true/;
+    check(
+      'a forced rescan is scanning in a worker when SIGTERM is sent',
+      await waitFor(
+        'the forced rescan to start in its worker',
+        () => forcedScan.test(output),
+        SCAN_TIMEOUT_MS,
+      ),
+      'no LocalMovieScanner force=true line marked {"worker":true}',
+    );
+  } catch (err) {
+    for (const label of ScanChecks) {
+      check(label, false, String(err));
+    }
   }
 }
 

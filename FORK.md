@@ -34,6 +34,25 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The worker smoke test runs a real scan in a scan worker (2026-10-14)
+
+- **Why:** the unit tests drive the scan worker over a `MessageChannel`, but only a real server shows that a scan
+  worker boots, scans and reports back. `scripts/worker-smoke-test.ts` already starts the real entry point for the
+  worker pool.
+- **Change:**
+  - **Scan checks:**
+    - generates one short clip with ffmpeg, hard-links it into 12 movie folders, points the FFmpeg paths at this
+      machine's ffmpeg and ffprobe, and creates a local movie source;
+    - checks that its scan runs in a scan worker, with the scanner's log lines marked `"worker":true`;
+    - checks that all 12 programs are saved and progress ends as `not_scanning` on the main thread.
+  - **SIGTERM:** a forced rescan is started and SIGTERM is sent once it is scanning in its worker. The server must
+    exit within 10 s.
+  - **`--binary` works through pnpm:** `pnpm test:worker-smoke -- --binary …` forwards the `--`, and `parseArgs`
+    read every flag after it as a positional. The binary flag was dropped silently and the dev server was tested
+    instead. The leading `--` is now removed, and an unknown flag is an error.
+  - **Loopback only:** the test server binds to 127.0.0.1, since it mounts the debug endpoints.
+- **Upstream:** not sent.
+
 ### Library scans run in a worker thread, so live streams don't stall (2026-10-14)
 
 - **What you saw:** live streams paused while a library scanned. A music rescan stalled the server for up to 3.6 s at a
