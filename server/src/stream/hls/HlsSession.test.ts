@@ -4,10 +4,14 @@ import type { OutputFormat } from '@/ffmpeg/builder/constants.js';
 import type { OnDemandChannelService } from '@/services/OnDemandChannelService.js';
 import type { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StreamProgramCalculator } from '@/stream/StreamProgramCalculator.js';
+import { Result } from '@/types/result.js';
 import { defaultFfmpegSettings } from '@tunarr/types';
+import dayjs from 'dayjs';
+import duration from 'dayjs/plugin/duration.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import tmp from 'tmp';
+import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   framePts,
@@ -20,6 +24,9 @@ import { noCaptionsNotice } from '../captions/ProgramCaptions.ts';
 import { ProgramStream } from '../ProgramStream.ts';
 import type { HlsSessionOptions } from './HlsSession.js';
 import { HlsSession } from './HlsSession.js';
+import type { TranscodeSpeedEvent } from './TranscodeSpeedMonitor.ts';
+
+dayjs.extend(duration);
 
 vi.mock('@/util/logging/LoggerFactory.js', () => ({
   LoggerFactory: {
@@ -42,6 +49,31 @@ vi.mock('@/stream/ConnectionTracker.ts', () => {
     },
   };
 });
+
+// Each TranscodeSpeedWatcher the session creates, by its event callback, and
+// the order the current test's watcher and fake ffmpeg ran in
+const speedWatchers = vi.hoisted(
+  () => [] as { onEvent: (event: TranscodeSpeedEvent) => void }[],
+);
+const speedWatcherCalls = vi.hoisted(() => ({ current: [] as string[] }));
+
+vi.mock('./TranscodeSpeedWatcher.js', () => ({
+  TranscodeSpeedWatcher: class {
+    constructor(
+      _playlistPath: string,
+      public onEvent: (event: TranscodeSpeedEvent) => void,
+    ) {
+      speedWatchers.push({ onEvent });
+    }
+    start() {
+      speedWatcherCalls.current.push('watching');
+      return Promise.resolve();
+    }
+    stop() {
+      speedWatcherCalls.current.push('stopped watching');
+    }
+  },
+}));
 
 const channelUuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
@@ -559,6 +591,136 @@ describe('HlsSession', () => {
 
       const remaining = await fs.readdir(workingDir);
       expect(remaining.sort()).toEqual(['data000000.ts']);
+    });
+  });
+
+  describe('transcode speed', () => {
+    let dir: tmp.DirResult;
+
+    beforeEach(() => {
+      dir = tmp.dirSync({ unsafeCleanup: true });
+      speedWatchers.length = 0;
+      speedWatcherCalls.current = [];
+    });
+
+    afterEach(() => {
+      dir.removeCallback();
+    });
+
+    // Runs one program's transcode against a fake ffmpeg that exits when
+    // `exit` is called
+    async function startTranscode(streamMode: HlsSessionOptions['streamMode']) {
+      const calls = speedWatcherCalls.current;
+      const exited = Promise.withResolvers<void>();
+      const lineupItem = {
+        type: 'program',
+        program: { title: 'Pilot', showTitle: 'The Show' },
+        duration: 60_000,
+        streamDuration: 60_000,
+        programBeginMs: 0,
+        infiniteLoop: false,
+      };
+      const channel = {
+        uuid: channelUuid,
+        number: 7,
+        name: 'Sitcoms',
+        transcodeConfig: { name: 'Default', threadCount: 4 },
+      } as unknown as ChannelOrmWithTranscodeConfig;
+      const transcodeSession = {
+        streamDuration: dayjs.duration(60, 'seconds'),
+        wait: async () => {
+          await exited.promise;
+          calls.push('ffmpeg exited');
+        },
+      };
+
+      const session = new HlsSession(
+        channel,
+        { streamMode, initialSegmentCount: 2, transcodeDirectory: dir.name },
+        {
+          getCurrentLineupItem: async () =>
+            Result.success({
+              lineupItem,
+              channelContext: channel,
+              sourceChannel: channel,
+            }),
+        } as unknown as StreamProgramCalculator,
+        {
+          ffmpegSettings: () => defaultFfmpegSettings,
+        } as unknown as ISettingsDB,
+        {
+          getLiveTimestamp: async () => Date.now(),
+        } as unknown as OnDemandChannelService,
+        ((context: PlayerContext) =>
+          ({
+            context,
+            on: vi.fn(),
+            renditions: undefined,
+            transcodeSession,
+            setup: async () => Result.success(transcodeSession),
+            start: async () => {
+              calls.push('ffmpeg started');
+            },
+          }) as unknown as ProgramStream) as (
+          ctx: PlayerContext,
+          fmt: OutputFormat,
+        ) => ProgramStream,
+      );
+      await fs.mkdir(session.workingDirectory, { recursive: true });
+      const internals = session as unknown as {
+        state: string;
+        transcode(realtime: boolean): Promise<void>;
+        logger: { warn: Mock; info: Mock };
+      };
+      internals.state = 'started';
+      const done = internals.transcode(true);
+      await vi.waitFor(() => expect(calls).toContain('ffmpeg started'));
+
+      return {
+        calls,
+        logger: internals.logger,
+        exit: async () => {
+          exited.resolve();
+          await done;
+        },
+      };
+    }
+
+    test('watches the speed while ffmpeg runs', async () => {
+      const { calls, exit } = await startTranscode('hls');
+      await exit();
+
+      expect(speedWatchers).toHaveLength(1);
+      expect(calls).toEqual([
+        'watching',
+        'ffmpeg started',
+        'ffmpeg exited',
+        'stopped watching',
+      ]);
+    });
+
+    test('warns about a slow transcode, naming the channel, program and thread count', async () => {
+      const { logger, exit } = await startTranscode('hls');
+      speedWatchers[0]?.onEvent({ type: 'behind', speed: 0.95 });
+      speedWatchers[0]?.onEvent({ type: 'recovered', speed: 1 });
+      await exit();
+
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      const [warning] = logger.warn.mock.calls[0] ?? [];
+      expect(warning).toContain('Channel 7 (Sitcoms)');
+      expect(warning).toContain('"The Show - Pilot"');
+      expect(warning).toContain('0.95x');
+      expect(warning).toContain('thread count 4');
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('at real time again'),
+      );
+    });
+
+    test('does not watch hls_direct_v2, which copies the video', async () => {
+      const { exit } = await startTranscode('hls_direct_v2');
+      await exit();
+
+      expect(speedWatchers).toHaveLength(0);
     });
   });
 });

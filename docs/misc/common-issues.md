@@ -40,3 +40,24 @@ Common causes:
 
 The library becomes available again on its own once the server reports it. If you deleted the library on purpose, its programs stay in Tunarr until you delete the media source.
 
+## Playback pauses every few minutes
+
+A channel that plays but stops for a moment every few minutes is often transcoding slower than real time. Tunarr then makes less than a second of video per second, and players run out of video and wait for more.
+
+On channels using the HLS stream mode, Tunarr measures this. When a program's transcode stays below real time for about a minute, Tunarr logs one warning for that program, such as:
+
+```
+Channel 7 (Sitcoms) is transcoding "The Show - Pilot" at 0.95x real time over the last 60 s, so players run out of video and pause. Transcode config "Default" has thread count 4; a higher thread count, a faster video preset or a lower output resolution helps.
+```
+
+If the transcode catches up later, an info line says so. The time FFmpeg takes to start a program does not count toward the measurement.
+
+To make the transcode faster, change the channel's [transcode config](../configure/ffmpeg/transcode_config.md):
+
+1. Raise the **Thread Count**. A low fixed count can hold a software encoder below real time on a machine with cores to spare.
+2. Pick a faster **Video Preset**, such as `veryfast` or `superfast`.
+3. Lower the output **Resolution**.
+4. Use hardware acceleration, if the machine has a supported GPU.
+
+Sources that are expensive to decode, such as 10-bit HEVC or 4K video, need the most CPU, and every transcode running at the same time shares it. A running stream keeps the transcode config it started with, so the change applies once everyone stops watching the channel and it starts again.
+
