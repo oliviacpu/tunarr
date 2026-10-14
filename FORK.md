@@ -34,10 +34,44 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Library scans run in a worker thread, so live streams don't stall (2026-10-14)
+
+- **What you saw:** live streams paused while a library scanned. A music rescan stalled the server for up to 3.6 s at a
+  time.
+- **Cause:** better-sqlite3 is synchronous, and scans ran on the main thread. That thread also serves HLS segments,
+  playlists and the HDHomeRun `.ts` stream that Plex reads, so every scan query and write blocked streaming.
+- **Fix:** `WorkerScanJobRunner` (`services/scanner/`) runs each scan job in a fresh worker thread with its own
+  database connection. The coordinator stays on the main thread and keeps the queue, locks, progress and the
+  duration reconcile after each job.
+  - **One worker per job:** each job gets current settings and media source credentials, and no memory is held
+    between scans. When the job ends, the worker is asked to exit and is terminated if it hasn't within 5 s.
+  - **Progress:** the worker's progress messages are applied to the main thread's `MediaSourceProgressService`, so
+    the UI is unchanged.
+  - **Start-up:** a worker has 60 s to report it started (180 s in dev, where tsx compiles the server first). If it
+    doesn't, the job runs on the main thread as before. After 3 failed starts in a row, scans stay on the main thread
+    until restart.
+  - **Cancel:** the worker gets a `cancel` and is terminated if the job hasn't stopped within 30 s. A job canceled
+    while its worker is starting never runs. Terminating a worker mid-transaction rolls the transaction back and
+    frees the write lock.
+  - **Crash:** a worker that dies mid-job fails that job without running it again; the next scan starts a new worker.
+  - **Shutdown:** `MediaSourceScanCoordinator.shutdown(graceMs)` cancels every job and skips the reconcile. `Server`
+    gives the running scan 2 s, then its worker is terminated.
+  - **Switch:** `TUNARR_SCAN_IN_WORKER` (default on) needs `TUNARR_USE_WORKER_POOL` (default on). With either off,
+    scans run on the main thread as before. `ServicesModule` picks the runner; worker threads always scan in-process.
+  - **Docs:** `docs/getting-started/run.md` adds the switch and corrects the pool's defaults (on, at most 8 threads).
+- **Tests:**
+  - new `WorkerScanJobRunner.test.ts` (fake worker): progress, a fresh worker per job, start-up fallback, the 3-failure
+    limit, a crash, a reported failure, cancels honored and ignored, a cancel during start-up, shutdown, and a worker
+    that won't exit;
+  - new `ScanWorkerRoundTrip.test.ts`: the runner and a real `ScanWorker` over a `MessageChannel`;
+  - new `workerTerminateReleasesLock.test.ts`: a real worker thread holding a write transaction is terminated, and
+    the lock is free and the row gone.
+- **Upstream:** not sent.
+
 ### A scan worker role and its message protocol (2026-10-14)
 
 - **Why:** groundwork for running library scans in a worker thread, so they stop stalling live streams. Nothing uses
-  it yet; the next entry switches scans over.
+  it yet; the entry above switches scans over.
 - **Change:**
   - **Protocol** (`types/worker_schemas.ts`):
     - `WorkerRole` (`pool` or `scan`);

@@ -25,6 +25,7 @@ export class MediaSourceScanCoordinator {
   private readonly signalById = new Map<string, AbortController>();
   // Each queued job including its cleanup, so callers can wait for both
   private readonly inFlight = new Set<Promise<void>>();
+  private shuttingDown = false;
 
   @InjectLogger() declare private readonly logger: Logger;
 
@@ -194,7 +195,7 @@ export class MediaSourceScanCoordinator {
         }
         // A skipped job (library gone or unavailable by the time it ran)
         // changed nothing
-        if (started && outcome !== 'skipped') {
+        if (started && outcome !== 'skipped' && !this.shuttingDown) {
           this.reconcileProgramDurations();
         }
       });
@@ -220,6 +221,22 @@ export class MediaSourceScanCoordinator {
   async awaitAllFinished() {
     await this.queue.onIdle();
     await Promise.all(this.inFlight);
+  }
+
+  /**
+   * Server shutdown: cancels every job and gives the running one graceMs to
+   * stop before the runner ends it (a scan worker is terminated).
+   */
+  async shutdown(graceMs: number) {
+    this.shuttingDown = true;
+    // Queued jobs see the abort when they come up and return at once
+    const stopping = this.runner.shutdown(graceMs);
+    this.cancelAll();
+    await Promise.race([
+      this.awaitAllFinished(),
+      new Promise<void>((resolve) => setTimeout(resolve, graceMs).unref()),
+    ]);
+    await stopping;
   }
 }
 
