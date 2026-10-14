@@ -24,7 +24,10 @@ function makeScanner() {
 function makeSut(
   options: {
     library?: object | undefined;
-    localSource?: object | undefined;
+    // What getById returns: a local source unless given
+    mediaSource?: object | undefined;
+    // What the collection scanner factory returns: a scanner unless given
+    collectionScanner?: object | undefined;
   } = {},
 ) {
   const mediaSourceDB = {
@@ -33,22 +36,32 @@ function makeSut(
     ),
     getById: vi.fn(() =>
       Promise.resolve(
-        'localSource' in options
-          ? options.localSource
+        'mediaSource' in options
+          ? options.mediaSource
           : { uuid: 'local1', type: 'local', mediaType: 'movies' },
       ),
     ),
   };
   const scanner = makeScanner();
   const localScanner = makeScanner();
-  const collectionScanner = { scanLibrary: vi.fn(() => Promise.resolve()) };
+  const collectionScanner = {
+    scan: vi.fn(() => Promise.resolve()),
+    scanLibrary: vi.fn(() => Promise.resolve()),
+  };
+  const collectionScannerFactory = vi.fn(() =>
+    'collectionScanner' in options
+      ? options.collectionScanner
+      : collectionScanner,
+  );
   const scannerFactory = vi.fn(() => scanner);
   const localScannerFactory = vi.fn(() => localScanner);
   const executor = new ScanJobExecutor(
     mediaSourceDB as unknown as MediaSourceDB,
     scannerFactory as unknown as GenericMediaSourceScannerFactory,
     localScannerFactory as unknown as GenericLocalMediaSourceScannerFactory,
-    () => collectionScanner as unknown as GenericExternalCollectionScanner,
+    collectionScannerFactory as unknown as (
+      sourceType: string,
+    ) => GenericExternalCollectionScanner | undefined,
   );
   return {
     executor,
@@ -145,7 +158,7 @@ describe('ScanJobExecutor', () => {
 
   test('skips a local media source without a media type', async () => {
     const { executor, localScanner } = makeSut({
-      localSource: { uuid: 'local1', type: 'local', mediaType: null },
+      mediaSource: { uuid: 'local1', type: 'local', mediaType: null },
     });
 
     expect(
@@ -155,5 +168,71 @@ describe('ScanJobExecutor', () => {
       ),
     ).toBe('skipped');
     expect(localScanner.scan).not.toHaveBeenCalled();
+  });
+
+  describe('collections', () => {
+    const collectionsJob = {
+      kind: 'collections',
+      mediaSourceId: 'ms1',
+    } as const;
+
+    test("syncs a remote media source's collections", async () => {
+      const { executor, collectionScanner } = makeSut({
+        mediaSource: { uuid: 'ms1', type: 'plex' },
+      });
+
+      expect(
+        await executor.run(collectionsJob, new AbortController().signal),
+      ).toBe('completed');
+      expect(collectionScanner.scan).toHaveBeenCalledWith({
+        mediaSourceId: 'ms1',
+      });
+    });
+
+    test('skips a media source that no longer exists', async () => {
+      const { executor, collectionScanner } = makeSut({
+        mediaSource: undefined,
+      });
+
+      expect(
+        await executor.run(collectionsJob, new AbortController().signal),
+      ).toBe('skipped');
+      expect(collectionScanner.scan).not.toHaveBeenCalled();
+    });
+
+    test('skips a local media source', async () => {
+      const { executor, collectionScanner } = makeSut();
+
+      expect(
+        await executor.run(collectionsJob, new AbortController().signal),
+      ).toBe('skipped');
+      expect(collectionScanner.scan).not.toHaveBeenCalled();
+    });
+
+    test('skips a source type without a collection scanner', async () => {
+      const { executor } = makeSut({
+        mediaSource: { uuid: 'ms1', type: 'plex' },
+        collectionScanner: undefined,
+      });
+
+      expect(
+        await executor.run(collectionsJob, new AbortController().signal),
+      ).toBe('skipped');
+    });
+
+    test('a sync canceled while it runs ends as canceled', async () => {
+      const { executor, collectionScanner } = makeSut({
+        mediaSource: { uuid: 'ms1', type: 'plex' },
+      });
+      const controller = new AbortController();
+      collectionScanner.scan.mockImplementation(() => {
+        controller.abort();
+        return Promise.resolve();
+      });
+
+      expect(await executor.run(collectionsJob, controller.signal)).toBe(
+        'canceled',
+      );
+    });
   });
 });

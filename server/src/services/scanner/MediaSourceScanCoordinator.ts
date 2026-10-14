@@ -147,6 +147,36 @@ export class MediaSourceScanCoordinator {
   }
 
   /**
+   * Queues a sync of a remote media source's collections. It shares the queue
+   * with library scans, so only one scan job writes to the database at a time.
+   */
+  async addCollections({
+    mediaSourceId,
+  }: CollectionsScanRequest): Promise<boolean> {
+    const mediaSource = await this.mediaSourceDB.getById(mediaSourceId);
+    if (!mediaSource) {
+      this.logger.error('No media source found with ID %s', mediaSourceId);
+      return false;
+    }
+    if (mediaSource.type === 'local') {
+      this.logger.error(
+        'Local media source %s has no collections to sync',
+        mediaSource.uuid,
+      );
+      return false;
+    }
+
+    return this.enqueue({
+      id: `collections.${mediaSource.uuid}`,
+      label: `collections of media source ${mediaSource.uuid}`,
+      getLock: () => this.entityMutex.getLockForCollections(mediaSource.uuid),
+      job: { kind: 'collections', mediaSourceId: mediaSource.uuid },
+      // Collections change tags, not program durations
+      reconcileDurations: false,
+    });
+  }
+
+  /**
    * Takes the scan's lock and queues the job for the runner. Whatever happens
    * to the job, the lock is released, its progress ends and its abort
    * controller is dropped; a job canceled while still queued never runs.
@@ -156,6 +186,7 @@ export class MediaSourceScanCoordinator {
     label,
     getLock,
     job,
+    reconcileDurations = true,
   }: QueuedScan): Promise<boolean> {
     let releaser: MutexInterface.Releaser;
     try {
@@ -195,7 +226,12 @@ export class MediaSourceScanCoordinator {
         }
         // A skipped job (library gone or unavailable by the time it ran)
         // changed nothing
-        if (started && outcome !== 'skipped' && !this.shuttingDown) {
+        if (
+          started &&
+          outcome !== 'skipped' &&
+          reconcileDurations &&
+          !this.shuttingDown
+        ) {
           this.reconcileProgramDurations();
         }
       });
@@ -246,6 +282,12 @@ type QueuedScan = {
   label: string;
   getLock: () => Promise<MutexInterface>;
   job: ScanJob;
+  // Reconcile channel durations after the job runs (default true)
+  reconcileDurations?: boolean;
+};
+
+type CollectionsScanRequest = {
+  mediaSourceId: MediaSourceId;
 };
 
 type ScanRequest = {

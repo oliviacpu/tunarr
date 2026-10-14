@@ -208,4 +208,73 @@ describe('MediaSourceScanCoordinator', () => {
     ).toBe(false);
     expect(runner.run).not.toHaveBeenCalled();
   });
+
+  describe('collections', () => {
+    // getById's mock is typed by the local source it returns by default
+    const remoteSource = { uuid: 'ms1', type: 'plex', mediaType: 'movies' };
+
+    test("queues a sync of a source's collections, without reconciling durations", async () => {
+      const { coordinator, mediaSourceDB, runner } = makeSut();
+      mediaSourceDB.getById.mockResolvedValue(remoteSource);
+
+      expect(
+        await coordinator.addCollections({
+          mediaSourceId: 'ms1' as MediaSourceId,
+        }),
+      ).toBe(true);
+      await coordinator.awaitAllFinished();
+
+      expect(runner.run).toHaveBeenCalledWith(
+        { kind: 'collections', mediaSourceId: 'ms1' },
+        expect.any(AbortSignal),
+      );
+      // Collections change tags, not durations
+      expect(runTask).not.toHaveBeenCalled();
+    });
+
+    test('a sync already queued for the source is not queued twice', async () => {
+      const running = deferredRun();
+      const { coordinator, mediaSourceDB, runner } = makeSut();
+      mediaSourceDB.getById.mockResolvedValue(remoteSource);
+      runner.run.mockReturnValueOnce(running.promise);
+      const request = { mediaSourceId: 'ms1' as MediaSourceId };
+
+      expect(await coordinator.addCollections(request)).toBe(true);
+      expect(await coordinator.addCollections(request)).toBe(false);
+      running.finish('completed');
+      await coordinator.awaitAllFinished();
+
+      expect(runner.run).toHaveBeenCalledTimes(1);
+    });
+
+    test("doesn't lock the source's libraries", async () => {
+      const running = deferredRun();
+      const { coordinator, mediaSourceDB, runner } = makeSut();
+      mediaSourceDB.getById.mockResolvedValue(remoteSource);
+      runner.run.mockReturnValueOnce(running.promise);
+
+      await coordinator.addCollections({
+        mediaSourceId: 'ms1' as MediaSourceId,
+      });
+      // A library of the same source can still be queued behind it
+      expect(
+        await coordinator.add({ libraryId: 'lib1', forceScan: false }),
+      ).toBe(true);
+      running.finish('completed');
+      await coordinator.awaitAllFinished();
+
+      expect(runner.run).toHaveBeenCalledTimes(2);
+    });
+
+    test('a local media source has no collections to sync', async () => {
+      const { coordinator, runner } = makeSut();
+
+      expect(
+        await coordinator.addCollections({
+          mediaSourceId: 'local1' as MediaSourceId,
+        }),
+      ).toBe(false);
+      expect(runner.run).not.toHaveBeenCalled();
+    });
+  });
 });

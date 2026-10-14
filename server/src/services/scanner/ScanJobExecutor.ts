@@ -14,8 +14,9 @@ import type { GenericMediaSourceScannerFactory } from './MediaSourceScanner.ts';
 
 /**
  * Runs one scan job: re-reads the library or media source, scans it, then (for
- * remote libraries) its collections. Runs the same in-process and in a scan
- * worker. Aborting the signal cancels the scanner at its next item.
+ * remote libraries) its collections. A collections job syncs a remote media
+ * source's collections. Runs the same in-process and in a scan worker.
+ * Aborting the signal cancels the scanner at its next item.
  */
 @injectable()
 export class ScanJobExecutor {
@@ -42,6 +43,8 @@ export class ScanJobExecutor {
         return this.runLibrary(job, signal);
       case 'local':
         return this.runLocal(job, signal);
+      case 'collections':
+        return this.runCollections(job, signal);
     }
   }
 
@@ -96,6 +99,42 @@ export class ScanJobExecutor {
     } finally {
       signal.removeEventListener('abort', onAbort);
     }
+  }
+
+  private async runCollections(
+    job: Extract<ScanJob, { kind: 'collections' }>,
+    signal: AbortSignal,
+  ): Promise<ScanOutcome> {
+    const mediaSource = await this.mediaSourceDB.getById(
+      tag<MediaSourceId>(job.mediaSourceId),
+    );
+    if (!mediaSource || mediaSource.type === 'local') {
+      this.logger.warn(
+        'Media source %s no longer exists or has no collections; skipping',
+        job.mediaSourceId,
+      );
+      return 'skipped';
+    }
+    const scanner = this.collectionScannerFactory(mediaSource.type);
+    if (!scanner) {
+      this.logger.warn(
+        'No collection scanner for %s media source %s; skipping',
+        mediaSource.type,
+        mediaSource.uuid,
+      );
+      return 'skipped';
+    }
+
+    this.logger.info(
+      'Scanning collections for %s media source %s (ID = %s)',
+      mediaSource.type,
+      mediaSource.name,
+      mediaSource.uuid,
+    );
+    // The collection scanner can't stop partway, so a canceled sync ends when
+    // the scan does (a scan worker is terminated if that takes too long)
+    await scanner.scan({ mediaSourceId: mediaSource.uuid });
+    return signal.aborted ? 'canceled' : 'completed';
   }
 
   private async runLocal(

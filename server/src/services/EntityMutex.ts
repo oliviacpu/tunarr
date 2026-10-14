@@ -44,6 +44,11 @@ export class EntityMutex {
     return this.lock(this.mediaSourceKey(mediaSource.uuid));
   }
 
+  // Separate from the media source's lock, which marks its libraries locked
+  getLockForCollections(mediaSourceId: string) {
+    return this.lock(`${this.mediaSourceKey(mediaSourceId)}.collections`);
+  }
+
   libraryKey(mediaSourceId: string, libraryId: string) {
     return `media_source.${mediaSourceId}.library.${libraryId}`;
   }

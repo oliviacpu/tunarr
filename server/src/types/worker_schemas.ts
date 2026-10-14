@@ -27,6 +27,11 @@ export const ScanJob = z.discriminatedUnion('kind', [
     force: z.boolean(),
     pathFilter: z.string().optional(),
   }),
+  // A remote media source's collections, across its enabled libraries
+  z.object({
+    kind: z.literal('collections'),
+    mediaSourceId: z.string(),
+  }),
 ]);
 
 export type ScanJob = z.infer<typeof ScanJob>;

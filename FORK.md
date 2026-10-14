@@ -34,6 +34,28 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The nightly collection sync runs in a scan worker (2026-10-14)
+
+- **What you saw:** nothing specific. It was the last scan work left on the main thread: `SyncCollectionsTask` (daily,
+  00:00) read and wrote every remote source's collections there, on the thread that serves streams.
+- **Fix:** the task now queues a `collections` job per remote media source with `MediaSourceScanCoordinator`, which
+  runs it like a library scan: in a scan worker when there is one, one job at a time.
+  - **The job:** `{kind: 'collections', mediaSourceId}` (`types/worker_schemas.ts`). `ScanJobExecutor` re-reads the
+    source when the job starts and skips it if the source is gone, local, or has no collection scanner.
+  - **Lock:** each source's sync has its own lock (`EntityMutex.getLockForCollections`), so a sync still queued from
+    the night before isn't queued twice. It's separate from the source's lock, so its libraries don't show as locked
+    and can still be scanned.
+  - **No reconcile:** collections change tags, not durations, so a collections job doesn't reconcile channel
+    durations.
+  - **Cancel:** the collection scanner can't stop partway, so a canceled sync ends when its scan does; in a scan
+    worker, the worker is terminated after 30 s.
+- **Checked end to end** on a throwaway server with a Plex source: running the task queued the sync, a scan worker
+  started, and the collection scan ran in it.
+- **Tests:** `ScanJobExecutor.test.ts` (a sync, a gone or local source, no scanner, a cancel),
+  `MediaSourceScanCoordinator.test.ts` (queued once, no reconcile, libraries not locked, local refused), and a new
+  `SyncCollectionsTask.test.ts` (queues each remote source with a collection scanner, scans nothing itself).
+- **Upstream:** not sent.
+
 ### A scan A/B bench, and a latency probe for a running server (2026-10-14)
 
 - **Why:** to show that scans in a worker thread stop stalling the main thread, here and on a real server.
