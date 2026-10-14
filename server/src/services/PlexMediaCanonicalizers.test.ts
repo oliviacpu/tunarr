@@ -244,6 +244,53 @@ describe('PlexMediaCanonicalizer - movie', () => {
     );
   });
 
+  it('changes id when stream id changes', () => {
+    const withStream: PlexMovie = {
+      ...baseMovie,
+      Media: [baseMediaWithStream],
+    };
+    expect(canonicalizer.getCanonicalId(withStream)).not.toBe(
+      canonicalizer.getCanonicalId({
+        ...baseMovie,
+        Media: [
+          {
+            ...baseMediaWithStream,
+            Part: [
+              { ...basePartWithStream, Stream: [{ ...baseStream, id: 999 }] },
+            ],
+          },
+        ],
+      }),
+    );
+  });
+
+  it('changes id when a sidecar subtitle stream is added', () => {
+    // What Plex reports after a tool such as Bazarr writes an .srt next to the
+    // movie: one more stream, everything else the same
+    const sidecar = {
+      streamType: 3 as const,
+      id: 300,
+      codec: 'srt',
+      index: 2,
+      languageCode: 'eng',
+    };
+    const withStream: PlexMovie = {
+      ...baseMovie,
+      Media: [baseMediaWithStream],
+    };
+    expect(canonicalizer.getCanonicalId(withStream)).not.toBe(
+      canonicalizer.getCanonicalId({
+        ...baseMovie,
+        Media: [
+          {
+            ...baseMediaWithStream,
+            Part: [{ ...basePartWithStream, Stream: [baseStream, sidecar] }],
+          },
+        ],
+      }),
+    );
+  });
+
   it('does not change id when guid changes', () => {
     expect(canonicalizer.getCanonicalId(baseMovie)).toBe(
       canonicalizer.getCanonicalId({

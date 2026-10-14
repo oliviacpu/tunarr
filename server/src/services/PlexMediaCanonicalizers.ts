@@ -73,6 +73,14 @@ export class PlexMediaCanonicalizer implements Canonicalizer<PlexMedia> {
         hash.update(part.container ?? '');
         hash.update(part.videoProfile ?? '');
         hash.update(part.audioProfile ?? '');
+
+        // A sidecar subtitle added later (e.g. by Bazarr) shows up only as a
+        // new stream; nothing else about the movie changes
+        for (const stream of part.Stream ?? []) {
+          if (stream.id) {
+            hash.update(stream.id.toFixed());
+          }
+        }
       }
     }
 

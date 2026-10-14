@@ -206,11 +206,14 @@ export abstract class MediaSourceMovieLibraryScanner<
 
     const fullMovie = fullMovieResult.get();
 
+    // Compare the full metadata, as the episode and other-video scanners do:
+    // a library listing can omit details (Plex lists no streams), so a change
+    // such as a new sidecar subtitle never reaches the listing's id
     if (
       !force &&
       existingMovie &&
       existingMovie.canonicalId &&
-      existingMovie.canonicalId === incomingMovie.canonicalId
+      existingMovie.canonicalId === fullMovie.canonicalId
     ) {
       this.logger.debug(
         'Found an unchanged program: rating key = %s, program ID = %s',

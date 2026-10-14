@@ -34,6 +34,32 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Movie scans pick up subtitle files added later (2026-10-14)
+
+- **What you saw:** a movie got no captions although Bazarr had added an `.srt` the day before (Star Trek II: Plex
+  listed the sidecar, Tunarr still knew only the embedded PGS track after the nightly scan).
+- **Cause:**
+  - **Wrong comparison:** `MediaSourceMovieLibraryScanner.scanSingleInternal` decided "unchanged" by comparing the
+    stored canonical id with the **library listing's**. The episode and other-video scanners compare the full
+    metadata's.
+  - **No streams in the hash:** the Plex movie hash (`canonicalizePlexMovie`) ignored streams, and Plex's listing
+    has none anyway (`Part` without `Stream`).
+  - **Plex doesn't mark the change:** adding a sidecar doesn't move the movie's `updatedAt` (03:10 before the `.srt`
+    at 05:49, checked).
+  - **Result:** the movie was skipped every night. Episodes weren't affected: their hash includes stream ids,
+    compared on the full metadata.
+- **Fix:**
+  - **Hash:** `canonicalizePlexMovie` hashes stream ids, like episodes.
+  - **Comparison:** the movie scanner compares `fullMovie.canonicalId`, which was already fetched before the check,
+    so it costs no extra request.
+  - **One-time rescan:** the first scan after this change re-saves every movie once, because their stored ids
+    change.
+- **Tests:**
+  - `PlexMediaCanonicalizers.test.ts`: a stream id change, and a sidecar subtitle stream added.
+  - New `MediaSourceMovieLibraryScanner.test.ts`: a rescan when only the full metadata changed, a skip when it's
+    unchanged, and a forced rescan. Three of these four fail on the old code.
+- **Upstream:** not sent.
+
 ### Closed captions are labelled with their language in the stream Plex reads (2026-10-14)
 
 - **What you saw:** Plex Live TV listed the captions as "Unknown (Closed Captioned)".
