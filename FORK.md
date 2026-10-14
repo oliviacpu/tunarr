@@ -66,18 +66,20 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     cue stays at the top.
   - **Alignment:** a new FFmpeg setting, **Caption Alignment** (`hdhrCaptionAlignment`): centred block (the default,
     unchanged), each line centred (preamble indent plus Tab Offset 1–3 for exact columns), or left.
-  - **Background (experimental, no UI):** `hdhrCaptionBackground` = `player` (default, sends nothing),
-    `semiTransparent` (black semi-transparent attribute, `0x10 0x2f`) or `transparent` (`0x17 0x2d`). Each line
-    starts with a space and then the attribute. Set it through `PUT /api/ffmpeg-settings` to test a player.
-  - **Plumbing:** `HlsSession.addCaptions` reads both settings per program, so a change applies from the next
+  - **Plumbing:** `HlsSession.addCaptions` reads the alignment per program, so a change applies from the next
     program.
-- **What the player decides:** text size, font and background opacity have no 608 codes. Native Apple TV playback
-  follows tvOS's caption style. When Plex burns captions in for a device, it decodes the 608 itself
-  (`inlineass=…:atsc_cc=1`) and applies its own style (Noto Sans, outline, shadow).
+- **What the player decides:** text size, font and background have no 608 codes Plex honours. For Plex Live TV on
+  Apple TV, Plex burns the captions in: it decodes the 608 itself (`inlineass=…:atsc_cc=1`) and draws them in its own
+  style, an opaque near-black box with Noto Sans text. The text size follows the Plex app's subtitle size setting
+  (`font_size`, `font_scale`).
+- **Background codes tried and removed:** an experimental `hdhrCaptionBackground` setting sent 608's optional
+  background attributes: semi-transparent black (`0x10 0x2f`) and transparent (`0x17 0x2d`), each after a space at a
+  line's start. On 2026-10-13 both were confirmed in the stream Plex read, and the Apple TV's box stayed solid
+  black. ffmpeg's 608 decoder, which Plex's burn-in shares a lineage with, maps background attributes only to the
+  box colour and ignores transparent. So the setting and the codes were taken out again.
 - **Checked:** with ffmpeg's own 608 decoder (jellyfin-ffmpeg 8.1.3), which Plex's burn-in shares a lineage with,
   italics and underline come out as `{\i1}`/`{\u1}`. The top cue comes out at the top (`\pos(…,28)` against 228/243
-  at the bottom), and each centred line gets its own leading spaces. The background attribute only shifts the line
-  by one column there: ffmpeg maps background codes to an outline colour and ignores transparent. Tests:
+  at the bottom), and each centred line gets its own leading spaces. Tests:
   `Cea608Encoder.test.ts` (with a small decoder for rows, columns and styles), `CaptionInsertion.local.test.ts`
   (the ffmpeg round trip), `ProgramCaptions.test.ts`.
 - **Upstream:** not sent.

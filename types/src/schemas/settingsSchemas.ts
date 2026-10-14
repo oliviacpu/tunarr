@@ -79,17 +79,6 @@ export const CaptionAlignments = [
 
 export type CaptionAlignment = TupleToUnion<typeof CaptionAlignments>;
 
-// The background behind closed caption text. 'player' sends no background
-// code, leaving it to the player; the others send CEA-608's optional
-// background attributes, which many players ignore.
-export const CaptionBackgrounds = [
-  'player',
-  'semiTransparent',
-  'transparent',
-] as const;
-
-export type CaptionBackground = TupleToUnion<typeof CaptionBackgrounds>;
-
 export const FfmpegNumericLogLevels: Record<
   TupleToUnion<typeof FfmpegLogLevels>,
   number
@@ -148,8 +137,6 @@ export const FfmpegSettingsSchema = z.object({
   // program are sent as captions (and WebVTT) instead; forced ones stay burned.
   hdhrClosedCaptions: z.boolean().default(false),
   hdhrCaptionAlignment: z.enum(CaptionAlignments).default('centeredBlock'),
-  // Experimental: whether players honour it is still being tested
-  hdhrCaptionBackground: z.enum(CaptionBackgrounds).default('player'),
   enableSubtitleExtraction: z.boolean().optional().default(false),
 });
 

@@ -1,7 +1,4 @@
-import type {
-  CaptionAlignment,
-  CaptionBackground,
-} from '@tunarr/types/schemas';
+import type { CaptionAlignment } from '@tunarr/types/schemas';
 
 // CEA-608 (line 21) captions for field 1, channel CC1, in pop-on mode: each
 // caption is loaded into the decoder's hidden memory ahead of time, then shown
@@ -208,24 +205,11 @@ export type CaptionLayout = { top: boolean; lines: StyledChar[][] };
 
 export type CaptionLayoutOptions = {
   alignment: CaptionAlignment;
-  background: CaptionBackground;
 };
 
 export const DefaultCaptionLayout: CaptionLayoutOptions = {
   alignment: 'centeredBlock',
-  background: 'player',
 };
-
-// CEA-608's optional background attributes. Each is sent after a space: a
-// decoder that knows it draws the attribute in that column, others show the
-// space.
-const BackgroundCodes: Record<Exclude<CaptionBackground, 'player'>, CcPair> = {
-  semiTransparent: pair(0x10, 0x2f), // black, semi-transparent
-  transparent: pair(0x17, 0x2d),
-};
-
-const backgroundColumns = (options: CaptionLayoutOptions) =>
-  options.background === 'player' ? 0 : 1;
 
 // Reads a cue's text into lines of styled characters. Italics and underline
 // come from SRT/WebVTT tags (<i>, <u>) and ASS overrides ({\i1}, {\u1}, {\r});
@@ -373,16 +357,12 @@ function words(line: StyledChar[]): StyledChar[][] {
 
 // Splits the cue into captions of at most 2 lines of 32 columns each, keeping
 // its italics, underline and top-of-screen placement.
-export function layoutCaption(
-  text: string,
-  options: CaptionLayoutOptions = DefaultCaptionLayout,
-): CaptionLayout[] {
+export function layoutCaption(text: string): CaptionLayout[] {
   const cue = parseCueText(text);
 
-  // Width in 608 columns: style codes and a background attribute take
-  // columns, and transliteration can widen a character ('…' is 3)
-  const width = (line: StyledChar[]) =>
-    lineUnits(line).length + backgroundColumns(options);
+  // Width in 608 columns: style codes take columns, and transliteration can
+  // widen a character ('…' is 3)
+  const width = (line: StyledChar[]) => lineUnits(line).length;
   // The cue's own line breaks are kept when every line fits. Otherwise the
   // whole cue is rewrapped, so a 2-line cue with one long line usually stays
   // one caption instead of becoming 3 lines split over two captions.
@@ -462,13 +442,9 @@ function loadSequence(
   pushCode(ResumeCaptionLoading);
   pushCode(EraseNonDisplayedMemory);
 
-  const background =
-    options.background === 'player'
-      ? undefined
-      : BackgroundCodes[options.background];
   const lineUnitList = caption.lines.map(lineUnits);
   const columns = lineColumns(
-    lineUnitList.map((units) => units.length + backgroundColumns(options)),
+    lineUnitList.map((units) => units.length),
     options.alignment,
   );
 
@@ -480,9 +456,6 @@ function loadSequence(
     pushCode(preambleAddress(firstRow + i, indent));
     if (column > indent) {
       pushCode(pair(0x17, 0x20 + (column - indent)));
-    }
-    if (background) {
-      atoms.push([pair(0x20, 0), background]);
     }
 
     // Basic characters go two to a pair
@@ -588,7 +561,7 @@ export function buildCaptionSchedule(
     .flatMap((cue) => {
       // A cue too long for one caption is shown in parts, each for a share of
       // the cue's time in proportion to its text
-      const parts = layoutCaption(cue.text, layout);
+      const parts = layoutCaption(cue.text);
       const lengths = parts.map(
         ({ lines }) =>
           lines.reduce((n, line) => n + line.length, 0) + lines.length - 1,

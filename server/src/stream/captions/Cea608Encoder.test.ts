@@ -94,8 +94,7 @@ type DecodedRow = { row: number; column: number; width: number; text: string };
 
 // A small 608 decoder for the tests: each caption shown (up to its End of
 // Caption), as rows with their start column, width in columns, and text. Style
-// changes show as [i] italics, [u] underline, [iu] both, [-] plain;
-// background attributes as [bg:semi] and [bg:transparent].
+// changes show as [i] italics, [u] underline, [iu] both, [-] plain.
 function decodeCaptions(pairs: number[][]): DecodedRow[][] {
   const captions: DecodedRow[][] = [];
   let rows: DecodedRow[] = [];
@@ -128,10 +127,6 @@ function decodeCaptions(pairs: number[][]): DecodedRow[][] {
       }
     } else if (a === 0x11 && b >= 0x20 && b <= 0x2f) {
       add(MidRowLabels[b] ?? '[?]', 1);
-    } else if (a === 0x10 && b === 0x2f) {
-      add('[bg:semi]', 0);
-    } else if (a === 0x17 && b === 0x2d) {
-      add('[bg:transparent]', 0);
     } else if (a === 0x11 && b === 0x37) {
       add('♪', 1);
     } else if (a >= 0x20) {
@@ -392,7 +387,7 @@ describe('caption styles', () => {
   });
 
   test('counts style codes when wrapping', () => {
-    const left = { alignment: 'left', background: 'player' } as const;
+    const left = { alignment: 'left' } as const;
     // The italics code takes the first column: 31 characters fill the line
     const fits = decode(`<i>${'x'.repeat(31)}</i>`, left).flat();
     const wraps = decode(`<i>${'x'.repeat(32)}</i>`, left).flat();
@@ -428,7 +423,6 @@ describe('caption placement', () => {
   test('centres each line on its own with tab offsets', () => {
     const rows = decode('Short\nA much longer second line', {
       alignment: 'centeredLines',
-      background: 'player',
     })[0];
 
     // (32 - 5) / 2 = 13: preamble indent 12 and TO1; (32 - 25) / 2 = 3: indent 0 and TO3
@@ -437,46 +431,9 @@ describe('caption placement', () => {
 
   test('starts every line at the left edge', () => {
     expect(
-      decode('Short\nA much longer second line', {
-        alignment: 'left',
-        background: 'player',
-      })[0]?.map((r) => r.column),
+      decode('Short\nA much longer second line', { alignment: 'left' })[0]?.map(
+        (r) => r.column,
+      ),
     ).toEqual([0, 0]);
-  });
-});
-
-describe('caption background', () => {
-  test('sends no background code by default', () => {
-    expect(decode('Hi')[0]?.[0]?.text).toBe('Hi');
-  });
-
-  test('starts each line with a space and the background attribute', () => {
-    expect(
-      decode('Hi\nthere', {
-        alignment: 'centeredBlock',
-        background: 'semiTransparent',
-      })[0]?.map((r) => r.text),
-    ).toEqual([' [bg:semi]Hi', ' [bg:semi]there']);
-    expect(
-      decode('Hi', {
-        alignment: 'centeredBlock',
-        background: 'transparent',
-      })[0]?.[0]?.text,
-    ).toBe(' [bg:transparent]Hi');
-  });
-
-  test('counts the background column when wrapping', () => {
-    const line = 'x'.repeat(32);
-
-    expect(
-      decode(line, { alignment: 'left', background: 'player' }).flat(),
-    ).toHaveLength(1);
-    // 31 characters and the background column fit a line, so 32 take two
-    expect(
-      decode(line, {
-        alignment: 'left',
-        background: 'semiTransparent',
-      }).flat(),
-    ).toHaveLength(2);
   });
 });

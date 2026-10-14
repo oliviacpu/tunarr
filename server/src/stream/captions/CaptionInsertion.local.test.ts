@@ -170,10 +170,7 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
         Number(m[1]),
       );
 
-    const block = await decode({
-      alignment: 'centeredBlock',
-      background: 'player',
-    });
+    const block = await decode({ alignment: 'centeredBlock' });
     expect(block).toHaveLength(3);
     expect(block[0]).toContain('{\\i1} hello there{\\i0}');
     expect(block[0]).toContain('{\\u1}');
@@ -186,10 +183,7 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
     expect(block[2]).toContain('}Short\\N');
 
     // Centred lines: "Short" starts 10 columns right of the longer line (13 vs 3)
-    const lines = await decode({
-      alignment: 'centeredLines',
-      background: 'player',
-    });
+    const lines = await decode({ alignment: 'centeredLines' });
     expect(lines[2]).toContain(`}${'\\h'.repeat(10)}Short\\N`);
   });
 });

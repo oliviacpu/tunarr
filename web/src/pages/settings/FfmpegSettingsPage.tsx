@@ -506,9 +506,9 @@ export default function FfmpegSettingsPage() {
               <Trans>
                 Where closed caption lines sit across the screen. Italics,
                 underline and top-of-screen placement follow the subtitle file.
-                Text size, font and background are up to the player: on Apple
-                TV, under Settings, Accessibility, Subtitles and Captioning,
-                Style. Takes effect from the next program.
+                Text size, font and background are up to the player: Plex Live
+                TV draws captions in its own style, sized by the Plex app's
+                subtitle size setting. Takes effect from the next program.
               </Trans>
             </FormHelperText>
           </FormControl>

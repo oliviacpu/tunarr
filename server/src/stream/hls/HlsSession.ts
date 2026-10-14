@@ -438,7 +438,6 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         // Read per program, so a settings change applies from the next one
         layout: {
           alignment: this.settingsDB.ffmpegSettings().hdhrCaptionAlignment,
-          background: this.settingsDB.ffmpegSettings().hdhrCaptionBackground,
         },
       },
     );
