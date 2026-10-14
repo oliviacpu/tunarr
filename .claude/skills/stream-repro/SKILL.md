@@ -142,7 +142,8 @@ window. A guide entry with `via` came through a redirect.
 - A fresh database directory under `--out`, free random ports for HTTP and search, and bind to 127.0.0.1.
   Your dev server and its data are untouched.
 - `TUNARR_USE_WORKER_POOL=false`. Eight `tsx` workers booting at once starve ffmpeg of CPU, and HLS startup
-  then times out after 15 retries. That failure is an artifact, not a repro.
+  then times out after 15 retries. That failure is an artifact, not a repro. With the pool off, library scans
+  also run on the main thread (no scan worker).
 - `TUNARR_LOG_LEVEL=debug`, so every ffmpeg command line lands in `<out>/db/logs/tunarr.log`.
 - `copy` mode copies the database directory except logs, backups, cache, and streams. It rewrites the
   copied `settings.json` logs path so the copy never writes into the original.

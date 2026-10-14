@@ -5,8 +5,15 @@ import type { JellyfinItem } from '@tunarr/types/jellyfin';
 import type { PlexMedia } from '@tunarr/types/plex';
 import type { Factory } from 'inversify';
 import { ContainerModule } from 'inversify';
+import { isMainThread } from 'node:worker_threads';
 import type { MediaLibraryType } from '../db/schema/MediaSource.ts';
 import { KEYS } from '../types/inject.ts';
+import {
+  getBooleanEnvVar,
+  SCAN_IN_WORKER_ENV_VAR,
+  USE_WORKER_POOL_ENV_VAR,
+} from '../util/env.ts';
+import { isDev } from '../util/index.ts';
 import { bindFactoryFunc } from '../util/inject.ts';
 import type { Canonicalizer } from './Canonicalizer.ts';
 import { CelEvaluationService } from './CelEvaluationService.ts';
@@ -48,6 +55,11 @@ import type { GenericMediaSourceOtherVideoLibraryScanner } from './scanner/Media
 import { EmptyTrashService } from './EmptyTrashService.ts';
 import { MediaSourceProgressService } from './scanner/MediaSourceProgressService.ts';
 import { MediaSourceScanCoordinator } from './scanner/MediaSourceScanCoordinator.ts';
+import { ScanJobExecutor } from './scanner/ScanJobExecutor.ts';
+import type { ScanJobRunner } from './scanner/ScanJobRunner.ts';
+import { InProcessScanJobRunner } from './scanner/ScanJobRunner.ts';
+import { WorkerScanJobRunner } from './scanner/WorkerScanJobRunner.ts';
+import { TunarrSubprocessService } from './TunarrSubprocessService.ts';
 import type {
   GenericMediaSourceScanner,
   GenericMediaSourceScannerFactory,
@@ -225,6 +237,30 @@ export const ServicesModule = new ContainerModule(({ bind }) => {
   bind(MediaSourceProgressService).toSelf().inSingletonScope();
   bind(EmptyTrashService).toSelf().inSingletonScope();
   bind(MediaSourceScanCoordinator).toSelf().inSingletonScope();
+  bind(ScanJobExecutor).toSelf();
+  bind(InProcessScanJobRunner).toSelf().inSingletonScope();
+  // Scans run in a worker thread so their database work can't stall streams,
+  // unless worker threads are turned off (or this is already a worker)
+  bind<ScanJobRunner>(KEYS.ScanJobRunner)
+    .toDynamicValue((ctx) => {
+      const inProcess = ctx.get(InProcessScanJobRunner);
+      if (
+        !isMainThread ||
+        !getBooleanEnvVar(USE_WORKER_POOL_ENV_VAR, true) ||
+        !getBooleanEnvVar(SCAN_IN_WORKER_ENV_VAR, true)
+      ) {
+        return inProcess;
+      }
+      const subprocess = ctx.get(TunarrSubprocessService);
+      return new WorkerScanJobRunner(
+        () => subprocess.createWorker({}, 'scan'),
+        inProcess,
+        ctx.get(MediaSourceProgressService),
+        // Dev workers compile the server with tsx before they start
+        isDev ? { bootTimeoutMs: 180_000 } : {},
+      );
+    })
+    .inSingletonScope();
 
   bind(CelEvaluationService).toSelf().inSingletonScope();
   bind(StreamSelectionProfileResolver).toSelf().inSingletonScope();

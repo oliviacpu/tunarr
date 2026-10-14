@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { Worker, type WorkerOptions } from 'node:worker_threads';
 import { container } from '../container.ts';
 import { globalOptions, serverOptions } from '../globals.ts';
+import type { WorkerRole } from '../types/worker_schemas.ts';
 import { isDev } from '../util/index.ts';
 import { MeilisearchService } from './MeilisearchService.ts';
 
@@ -10,11 +11,20 @@ import { MeilisearchService } from './MeilisearchService.ts';
 export class TunarrSubprocessService {
   constructor() {}
 
-  createWorker(opts: WorkerOptions = {}) {
-    return new TsWorker(process.argv[1]!, {
-      ...opts,
-      argv: workerArgv(),
-    });
+  // A worker re-executes this process's own entry point (see workerArgv)
+  createWorker(opts: WorkerOptions = {}, role: WorkerRole = 'pool') {
+    const entry = process.argv[1];
+    if (entry === undefined) {
+      throw new Error('Cannot start a worker: no entry script in process.argv');
+    }
+    return new TsWorker(
+      entry,
+      {
+        ...opts,
+        argv: workerArgv(),
+      },
+      role,
+    );
   }
 }
 
@@ -64,7 +74,11 @@ export function workerEntryUrl(entryPath: string): URL {
 }
 
 class TsWorker extends Worker {
-  constructor(filename: string, options: WorkerOptions = {}) {
+  constructor(
+    filename: string,
+    options: WorkerOptions = {},
+    role: WorkerRole = 'pool',
+  ) {
     options.workerData ??= {
       serverOptions: {
         ...serverOptions(),
@@ -72,6 +86,7 @@ class TsWorker extends Worker {
           .get<MeilisearchService>(MeilisearchService)
           .getPort(),
       },
+      role,
     };
 
     if (isDev) {

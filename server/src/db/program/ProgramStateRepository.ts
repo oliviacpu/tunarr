@@ -165,7 +165,21 @@ export class ProgramStateRepository {
    */
   checkpointAndOptimize(): Promise<void> {
     // better-sqlite3 is synchronous; `run` returns a result, not a promise.
-    this.drizzleDB.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`);
+    // The checkpoint is best effort: while another connection (a scan worker)
+    // holds a transaction, TRUNCATE would block this thread for the whole busy
+    // timeout. Without waiting it just reports busy, and a later checkpoint
+    // (or SQLite's automatic ones) finishes the job.
+    const row = this.drizzleDB.get<{ timeout: number } | undefined>(
+      sql`PRAGMA busy_timeout`,
+    );
+    const timeout =
+      row !== undefined && Number.isInteger(row.timeout) ? row.timeout : 5_000;
+    this.drizzleDB.run(sql`PRAGMA busy_timeout = 0`);
+    try {
+      this.drizzleDB.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`);
+    } finally {
+      this.drizzleDB.run(sql.raw(`PRAGMA busy_timeout = ${timeout}`));
+    }
     this.drizzleDB.run(sql`PRAGMA optimize`);
     return Promise.resolve();
   }

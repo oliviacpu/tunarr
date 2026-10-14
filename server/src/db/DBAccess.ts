@@ -6,6 +6,7 @@ import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import { Mutex } from 'async-mutex';
 import Sqlite from 'better-sqlite3';
 import dayjs from 'dayjs';
+import { isMainThread } from 'node:worker_threads';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import {
   CamelCasePlugin,
@@ -25,6 +26,7 @@ import {
 import type { Maybe } from '../types/util.ts';
 import { getDefaultDatabaseName } from '../util/defaults.ts';
 import type { DB } from './schema/db.ts';
+import { withImmediateTransactions } from './immediateTransactions.ts';
 import type { DrizzleDBAccess } from './schema/index.ts';
 import { schema } from './schema/index.ts';
 
@@ -46,7 +48,10 @@ class Connection {
       dbName: name,
     });
     this.sqlite = new Sqlite(name, {
-      timeout: 5000,
+      // How long a statement waits for another connection's write lock. The
+      // wait blocks the calling thread, so the main thread (which serves
+      // streams) gives up sooner than a worker (e.g. a library scan) does.
+      timeout: isMainThread ? 5_000 : 30_000,
     });
 
     // Write to a separate WAL file, reads continue from main database
@@ -90,7 +95,7 @@ class Connection {
       plugins: [new ParseJSONResultsPlugin(), new CamelCasePlugin()],
     });
 
-    this.drizzle = drizzle({
+    const db = drizzle({
       client: this.sqlite,
       casing: 'snake_case',
       schema,
@@ -106,6 +111,7 @@ class Connection {
           }
         : false,
     });
+    this.drizzle = withImmediateTransactions(db);
   }
 
   private get db() {

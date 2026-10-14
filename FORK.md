@@ -34,6 +34,202 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The nightly collection sync runs in a scan worker (2026-10-14)
+
+- **What you saw:** nothing specific. It was the last scan work left on the main thread: `SyncCollectionsTask` (daily,
+  00:00) read and wrote every remote source's collections there, on the thread that serves streams.
+- **Fix:** the task now queues a `collections` job per remote media source with `MediaSourceScanCoordinator`, which
+  runs it like a library scan: in a scan worker when there is one, one job at a time.
+  - **The job:** `{kind: 'collections', mediaSourceId}` (`types/worker_schemas.ts`). `ScanJobExecutor` re-reads the
+    source when the job starts and skips it if the source is gone, local, or has no collection scanner.
+  - **Lock:** each source's sync has its own lock (`EntityMutex.getLockForCollections`), so a sync still queued from
+    the night before isn't queued twice. It's separate from the source's lock, so its libraries don't show as locked
+    and can still be scanned.
+  - **No reconcile:** collections change tags, not durations, so a collections job doesn't reconcile channel
+    durations.
+  - **Cancel:** the collection scanner can't stop partway, so a canceled sync ends when its scan does; in a scan
+    worker, the worker is terminated after 30 s.
+- **Checked end to end** on a throwaway server with a Plex source: running the task queued the sync, a scan worker
+  started, and the collection scan ran in it.
+- **Tests:** `ScanJobExecutor.test.ts` (a sync, a gone or local source, no scanner, a cancel),
+  `MediaSourceScanCoordinator.test.ts` (queued once, no reconcile, libraries not locked, local refused), and a new
+  `SyncCollectionsTask.test.ts` (queues each remote source with a collection scanner, scans nothing itself).
+- **Upstream:** not sent.
+
+### A scan A/B bench, and a latency probe for a running server (2026-10-14)
+
+- **Why:** to show that scans in a worker thread stop stalling the main thread, here and on a real server.
+- **`pnpm bench:scan-worker`** (`scripts/scan-worker-ab.ts`):
+  - **What it runs:** a fresh migrated database per run, a local movie source over 1,500 hard-linked clips, and the
+    initial scan, with `TUNARR_SCAN_IN_WORKER` off and on. The arms alternate (A B, then B A), and both use the same
+    worker pool.
+  - **What it measures:**
+    - an HTTP probe every 10 ms, timed from when each probe was due;
+    - **main-thread CPU:** the CPU time the scan adds to the server's main thread (`ps -M` on macOS, `/proc` on
+      Linux), which a busy machine doesn't distort;
+    - **write-lock wait:** a second connection, in its own thread, times `BEGIN IMMEDIATE` every 50 ms, as a main-thread
+      write (play history at a program start) would wait on the scan's transaction;
+    - the bench's own event-loop lag, to tell a busy machine from a stalled server.
+  - **Pass:** the worker arm adds at most 10% of the in-process arm's main-thread CPU, and the write wait's p99 stays
+    under 25 ms. Worst cases (probe stall, longest write wait) must stay under 100 ms, judged only when the bench's
+    own loop kept up.
+  - **Result** on a loaded laptop (1,500 clips, 2 trials, medians):
+    - main-thread CPU for the scan: 11.5 s in-process, 0.0 s in the worker;
+    - write-lock wait p99: 6.3 ms in-process, 6.6 ms in the worker;
+    - worst cases were not judged, because the bench's own loop lagged up to 166 ms.
+- **`scripts/probe-latency.mjs`**: plain Node with no dependencies, for a running server.
+  - Probes `/api/xmltv-last-refresh` on a cadence and can read a channel's `.ts` the way an HDHomeRun client does,
+    timing the gaps between chunks and noting if the stream ends.
+  - Basic auth comes from `TUNARR_BASIC_AUTH_USER`/`PASSWORD`, read from the environment or from `--auth-env FILE`, so
+    credentials never appear in the process list.
+  - **First use, on the in-process build:** a forced 91 s Plex movie-library scan stalled the API for up to 3.4 s (53
+    probes over 250 ms, against 1 in the two minutes before). The `.ts` stream's longest gap was 3.5 s, against
+    about 2 s, one segment, at idle.
+- **Upstream:** not sent.
+
+### The worker smoke test runs a real scan in a scan worker (2026-10-14)
+
+- **Why:** the unit tests drive the scan worker over a `MessageChannel`, but only a real server shows that a scan
+  worker boots, scans and reports back. `scripts/worker-smoke-test.ts` already starts the real entry point for the
+  worker pool.
+- **Change:**
+  - **Scan checks:**
+    - generates one short clip with ffmpeg, hard-links it into 12 movie folders, points the FFmpeg paths at this
+      machine's ffmpeg and ffprobe, and creates a local movie source;
+    - checks that its scan runs in a scan worker, with the scanner's log lines marked `"worker":true`;
+    - checks that all 12 programs are saved and progress ends as `not_scanning` on the main thread.
+  - **SIGTERM:** a forced rescan is started and SIGTERM is sent once it is scanning in its worker. The server must
+    exit within 10 s.
+  - **`--binary` works through pnpm:** `pnpm test:worker-smoke -- --binary …` forwards the `--`, and `parseArgs`
+    read every flag after it as a positional. The binary flag was dropped silently and the dev server was tested
+    instead. The leading `--` is now removed, and an unknown flag is an error.
+  - **Loopback only:** the test server binds to 127.0.0.1, since it mounts the debug endpoints.
+- **Upstream:** not sent.
+
+### Library scans run in a worker thread, so live streams don't stall (2026-10-14)
+
+- **What you saw:** live streams paused while a library scanned. A music rescan stalled the server for up to 3.6 s at a
+  time.
+- **Cause:** better-sqlite3 is synchronous, and scans ran on the main thread. That thread also serves HLS segments,
+  playlists and the HDHomeRun `.ts` stream that Plex reads, so every scan query and write blocked streaming.
+- **Fix:** `WorkerScanJobRunner` (`services/scanner/`) runs each scan job in a fresh worker thread with its own
+  database connection. The coordinator stays on the main thread and keeps the queue, locks, progress and the
+  duration reconcile after each job.
+  - **One worker per job:** each job gets current settings and media source credentials, and no memory is held
+    between scans. When the job ends, the worker is asked to exit and is terminated if it hasn't within 5 s.
+  - **Progress:** the worker's progress messages are applied to the main thread's `MediaSourceProgressService`, so
+    the UI is unchanged.
+  - **Start-up:** a worker has 60 s to report it started (180 s in dev, where tsx compiles the server first). If it
+    doesn't, the job runs on the main thread as before. After 3 failed starts in a row, scans stay on the main thread
+    until restart.
+  - **Cancel:** the worker gets a `cancel` and is terminated if the job hasn't stopped within 30 s. A job canceled
+    while its worker is starting never runs. Terminating a worker mid-transaction rolls the transaction back and
+    frees the write lock.
+  - **Crash:** a worker that dies mid-job fails that job without running it again; the next scan starts a new worker.
+  - **Shutdown:** `MediaSourceScanCoordinator.shutdown(graceMs)` cancels every job and skips the reconcile. `Server`
+    gives the running scan 2 s, then its worker is terminated. A worker still starting is terminated at once (found by
+    the Codex review).
+  - **Switch:** `TUNARR_SCAN_IN_WORKER` (default on) needs `TUNARR_USE_WORKER_POOL` (default on). With either off,
+    scans run on the main thread as before. `ServicesModule` picks the runner; worker threads always scan in-process.
+  - **Docs:** `docs/getting-started/run.md` adds the switch and corrects the pool's defaults (on, at most 8 threads).
+- **Tests:**
+  - new `WorkerScanJobRunner.test.ts` (fake worker): progress, a fresh worker per job, start-up fallback, the 3-failure
+    limit, a crash, a reported failure, cancels honored and ignored, a cancel during start-up, shutdown during a job and
+    during start-up, and a worker that won't exit;
+  - new `ScanWorkerRoundTrip.test.ts`: the runner and a real `ScanWorker` over a `MessageChannel`;
+  - new `workerTerminateReleasesLock.test.ts`: a real worker thread holding a write transaction is terminated, and
+    the lock is free and the row gone.
+- **Upstream:** not sent.
+
+### A scan worker role and its message protocol (2026-10-14)
+
+- **Why:** groundwork for running library scans in a worker thread, so they stop stalling live streams. Nothing uses
+  it yet; the entry above switches scans over.
+- **Change:**
+  - **Protocol** (`types/worker_schemas.ts`):
+    - `WorkerRole` (`pool` or `scan`);
+    - main to worker: `ScanWorkerRequest` (`scan`, `cancel`, `shutdown`);
+    - worker to main: `ScanWorkerMessage` (`started`, `scan-progress`, `scan-done`, `scan-failed`).
+  - **Starting a worker:** `TunarrSubprocessService.createWorker(opts, role)` passes the role in `workerData` and
+    guards a missing entry script instead of using `process.argv[1]!`. `start-worker` starts a `ScanWorker` for
+    `role: 'scan'`, and a pool worker otherwise; workers without a role are pool workers.
+  - **`ScanWorker`:**
+    - runs one `ScanJob` at a time through `ScanJobExecutor`, on its own database connection;
+    - relays its `MediaSourceProgressService` events, sanitised and coalesced to whole percents;
+    - aborts the job on `cancel`, refuses a second job while busy, and flushes logs before exiting on `shutdown`.
+- **Test:** new `ScanWorker.test.ts`, run over a real `MessageChannel`.
+- **Upstream:** not sent.
+
+### Write transactions start IMMEDIATE, so a second writer can't fail them (2026-10-14)
+
+- **Why:** library scans are moving to a worker thread, which has its own SQLite connection. That makes the worker the
+  second writer to the same database, alongside the main thread. In WAL mode, a DEFERRED transaction (Drizzle's
+  default) that reads and then writes fails at once with `SQLITE_BUSY_SNAPSHOT` if the other connection committed in
+  between; the busy timeout doesn't apply. better-sqlite3's busy wait also blocks the thread that waits, and the main
+  thread serves the streams.
+- **Change:**
+  - **Immediate by default:** `withImmediateTransactions` (`db/immediateTransactions.ts`, applied in `DBAccess`)
+    makes `drizzle.transaction(fn)` start with BEGIN IMMEDIATE unless the caller passes its own `behavior`. The
+    write lock is taken up front, so a read-then-write can't fail that way. Applying it in one place keeps the 31
+    call sites unchanged, and new transactions get it too.
+  - **Busy timeout:** the main thread's connection keeps 5 s; worker threads get 30 s, since they can afford to wait.
+  - **Checkpoint:** `ProgramStateRepository.checkpointAndOptimize` runs the TRUNCATE checkpoint with
+    `busy_timeout = 0` and restores the timeout afterwards. While another connection holds a transaction, the
+    checkpoint just reports busy instead of blocking the main thread for 5 s.
+- **Test:** new `sqliteWriteContention.test.ts`, on a pre-migrated database with a second raw connection standing in
+  for a worker:
+  - a deferred read-then-write fails after another connection commits;
+  - Tunarr's transactions hold the write lock before their first write;
+  - an explicit `behavior` still applies;
+  - the checkpoint returns in under a second while another connection holds a snapshot, and the busy timeout is
+    restored.
+  - The second and fourth fail on the old code.
+- **Upstream:** not sent.
+
+### Scan jobs go through a runner, and re-check the library when they start (2026-10-14)
+
+- **Why:** this prepares for running scans in a worker thread, so the coordinator can hand a job to whichever runner
+  is configured. It also fixes a latent problem: a queued job checked whether its library was available only when it
+  was queued. A job that waited hours behind others could then scan a library the server no longer reports, which
+  marks every program in it missing.
+- **Change:**
+  - **The job:** `ScanJob` (`types/worker_schemas.ts`, zod) describes a scan by IDs and flags only. A local job is
+    `{kind: 'local', mediaSourceId, force, pathFilter?}`; a remote one is `{kind: 'library', libraryId, …}`.
+  - **The executor:** `ScanJobExecutor` re-reads the library or media source when the job starts. It skips the job
+    if the library is gone or unavailable, wires the abort signal to `scanner.cancel`, and runs the library scan,
+    then the collection scan (not after a cancel).
+  - **The runner:** `ScanJobRunner` (bound at `KEYS.ScanJobRunner`) runs one job. `InProcessScanJobRunner` runs it on
+    the calling thread, as before.
+  - **The coordinator:** `MediaSourceScanCoordinator` still refuses unsupported libraries up front and keeps the
+    queue, locks and progress. It doesn't reconcile durations after a skipped job.
+  - **`awaitAllFinished`:** now also waits for each job's cleanup, not just for the queue to go idle.
+- **Tests:** new `ScanJobExecutor.test.ts`; `MediaSourceScanCoordinator.test.ts` now uses a fake runner.
+- **Upstream:** not sent.
+
+### A failed or canceled scan no longer leaves its library locked or "scanning" (2026-10-14)
+
+- **What you saw:** nothing obvious yet; found while planning to move scans into a worker thread.
+  `MediaSourceScanCoordinator` had several ways to leave a library stuck:
+  - **Lock leaks:** if no scanner could be created, the library's lock stayed taken until restart, because the early
+    return came after `lock.acquire()`.
+  - **Stuck progress:** a scan that threw, or was canceled, stayed "in progress" in the UI, because only a scanner
+    that finishes normally calls `scanEnded`.
+  - **Cancel ignored:** a job canceled while still queued ran anyway, because the abort listener was added only once
+    it started.
+  - **Wasted work:** a canceled library scan was still followed by a full collection scan.
+  - **Shutdown:** `awaitAllFinished` waited only for the queue to empty, not for the running scan.
+- **Fix:** both `add` and `addLocal` now go through one `enqueue` helper.
+  - **Order:** the scanner is created before the lock is taken.
+  - **Cleanup:** whatever happens to the job, the lock is released, the abort controller is dropped, and progress
+    ends.
+  - **Cancel:** a job canceled before it starts doesn't run, and the collection scan is skipped after a cancel.
+  - **Reconcile:** duration reconciliation runs only after a job that actually ran.
+  - **Shutdown:** `awaitAllFinished` uses `onIdle`.
+  - **Tidy-ups:** the queue and controllers are instance fields (the coordinator is a singleton), and a local source
+    without a media type is refused instead of hitting `mediaType!`.
+- **Test:** new `MediaSourceScanCoordinator.test.ts`; 6 of its 7 cases fail on the old code.
+- **Upstream:** not sent.
+
 ### Movie scans pick up subtitle files added later (2026-10-14)
 
 - **What you saw:** a movie got no captions although Bazarr had added an `.srt` the day before (Star Trek II: Plex

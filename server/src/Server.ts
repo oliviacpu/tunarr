@@ -49,7 +49,7 @@ import type { IWorkerPool } from './interfaces/IWorkerPool.ts';
 import { ServerContext, ServerRequestContext } from './ServerContext.js';
 import { Result } from './types/result.ts';
 import { getEnvVar, TUNARR_ENV_VARS } from './util/env.ts';
-import { filename, isDev, run, timeoutPromise } from './util/index.js';
+import { filename, isDev, run } from './util/index.js';
 import { InjectLogger } from './util/inject.js';
 import { type Logger } from './util/logging/LoggerFactory.js';
 
@@ -567,15 +567,11 @@ export class Server {
     }
 
     this.logger.info('Canceling all active scans');
-    this.serverContext.mediaSourceScanCoordinator.cancelAll();
-
     try {
-      await timeoutPromise(
-        this.serverContext.mediaSourceScanCoordinator.awaitAllFinished(),
-        1_000,
-      );
-    } catch {
-      this.logger.warn('Was unable to gracefully shutdown scans.');
+      // A scan running in a worker thread is terminated if it hasn't stopped
+      await this.serverContext.mediaSourceScanCoordinator.shutdown(2_000);
+    } catch (e) {
+      this.logger.warn(e, 'Was unable to gracefully shutdown scans.');
     }
 
     this.serverContext.searchService.stop();
