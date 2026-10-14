@@ -105,6 +105,11 @@ export class TranscodeSpeedWatcher {
 
   async poll() {
     for (const segment of await this.readSegments()) {
+      // A poll still running when its transcode ended goes no further: the
+      // next program appends its segments to the same playlist
+      if (this.#stopped) {
+        return;
+      }
       if (
         this.#lastSegment !== undefined &&
         segment.number <= this.#lastSegment
@@ -113,6 +118,9 @@ export class TranscodeSpeedWatcher {
       }
       this.#lastSegment = segment.number;
       const finishedAtMs = await this.finishedAt(segment);
+      if (this.#stopped) {
+        return;
+      }
       const event = this.#monitor.addSegment(segment.seconds, finishedAtMs);
       if (event) {
         this.onEvent(event);

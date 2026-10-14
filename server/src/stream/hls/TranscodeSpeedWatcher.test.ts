@@ -174,6 +174,19 @@ describe('TranscodeSpeedWatcher', () => {
     expect(events.map((e) => e.type)).toEqual(['behind']);
   });
 
+  // Programs append to the same playlist, so a poll that outlives its
+  // transcode would read the next program's segments under this one's name
+  test('a poll still running when it is stopped delivers nothing', async () => {
+    await watcher.start();
+    await writeSegments(0, 72, Date.now(), 2002 / 0.95);
+
+    const running = watcher.poll();
+    watcher.stop();
+    await running;
+
+    expect(events).toEqual([]);
+  });
+
   test('polls on its own until stopped', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {

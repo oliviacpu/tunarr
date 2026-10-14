@@ -59,7 +59,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Tests:** `TranscodeSpeedMonitor.test.ts`: real time gives nothing; 0.95x gives one warning, after 80 s; recovery
   gives one info line and nothing after it; a slow start, a long first segment, a fast initial burst, a caught-up
   stall and a program shorter than the window give nothing; the log line's wording. `TranscodeSpeedWatcher.test.ts`:
-  playlist parsing, mtime timing, skipping earlier programs' segments, a playlist longer than the part read.
+  playlist parsing, mtime timing, skipping earlier programs' segments, a playlist longer than the part read, and a
+  poll still running when the watcher stops delivering nothing (programs share one playlist, so it would otherwise
+  read the next program's segments under this one's name; found by the Codex review).
   `HlsSession.test.ts`: the watcher runs for exactly the life of ffmpeg, the warning reaches the log, and
   `hls_direct_v2` isn't watched. Checked end to end with stream-repro and 2 s segments: a single-thread `medium`
   transcode logged one warning (`Channel 900 (Repro) is transcoding "clip01" at 0.23x real time …`) under two minutes
