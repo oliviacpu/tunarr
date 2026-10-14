@@ -187,13 +187,17 @@ function makeClips(dir) {
     let subIdx;
     if (l.subs) {
       const srt = path.join(dir, `clip${i + 1}.srt`);
-      // One cue every 2 s, from --subs-start on
+      // One cue every 2 s, starting exactly at --subs-start
       const srtTime = (ms) => new Date(ms).toISOString().slice(11, 23).replace('.', ',');
-      const starts = Array.from({ length: Math.ceil(dur / 2) }, (_, k) => k * 2).filter((s) => s >= subsStart);
+      const starts = [];
+      for (let s = subsStart; s < dur; s += 2) starts.push(Math.round(s * 1000));
+      if (starts.length === 0) {
+        throw new Error(`--subs-start ${subsStart} leaves clip ${i + 1} (${dur} s) without a cue`);
+      }
       fs.writeFileSync(
         srt,
-        starts.map((s, k) =>
-          `${k + 1}\n${srtTime(s * 1000)} --> ${srtTime(s * 1000 + 1500)}\nclip ${i + 1} line ${k + 1}\n`,
+        starts.map((ms, k) =>
+          `${k + 1}\n${srtTime(ms)} --> ${srtTime(ms + 1500)}\nclip ${i + 1} line ${k + 1}\n`,
         ).join('\n'),
       );
       subIdx = l.audio.length + 1;
