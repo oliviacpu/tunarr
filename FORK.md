@@ -57,6 +57,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   Tests: `CaptionLanguageStream.test.ts` (chunk sizes from 1 byte, idempotent, lost sync), the PMT test in
   `MpegTsCaptionInserter.test.ts`, and `CaptionInsertion.local.test.ts` (ffmpeg's remux drops the language,
   the stream puts it back).
+- **Confirmed in Plex (2026-10-14, `oliviacpu-2026.10.14`):** on the Apple TV, the CC menu lists the captions as
+  English, as does the audio menu.
 - **Upstream:** not sent.
 
 ### Gaps in the guide show the channel's offline picture (2026-10-13)
