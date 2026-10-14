@@ -10,6 +10,10 @@ export const XmlTvSettingsSchema = z.object({
   // If true, episodes will use the poster for their show in
   // the XMLTV file
   useShowPoster: z.boolean().default(false).catch(false),
+  // The address links in the guide (programme and channel pictures) use, for
+  // clients that load pictures themselves. Empty: the address the guide was
+  // requested on.
+  publicUrl: z.url().or(z.literal('')).default(''),
 });
 
 export const SupportedVideoFormats = ['h264', 'hevc', 'mpeg2'] as const;

@@ -142,6 +142,38 @@ export default function XmlTvSettingsPage() {
           }}
         />
       </Stack>
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <Controller
+          control={control}
+          name="publicUrl"
+          rules={{
+            validate: (value) =>
+              isEmpty(value) ||
+              URL.canParse(value) ||
+              t`Enter a full address, such as https://tunarr.example.com`,
+          }}
+          render={({ field, fieldState }) => (
+            <TextField
+              id="public-url"
+              label={t`Public Address for Guide Pictures`}
+              placeholder="https://tunarr.example.com"
+              error={!!fieldState.error}
+              helperText={
+                fieldState.error?.message ?? (
+                  <Trans>
+                    The address programme and channel pictures in the guide link
+                    to. Set it when a client such as Plex reads the guide from a
+                    local address (like 127.0.0.1) but its apps load the
+                    pictures themselves: they can only reach a public address.
+                    Leave empty to use the address the guide was requested on.
+                  </Trans>
+                )
+              }
+              {...field}
+            />
+          )}
+        />
+      </FormControl>
       {/* <FormControl>
         <FormControlLabel
           control={

@@ -10555,6 +10555,7 @@ export type GetApiXmltvSettingsResponses = {
         outputPath: string;
         enableImageCache: boolean;
         useShowPoster: boolean;
+        publicUrl: string | '';
     };
 };
 
@@ -10586,6 +10587,7 @@ export type PostApiXmltvSettingsResponses = {
         outputPath: string;
         enableImageCache: boolean;
         useShowPoster: boolean;
+        publicUrl: string | '';
     };
 };
 
@@ -10598,6 +10600,7 @@ export type PutApiXmltvSettingsData = {
         outputPath?: string;
         enableImageCache?: boolean;
         useShowPoster?: boolean;
+        publicUrl?: string | '';
     };
     path?: never;
     query?: never;
@@ -10625,6 +10628,7 @@ export type PutApiXmltvSettingsResponses = {
         outputPath: string;
         enableImageCache: boolean;
         useShowPoster: boolean;
+        publicUrl: string | '';
     };
 };
 

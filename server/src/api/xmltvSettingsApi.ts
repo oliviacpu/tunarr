@@ -26,6 +26,7 @@ const UpdateXmlTvSettingsRequestSchema = z.object({
   outputPath: z.string().optional(),
   enableImageCache: z.boolean().optional(),
   useShowPoster: z.boolean().optional(),
+  publicUrl: z.url().or(z.literal('')).optional(),
 });
 
 export const xmlTvSettingsRouter: RouterPluginCallback = (
@@ -88,6 +89,7 @@ export const xmlTvSettingsRouter: RouterPluginCallback = (
           outputPath: xmltv.outputPath,
           programmingHours: settings.programmingHours ?? xmltv.programmingHours,
           useShowPoster: settings.useShowPoster ?? xmltv.useShowPoster,
+          publicUrl: settings.publicUrl ?? xmltv.publicUrl,
         });
         xmltv = req.serverCtx.settings.xmlTvSettings();
         req.serverCtx.eventService.push({

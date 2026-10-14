@@ -18,7 +18,11 @@ import {
   inMemorySettingsDB,
   setTestGlobalOptions,
 } from '../testing/getFakeSettingsDb.ts';
-import { MaterializedChannelPrograms, XmlTvWriter } from './XmlTvWriter.ts';
+import {
+  MaterializedChannelPrograms,
+  XmlTvWriter,
+  xmlTvLinkHost,
+} from './XmlTvWriter.ts';
 
 beforeAll(async () => {
   await setTestGlobalOptions();
@@ -1258,5 +1262,23 @@ describe('XmlTvWriter', () => {
       const output = writer.generateXmltv(channels);
       expect(output.programmes[0]?.video?.present).toBe(false);
     });
+  });
+});
+
+describe('xmlTvLinkHost', () => {
+  const request = { protocol: 'http', host: '127.0.0.1:8000' };
+
+  test('uses the address the guide was requested on by default', () => {
+    expect(xmlTvLinkHost('', request)).toBe('http://127.0.0.1:8000');
+    expect(xmlTvLinkHost(undefined, request)).toBe('http://127.0.0.1:8000');
+  });
+
+  test('prefers the configured public address, without a trailing slash', () => {
+    expect(xmlTvLinkHost('https://tunarr.example.com/', request)).toBe(
+      'https://tunarr.example.com',
+    );
+    expect(xmlTvLinkHost('https://example.com/tunarr', request)).toBe(
+      'https://example.com/tunarr',
+    );
   });
 });

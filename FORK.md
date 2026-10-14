@@ -34,6 +34,24 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Guide pictures can use a public address (2026-10-13)
+
+- **What you saw:** in Plex's apps, programmes in the guide and "Shows On Now" showed plain titles with no posters.
+  A channel logo left at Tunarr's default was missing too.
+- **Cause:** `/api/xmltv.xml` fills `{{host}}` with the address it was requested on. Plex fetches the guide from
+  `http://127.0.0.1:<port>`, so every picture link pointed at 127.0.0.1. Plex's apps load guide pictures themselves,
+  so on a phone or TV that address is the device itself.
+- **Fix:**
+  - **Setting:** an XMLTV setting, **Public Address for Guide Pictures** (`xmlTvSettings.publicUrl`), in Settings →
+    XMLTV. When set, `{{host}}` becomes it (`xmlTvLinkHost` in `XmlTvWriter.ts`); empty keeps the old behaviour.
+    `/channels.m3u` already had a `hostOverride` for the same reason.
+  - **Docs:** `docs/configure/clients/plex.md` notes that the picture paths must be reachable at that address without
+    a login.
+  - **Safe to expose:** artwork that needs a media-server credential is always proxied, never redirected
+    (`ArtworkService.serveArtwork`), so exposing the picture paths doesn't expose the credential.
+- **Test:** `XmlTvWriter.test.ts` (`xmlTvLinkHost`).
+- **Upstream:** not sent.
+
 ### The search server requires a key (2026-10-13)
 
 - **What you saw:** Tunarr's bundled Meilisearch listened on `localhost:<port>` with no key. Anything that could

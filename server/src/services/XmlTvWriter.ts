@@ -71,6 +71,22 @@ export type MaterializedChannelPrograms = {
   programs: MaterializedGuideItem[];
 };
 
+/**
+ * The address the guide's links (programme and channel pictures) use. A client
+ * such as Plex may fetch the guide from an address only it can reach
+ * (localhost) while its apps load the pictures themselves, so a configured
+ * public address takes precedence over the one the guide was requested on.
+ */
+export function xmlTvLinkHost(
+  publicUrl: string | undefined,
+  request: { protocol: string; host: string },
+): string {
+  if (isNonEmptyString(publicUrl)) {
+    return publicUrl.replace(/\/+$/, '');
+  }
+  return `${request.protocol}://${request.host}`;
+}
+
 @injectable()
 @loggingDef({ category: 'scheduling' })
 export class XmlTvWriter {
