@@ -14,7 +14,9 @@ import {
   makeTsSegment,
   parseTsSegment,
 } from '../../testing/captions/MpegTsSegmentFixture.ts';
+import type { ContentBackedStreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import type { ProgramCaptions } from '../captions/ProgramCaptions.ts';
+import { noCaptionsNotice } from '../captions/ProgramCaptions.ts';
 import { ProgramStream } from '../ProgramStream.ts';
 import type { HlsSessionOptions } from './HlsSession.js';
 import { HlsSession } from './HlsSession.js';
@@ -137,6 +139,62 @@ describe('HlsSession', () => {
       expect(pairs[0]).toEqual([0x80, 0x80]);
       expect(pairs[40]).toEqual(EndOfCaption);
       expect(pairs.findIndex((p) => p[0] === 0x94 && p[1] === 0x2f)).toBe(40);
+    });
+
+    test('serves the whole notice although a first program starts late', async () => {
+      const notice = noCaptionsNotice(
+        {
+          type: 'program',
+          streamDuration: 60_000,
+          programBeginMs: 0,
+          duration: 60_000,
+          infiniteLoop: false,
+          program: { uuid: 'program-uuid', type: 'episode' },
+        } as ContentBackedStreamLineupItem,
+        {
+          subtitles: [],
+          durationMs: 60_000,
+          frameRate: 30000 / 1001,
+          language: 'eng',
+        },
+      );
+      if (!notice) {
+        throw new Error('no notice');
+      }
+      // A session's first program is laid out from PTS 0, but its first frame
+      // comes two frames later (the encoder's B-frame delay)
+      const served = await serve(notice, 0, {
+        firstPts: 2 * 3003,
+        frames: 160,
+      });
+      if (!served) {
+        throw new Error('not captioned');
+      }
+
+      const pairs = framePairs(served).map(([a = 0, b = 0]) => [
+        a & 0x7f,
+        b & 0x7f,
+      ]);
+      const indexOf = (code: number[]) =>
+        pairs.findIndex((p) => p[0] === code[0] && p[1] === code[1]);
+      const shown = indexOf([0x14, 0x2f]);
+      // The characters loaded before it shows (pairs that aren't control codes)
+      const text = pairs
+        .slice(0, shown)
+        .filter((p) => (p[0] ?? 0) >= 0x20)
+        .flat()
+        .filter((byte) => byte >= 0x20)
+        .map((byte) => String.fromCharCode(byte))
+        .join('');
+
+      // Resume Caption Loading is sent, after the frames that never come
+      expect(indexOf([0x14, 0x20])).toBeGreaterThan(0);
+      expect(indexOf([0x14, 0x20])).toBeLessThan(shown);
+      expect(text).toBe('No captions for this program');
+      // Shown 1 s and erased 5 s into the program: slots 30 and 150 at 29.97
+      // fps, which are this segment's frames 28 and 148
+      expect(shown).toBe(28);
+      expect(indexOf([0x14, 0x2c])).toBe(148);
     });
 
     test('follows the program across the 33-bit timestamp wrap', async () => {

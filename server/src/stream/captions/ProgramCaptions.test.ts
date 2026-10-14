@@ -1,7 +1,14 @@
+import type {
+  ContentBackedStreamLineupItem,
+  StreamLineupItem,
+} from '../../db/derived_types/StreamLineup.ts';
+import { createOfflineStreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
+import type { ProgramType } from '../../db/schema/Program.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
 import {
   exactFrameRate,
   markSegmentsForCaptions,
+  noCaptionsNotice,
   parseSubtitleCues,
   captionTrackCandidates,
 } from './ProgramCaptions.ts';
@@ -131,6 +138,117 @@ describe('captionTrackCandidates', () => {
     expect(
       captionTrackCandidates(tracks, [{ iso6391: 'fr', iso6392: 'fra' }]),
     ).toEqual([]);
+  });
+});
+
+describe('noCaptionsNotice', () => {
+  const programItem = (
+    programType: ProgramType = 'episode',
+  ): ContentBackedStreamLineupItem =>
+    ({
+      type: 'program',
+      streamDuration: 1_800_000,
+      programBeginMs: 0,
+      duration: 1_800_000,
+      infiniteLoop: false,
+      program: {
+        uuid: 'program-uuid',
+        type: programType,
+        mediaSourceId: 'source-id',
+        externalIds: [],
+      },
+    }) as ContentBackedStreamLineupItem;
+  const noSubtitles = {
+    subtitles: [],
+    durationMs: 1_800_000,
+    frameRate: 24000 / 1001,
+    language: 'eng',
+  };
+  const textTrack: SubtitleStreamDetails = {
+    type: 'external',
+    codec: 'subrip',
+    default: false,
+    forced: false,
+    sdh: false,
+    languageCodeISO6392: 'eng',
+    path: '/subs/a.srt',
+  };
+
+  test('shows the notice for 4 s near the start of a program without subtitles', () => {
+    expect(noCaptionsNotice(programItem(), noSubtitles)).toEqual({
+      cues: [
+        { startMs: 1000, endMs: 5000, text: 'No captions for this program' },
+      ],
+      frameRate: 24000 / 1001,
+      durationMs: 1_800_000,
+      language: 'eng',
+    });
+    expect(
+      noCaptionsNotice(programItem('movie'), {
+        ...noSubtitles,
+        language: 'fra',
+      })?.language,
+    ).toBe('fra');
+  });
+
+  test('leaves a program with any subtitle track as it is', () => {
+    for (const track of [
+      textTrack,
+      { ...textTrack, codec: 'hdmv_pgs_subtitle' },
+      { ...textTrack, forced: true },
+      { ...textTrack, languageCodeISO6392: 'spa' },
+    ]) {
+      expect(
+        noCaptionsNotice(programItem(), { ...noSubtitles, subtitles: [track] }),
+      ).toBeUndefined();
+    }
+  });
+
+  test('adds nothing to filler, flex or anything else that is not a program', () => {
+    const program = programItem();
+    const items: StreamLineupItem[] = [
+      { ...program, type: 'commercial', fillerListId: 'filler-list' },
+      { ...program, type: 'fallback' },
+      createOfflineStreamLineupItem(60_000, 0),
+      {
+        type: 'redirect',
+        channel: 'other-channel',
+        duration: 60_000,
+        streamDuration: 60_000,
+        programBeginMs: 0,
+      },
+      {
+        type: 'error',
+        error: 'failed',
+        duration: 60_000,
+        streamDuration: 60_000,
+        programBeginMs: 0,
+      },
+    ];
+
+    for (const item of items) {
+      expect(noCaptionsNotice(item, noSubtitles)).toBeUndefined();
+    }
+  });
+
+  test('adds nothing to music tracks', () => {
+    expect(noCaptionsNotice(programItem('track'), noSubtitles)).toBeUndefined();
+    expect(
+      noCaptionsNotice(programItem('music_video'), noSubtitles),
+    ).toBeDefined();
+  });
+
+  test('needs a frame rate, and a stream twice as long as the notice', () => {
+    expect(
+      noCaptionsNotice(programItem(), { ...noSubtitles, frameRate: undefined }),
+    ).toBeUndefined();
+    expect(
+      noCaptionsNotice(programItem(), { ...noSubtitles, durationMs: 7_999 }),
+    ).toBeUndefined();
+    expect(
+      noCaptionsNotice(programItem(), { ...noSubtitles, durationMs: 8_000 })
+        ?.cues,
+    ).toHaveLength(1);
   });
 });
 

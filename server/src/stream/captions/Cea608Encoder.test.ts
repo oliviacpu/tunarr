@@ -8,6 +8,11 @@ import {
   layoutCaption,
   PaddingPair,
 } from './Cea608Encoder.ts';
+import {
+  NoCaptionsNoticeMs,
+  NoCaptionsNoticeStartMs,
+  NoCaptionsNoticeText,
+} from './ProgramCaptions.ts';
 
 const FrameRate = 30;
 const frameMs = 1000 / FrameRate;
@@ -435,5 +440,28 @@ describe('caption placement', () => {
         (r) => r.column,
       ),
     ).toEqual([0, 0]);
+  });
+});
+
+describe('the no-captions notice', () => {
+  test('is a plain caption on the bottom row, from 1 s to 5 s', () => {
+    const pairs = framePairs(
+      [
+        {
+          startMs: NoCaptionsNoticeStartMs,
+          endMs: NoCaptionsNoticeStartMs + NoCaptionsNoticeMs,
+          text: NoCaptionsNoticeText,
+        },
+      ],
+      30 * 6,
+    );
+
+    expect(decodeCaptions(pairs)).toEqual([
+      [{ row: 15, column: 4, width: 28, text: 'No captions for this program' }],
+    ]);
+    // Loaded in the 17 frames before it shows, clear of the first frames
+    expect(indexOfPair(pairs, ResumeCaptionLoading)).toBe(13);
+    expect(indexOfPair(pairs, EndOfCaption)).toBe(30);
+    expect(indexOfPair(pairs, EraseDisplayedMemory)).toBe(150);
   });
 });

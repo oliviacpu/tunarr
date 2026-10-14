@@ -34,6 +34,40 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Closed captions say "No captions for this program" when a program has no subtitles (2026-10-14)
+
+- **What you saw:** Plex decides which caption tracks exist at tune-in, so it offers CC for the whole Live TV session.
+  On a program without subtitles, a viewer who turned CC on saw nothing and couldn't tell whether captions were broken.
+- **Why:** the HDHomeRun `.ts` stream carries the caption track on every frame, whatever is on, but only programs with
+  subtitles put any text in it.
+- **Change:** a program with no subtitles gets one caption, "No captions for this program", on screen from 1 s to 5 s
+  into its stream (`noCaptionsNotice`, `server/src/stream/captions/ProgramCaptions.ts`).
+  - **Same pipeline:** `FfmpegStreamFactory` hands the notice to `HlsSession` as the program's captions, so it is an
+    ordinary pop-on caption at the bottom, in the default style, with the Caption Alignment setting. No new setting: it
+    is on wherever the captions are (**Closed captions for HDHomeRun clients**, an HLS channel with subtitles enabled).
+  - **Which programs:** lineup items of type `program` (scheduled programs, custom show episodes, what a redirect
+    resolves to) with no subtitle track at all. Filler (`commercial`, from filler lists), flex fallback filler
+    (`fallback`), offline and error streams, music tracks and streams under 8 s get none. A program whose subtitles
+    can't become captions (image-based, forced only, another language) is left as it was.
+  - **Tune-in:** a program's caption clock starts where its stream starts, so a viewer who tunes in partway through a
+    program gets the notice too.
+  - **Timing:** 4 s is about twice the time its five words take to read. It starts 1 s in rather than at 0 because a
+    session's first program has no frames for the first two slots of its caption schedule: the encoder's B-frame delay
+    puts its first video frame at PTS 6000 (two frames at 30 fps, with libx264) where the schedule expects 0. A notice
+    loaded from the first frame lost its Resume Caption Loading code and never showed. From 1 s, it loads in the 17
+    frames before it appears.
+  - **Docs:** `docs/configure/ffmpeg/index.md`.
+- **Known limit, not changed here:** the same two-frame delay makes a session's first program show its own captions
+  two frames early, and a cue already under way at tune-in can be lost on it. Later programs start exactly at their
+  offset.
+- **Tests:** `ProgramCaptions.test.ts` (which programs get the notice, its cue), `Cea608Encoder.test.ts` (bottom row,
+  block-centred, shown on frame 30 and erased on frame 150 at 30 fps), `FfmpegStreamFactory.test.ts` (no subtitles,
+  image-based subtitles, filler, fallback, captions off, an offline gap), `HlsSession.test.ts` (served whole on a first
+  program whose video starts two frames late). Checked with stream-repro on a throwaway server: an HLS channel of
+  `mixed` clips (1 and 3 without subtitles, 2 with), captions and subtitle extraction on, its `.ts` URL captured for
+  110 s and decoded with ffmpeg's 608 decoder. The notice showed for 4.0 s after tune-in partway through clip 1, then
+  clip 2 had only its own captions, then the notice showed 1 s into clip 3 and into clip 1 again.
+
 ### A subtitle the media server no longer has is one info line, not a warning with a stack (2026-10-14)
 
 - **What you saw:** since early October, library scans logged three warnings for each external subtitle that Plex no
