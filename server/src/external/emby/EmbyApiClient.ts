@@ -47,7 +47,6 @@ import {
   groupBy,
   isBoolean,
   isEmpty,
-  isError,
   isNil,
   isNull,
   isNumber,
@@ -490,15 +489,18 @@ export class EmbyApiClient extends MediaSourceApiClient<EmbyItemTypes> {
    * cannot be addressed by container stream index.
    */
   async getSubtitlesByPath(subtitlePath: string): Promise<QueryResult<string>> {
-    const subtitlesResult = await this.doGet<string>({
-      url: `/${trimStart(subtitlePath, '/')}`,
-    });
+    try {
+      // A 404 means the server no longer has this subtitle; the caller
+      // reports that.
+      const subtitlesResult = await this.doGet<string>(
+        { url: `/${trimStart(subtitlePath, '/')}` },
+        { notFoundIsExpected: true },
+      );
 
-    if (isError(subtitlesResult)) {
-      return this.makeErrorResult('generic_request_error');
+      return this.makeSuccessResult(subtitlesResult);
+    } catch (e) {
+      return this.requestErrorResult(e);
     }
-
-    return this.makeSuccessResult(subtitlesResult);
   }
 
   async getSubtitles(
@@ -507,15 +509,18 @@ export class EmbyApiClient extends MediaSourceApiClient<EmbyItemTypes> {
     streamIndex: number,
     subtitleFormat: string,
   ): Promise<QueryResult<string>> {
-    const subtitlesResult = await this.doGet<string>({
-      url: `/Videos/${itemId}/${mediaItemId}/Subtitles/${streamIndex}/Stream.${subtitleFormat}`,
-    });
+    try {
+      const subtitlesResult = await this.doGet<string>(
+        {
+          url: `/Videos/${itemId}/${mediaItemId}/Subtitles/${streamIndex}/Stream.${subtitleFormat}`,
+        },
+        { notFoundIsExpected: true },
+      );
 
-    if (isError(subtitlesResult)) {
-      return this.makeErrorResult('generic_request_error');
+      return this.makeSuccessResult(subtitlesResult);
+    } catch (e) {
+      return this.requestErrorResult(e);
     }
-
-    return this.makeSuccessResult(subtitlesResult);
   }
 
   async recordPlaybackStart(itemId: string, deviceId: string) {

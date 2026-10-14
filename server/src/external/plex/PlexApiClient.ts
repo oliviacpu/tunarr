@@ -1131,14 +1131,16 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
 
   async getSubtitles(key: string): Promise<QueryResult<string>> {
     try {
-      const subtitlesResult = await this.doGet<string>({
-        url: key,
-      });
+      // A 404 means Plex no longer has this stream (its file was replaced or
+      // removed and the item not rescanned yet); the caller reports that.
+      const subtitlesResult = await this.doGet<string>(
+        { url: key },
+        { notFoundIsExpected: true },
+      );
 
       return this.makeSuccessResult(subtitlesResult);
     } catch (e) {
-      const err = caughtErrorToError(e);
-      return this.makeErrorResult('generic_request_error', err.message);
+      return this.requestErrorResult(e);
     }
   }
 

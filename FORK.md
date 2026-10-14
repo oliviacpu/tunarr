@@ -34,6 +34,41 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A subtitle the media server no longer has is one info line, not a warning with a stack (2026-10-14)
+
+- **What you saw:** since early October, library scans logged three warnings for each external subtitle that Plex no
+  longer had: `Not found: …/library/streams/<id>`, `API client response error: … status 404 …` with Plex's HTML 404
+  page and headers, and `Error while requesting external subtitle stream: Request failed with status code 404` with a
+  stack trace. The scan skipped that subtitle and carried on, so nothing was broken, but it read like a failure.
+- **Cause:** when a subtitle file is replaced or deleted, Plex keeps listing its stream until it rescans the item, and
+  answers 404 when asked for it. The API client warned about every 404, Plex's subtitle fetch turned the 404 into a
+  generic request error, and the downloader logged every fetch failure as a warning with the error object.
+- **Fix:**
+  - **The fetch:** the subtitle fetches (`PlexApiClient.getSubtitles`, and `getSubtitles` and `getSubtitlesByPath` in
+    `JellyfinApiClient` and `EmbyApiClient`) report a 404 as `not_found` (through `BaseApiClient.requestErrorResult`).
+    They pass a new `notFoundIsExpected` request option, so `BaseApiClient.doRequest` logs that 404 as one debug line
+    instead of the two warnings. Every other request still warns about a 404.
+  - **The log line:** `ExternalSubtitleDownloader` logs a `not_found` at info, as one line without the error. Any
+    other failure is still a warning with the error. After the media server rescans the item its streams change, so
+    Tunarr's next library scan rescans it and picks up the new subtitle. The line reads:
+    `Plex no longer has subtitle stream 173516 for "The Movie" (item 4242); skipped until Plex rescans the item.`
+  - **Its text:** `missingSubtitleMessage`. The stream id comes from `externalSubtitleStreamId` (`util/subtitles.ts`):
+    Plex's stream id, or the stream index for Jellyfin and Emby, never a query string. The scanner
+    (`MediaSourceScanner.ts`) and `SubtitleExtractorTask.ts` pass the program's title for it.
+  - **Info, not debug:** the program plays without that subtitle until the media server rescans the item. That is
+    worth seeing at the default log level, but it isn't a fault.
+  - **Emby:** its subtitle fetches never caught request errors. They checked the return value for an error, which
+    `doGet` never returns, so a failed fetch escaped as an exception and the scan logged it with the whole program
+    record. They now return a failure like Plex and Jellyfin.
+- **Tests:** `ExternalSubtitleDownloader.test.ts` (new): a 404 is one info line with no error and no warning, any other
+  failure is still a warning with the error, and the message names Jellyfin and Emby streams by index without the
+  query string. `MediaSourceScanner.test.ts` (new): of two sidecars, a 404 on the first logs the one line and the
+  second still downloads; a 500 still warns with the error and the second still downloads. `subtitleRequests.test.ts`
+  (new): Plex, Jellyfin and Emby subtitle fetches against a local HTTP server; a 404 is `not_found` with only a debug
+  line, and a 500 is a generic failure that still warns. `BaseApiClient.test.ts`: a 404 still warns by default, an
+  expected one is a single debug line, and other statuses still warn. Nine of the new tests fail without the change.
+- **Upstream:** not sent.
+
 ### A replaced channel logo gets a new address, so Plex shows it (2026-10-14)
 
 - **What you saw:** after replacing all six channel logos, Plex and its Apple TV app kept showing the old ones, through

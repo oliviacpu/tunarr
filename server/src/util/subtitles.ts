@@ -58,6 +58,22 @@ export function externalSubtitleDeliveryPath(
   return `/Videos/${itemId}/${sourceId}/Subtitles/${stream.Index}/Stream.${ext}`;
 }
 
+/**
+ * A short name for an external subtitle stream in log lines: the stream id in
+ * a Plex key (`/library/streams/173516`), or the stream index in a Jellyfin or
+ * Emby delivery path (`/Videos/<item>/<source>/Subtitles/3/Stream.srt`). Any
+ * other key comes back whole, minus its query string, which can carry a token.
+ */
+export function externalSubtitleStreamId(key: string): string {
+  const queryStart = key.indexOf('?');
+  const keyPath = queryStart === -1 ? key : key.slice(0, queryStart);
+  return (
+    /\/library\/streams\/([^/]+)\/?$/.exec(keyPath)?.[1] ??
+    /\/Subtitles\/(\d+)\//i.exec(keyPath)?.[1] ??
+    keyPath
+  );
+}
+
 export function getSubtitleCacheFilePath(
   program: MinimalProgram,
   subtitleStream: {

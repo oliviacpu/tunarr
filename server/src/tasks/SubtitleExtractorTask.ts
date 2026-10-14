@@ -236,6 +236,7 @@ export class SubtitleExtractorTask extends Task2<
             externalSourceId: mediaSource.uuid,
             sourceType: dbProgram.sourceType,
             uuid: dbProgram.uuid,
+            title: dbProgram.title,
           },
           {
             streamIndex: subtitle.streamIndex ?? undefined,
