@@ -212,6 +212,7 @@ export abstract class MediaSourceScanner<
             externalSourceId: program.mediaSourceId,
             sourceType: program.sourceType,
             uuid: program.uuid,
+            title: program.title,
           },
           {
             streamIndex: stream.streamIndex ?? undefined,

@@ -1,4 +1,5 @@
 import { inject, injectable } from 'inversify';
+import { capitalize } from 'lodash-es';
 import fs from 'node:fs/promises';
 import path from 'path';
 import type { MediaSourceId, MediaSourceType } from '../db/schema/base.ts';
@@ -7,9 +8,11 @@ import { FileSystemService } from '../services/FileSystemService.ts';
 
 import type { Maybe } from '../types/util.ts';
 import { fileExists } from '../util/fsUtil.ts';
+import { isNonEmptyString } from '../util/index.ts';
 import { InjectLogger } from '../util/inject.ts';
 import type { Logger } from '../util/logging/LoggerFactory.ts';
 import {
+  externalSubtitleStreamId,
   getSubtitleCacheFilePath,
   subtitleCodecToExt,
 } from '../util/subtitles.ts';
@@ -27,7 +30,33 @@ type ExternalItem = {
   externalSourceId: MediaSourceId;
   sourceType: MediaSourceType;
   uuid: string;
+  // Names the program in log lines.
+  title: string;
 };
+
+type SubtitleStreamDetails = {
+  streamIndex: Maybe<number>;
+  codec: string;
+  key?: Maybe<string>;
+};
+
+/**
+ * The line logged when the media server answers 404 for a subtitle. It still
+ * lists the stream, but the file behind it was replaced or removed and the
+ * item has not been rescanned there yet. Once it is, the item's streams change
+ * and the next library scan downloads the new subtitle, if there is one, so
+ * this is reported as an expected outcome rather than a failure.
+ */
+export function missingSubtitleMessage(
+  item: Pick<ExternalItem, 'externalKey' | 'sourceType' | 'title'>,
+  details: Pick<SubtitleStreamDetails, 'streamIndex' | 'key'>,
+): string {
+  const server = capitalize(item.sourceType);
+  const stream = isNonEmptyString(details.key)
+    ? externalSubtitleStreamId(details.key)
+    : `index ${details.streamIndex ?? 'unknown'}`;
+  return `${server} no longer has subtitle stream ${stream} for "${item.title}" (item ${item.externalKey}); skipped until ${server} rescans the item.`;
+}
 
 @injectable()
 export class ExternalSubtitleDownloader {
@@ -47,7 +76,7 @@ export class ExternalSubtitleDownloader {
    */
   async downloadSubtitlesIfNecessary(
     item: ExternalItem,
-    details: { streamIndex: Maybe<number>; codec: string; key?: Maybe<string> },
+    details: SubtitleStreamDetails,
     getSubtitlesCb: GetSubtitlesCallback,
   ) {
     const outPath = getSubtitleCacheFilePath(
@@ -87,6 +116,11 @@ export class ExternalSubtitleDownloader {
       const subtitlesRes = await getSubtitlesCb({ extension: ext });
 
       if (subtitlesRes.isFailure()) {
+        if (subtitlesRes.error.type === 'not_found') {
+          this.logger.info(missingSubtitleMessage(item, details));
+          return;
+        }
+
         this.logger.warn(
           subtitlesRes.error,
           'Error while requesting external subtitle stream: %s',

@@ -2,10 +2,36 @@ import { tag } from '@tunarr/types';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { v4 } from 'uuid';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import { z } from 'zod/v4';
 import type { MediaSourceName } from '../db/schema/base.ts';
 import { BaseApiClient } from './BaseApiClient.ts';
+
+const { fakeLogger } = vi.hoisted(() => {
+  const fakeLogger = {
+    trace: vi.fn(),
+    http_out: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+    child: () => fakeLogger,
+  };
+  return { fakeLogger };
+});
+
+vi.mock('@/util/logging/LoggerFactory.js', () => ({
+  LoggerFactory: { child: () => fakeLogger, root: fakeLogger },
+}));
 
 class TestApiClient extends BaseApiClient {}
 
@@ -88,5 +114,46 @@ describe('doTypeCheckedGet', () => {
 
     expect(result.isFailure()).toBe(true);
     expect(result.error.type).toBe('parse_error');
+  });
+});
+
+describe('doGet', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('warns about a 404 by default', async () => {
+    await expect(client.doGet({ url: '/status/404' })).rejects.toThrow();
+
+    expect(fakeLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Not found: '),
+    );
+  });
+
+  test('logs a 404 the caller expects at debug only', async () => {
+    await expect(
+      client.doGet({ url: '/status/404' }, { notFoundIsExpected: true }),
+    ).rejects.toThrow();
+
+    expect(fakeLogger.debug).toHaveBeenCalledTimes(1);
+    expect(fakeLogger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Not found: '),
+    );
+    expect(fakeLogger.warn).not.toHaveBeenCalled();
+  });
+
+  test('still warns about other statuses when a 404 is expected', async () => {
+    await expect(
+      client.doGet({ url: '/status/500' }, { notFoundIsExpected: true }),
+    ).rejects.toThrow();
+
+    expect(fakeLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('API client response error'),
+      '/status/500',
+      500,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });

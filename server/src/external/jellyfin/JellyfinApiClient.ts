@@ -578,17 +578,21 @@ export class JellyfinApiClient extends MediaSourceApiClient<JellyfinItemTypes> {
    */
   async getSubtitlesByPath(subtitlePath: string): Promise<QueryResult<string>> {
     try {
-      const subtitlesResult = await this.doGet<string>({
-        url: `/${trimStart(subtitlePath, '/')}`,
-        params: {
-          userId: this.options.mediaSource.userId,
+      // A 404 means the server no longer has this subtitle; the caller
+      // reports that.
+      const subtitlesResult = await this.doGet<string>(
+        {
+          url: `/${trimStart(subtitlePath, '/')}`,
+          params: {
+            userId: this.options.mediaSource.userId,
+          },
         },
-      });
+        { notFoundIsExpected: true },
+      );
 
       return this.makeSuccessResult(subtitlesResult);
     } catch (e) {
-      const err = caughtErrorToError(e);
-      return this.makeErrorResult('generic_request_error', err.message);
+      return this.requestErrorResult(e);
     }
   }
 
@@ -600,17 +604,19 @@ export class JellyfinApiClient extends MediaSourceApiClient<JellyfinItemTypes> {
     tickOffset: number = 0,
   ): Promise<QueryResult<string>> {
     try {
-      const subtitlesResult = await this.doGet<string>({
-        url: `/Videos/${itemId}/${mediaItemId}/Subtitles/${streamIndex}/${tickOffset}/Stream.${trimStart(subtitleExt, '.')}`,
-        params: {
-          userId: this.options.mediaSource.userId,
+      const subtitlesResult = await this.doGet<string>(
+        {
+          url: `/Videos/${itemId}/${mediaItemId}/Subtitles/${streamIndex}/${tickOffset}/Stream.${trimStart(subtitleExt, '.')}`,
+          params: {
+            userId: this.options.mediaSource.userId,
+          },
         },
-      });
+        { notFoundIsExpected: true },
+      );
 
       return this.makeSuccessResult(subtitlesResult);
     } catch (e) {
-      const err = caughtErrorToError(e);
-      return this.makeErrorResult('generic_request_error', err.message);
+      return this.requestErrorResult(e);
     }
   }
 

@@ -78,6 +78,15 @@ export abstract class QueryError extends WrappedError {
 
 export type QueryResult<T> = Result<T, QueryError>;
 
+export type RequestOptions = {
+  /**
+   * The caller handles a 404 as an ordinary answer and reports it itself, so
+   * the client logs it at debug instead of warning about it. Other failures
+   * are logged as usual.
+   */
+  notFoundIsExpected?: boolean;
+};
+
 export abstract class BaseApiClient<
   OptionsType extends ApiClientOptions = ApiClientOptions,
 > {
@@ -196,8 +205,8 @@ export abstract class BaseApiClient<
     return Result.success<T, QueryError>(data);
   }
 
-  doGet<T>(req: Omit<AxiosRequestConfig, 'method'>) {
-    return this.doRequest<T>({ method: 'get', ...req });
+  doGet<T>(req: Omit<AxiosRequestConfig, 'method'>, opts?: RequestOptions) {
+    return this.doRequest<T>({ method: 'get', ...req }, opts);
   }
 
   doPost<T>(req: Omit<AxiosRequestConfig, 'method'>) {
@@ -218,7 +227,10 @@ export abstract class BaseApiClient<
     return url.toString();
   }
 
-  protected async doRequest<T>(req: AxiosRequestConfig): Promise<T> {
+  protected async doRequest<T>(
+    req: AxiosRequestConfig,
+    opts: RequestOptions = {},
+  ): Promise<T> {
     try {
       const response = await (this.queue
         ? this.queue.add(() => this.axiosInstance.request<T>(req), {
@@ -230,6 +242,12 @@ export abstract class BaseApiClient<
       if (isAxiosError(error)) {
         if (error.config) {
           this.redacter?.redact(error.config);
+        }
+        if (error.response?.status === 404 && opts.notFoundIsExpected) {
+          this.logger.debug(
+            `Not found: ${this.axiosInstance.defaults.baseURL}${req.url}`,
+          );
+          throw error;
         }
         if (error.response?.status === 404) {
           this.logger.warn(
