@@ -25,6 +25,8 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--layout basic\|multi-audio\|dup-lang\|subs\|mixed\|anamorphic` | `basic` | Synthetic clip track layout (see below) |
 | `--clips N`, `--clip-seconds S` | `3`, `60` | Number and length of synthetic clips; each clip is one program |
 | `--clip-durations LIST` | | Per-clip lengths in seconds, such as `60,8,60` for a bumper between two programs. Overrides `--clips` and `--clip-seconds` |
+| `--subs-start S` | `0` | Layouts with subtitles: the first cue is S seconds into each clip, like a program that opens without dialogue. Cues follow every 2 s |
+| `--no-subtitles` | off | Turn the channel's subtitles off. The clips keep their subtitle tracks |
 | `--truncate-clip I:S` | | Shorten clip I (1-based) to S seconds after the scan. The database keeps the longer duration, which mimics media that ends before its scheduled time |
 | `--mid-truncate I:S@T` | | HLS modes only. At T seconds into the capture, shorten clip I to S seconds and force a rescan, the way a replaced file and a scheduled scan change a live channel. `report.midTruncate` records the scan time and the channel's `startTime` and `duration` before and after duration reconciliation |
 | `--start-ago S` | | `synthetic` only. Backdate the channel start by S seconds, so the channel has already looped its lineup. Pair with `--mid-truncate` on a clip earlier in the cycle to exercise the start-time rebase |
@@ -69,6 +71,12 @@ Commentary, which is how a real library ends up with duplicate-language audio. `
 count, subtitles, and audio-track count between programs, so it exercises transitions hardest. Make the
 capture long enough to cross at least two program boundaries: `--seconds` should exceed
 `2 × --clip-seconds`.
+
+Synthetic channels have subtitles on. `hls_direct_v2` serves the clips' embedded subtitles as a WebVTT
+track, `subs.m3u8` next to `stream.m3u8`. The capture doesn't fetch it, so use `--keep-server` and fetch it
+yourself. The other modes use embedded subtitles only after extraction, which a synthetic run never does,
+so they stream without subtitles. Add `--subs-start 90` with clips longer than that to start a stream in a
+stretch without dialogue.
 
 Use `anamorphic` for aspect-ratio and scaling bugs. Its clips are 720x480 NTSC widescreen with SAR 32:27,
 so ffprobe reports DAR 16:9. The stream path reads SAR and DAR from the saved `program_version` row, not

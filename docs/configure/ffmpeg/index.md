@@ -88,10 +88,10 @@ A subtitle that could not be resolved during a scan — because the media server
 !!! note
     External subtitles from Jellyfin and Emby libraries scanned by an older version of Tunarr are picked up by that hourly pass once the program is scheduled, or immediately on the next rescan of the library.
 
-When using the **HLS Direct** stream mode, sidecar text-based subtitles are served as WebVTT tracks in the HLS master playlist. Clients that support HLS subtitle renditions (most modern players) will display them as selectable subtitle options.
+When using the **HLS Direct v2** stream mode, text-based subtitles (embedded or sidecar files) are served as WebVTT tracks in the HLS master playlist, since this mode can't burn them into the picture. Clients that support HLS subtitle renditions (most modern players) will display them as selectable subtitle options. A channel that starts during a stretch without dialogue starts right away, and its subtitle track stays empty until the next line.
 
 !!! note
-    Sidecar subtitle support is currently experimental. To enable it, go to **Settings > Features** and turn on the sidecar subtitles option.
+    WebVTT subtitle tracks in the **HLS** stream mode are currently experimental. To enable them, go to **Settings > Features** and turn on the sidecar subtitles option.
 
 ### Closed Captions for HDHomeRun Clients
 

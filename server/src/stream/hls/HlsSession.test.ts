@@ -4,6 +4,7 @@ import type { OutputFormat } from '@/ffmpeg/builder/constants.js';
 import type { OnDemandChannelService } from '@/services/OnDemandChannelService.js';
 import type { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StreamProgramCalculator } from '@/stream/StreamProgramCalculator.js';
+import type { SubtitleRenditionInfo } from '@/stream/types.js';
 import { Result } from '@/types/result.js';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import dayjs from 'dayjs';
@@ -36,6 +37,8 @@ vi.mock('@/util/logging/LoggerFactory.js', () => ({
       info: vi.fn(),
       trace: vi.fn(),
       warn: vi.fn(),
+      bindings: () => ({}),
+      setBindings: vi.fn(),
     }),
   },
 }));
@@ -46,6 +49,7 @@ vi.mock('@/stream/ConnectionTracker.ts', () => {
       on = vi.fn();
       recordHeartbeat = vi.fn();
       removeStaleConnections = vi.fn(() => []);
+      cancelCleanup = vi.fn();
     },
   };
 });
@@ -476,6 +480,151 @@ describe('HlsSession', () => {
       for (const file of listed) {
         expect(onDisk).toContain(file);
       }
+    });
+  });
+
+  describe('start with a subtitle rendition', () => {
+    let dir: tmp.DirResult;
+    let session: HlsSession | undefined;
+
+    beforeEach(() => {
+      dir = tmp.dirSync({ unsafeCleanup: true });
+    });
+
+    afterEach(async () => {
+      await session?.stop();
+      session = undefined;
+      dir.removeCallback();
+    });
+
+    const subtitle: SubtitleRenditionInfo = {
+      language: 'eng',
+      default: false,
+      forced: false,
+    };
+
+    // An hls_direct_v2 session whose program's ffmpeg has written its video
+    // segments but, as before a program's first line of dialogue, no
+    // subs.m3u8
+    function makeStartableSession(
+      programSubtitle: SubtitleRenditionInfo | undefined,
+    ) {
+      let exit = () => {};
+      const exited = new Promise<void>((resolve) => {
+        exit = resolve;
+      });
+      const transcodeSession = {
+        streamDuration: dayjs.duration({ minutes: 30 }),
+        exited,
+        wait: () => exited,
+        kill: () => exit(),
+      };
+      const created = new HlsSession(
+        {
+          uuid: channelUuid,
+          transcodeConfig: {},
+        } as ChannelOrmWithTranscodeConfig,
+        {
+          streamMode: 'hls_direct_v2',
+          initialSegmentCount: 2,
+          transcodeDirectory: dir.name,
+        },
+        {
+          getCurrentLineupItem: () =>
+            Promise.resolve(
+              Result.success({
+                lineupItem: {},
+                channelContext: {},
+                sourceChannel: {},
+              }),
+            ),
+        } as unknown as StreamProgramCalculator,
+        {
+          ffmpegSettings: () => defaultFfmpegSettings,
+        } as unknown as ISettingsDB,
+        {
+          getLiveTimestamp: (_channelId: string, requestTime: number) =>
+            Promise.resolve(requestTime),
+        } as unknown as OnDemandChannelService,
+        () =>
+          ({
+            on: vi.fn(),
+            setup: () => Promise.resolve(Result.success(transcodeSession)),
+            renditions: { audio: [], subtitle: programSubtitle },
+            transcodeSession,
+            start: async () => {
+              const workingDir = created.workingDirectory;
+              await fs.writeFile(
+                path.join(workingDir, 'stream.m3u8'),
+                '#EXTM3U\n',
+              );
+              await fs.writeFile(path.join(workingDir, 'data000000.ts'), '');
+              await fs.writeFile(path.join(workingDir, 'data000001.ts'), '');
+            },
+          }) as unknown as ProgramStream,
+      );
+      session = created;
+      return created;
+    }
+
+    // Without a subtitle playlist, start() gives up after 15 one-second
+    // retries, so the timeout leaves room for that failure to show
+    test(
+      'is ready once its video is, before ffmpeg writes a subtitle segment',
+      { timeout: 20_000 },
+      async () => {
+        const started = makeStartableSession(subtitle);
+
+        await started.start();
+
+        expect(started.hasError).toBe(false);
+        expect(started.started).toBe(true);
+        // Clients get a valid live playlist with no cues yet
+        const result = await started.trimSubtitlePlaylist();
+        expect(result.isSuccess()).toBe(true);
+        const playlist = result.get()?.playlist;
+        expect(playlist).toContain('#EXTM3U');
+        expect(playlist).not.toContain('#EXTINF');
+        expect(playlist).not.toContain('#EXT-X-ENDLIST');
+      },
+    );
+
+    test('keeps a subtitle playlist an earlier program left', async () => {
+      const started = makeStartableSession(subtitle);
+      const existing = [
+        '#EXTM3U',
+        '#EXT-X-VERSION:3',
+        '#EXT-X-TARGETDURATION:4',
+        '#EXT-X-MEDIA-SEQUENCE:0',
+        '#EXTINF:4.000000,',
+        'sub000007.vtt',
+      ].join('\n');
+      await fs.mkdir(started.workingDirectory, { recursive: true });
+      await fs.writeFile(
+        path.join(started.workingDirectory, 'subs.m3u8'),
+        existing,
+      );
+
+      await started.start();
+
+      expect(started.started).toBe(true);
+      expect(
+        await fs.readFile(
+          path.join(started.workingDirectory, 'subs.m3u8'),
+          'utf-8',
+        ),
+      ).toBe(existing);
+    });
+
+    test('writes no subtitle playlist for a program without subtitles', async () => {
+      const started = makeStartableSession(undefined);
+
+      await started.start();
+
+      expect(started.started).toBe(true);
+      expect(await fs.readdir(started.workingDirectory)).not.toContain(
+        'subs.m3u8',
+      );
     });
   });
 

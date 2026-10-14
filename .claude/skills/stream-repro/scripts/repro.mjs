@@ -38,6 +38,8 @@ const { values: opt } = parseArgs({
     'vaapi-device': { type: 'string' },
     schedule: { type: 'string' },
     'sar-override': { type: 'string' },
+    'subs-start': { type: 'string', default: '0' },
+    'no-subtitles': { type: 'boolean', default: false },
   },
 });
 
@@ -73,6 +75,8 @@ const resolution = resolutionMatch && { widthPx: Number(resolutionMatch[1]), hei
 const HWACCELS = ['none', 'cuda', 'vaapi', 'qsv', 'videotoolbox'];
 if (opt.hwaccel !== undefined && !HWACCELS.includes(opt.hwaccel)) throw new Error(`--hwaccel takes one of ${HWACCELS.join(', ')}`);
 if (opt['vaapi-device'] !== undefined && !['vaapi', 'qsv'].includes(opt.hwaccel)) throw new Error('--vaapi-device needs --hwaccel vaapi or qsv');
+const subsStart = Number(opt['subs-start']);
+if (!(subsStart >= 0)) throw new Error('--subs-start takes seconds');
 const log = (...a) => console.error('[repro]', ...a);
 
 // ---------- helpers ----------
@@ -183,10 +187,17 @@ function makeClips(dir) {
     let subIdx;
     if (l.subs) {
       const srt = path.join(dir, `clip${i + 1}.srt`);
+      // One cue every 2 s, starting exactly at --subs-start
+      const srtTime = (ms) => new Date(ms).toISOString().slice(11, 23).replace('.', ',');
+      const starts = [];
+      for (let s = subsStart; s < dur; s += 2) starts.push(Math.round(s * 1000));
+      if (starts.length === 0) {
+        throw new Error(`--subs-start ${subsStart} leaves clip ${i + 1} (${dur} s) without a cue`);
+      }
       fs.writeFileSync(
         srt,
-        Array.from({ length: Math.ceil(dur / 2) }, (_, k) =>
-          `${k + 1}\n00:00:${String(k * 2).padStart(2, '0')},000 --> 00:00:${String(k * 2 + 1).padStart(2, '0')},500\nclip ${i + 1} line ${k + 1}\n`,
+        starts.map((ms, k) =>
+          `${k + 1}\n${srtTime(ms)} --> ${srtTime(ms + 1500)}\nclip ${i + 1} line ${k + 1}\n`,
         ).join('\n'),
       );
       subIdx = l.audio.length + 1;
@@ -358,7 +369,7 @@ async function buildSyntheticChannel(base, clipsDir) {
       guideMinimumDuration: 30000,
       disableFillerOverlay: false,
       stealth: false,
-      subtitlesEnabled: true,
+      subtitlesEnabled: !opt['no-subtitles'],
       streamMode: opt.mode === 'mpegts' ? 'mpegts' : opt.mode,
       transcodeConfigId: tc.id,
       icon: {},

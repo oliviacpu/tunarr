@@ -7,6 +7,7 @@ import {
   HlsDirectOutputFormat,
   HlsOutputFormat,
 } from '@/ffmpeg/builder/constants.js';
+import { HlsSubtitleOutputFormat } from '@/ffmpeg/builder/options/HlsSubtitleOutputFormat.js';
 import type { OnDemandChannelService } from '@/services/OnDemandChannelService.js';
 import { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StopOptions } from '@/stream/Session.js';
@@ -70,6 +71,14 @@ type CaptionTimelineEntry = {
 const PtsWrap = 2 ** 33;
 // Captions of this many recent programs are kept, for segments still being served
 const CaptionTimelineLength = 10;
+// A live subtitle playlist with no segments yet (see ensureSubtitlePlaylist)
+const EmptySubtitlePlaylist = [
+  '#EXTM3U',
+  '#EXT-X-VERSION:3',
+  `#EXT-X-TARGETDURATION:${HlsSubtitleOutputFormat.SegmentSeconds}`,
+  '#EXT-X-MEDIA-SEQUENCE:0',
+  '',
+].join('\n');
 
 export interface HlsSessionOptions extends BaseHlsSessionOptions {
   streamMode: 'hls' | 'hls_direct_v2';
@@ -381,9 +390,12 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         }
       }
 
-      // Started before the check below, which then also covers a stop that
-      // lands while it reads the playlist. hls_direct_v2 copies the video, so
-      // there is no encoder to fall behind.
+      // Both awaits below come before the stop check, which then also covers
+      // a stop that lands during them.
+      if (programStream.renditions?.subtitle !== undefined) {
+        await this.ensureSubtitlePlaylist();
+      }
+      // hls_direct_v2 copies the video, so there is no encoder to fall behind
       const speedWatcher =
         this.sessionOptions.streamMode === 'hls'
           ? await this.watchTranscodeSpeed(programStream.context)
@@ -459,6 +471,25 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     return this.#currentSubtitleRendition
       ? [this.getHlsOptions().subtitleStreamNameFormat]
       : [];
+  }
+
+  // ffmpeg's segment muxer (HlsSubtitleOutputFormat) writes subs.m3u8 only
+  // when it closes a subtitle segment, which takes a cue past the segment's
+  // end. Embedded subtitles are read at playback speed (hls_direct_v2 maps
+  // them from the program's own input), so a stream that starts in a stretch
+  // without dialogue would have no subtitle playlist for longer than start-up
+  // waits for one. An empty live playlist stands in until ffmpeg replaces
+  // it. One left by an earlier program is kept, so clients never see the
+  // subtitle playlist emptied.
+  private async ensureSubtitlePlaylist() {
+    const result = await Result.attemptAsync(() =>
+      fs.writeFile(this._subtitlePlaylistPath, EmptySubtitlePlaylist, {
+        flag: 'wx',
+      }),
+    );
+    if (result.isFailure() && result.error.nodeErrorCode() !== 'EEXIST') {
+      this.logger.warn(result.error, 'Could not write subtitle playlist');
+    }
   }
 
   // Lays a program's caption cues out on the session's output clock, which

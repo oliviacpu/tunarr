@@ -34,6 +34,33 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### An HLS Direct v2 channel with subtitles starts even when no one is talking (2026-10-14)
+
+- **What you saw:** an HLS Direct v2 channel with subtitles on never started. Tunarr waited for the subtitle
+  playlist (`subs.m3u8`), gave up after 15 s with "Stream not ready yet", and the stream failed. With subtitles off, or
+  in another stream mode, the same channel started.
+- **Cause:** ffmpeg's segment muxer, which writes the WebVTT subtitle track (`HlsSubtitleOutputFormat`), writes
+  `subs.m3u8` only when it closes a subtitle segment, and it closes one only when a cue arrives after the segment's
+  end. HLS Direct v2 maps a program's embedded subtitles from the program's own input, which ffmpeg reads at playback
+  speed after a 60 s read-ahead. So a stream that started more than about 75 s (the read-ahead plus the 15 s start-up
+  wait in `HlsSession.getAdditionalRequiredFiles`) before the next lines of dialogue had no `subs.m3u8` in time, though
+  its video segments were ready. That covers opening credits, a quiet scene, or a forced-only subtitle track. The other
+  modes burn subtitles in, or read an extracted subtitle file at full speed, so they didn't hit this.
+- **Fix:** before a program with a subtitle track starts, `HlsSession` writes an empty live `subs.m3u8` if there isn't
+  one. ffmpeg replaces it when it closes its first subtitle segment. A playlist an earlier program left is kept, so a
+  client never sees it emptied. Start-up still waits for `subs.m3u8`, which now exists from the start
+  (`server/src/stream/hls/HlsSession.ts`).
+  - **Docs:** `docs/configure/ffmpeg/index.md` says HLS Direct v2 always serves text subtitles as WebVTT, that its
+    subtitle track can be empty until the next line, and that the experimental switch is for the HLS mode.
+  - **stream-repro:** `--subs-start S` puts each clip's first cue S seconds in, and `--no-subtitles` turns the
+    channel's subtitles off. Cue times past 59 s are now valid SRT.
+- **Tests:** `HlsSession.test.ts`: a session whose program has subtitles is ready as soon as its video is, before
+  ffmpeg writes a subtitle segment (without the fix, start-up gives up after 15 s with "Stream not ready yet"); a
+  playlist an earlier program left is kept; a program without subtitles gets no subtitle playlist. With stream-repro
+  (`--mode hls_direct_v2 --layout subs --clips 2 --clip-seconds 150 --subs-start 90`): before, start-up failed after
+  15 s with 8 video segments ready and no `subs.m3u8`. After, the channel started in about 1 s, and `subs.m3u8` was
+  empty until the program reached its first cue at 90 s, then listed the lines.
+
 ### Tunarr warns when a channel's transcode falls behind real time (2026-10-14)
 
 - **What you saw:** a channel paused briefly every so often, for many minutes, and Tunarr logged nothing. Timing the
