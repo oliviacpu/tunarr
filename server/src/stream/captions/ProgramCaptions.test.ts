@@ -9,6 +9,7 @@ import {
   exactFrameRate,
   markSegmentsForCaptions,
   noCaptionsNotice,
+  noCaptionsNoticeStartMs,
   parseSubtitleCues,
   captionTrackCandidates,
 } from './ProgramCaptions.ts';
@@ -138,6 +139,20 @@ describe('captionTrackCandidates', () => {
     expect(
       captionTrackCandidates(tracks, [{ iso6391: 'fr', iso6392: 'fra' }]),
     ).toEqual([]);
+  });
+});
+
+describe('noCaptionsNoticeStartMs', () => {
+  test('is 1 s at common frame rates', () => {
+    expect(noCaptionsNoticeStartMs(24000 / 1001)).toBe(1000);
+    expect(noCaptionsNoticeStartMs(25)).toBe(1000);
+    expect(noCaptionsNoticeStartMs(30000 / 1001)).toBe(1000);
+  });
+
+  // Loading needs up to 18 frames after the 2 a first program loses
+  test('starts later at low frame rates, so loading fits', () => {
+    expect(noCaptionsNoticeStartMs(15)).toBe(1534);
+    expect(noCaptionsNoticeStartMs(10)).toBe(2300);
   });
 });
 

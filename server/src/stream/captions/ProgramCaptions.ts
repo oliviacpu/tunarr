@@ -212,6 +212,20 @@ export const NoCaptionsNoticeText = 'No captions for this program';
 export const NoCaptionsNoticeStartMs = 1000;
 export const NoCaptionsNoticeMs = 4000;
 
+// At a low frame rate 1 s is too few frames for that: loading takes up to 18
+// frames (17 with block-centred lines, 18 with each line centred), after the
+// 2 a first program loses. So the notice starts no earlier than this many
+// frames in, 3 to spare: 1 s from 23.976 fps up, about 1.5 s at 15 fps.
+export const NoCaptionsNoticeLeadFrames = 23;
+
+// When the notice appears, for a stream at `frameRate`
+export function noCaptionsNoticeStartMs(frameRate: number): number {
+  return Math.max(
+    NoCaptionsNoticeStartMs,
+    Math.ceil((NoCaptionsNoticeLeadFrames / frameRate) * 1000),
+  );
+}
+
 /**
  * The captions for a program that has no subtitles: the notice, near the
  * start of its clock. That is the program's start, or the tune-in point when
@@ -247,16 +261,23 @@ export function noCaptionsNotice(
     item.type !== 'program' ||
     item.program.type === 'track' ||
     stream.subtitles.length > 0 ||
-    stream.frameRate === undefined ||
-    stream.durationMs < 2 * NoCaptionsNoticeMs
+    stream.frameRate === undefined
+  ) {
+    return;
+  }
+  const startMs = noCaptionsNoticeStartMs(stream.frameRate);
+  // The clearing code needs a second of program after it, too
+  if (
+    stream.durationMs < 2 * NoCaptionsNoticeMs ||
+    stream.durationMs < startMs + NoCaptionsNoticeMs + 1000
   ) {
     return;
   }
   return {
     cues: [
       {
-        startMs: NoCaptionsNoticeStartMs,
-        endMs: NoCaptionsNoticeStartMs + NoCaptionsNoticeMs,
+        startMs,
+        endMs: startMs + NoCaptionsNoticeMs,
         text: NoCaptionsNoticeText,
       },
     ],

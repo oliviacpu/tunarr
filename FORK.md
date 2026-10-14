@@ -55,7 +55,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     session's first program has no frames for the first two slots of its caption schedule: the encoder's B-frame delay
     puts its first video frame at PTS 6000 (two frames at 30 fps, with libx264) where the schedule expects 0. A notice
     loaded from the first frame lost its Resume Caption Loading code and never showed. From 1 s, it loads in the 17
-    frames before it appears.
+    frames before it appears. Below 23.976 fps, 1 s is too few frames for the load after the two lost slots, so the
+    notice starts at least 23 frames in (`noCaptionsNoticeStartMs`; about 1.5 s at 15 fps). Found by the Codex review.
   - **Docs:** `docs/configure/ffmpeg/index.md`.
 - **Known limit, not changed here:** the same two-frame delay makes a session's first program show its own captions
   two frames early, and a cue already under way at tune-in can be lost on it. Later programs start exactly at their
