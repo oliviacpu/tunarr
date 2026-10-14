@@ -6,6 +6,7 @@ import { xmlTvLinkHost } from '@/services/XmlTvWriter.js';
 import { UpdateXmlTvTask } from '@/tasks/UpdateXmlTvTask.js';
 import type { RouterPluginAsyncCallback } from '@/types/serverType.js';
 import { fileExists } from '@/util/fsUtil.js';
+import { uploadedImageUrl } from '@/util/iconUtil.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import { getTunarrVersion } from '@/util/version.js';
 import fpStatic from '@fastify/static';
@@ -205,14 +206,17 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
       //   createWriteStream(path.join(baseDir, data.filename)),
       // );
 
-      await fsPromises.copyFile(
-        data.filepath,
-        path.join(baseDir, data.filename),
-      );
+      const savedPath = path.join(baseDir, data.filename);
+      await fsPromises.copyFile(data.filepath, savedPath);
 
       return res.send({
         name: data.filename,
-        fileUrl: `${req.protocol}://${req.host}/images/uploads/${data.filename}`,
+        // Versioned by contents, so a replaced image gets a new URL
+        fileUrl: uploadedImageUrl(
+          `${req.protocol}://${req.host}`,
+          data.filename,
+          await fsPromises.readFile(savedPath),
+        ),
       });
     },
   );

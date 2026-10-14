@@ -34,6 +34,8 @@ Plex's apps load guide pictures (programme posters, channel logos) themselves, f
 
 Gaps between programmes (flex) show the channel's offline picture, which is what airs during them, or the channel's logo when it has none.
 
+A new channel logo appears in Plex after Plex next refreshes the guide: daily by default, or right away with **Refresh Guide** in Plex's Live TV & DVR settings. Refreshing the guide ends any Live TV stream that is playing.
+
 To fix this, set **Public Address for Guide Pictures** (Settings → XMLTV) to an address the apps can reach, such as `https://tunarr.example.com`. The guide's picture links then use it. Plex keeps fetching the guide from its usual address. The picture paths (`/api/programs/<id>/artwork/<type>`, `/api/credits/<id>/artwork/<type>` and `/images/…`) must be reachable at that address without a login.
 
 Play your channel by hovering over the channel icon and selecting the play icon.

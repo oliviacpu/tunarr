@@ -3,6 +3,7 @@ import {
   deleteIfLocalAndCleared,
   extractLocalUploadFilename,
   resolveIconUrl,
+  uploadedImageUrl,
 } from './iconUtil.ts';
 import * as fsUtil from './fsUtil.ts';
 
@@ -11,6 +12,44 @@ vi.mock('./fsUtil.ts', () => ({
 }));
 
 describe('iconUtil', () => {
+  describe('uploadedImageUrl', () => {
+    const origin = 'https://tunarr.example';
+    const logo = new TextEncoder().encode('first logo');
+
+    test('points at the uploaded file, with a version from its contents', () => {
+      expect(uploadedImageUrl(origin, 'ch1_icon.png', logo)).toMatch(
+        /^https:\/\/tunarr\.example\/images\/uploads\/ch1_icon\.png\?v=[0-9a-f]{12}$/,
+      );
+    });
+
+    // Plex, its apps and Tunarr's image cache key images by URL. A replaced
+    // logo keeps its file name, so only the version can tell them apart.
+    test('a different image under the same name gets a different URL', () => {
+      expect(uploadedImageUrl(origin, 'ch1_icon.png', logo)).not.toBe(
+        uploadedImageUrl(
+          origin,
+          'ch1_icon.png',
+          new TextEncoder().encode('second logo'),
+        ),
+      );
+    });
+
+    test('uploading the same image again keeps its URL', () => {
+      expect(uploadedImageUrl(origin, 'ch1_icon.png', logo)).toBe(
+        uploadedImageUrl(origin, 'ch1_icon.png', Uint8Array.from(logo)),
+      );
+    });
+
+    // Clearing a channel's icon deletes the upload, found from its URL
+    test('the file name can still be read back from the URL', () => {
+      expect(
+        extractLocalUploadFilename(
+          uploadedImageUrl(origin, 'ch1_icon.png', logo),
+        ),
+      ).toBe('ch1_icon.png');
+    });
+  });
+
   describe('extractLocalUploadFilename', () => {
     test('returns null for an empty string', () => {
       expect(extractLocalUploadFilename('')).toBeNull();
