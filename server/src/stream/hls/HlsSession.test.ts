@@ -56,6 +56,10 @@ const speedWatchers = vi.hoisted(
   () => [] as { onEvent: (event: TranscodeSpeedEvent) => void }[],
 );
 const speedWatcherCalls = vi.hoisted(() => ({ current: [] as string[] }));
+// Set to hold a watcher's start until the test resolves it
+const speedWatcherStart = vi.hoisted(() => ({
+  gate: undefined as Promise<void> | undefined,
+}));
 
 vi.mock('./TranscodeSpeedWatcher.js', () => ({
   TranscodeSpeedWatcher: class {
@@ -67,7 +71,7 @@ vi.mock('./TranscodeSpeedWatcher.js', () => ({
     }
     start() {
       speedWatcherCalls.current.push('watching');
-      return Promise.resolve();
+      return speedWatcherStart.gate ?? Promise.resolve();
     }
     stop() {
       speedWatcherCalls.current.push('stopped watching');
@@ -601,6 +605,7 @@ describe('HlsSession', () => {
       dir = tmp.dirSync({ unsafeCleanup: true });
       speedWatchers.length = 0;
       speedWatcherCalls.current = [];
+      speedWatcherStart.gate = undefined;
     });
 
     afterEach(() => {
@@ -608,8 +613,12 @@ describe('HlsSession', () => {
     });
 
     // Runs one program's transcode against a fake ffmpeg that exits when
-    // `exit` is called
-    async function startTranscode(streamMode: HlsSessionOptions['streamMode']) {
+    // `exit` is called. Waits until ffmpeg has started, or with
+    // `untilWatching` only until the speed watcher is starting.
+    async function startTranscode(
+      streamMode: HlsSessionOptions['streamMode'],
+      { untilWatching = false } = {},
+    ) {
       const calls = speedWatcherCalls.current;
       const exited = Promise.withResolvers<void>();
       const lineupItem = {
@@ -670,14 +679,18 @@ describe('HlsSession', () => {
       const internals = session as unknown as {
         state: string;
         transcode(realtime: boolean): Promise<void>;
-        logger: { warn: Mock; info: Mock };
+        logger: { warn: Mock; info: Mock; error: Mock };
       };
       internals.state = 'started';
       const done = internals.transcode(true);
-      await vi.waitFor(() => expect(calls).toContain('ffmpeg started'));
+      await vi.waitFor(() =>
+        expect(calls).toContain(untilWatching ? 'watching' : 'ffmpeg started'),
+      );
 
       return {
         calls,
+        internals,
+        done,
         logger: internals.logger,
         exit: async () => {
           exited.resolve();
@@ -714,6 +727,23 @@ describe('HlsSession', () => {
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining('at real time again'),
       );
+    });
+
+    // A stop while the watcher reads the playlist must not start ffmpeg on a
+    // transcode session the stop has already killed
+    test('a stop while the watcher starts leaves ffmpeg unstarted', async () => {
+      const opened = Promise.withResolvers<void>();
+      speedWatcherStart.gate = opened.promise;
+      const { calls, internals, done, logger } = await startTranscode('hls', {
+        untilWatching: true,
+      });
+
+      internals.state = 'stopping';
+      opened.resolve();
+      await done;
+
+      expect(calls).toEqual(['watching', 'stopped watching']);
+      expect(logger.error).not.toHaveBeenCalled();
     });
 
     test('does not watch hls_direct_v2, which copies the video', async () => {

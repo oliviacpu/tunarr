@@ -381,9 +381,18 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         }
       }
 
+      // Started before the check below, which then also covers a stop that
+      // lands while it reads the playlist. hls_direct_v2 copies the video, so
+      // there is no encoder to fall behind.
+      const speedWatcher =
+        this.sessionOptions.streamMode === 'hls'
+          ? await this.watchTranscodeSpeed(programStream.context)
+          : undefined;
+
       // A stop that landed during setup has already killed the previous
       // transcode. Starting this one would leave an ffmpeg nothing kills.
       if (this.state !== 'started') {
+        speedWatcher?.stop();
         return;
       }
 
@@ -403,11 +412,6 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
       if (this.sessionOptions.streamMode === 'hls') {
         // await this.trimPlaylistAndDeleteSegments();
       }
-      // hls_direct_v2 copies the video, so there is no encoder to fall behind
-      const speedWatcher =
-        this.sessionOptions.streamMode === 'hls'
-          ? await this.watchTranscodeSpeed(programStream.context)
-          : undefined;
       try {
         await programStream.start();
         return await programStream.transcodeSession!.wait();
