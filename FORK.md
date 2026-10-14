@@ -34,6 +34,31 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Closed captions are labelled with their language in the stream Plex reads (2026-10-14)
+
+- **What you saw:** Plex Live TV listed the captions as "Unknown (Closed Captioned)".
+- **Cause:** the captioned HLS segments name the language in their PMT, but the HDHomeRun `.ts` stream is ffmpeg's
+  `-c copy` remux of those segments (`ConcatStream`, `hls_concat`). ffmpeg writes a PMT of its own and keeps none of
+  the segments' descriptors, so the stream Plex reads had no language on its video, where the captions live. Checked
+  on the live stream: no descriptors on the video entry.
+- **Fix:**
+  - **Stream:** `CaptionLanguageStream` (`server/src/stream/captions/`) relabels every PMT in ffmpeg's output on its
+    way to viewers. `ConcatStream.outputSink()` supplies it when captions are on, `ConcatSession` hands it to the
+    transcode session (`DirectStreamSession.outputSink()`), and `StreamModule` passes the first preferred language.
+    Every other byte passes through unchanged; if the stream ever lost TS sync, the rest would pass through
+    untouched.
+  - **Labels:** `withLanguageDescriptors` (`MpegTsCaptionInserter.ts`) adds an ISO 639 language descriptor to the
+    video entry, which ffmpeg-based readers such as Plex's take as the video's language, next to the ATSC caption
+    service descriptor, which they ignore. The segment inserter uses the same function, so the segments carry both
+    too.
+- **Checked:** with Plex's own transcoder on a stream sample from the server, the video read as `(eng)` only with
+  the ISO 639 descriptor; the caption service descriptor alone changed nothing. A local server's `.ts` stream (HLS
+  channel, captions on) read as English video, with both descriptors in all 157 PMTs and caption data intact.
+  Tests: `CaptionLanguageStream.test.ts` (chunk sizes from 1 byte, idempotent, lost sync), the PMT test in
+  `MpegTsCaptionInserter.test.ts`, and `CaptionInsertion.local.test.ts` (ffmpeg's remux drops the language,
+  the stream puts it back).
+- **Upstream:** not sent.
+
 ### Gaps in the guide show the channel's offline picture (2026-10-13)
 
 - **What you saw:** gaps between programmes (flex, such as "<channel> · back soon") were blank tiles in Plex's "Shows

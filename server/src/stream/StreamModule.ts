@@ -83,11 +83,13 @@ const configure = ({ bind }: ContainerModuleLoadOptions) => {
     const ffmpegFactory = ctx.get<FFmpegAssistedFactory>(KEYS.FFmpegFactory);
     const settingsDB = ctx.get<ISettingsDB>(KEYS.SettingsDB);
     return (channel, streamMode) => {
+      const ffmpegSettings = settingsDB.ffmpegSettings();
       return new ConcatStream(
         channel,
         streamMode,
         ffmpegFactory,
-        settingsDB.ffmpegSettings().hdhrClosedCaptions,
+        ffmpegSettings.hdhrClosedCaptions,
+        ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ?? 'eng',
       );
     };
   });

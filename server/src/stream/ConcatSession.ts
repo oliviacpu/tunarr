@@ -2,6 +2,7 @@ import type { ChannelOrmWithTranscodeConfig } from '@/db/schema/derivedTypes.js'
 import type { FfmpegTranscodeSession } from '@/ffmpeg/FfmpegTrancodeSession.js';
 import type { ChannelConcatStreamMode } from '@tunarr/types/schemas';
 import { isEmpty } from 'lodash-es';
+import type { PassThrough } from 'node:stream';
 import type { ConcatStreamFactory } from './ConcatStream.ts';
 import { DirectStreamSession } from './DirectStreamSession.js';
 import type { SessionOptions } from './Session.js';
@@ -18,6 +19,7 @@ export type ConcatSessionFactory = (
 
 export class ConcatSession extends DirectStreamSession<ConcatSessionOptions> {
   #transcodeSession?: FfmpegTranscodeSession;
+  #outputSink?: PassThrough;
 
   constructor(
     channel: ChannelOrmWithTranscodeConfig,
@@ -41,15 +43,21 @@ export class ConcatSession extends DirectStreamSession<ConcatSessionOptions> {
   }
 
   protected async initializeStream(): Promise<FfmpegTranscodeSession> {
-    this.#transcodeSession = await this.concatStreamFactory(
+    const concatStream = this.concatStreamFactory(
       this.channel,
       this.sessionOptions.sessionType,
-    ).createSession();
+    );
+    this.#outputSink = concatStream.outputSink();
+    this.#transcodeSession = await concatStream.createSession();
 
     this.#transcodeSession.on('error', (e) => this.emit('error', e));
     this.#transcodeSession.on('exit', () => this.emit('end'));
 
     return Promise.resolve(this.#transcodeSession);
+  }
+
+  protected override outputSink(): PassThrough | undefined {
+    return this.#outputSink;
   }
 
   protected stopStream(): Promise<void> {

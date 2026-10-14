@@ -145,6 +145,10 @@ describe('insertCaptions', () => {
     expect(
       section.indexOf(Buffer.from([0x86, 7, 0xe1, ...Buffer.from('eng')])),
     ).toBeGreaterThan(0);
+    // The video's own language, which Plex names embedded captions after
+    expect(
+      section.indexOf(Buffer.from([0x0a, 4, ...Buffer.from('eng'), 0])),
+    ).toBeGreaterThan(0);
   });
 
   test('leaves video that already carries captions alone', () => {

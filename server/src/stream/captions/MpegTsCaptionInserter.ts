@@ -1,21 +1,22 @@
 import type { CcPair } from './Cea608Encoder.ts';
 
 // Adds CEA-608 captions to the H.264 video of one MPEG-TS segment: an ATSC A/53
-// caption SEI before the first slice of every access unit, and an ATSC caption
-// service descriptor in the PMT that names the captions' language. The video is
-// otherwise untouched; only its PES packets are re-split into TS packets.
+// caption SEI before the first slice of every access unit, and descriptors in
+// the PMT that name the captions' language. The video is otherwise untouched;
+// only its PES packets are re-split into TS packets.
 
-const PacketSize = 188;
-const SyncByte = 0x47;
-const PatPid = 0;
+export const PacketSize = 188;
+export const SyncByte = 0x47;
+export const PatPid = 0;
 const StreamTypeH264 = 0x1b;
+const Iso639LanguageDescriptorTag = 0x0a;
 const CaptionServiceDescriptorTag = 0x86;
 const StartCode = Buffer.from([0, 0, 1]);
 
 export type InsertCaptionsOptions = {
   // The caption pair for the frame shown at this PTS (90 kHz clock)
   pairForPts: (pts90k: number) => CcPair;
-  // ISO 639-2 code for the caption service descriptor
+  // ISO 639-2 code for the PMT's language descriptors
   language: string;
 };
 
@@ -88,6 +89,25 @@ function findPmtPid(buf: Buffer, packets: TsPacket[]): number | undefined {
   return;
 }
 
+// The PMT PID a PAT packet names, when the packet holds a whole PAT section
+export function pmtPidOfPat(packet: Buffer): number | undefined {
+  const pat = readPacket(packet, 0);
+  if (pat.pid !== PatPid || !pat.pusi || !pat.hasPayload) {
+    return;
+  }
+  const start = sectionStart(packet, pat);
+  if (
+    start + 3 > PacketSize ||
+    start + 3 + sectionLength(packet, start) > PacketSize
+  ) {
+    return;
+  }
+  return findPmtPid(packet, [pat]);
+}
+
+// MPEG-1, MPEG-2, MPEG-4 part 2, H.264, HEVC
+const VideoStreamTypes = [0x01, 0x02, 0x10, 0x1b, 0x24];
+
 type VideoEntry = { pid: number; streamType: number };
 
 function findVideo(buf: Buffer, pmt: TsPacket): VideoEntry | undefined {
@@ -100,7 +120,7 @@ function findVideo(buf: Buffer, pmt: TsPacket): VideoEntry | undefined {
     const pid = ((buf.readUInt8(i + 1) & 0x1f) << 8) | buf.readUInt8(i + 2);
     const esInfoLength =
       ((buf.readUInt8(i + 3) & 0x0f) << 8) | buf.readUInt8(i + 4);
-    if ([0x01, 0x02, 0x10, 0x1b, 0x24].includes(streamType)) {
+    if (VideoStreamTypes.includes(streamType)) {
       return { pid, streamType };
     }
     i += 5 + esInfoLength;
@@ -108,57 +128,90 @@ function findVideo(buf: Buffer, pmt: TsPacket): VideoEntry | undefined {
   return;
 }
 
+function languageCode(language: string): number[] {
+  return [...language.padEnd(3, ' ').slice(0, 3)].map((c) => c.charCodeAt(0));
+}
+
+// ISO_639_language_descriptor: ffmpeg-based readers such as Plex take the
+// video stream's language from it, and name its embedded captions after it
+function iso639LanguageDescriptor(language: string): number[] {
+  return [
+    Iso639LanguageDescriptorTag,
+    4,
+    ...languageCode(language),
+    0, // audio_type: undefined
+  ];
+}
+
 // caption_service_descriptor (ATSC A/65): one 608 service on line 21 field 1
 function captionServiceDescriptor(language: string): number[] {
-  const lang = [...language.padEnd(3, ' ').slice(0, 3)].map((c) =>
-    c.charCodeAt(0),
-  );
   return [
     CaptionServiceDescriptorTag,
     7,
     0xe0 | 1, // reserved bits, number_of_services = 1
-    ...lang,
+    ...languageCode(language),
     0x7e, // digital_cc = 0, reserved, line21_field = 0
     0x3f, // easy_reader = 0, wide_aspect_ratio = 0, reserved
     0xff,
   ];
 }
 
-// A copy of the PMT packet with the descriptor added to the video entry, or
-// undefined when it is already there or wouldn't fit in the packet
-function withCaptionDescriptor(
-  buf: Buffer,
-  pmt: TsPacket,
-  videoPid: number,
+/**
+ * A copy of a PMT packet whose video entry names the captions' language: an
+ * ISO 639 language descriptor and an ATSC caption service descriptor, each
+ * added unless it is already there. Undefined when both are there, the packet
+ * starts no PMT section, the section has no video, or the section wouldn't fit
+ * in the packet.
+ */
+export function withLanguageDescriptors(
+  pmtPacket: Buffer,
   language: string,
 ): Buffer | undefined {
-  const packet = Buffer.from(buf.subarray(pmt.offset, pmt.offset + PacketSize));
-  const base = pmt.offset;
-  const start = sectionStart(buf, pmt) - base;
+  const pmt = readPacket(pmtPacket, 0);
+  if (!pmt.pusi || !pmt.hasPayload) {
+    return;
+  }
+  const packet = Buffer.from(pmtPacket.subarray(0, PacketSize));
+  const start = sectionStart(packet, pmt);
+  // A section that continues in the next packet is left alone
+  if (
+    start + 12 > PacketSize ||
+    start + 3 + sectionLength(packet, start) > PacketSize
+  ) {
+    return;
+  }
   const length = sectionLength(packet, start);
   const end = start + 3 + length - 4;
   const programInfoLength =
     ((packet.readUInt8(start + 10) & 0x0f) << 8) | packet.readUInt8(start + 11);
 
   for (let i = start + 12 + programInfoLength; i + 5 <= end; ) {
-    const pid =
-      ((packet.readUInt8(i + 1) & 0x1f) << 8) | packet.readUInt8(i + 2);
+    const streamType = packet.readUInt8(i);
     const esInfoLength =
       ((packet.readUInt8(i + 3) & 0x0f) << 8) | packet.readUInt8(i + 4);
-    if (pid !== videoPid) {
+    if (!VideoStreamTypes.includes(streamType)) {
       i += 5 + esInfoLength;
       continue;
     }
+    const present = new Set<number>();
     for (
       let d = i + 5;
-      d < i + 5 + esInfoLength;
+      d + 2 <= i + 5 + esInfoLength;
       d += 2 + packet.readUInt8(d + 1)
     ) {
-      if (packet[d] === CaptionServiceDescriptorTag) {
-        return;
-      }
+      present.add(packet.readUInt8(d));
     }
-    const descriptor = captionServiceDescriptor(language);
+    const descriptor = [
+      ...(present.has(Iso639LanguageDescriptorTag)
+        ? []
+        : iso639LanguageDescriptor(language)),
+      ...(present.has(CaptionServiceDescriptorTag)
+        ? []
+        : captionServiceDescriptor(language)),
+    ];
+    if (descriptor.length === 0) {
+      return;
+    }
     const newEnd = start + 3 + length + descriptor.length;
     if (newEnd > PacketSize) {
       return;
@@ -482,10 +535,8 @@ export function insertCaptions(
     );
   }
 
-  const newPmt = withCaptionDescriptor(
-    segment,
-    pmt,
-    video.pid,
+  const newPmt = withLanguageDescriptors(
+    segment.subarray(pmt.offset, pmt.offset + PacketSize),
     options.language,
   );
 

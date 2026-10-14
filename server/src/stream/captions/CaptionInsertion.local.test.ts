@@ -1,10 +1,13 @@
 import { execFileSync } from 'node:child_process';
+import { createReadStream, createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { createTempWorkdir } from '../../testing/ffmpeg/FfmpegIntegrationHelper.ts';
 import { binaries } from '../../testing/ffmpeg/FfmpegTestFixtures.ts';
+import { CaptionLanguageStream } from './CaptionLanguageStream.ts';
 import type { CaptionCue, CaptionLayoutOptions } from './Cea608Encoder.ts';
-import { buildCaptionSchedule } from './Cea608Encoder.ts';
+import { PaddingPair, buildCaptionSchedule } from './Cea608Encoder.ts';
 import { insertCaptions } from './MpegTsCaptionInserter.ts';
 
 // Captions written into real libx264 output (B-frames, MPEG-TS as Tunarr's HLS
@@ -185,5 +188,55 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
     // Centred lines: "Short" starts 10 columns right of the longer line (13 vs 3)
     const lines = await decode({ alignment: 'centeredLines' });
     expect(lines[2]).toContain(`}${'\\h'.repeat(10)}Short\\N`);
+  });
+
+  // The HDHomeRun .ts stream is ffmpeg's remux of the captioned segments, as
+  // ConcatStream runs it. ffmpeg writes a PMT of its own, so readers of the
+  // same lineage as Plex's saw no language until CaptionLanguageStream.
+  test("the remuxed stream names the captions' language", async () => {
+    if (!binaries) {
+      return;
+    }
+    const { ffmpeg, ffprobe } = binaries;
+    const input = path.join(workdir, 'label-in.ts');
+    const captioned = path.join(workdir, 'label-captioned.ts');
+    const remuxed = path.join(workdir, 'label-remuxed.ts');
+    const labelled = path.join(workdir, 'label-out.ts');
+    execFileSync(ffmpeg, [
+      ...['-hide_banner', '-loglevel', 'error', '-y'],
+      ...['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30'],
+      ...['-f', 'lavfi', '-i', 'sine=frequency=440'],
+      ...['-t', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac'],
+      ...['-f', 'mpegts', input],
+    ]);
+    const result = insertCaptions(await fs.readFile(input), {
+      pairForPts: () => PaddingPair,
+      language: 'eng',
+    });
+    if (!result.ok) {
+      throw new Error(result.reason);
+    }
+    await fs.writeFile(captioned, result.segment);
+    execFileSync(ffmpeg, [
+      ...['-hide_banner', '-loglevel', 'error', '-y', '-i', captioned],
+      ...['-map', '0', '-c', 'copy', '-f', 'mpegts', remuxed],
+    ]);
+
+    const videoLanguage = (file: string) =>
+      execFileSync(ffprobe, [
+        ...['-v', 'error', '-select_streams', 'v'],
+        ...['-show_entries', 'stream_tags=language', '-of', 'csv=p=0', file],
+      ])
+        .toString()
+        .trim();
+    expect(videoLanguage(captioned)).toBe('eng');
+    expect(videoLanguage(remuxed)).toBe('');
+
+    await pipeline(
+      createReadStream(remuxed),
+      new CaptionLanguageStream('eng'),
+      createWriteStream(labelled),
+    );
+    expect(videoLanguage(labelled)).toBe('eng');
   });
 });

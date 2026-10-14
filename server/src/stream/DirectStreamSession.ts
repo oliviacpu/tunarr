@@ -1,7 +1,7 @@
 import type { ChannelOrmWithTranscodeConfig } from '@/db/schema/derivedTypes.js';
 import type { FfmpegTranscodeSession } from '@/ffmpeg/FfmpegTrancodeSession.js';
 import { once, round } from 'lodash-es';
-import type { Readable } from 'node:stream';
+import type { PassThrough, Readable } from 'node:stream';
 import { caughtErrorToError } from '../util/index.ts';
 import type { SessionOptions } from './Session.js';
 import { Session } from './Session.js';
@@ -52,7 +52,7 @@ export abstract class DirectStreamSession<
 
     const streamInitResult = await this.initializeStream();
 
-    this.#stream = streamInitResult.start();
+    this.#stream = streamInitResult.start(this.outputSink());
 
     const onceListener = once(() => {
       const end = performance.now();
@@ -68,6 +68,11 @@ export abstract class DirectStreamSession<
   }
 
   protected abstract initializeStream(): Promise<FfmpegTranscodeSession>;
+
+  // The stream the transcode's output is piped through, after initializeStream
+  protected outputSink(): PassThrough | undefined {
+    return;
+  }
 }
 
 type StreamReadyErrorResult = {

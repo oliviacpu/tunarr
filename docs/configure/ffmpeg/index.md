@@ -106,6 +106,7 @@ Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. T
 - **Look:** text size, font and background are the player's, not Tunarr's. Plex Live TV (on Apple TV, for example) burns captions into the picture in its own style, a solid dark box behind the text. The text size follows the Plex app's subtitle size setting. CEA-608's optional background codes (semi-transparent or transparent) don't change it, so Tunarr doesn't send them.
 - **Format limits:** lines hold up to 32 characters, two lines at a time, and long cues are split over time. A style change in the middle of a word takes a column of its own. Characters outside the caption character set (most non-Latin scripts) are dropped.
 - **Every frame carries caption data,** even when nothing is being said, so players detect the caption track as soon as they tune in.
+- **Language:** the stream labels the captions with the first language in your [Language Preference](#language-preference), so players such as Plex can name the track by language instead of "Unknown".
 
 The setting takes effect from the next program, and the HDHomeRun stream picks it up the next time it is started.
 
