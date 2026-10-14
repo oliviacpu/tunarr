@@ -36,6 +36,7 @@ import duration from 'dayjs/plugin/duration.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import tmp from 'tmp';
+import type { NonEmptyArray } from 'ts-essentials';
 import { describe, expect, test, vi } from 'vitest';
 import { GapMusicLoudnorm } from './builder/filter/LoudnormFilter.ts';
 import {
@@ -1440,10 +1441,17 @@ describe('FfmpegStreamFactory', () => {
         selected: SubtitleStreamDetails | null;
         hdhrClosedCaptions?: boolean;
         streamMode?: 'hls' | 'mpegts';
+        // The program's subtitle tracks, both files by default; null for
+        // none, which the stream details leave undefined
+        subtitles?: NonEmptyArray<SubtitleStreamDetails> | null;
+        lineupItem?: ContentBackedStreamLineupItem;
       }) {
         const capturing = createCapturingPipelineBuilderFactory();
         const details = makeStreamDetails();
-        details.subtitleDetails = [fullTrack(), forcedTrack()];
+        details.subtitleDetails =
+          opts.subtitles === null
+            ? undefined
+            : (opts.subtitles ?? [fullTrack(), forcedTrack()]);
         const sut = new FfmpegStreamFactory(
           makeMockFfmpegInfo(),
           makeMockSettingsDB({
@@ -1470,7 +1478,7 @@ describe('FfmpegStreamFactory', () => {
             realtime: true,
             streamMode: opts.streamMode ?? 'hls',
           },
-          lineupItem: makeLineupItem(),
+          lineupItem: opts.lineupItem ?? makeLineupItem(),
         });
         return {
           method: capturing.getCapturedSubtitleInput()?.method,
@@ -1589,6 +1597,97 @@ describe('FfmpegStreamFactory', () => {
 
         expect(method).toBe(SubtitleMethods.Burn);
         expect(captions).toBeUndefined();
+      });
+
+      describe('the notice for a program without subtitles', () => {
+        test('captions a program without subtitles with a short notice', async () => {
+          const { method, captions } = await run({
+            selected: null,
+            subtitles: null,
+          });
+
+          expect(method).toBeUndefined();
+          // Near the start of the program's stream (the 10 s seek is its time 0)
+          expect(captions).toEqual({
+            cues: [
+              {
+                startMs: 1000,
+                endMs: 5000,
+                text: 'No captions for this program',
+              },
+            ],
+            frameRate: 24,
+            durationMs: 30000,
+            language: 'eng',
+          });
+        });
+
+        test('leaves a program whose subtitles cannot become captions as it is', async () => {
+          // Image-based subtitles stay burned in, and are no reason for a notice
+          const { method, captions } = await run({
+            selected: imageSubtitleStream,
+            subtitles: [imageSubtitleStream],
+          });
+
+          expect(method).toBe(SubtitleMethods.Burn);
+          expect(captions).toBeUndefined();
+        });
+
+        test('adds no notice to filler', async () => {
+          const program = makeLineupItem();
+          for (const lineupItem of [
+            { ...program, type: 'commercial', fillerListId: 'filler-list' },
+            { ...program, type: 'fallback' },
+          ] satisfies ContentBackedStreamLineupItem[]) {
+            const { captions } = await run({
+              selected: null,
+              subtitles: null,
+              lineupItem,
+            });
+
+            expect(captions).toBeUndefined();
+          }
+        });
+
+        test('adds no notice when captions are off', async () => {
+          for (const opts of [
+            { hdhrClosedCaptions: false },
+            { streamMode: 'mpegts' as const },
+          ]) {
+            const { captions } = await run({
+              selected: null,
+              subtitles: null,
+              ...opts,
+            });
+
+            expect(captions).toBeUndefined();
+          }
+        });
+
+        test('adds no notice to an offline gap', async () => {
+          const sut = new FfmpegStreamFactory(
+            makeMockFfmpegInfo(),
+            makeMockSettingsDB({
+              ...makeFfmpegSettings(),
+              hdhrClosedCaptions: true,
+            }),
+            createCapturingPipelineBuilderFactory().factory,
+            makeMockChannelDB(),
+            makeMockFeatureFlagService(),
+            makeMockStreamSelector(),
+            makeTranscodeConfig(),
+            makeChannel({ subtitlesEnabled: true }),
+          );
+
+          const result = await sut.createPlaceholderSession({
+            kind: 'offline',
+            duration: dayjs.duration({ seconds: 30 }),
+            outputFormat: HlsOutputFormat(defaultHlsOptions),
+          });
+
+          expect(result).toBeDefined();
+          expect(result?.renditions.captions).toBeUndefined();
+        });
       });
     });
 

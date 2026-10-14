@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import type { StreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import { isImageBasedSubtitle } from '../util.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
 import type { CaptionCue } from './Cea608Encoder.ts';
@@ -191,6 +192,98 @@ export async function loadProgramCaptions(
     frameRate: program.frameRate,
     durationMs: program.durationMs,
     language: track.languageCodeISO6392 ?? 'eng',
+  };
+}
+
+// What a program without subtitles shows when its stream starts. Plex offers
+// the CC option for the whole session, so without it a viewer who turns
+// captions on sees nothing and can't tell whether they work.
+export const NoCaptionsNoticeText = 'No captions for this program';
+
+// The notice appears 1 s into the program's stream and stays up for 4 s.
+// - 4 s: its five words take about 2 s to read at the 160-180 words a minute
+//   captions are usually timed for. Twice that gives a viewer time to notice
+//   it as well as read it, and it is gone before the program is under way.
+// - 1 s in: a pop-on caption is loaded in the frames before it appears (17
+//   frames here, 0.7 s at 23.976 fps), and those have to come after the
+//   stream's first frames. A session's first program has no frames for the
+//   first couple of slots of its schedule (its video starts after the
+//   encoder's B-frame delay), so caption data placed there is never sent.
+export const NoCaptionsNoticeStartMs = 1000;
+export const NoCaptionsNoticeMs = 4000;
+
+// At a low frame rate 1 s is too few frames for that: loading takes up to 18
+// frames (17 with block-centred lines, 18 with each line centred), after the
+// 2 a first program loses. So the notice starts no earlier than this many
+// frames in, 3 to spare: 1 s from 23.976 fps up, about 1.5 s at 15 fps.
+export const NoCaptionsNoticeLeadFrames = 23;
+
+// When the notice appears, for a stream at `frameRate`
+export function noCaptionsNoticeStartMs(frameRate: number): number {
+  return Math.max(
+    NoCaptionsNoticeStartMs,
+    Math.ceil((NoCaptionsNoticeLeadFrames / frameRate) * 1000),
+  );
+}
+
+/**
+ * The captions for a program that has no subtitles: the notice, near the
+ * start of its clock. That is the program's start, or the tune-in point when
+ * the stream starts partway through it.
+ *
+ * - Only scheduled programs get it: lineup items of type 'program', which
+ *   include custom show episodes and what a redirect resolves to. Filler
+ *   ('commercial': filler lists, in flex time or scheduled in slots) and a
+ *   flex gap's fallback filler ('fallback') get none. Offline and error items
+ *   never reach here; they play placeholder streams, which carry no captions.
+ * - Music tracks get none either: there is no speech to caption, and a music
+ *   channel would show it at every song.
+ * - No subtitles means no subtitle track at all. A program with any track,
+ *   even one that can't become captions (image-based, forced only, another
+ *   language), is left as it is.
+ * - It needs the frame rate captions are laid out on, as subtitles do.
+ * - A stream shorter than 8 s, twice the notice (a bumper, or the last seconds
+ *   of a program at tune-in), gets none: the notice would cover most of it,
+ *   and the code that clears it has to fall inside the program, since nothing
+ *   of a program's schedule is sent past its end.
+ */
+export function noCaptionsNotice(
+  item: StreamLineupItem,
+  stream: {
+    subtitles: readonly SubtitleStreamDetails[];
+    durationMs: number;
+    frameRate: number | undefined;
+    // ISO 639-2, the language the stream labels its captions with
+    language: string;
+  },
+): ProgramCaptions | undefined {
+  if (
+    item.type !== 'program' ||
+    item.program.type === 'track' ||
+    stream.subtitles.length > 0 ||
+    stream.frameRate === undefined
+  ) {
+    return;
+  }
+  const startMs = noCaptionsNoticeStartMs(stream.frameRate);
+  // The clearing code needs a second of program after it, too
+  if (
+    stream.durationMs < 2 * NoCaptionsNoticeMs ||
+    stream.durationMs < startMs + NoCaptionsNoticeMs + 1000
+  ) {
+    return;
+  }
+  return {
+    cues: [
+      {
+        startMs,
+        endMs: startMs + NoCaptionsNoticeMs,
+        text: NoCaptionsNoticeText,
+      },
+    ],
+    frameRate: stream.frameRate,
+    durationMs: stream.durationMs,
+    language: stream.language,
   };
 }
 

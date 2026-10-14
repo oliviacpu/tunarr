@@ -8,6 +8,12 @@ import {
   layoutCaption,
   PaddingPair,
 } from './Cea608Encoder.ts';
+import {
+  NoCaptionsNoticeMs,
+  NoCaptionsNoticeStartMs,
+  NoCaptionsNoticeText,
+  noCaptionsNoticeStartMs,
+} from './ProgramCaptions.ts';
 
 const FrameRate = 30;
 const frameMs = 1000 / FrameRate;
@@ -435,5 +441,53 @@ describe('caption placement', () => {
         (r) => r.column,
       ),
     ).toEqual([0, 0]);
+  });
+});
+
+describe('the no-captions notice', () => {
+  test('is a plain caption on the bottom row, from 1 s to 5 s', () => {
+    const pairs = framePairs(
+      [
+        {
+          startMs: NoCaptionsNoticeStartMs,
+          endMs: NoCaptionsNoticeStartMs + NoCaptionsNoticeMs,
+          text: NoCaptionsNoticeText,
+        },
+      ],
+      30 * 6,
+    );
+
+    expect(decodeCaptions(pairs)).toEqual([
+      [{ row: 15, column: 4, width: 28, text: 'No captions for this program' }],
+    ]);
+    // Loaded in the 17 frames before it shows, clear of the first frames
+    expect(indexOfPair(pairs, ResumeCaptionLoading)).toBe(13);
+    expect(indexOfPair(pairs, EndOfCaption)).toBe(30);
+    expect(indexOfPair(pairs, EraseDisplayedMemory)).toBe(150);
+  });
+
+  // A session's first program loses its first 2 frame slots, so the notice
+  // has to load after them, even where 1 s is only 15 frames
+  test('loads after the first 2 frames at 15 fps', () => {
+    const frameRate = 15;
+    const startMs = noCaptionsNoticeStartMs(frameRate);
+    const schedule = buildCaptionSchedule(
+      [
+        {
+          startMs,
+          endMs: startMs + NoCaptionsNoticeMs,
+          text: NoCaptionsNoticeText,
+        },
+      ],
+      { firstFrameMs: 0, frameRate },
+    );
+    const pairs = Array.from({ length: frameRate * 7 }, (_, k) =>
+      withoutParity(schedule.pairAt((k * 1000) / frameRate)),
+    );
+
+    expect(indexOfPair(pairs, ResumeCaptionLoading)).toBeGreaterThanOrEqual(2);
+    expect(decodeCaptions(pairs.slice(2))).toEqual([
+      [{ row: 15, column: 4, width: 28, text: 'No captions for this program' }],
+    ]);
   });
 });

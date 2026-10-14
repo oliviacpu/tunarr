@@ -41,6 +41,7 @@ import {
   exactFrameRate,
   loadProgramCaptions,
   captionTrackCandidates,
+  noCaptionsNotice,
 } from '../stream/captions/ProgramCaptions.ts';
 import { isImageBasedSubtitle } from '../stream/util.ts';
 import { KEYS } from '../types/inject.ts';
@@ -686,6 +687,20 @@ export class FfmpegStreamFactory {
           break;
         }
       }
+    }
+
+    // A program with no subtitles at all gets a short notice instead, so a
+    // viewer who turns captions on can tell they work
+    if (captionsOn && captions === undefined) {
+      captions = noCaptionsNotice(lineupItem, {
+        subtitles: streamDetails.subtitleDetails ?? [],
+        durationMs: duration.asMilliseconds(),
+        frameRate: exactFrameRate(streamDetails.videoDetails?.[0]?.framerate),
+        // The first preferred language, the .ts stream's caption label
+        language:
+          this.ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ??
+          'eng',
+      });
     }
 
     let watermarkSource: Nullable<WatermarkInputSource> = null;
