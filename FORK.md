@@ -34,6 +34,32 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Write transactions start IMMEDIATE, so a second writer can't fail them (2026-10-14)
+
+- **Why:** library scans are moving to a worker thread, which has its own SQLite connection. That makes the worker the
+  second writer to the same database, alongside the main thread. In WAL mode, a DEFERRED transaction (Drizzle's
+  default) that reads and then writes fails at once with `SQLITE_BUSY_SNAPSHOT` if the other connection committed in
+  between; the busy timeout doesn't apply. better-sqlite3's busy wait also blocks the thread that waits, and the main
+  thread serves the streams.
+- **Change:**
+  - **Immediate by default:** `withImmediateTransactions` (`db/immediateTransactions.ts`, applied in `DBAccess`)
+    makes `drizzle.transaction(fn)` start with BEGIN IMMEDIATE unless the caller passes its own `behavior`. The
+    write lock is taken up front, so a read-then-write can't fail that way. Applying it in one place keeps the 31
+    call sites unchanged, and new transactions get it too.
+  - **Busy timeout:** the main thread's connection keeps 5 s; worker threads get 30 s, since they can afford to wait.
+  - **Checkpoint:** `ProgramStateRepository.checkpointAndOptimize` runs the TRUNCATE checkpoint with
+    `busy_timeout = 0` and restores the timeout afterwards. While another connection holds a transaction, the
+    checkpoint just reports busy instead of blocking the main thread for 5 s.
+- **Test:** new `sqliteWriteContention.test.ts`, on a pre-migrated database with a second raw connection standing in
+  for a worker:
+  - a deferred read-then-write fails after another connection commits;
+  - Tunarr's transactions hold the write lock before their first write;
+  - an explicit `behavior` still applies;
+  - the checkpoint returns in under a second while another connection holds a snapshot, and the busy timeout is
+    restored.
+  - The second and fourth fail on the old code.
+- **Upstream:** not sent.
+
 ### Scan jobs go through a runner, and re-check the library when they start (2026-10-14)
 
 - **Why:** this prepares for running scans in a worker thread, so the coordinator can hand a job to whichever runner
