@@ -34,6 +34,40 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Tunarr warns when a channel's transcode falls behind real time (2026-10-14)
+
+- **What you saw:** a channel paused briefly every so often, for many minutes, and Tunarr logged nothing. Timing the
+  segment files by hand showed 2.002 s segments arriving every 2.1 to 2.3 s, about 0.95x real time, so players kept
+  running dry. The source was 10-bit HEVC 1080p, transcoded to libx264 `veryfast` with `-threads:v 4`. Raising the
+  transcode config's thread count to 8 fixed it.
+- **Cause:** nothing measured how fast a transcode produces video. A transcode below real time looked the same as a
+  healthy one in the logs.
+- **Fix:** while an HLS transcode runs, Tunarr follows its playlist and compares the video it produces with wall-clock
+  time. When a program stays below 0.98x over a minute of output, and keeps there for 20 s more, it logs one warning
+  naming the channel, the program, the speed and the transcode config's thread count, with the remedies. It logs one
+  info line if the program gets back to 0.99x, and nothing more for that program.
+  - **Measuring:** `TranscodeSpeedMonitor` (`stream/hls/TranscodeSpeedMonitor.ts`) takes "a segment of N seconds
+    finished at T" and reports the change of state. Time counts from the first segment, so ffmpeg's start-up and
+    probing don't count. The initial read burst only makes the speed higher. The extra 20 s keeps a stall that ffmpeg
+    catches up (a slow disk or network read) from warning.
+  - **Following the playlist:** `TranscodeSpeedWatcher` (`stream/hls/TranscodeSpeedWatcher.ts`) reads the end of
+    `stream.m3u8` every 2 s. It takes durations from `EXTINF` and finish times from the segment files' mtimes, so the
+    poll interval doesn't affect the measurement. Segments of earlier programs, which share the playlist, are skipped.
+  - **Wiring:** `HlsSession.transcode` starts a watcher before each program's ffmpeg and stops it when ffmpeg exits.
+    `hls_direct_v2` copies the video and isn't watched.
+  - **Docs:** `docs/misc/common-issues.md` ("Playback pauses every few minutes"): the warning and the remedies.
+- **Tests:** `TranscodeSpeedMonitor.test.ts`: real time gives nothing; 0.95x gives one warning, after 80 s; recovery
+  gives one info line and nothing after it; a slow start, a long first segment, a fast initial burst, a caught-up
+  stall and a program shorter than the window give nothing; the log line's wording. `TranscodeSpeedWatcher.test.ts`:
+  playlist parsing, mtime timing, skipping earlier programs' segments, a playlist longer than the part read, and a
+  poll still running when the watcher stops delivering nothing (programs share one playlist, so it would otherwise
+  read the next program's segments under this one's name; found by the Codex review).
+  `HlsSession.test.ts`: the watcher runs for exactly the life of ffmpeg, the warning reaches the log, and
+  `hls_direct_v2` isn't watched. Checked end to end with stream-repro and 2 s segments: a single-thread `medium`
+  transcode logged one warning (`Channel 900 (Repro) is transcoding "clip01" at 0.23x real time …`) under two minutes
+  after its first segment, matching the segment files' timing. A fast 360p transcode over two programs, the first
+  with the 60 s read burst, logged nothing.
+
 ### Closed captions say "No captions for this program" when a program has no subtitles (2026-10-14)
 
 - **What you saw:** Plex decides which caption tracks exist at tune-in, so it offers CC for the whole Live TV session.

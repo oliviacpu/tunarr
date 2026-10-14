@@ -43,6 +43,8 @@ import type {
   HlsPlaylistFilterOptions,
 } from './HlsPlaylistMutator.js';
 import { HlsPlaylistMutator } from './HlsPlaylistMutator.js';
+import { describeTranscodeSpeedEvent } from './TranscodeSpeedMonitor.js';
+import { TranscodeSpeedWatcher } from './TranscodeSpeedWatcher.js';
 
 export type HlsSessionProvider = (
   channel: ChannelOrmWithTranscodeConfig,
@@ -379,9 +381,18 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         }
       }
 
+      // Started before the check below, which then also covers a stop that
+      // lands while it reads the playlist. hls_direct_v2 copies the video, so
+      // there is no encoder to fall behind.
+      const speedWatcher =
+        this.sessionOptions.streamMode === 'hls'
+          ? await this.watchTranscodeSpeed(programStream.context)
+          : undefined;
+
       // A stop that landed during setup has already killed the previous
       // transcode. Starting this one would leave an ffmpeg nothing kills.
       if (this.state !== 'started') {
+        speedWatcher?.stop();
         return;
       }
 
@@ -401,8 +412,12 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
       if (this.sessionOptions.streamMode === 'hls') {
         // await this.trimPlaylistAndDeleteSegments();
       }
-      await programStream.start();
-      return programStream.transcodeSession!.wait();
+      try {
+        await programStream.start();
+        return await programStream.transcodeSession!.wait();
+      } finally {
+        speedWatcher?.stop();
+      }
     });
 
     if (transcodeResult.isFailure()) {
@@ -413,6 +428,31 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     }
 
     this.logger.debug('Stream ended.');
+  }
+
+  // Warns once per program when its transcode can't keep up with real time
+  private async watchTranscodeSpeed(context: PlayerContext) {
+    const watcher = new TranscodeSpeedWatcher(
+      this._m3u8PlaylistPath,
+      (event) => {
+        const message = describeTranscodeSpeedEvent(event, {
+          channel: this.channel,
+          item: context.lineupItem,
+          transcodeConfig: context.transcodeConfig,
+        });
+        if (event.type === 'behind') {
+          this.logger.warn(message);
+        } else {
+          this.logger.info(message);
+        }
+      },
+      {
+        onError: (e) =>
+          this.logger.debug(e, 'Could not measure the transcode speed'),
+      },
+    );
+    await watcher.start();
+    return watcher;
   }
 
   protected override getAdditionalRequiredFiles(): string[] {
