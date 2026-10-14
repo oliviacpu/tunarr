@@ -34,6 +34,30 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A failed or canceled scan no longer leaves its library locked or "scanning" (2026-10-14)
+
+- **What you saw:** nothing obvious yet; found while planning to move scans into a worker thread.
+  `MediaSourceScanCoordinator` had several ways to leave a library stuck:
+  - **Lock leaks:** if no scanner could be created, the library's lock stayed taken until restart, because the early
+    return came after `lock.acquire()`.
+  - **Stuck progress:** a scan that threw, or was canceled, stayed "in progress" in the UI, because only a scanner
+    that finishes normally calls `scanEnded`.
+  - **Cancel ignored:** a job canceled while still queued ran anyway, because the abort listener was added only once
+    it started.
+  - **Wasted work:** a canceled library scan was still followed by a full collection scan.
+  - **Shutdown:** `awaitAllFinished` waited only for the queue to empty, not for the running scan.
+- **Fix:** both `add` and `addLocal` now go through one `enqueue` helper.
+  - **Order:** the scanner is created before the lock is taken.
+  - **Cleanup:** whatever happens to the job, the lock is released, the abort controller is dropped, and progress
+    ends.
+  - **Cancel:** a job canceled before it starts doesn't run, and the collection scan is skipped after a cancel.
+  - **Reconcile:** duration reconciliation runs only after a job that actually ran.
+  - **Shutdown:** `awaitAllFinished` uses `onIdle`.
+  - **Tidy-ups:** the queue and controllers are instance fields (the coordinator is a singleton), and a local source
+    without a media type is refused instead of hitting `mediaType!`.
+- **Test:** new `MediaSourceScanCoordinator.test.ts`; 6 of its 7 cases fail on the old code.
+- **Upstream:** not sent.
+
 ### Movie scans pick up subtitle files added later (2026-10-14)
 
 - **What you saw:** a movie got no captions although Bazarr had added an `.srt` the day before (Star Trek II: Plex
