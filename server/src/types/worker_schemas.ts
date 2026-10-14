@@ -90,6 +90,46 @@ export const WorkerEvent = z.object({
 
 export type WorkerEvent = z.infer<typeof WorkerEvent>;
 
+// What a worker thread does: the round-robin pool (slot scheduling) or a
+// single library scan
+export const WorkerRole = z.enum(['pool', 'scan']);
+
+export type WorkerRole = z.infer<typeof WorkerRole>;
+
+// Main thread -> scan worker
+export const ScanWorkerRequest = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('scan'), jobId: z.uuid(), job: ScanJob }),
+  z.object({ type: z.literal('cancel'), jobId: z.uuid() }),
+  z.object({ type: z.literal('shutdown') }),
+]);
+
+export type ScanWorkerRequest = z.infer<typeof ScanWorkerRequest>;
+
+// Scan worker -> main thread. Progress mirrors MediaSourceProgressService's
+// events for the library or media source being scanned.
+export const ScanWorkerMessage = z.discriminatedUnion('type', [
+  WorkerEvent,
+  z.object({
+    type: z.literal('scan-progress'),
+    jobId: z.uuid(),
+    entityId: z.string(),
+    event: z.enum(['started', 'progress', 'ended']),
+    percentComplete: z.number().min(0).max(100).optional(),
+  }),
+  z.object({
+    type: z.literal('scan-done'),
+    jobId: z.uuid(),
+    outcome: ScanOutcome,
+  }),
+  z.object({
+    type: z.literal('scan-failed'),
+    jobId: z.uuid(),
+    message: z.string(),
+  }),
+]);
+
+export type ScanWorkerMessage = z.infer<typeof ScanWorkerMessage>;
+
 const WorkerErrorReply = z.object({
   type: z.literal('error'),
   message: z.string(),

@@ -34,6 +34,25 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A scan worker role and its message protocol (2026-10-14)
+
+- **Why:** groundwork for running library scans in a worker thread, so they stop stalling live streams. Nothing uses
+  it yet; the next entry switches scans over.
+- **Change:**
+  - **Protocol** (`types/worker_schemas.ts`):
+    - `WorkerRole` (`pool` or `scan`);
+    - main to worker: `ScanWorkerRequest` (`scan`, `cancel`, `shutdown`);
+    - worker to main: `ScanWorkerMessage` (`started`, `scan-progress`, `scan-done`, `scan-failed`).
+  - **Starting a worker:** `TunarrSubprocessService.createWorker(opts, role)` passes the role in `workerData` and
+    guards a missing entry script instead of using `process.argv[1]!`. `start-worker` starts a `ScanWorker` for
+    `role: 'scan'`, and a pool worker otherwise; workers without a role are pool workers.
+  - **`ScanWorker`:**
+    - runs one `ScanJob` at a time through `ScanJobExecutor`, on its own database connection;
+    - relays its `MediaSourceProgressService` events, sanitised and coalesced to whole percents;
+    - aborts the job on `cancel`, refuses a second job while busy, and flushes logs before exiting on `shutdown`.
+- **Test:** new `ScanWorker.test.ts`, run over a real `MessageChannel`.
+- **Upstream:** not sent.
+
 ### Write transactions start IMMEDIATE, so a second writer can't fail them (2026-10-14)
 
 - **Why:** library scans are moving to a worker thread, which has its own SQLite connection. That makes the worker the

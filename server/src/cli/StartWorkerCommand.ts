@@ -4,12 +4,15 @@ import { container } from '../container.ts';
 import type { ServerOptions } from '../globals.ts';
 import { setServerOptionsUnchecked } from '../globals.ts';
 import { MeilisearchService } from '../services/MeilisearchService.ts';
+import { ScanWorker } from '../services/ScanWorker.ts';
 import { TunarrWorker } from '../services/TunarrWorker.ts';
+import { WorkerRole } from '../types/worker_schemas.ts';
 import type { GenerateOpenApiCommandArgs } from './GenerateOpenApiCommand.ts';
 import type { GlobalArgsType } from './types.ts';
 
 type WorkerData = {
   serverOptions: ServerOptions;
+  role?: unknown;
 };
 
 export const StartWorkerCommand: CommandModule<
@@ -29,7 +32,7 @@ export const StartWorkerCommand: CommandModule<
       process.exit(1);
     }
 
-    const { serverOptions } = workerData as WorkerData;
+    const { serverOptions, role } = workerData as WorkerData;
 
     // The global options were already resolved from this worker's argv by the
     // CLI middleware. This applies the server-only fields on top — notably
@@ -44,10 +47,16 @@ export const StartWorkerCommand: CommandModule<
     // guide, run fixers, register cron jobs or refresh libraries — the parent
     // did all of that before spawning it, and doing it again once per worker
     // means N concurrent migrations against one SQLite file. The search client
-    // is the one piece of shared startup a worker genuinely needs, because slot
-    // scheduling resolves smart collections through it.
+    // is the one piece of shared startup a worker genuinely needs: slot
+    // scheduling resolves smart collections through it, and scans index what
+    // they find.
     await container.get<MeilisearchService>(MeilisearchService).start();
 
-    container.get<TunarrWorker>(TunarrWorker).start();
+    // Workers spawned before roles existed carry none: they're pool workers
+    if (WorkerRole.catch('pool').parse(role) === 'scan') {
+      container.get<ScanWorker>(ScanWorker).start(parentPort);
+    } else {
+      container.get<TunarrWorker>(TunarrWorker).start();
+    }
   },
 };
