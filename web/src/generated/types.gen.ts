@@ -10989,6 +10989,7 @@ export type GetApiSystemMigrationStateResponses = {
         legacyMigration: boolean;
         isFreshSettings?: boolean;
         hasMigratedTo1_0: boolean;
+        hasEnabledLogRollByDefault: boolean;
     };
 };
 
