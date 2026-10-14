@@ -34,6 +34,37 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A scan A/B bench, and a latency probe for a running server (2026-10-14)
+
+- **Why:** to show that scans in a worker thread stop stalling the main thread, here and on a real server.
+- **`pnpm bench:scan-worker`** (`scripts/scan-worker-ab.ts`):
+  - **What it runs:** a fresh migrated database per run, a local movie source over 1,500 hard-linked clips, and the
+    initial scan, with `TUNARR_SCAN_IN_WORKER` off and on. The arms alternate (A B, then B A), and both use the same
+    worker pool.
+  - **What it measures:**
+    - an HTTP probe every 10 ms, timed from when each probe was due;
+    - **main-thread CPU:** the CPU time the scan adds to the server's main thread (`ps -M` on macOS, `/proc` on
+      Linux), which a busy machine doesn't distort;
+    - **write-lock wait:** a second connection, in its own thread, times `BEGIN IMMEDIATE` every 50 ms, as a main-thread
+      write (play history at a program start) would wait on the scan's transaction;
+    - the bench's own event-loop lag, to tell a busy machine from a stalled server.
+  - **Pass:** the worker arm adds at most 10% of the in-process arm's main-thread CPU, and the write wait's p99 stays
+    under 25 ms. Worst cases (probe stall, longest write wait) must stay under 100 ms, judged only when the bench's
+    own loop kept up.
+  - **Result** on a loaded laptop (1,500 clips, 2 trials, medians):
+    - main-thread CPU for the scan: 11.5 s in-process, 0.0 s in the worker;
+    - write-lock wait p99: 6.3 ms in-process, 6.6 ms in the worker;
+    - worst cases were not judged, because the bench's own loop lagged up to 166 ms.
+- **`scripts/probe-latency.mjs`**: plain Node with no dependencies, for a running server.
+  - Probes `/api/xmltv-last-refresh` on a cadence and can read a channel's `.ts` the way an HDHomeRun client does,
+    timing the gaps between chunks and noting if the stream ends.
+  - Basic auth comes from `TUNARR_BASIC_AUTH_USER`/`PASSWORD`, read from the environment or from `--auth-env FILE`, so
+    credentials never appear in the process list.
+  - **First use, on the in-process build:** a forced 91 s Plex movie-library scan stalled the API for up to 3.4 s (53
+    probes over 250 ms, against 1 in the two minutes before). The `.ts` stream's longest gap was 3.5 s, against
+    about 2 s, one segment, at idle.
+- **Upstream:** not sent.
+
 ### The worker smoke test runs a real scan in a scan worker (2026-10-14)
 
 - **Why:** the unit tests drive the scan worker over a `MessageChannel`, but only a real server shows that a scan
