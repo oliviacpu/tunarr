@@ -1,6 +1,15 @@
 import dayjs from 'dayjs';
 import { describe, expect, it, vi } from 'vitest';
+import { ReferenceHlsPlaylistTrim } from '../../testing/hls/ReferenceHlsPlaylistTrim.ts';
+import {
+  RandomDurations,
+  SeededRandom,
+  randomFilter,
+  randomOptions,
+  segmentUri,
+} from '../../testing/hls/randomPlaylists.ts';
 import { readTestFile } from '../../testing/util.ts';
+import type { TrimPlaylistResult } from './HlsPlaylistMutator.ts';
 import { HlsPlaylistMutator } from './HlsPlaylistMutator.ts';
 
 describe('HlsPlaylistMutator', () => {
@@ -1251,6 +1260,87 @@ describe('HlsPlaylistMutator', () => {
         .map((l) => l.slice('#EXT-X-PROGRAM-DATE-TIME:'.length));
 
       expect(dates).toEqual(expected);
+    });
+  });
+
+  // The trim parses into a MediaPlaylistIndex and lists from it. This checks
+  // it against the trim it replaced, kept in src/testing/hls, on playlists
+  // with every kind of line the parser meets, including ones ffmpeg doesn't
+  // write.
+  describe('matches the trim it replaced', () => {
+    const reference = new ReferenceHlsPlaylistTrim();
+    const start = dayjs('2024-10-18T14:00:00.000-0400');
+
+    function randomPlaylist(random: SeededRandom) {
+      const lines = [
+        '#EXTM3U',
+        '#EXT-X-VERSION:6',
+        '#EXT-X-TARGETDURATION:4',
+        '#EXT-X-MEDIA-SEQUENCE:0',
+      ];
+      for (let i = random.int(0, 2); i > 0; i--) {
+        lines.push('#EXT-X-DISCONTINUITY');
+      }
+      let next = 0;
+      for (let entry = random.int(0, 60); entry > 0; entry--) {
+        const kind = random.next();
+        if (kind < 0.7) {
+          lines.push(
+            `#EXTINF:${random.pick(RandomDurations).toFixed(6)},`,
+            '#EXT-X-PROGRAM-DATE-TIME:2024-10-18T14:00:00.000-0400',
+            random.chance(0.9)
+              ? segmentUri(next++, random.chance(0.1) ? 'mp4' : 'ts')
+              : random.pick([
+                  segmentUri(random.int(0, 40)),
+                  '/stream/channels/x/hls/promo.ts',
+                ]),
+          );
+        } else if (kind < 0.85) {
+          lines.push('#EXT-X-DISCONTINUITY');
+        } else if (kind < 0.9) {
+          lines.push(random.pick(['', '  ']));
+        } else {
+          // Lines out of step with the three-line entries
+          lines.push(
+            random.pick([
+              '#EXT-X-DISCONTINUITY-SEQUENCE:3',
+              '#EXTINF:abc,',
+              '#EXT-X-ENDLIST',
+            ]),
+          );
+        }
+      }
+      // Cut off at the end, as a partial write would be
+      return random.chance(0.2)
+        ? lines.slice(0, lines.length - random.int(1, 2))
+        : lines;
+    }
+
+    function settle<T>(run: () => T) {
+      try {
+        const result = run() as TrimPlaylistResult;
+        return {
+          ...result,
+          playlistStart:
+            result.segmentCount > 0 ? result.playlistStart.valueOf() : 0,
+        };
+      } catch {
+        return 'failed';
+      }
+    }
+
+    it.each(Array.from({ length: 40 }, (_, i) => i + 1))('seed %i', (seed) => {
+      const random = new SeededRandom(seed);
+      for (let round = 0; round < 25; round++) {
+        const lines = randomPlaylist(random);
+        const filter = randomFilter(random, start, 60);
+        const options = randomOptions(random);
+        expect(
+          settle(() => mutator.trimPlaylist(start, filter, lines, options)),
+        ).toEqual(
+          settle(() => reference.trimPlaylist(start, filter, lines, options)),
+        );
+      }
     });
   });
 });

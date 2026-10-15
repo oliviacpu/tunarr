@@ -1,24 +1,14 @@
 import { isNonEmptyString } from '@/util/index.js';
-import { seq } from '@tunarr/shared/util';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import {
-  filter,
-  first,
-  isEmpty,
-  last,
-  max,
-  nth,
-  reject,
-  take,
-  takeRight,
-  trimEnd,
-} from 'lodash-es';
+import { filter, first, max, nth, take, takeRight, trimEnd } from 'lodash-es';
 import { basename } from 'node:path';
 import { match } from 'ts-pattern';
 import { SegmentNameRegex } from './BaseHlsSession.ts';
+import type { PlaylistLine, PlaylistSegment } from './MediaPlaylistIndex.ts';
+import { MediaPlaylistIndex } from './MediaPlaylistIndex.ts';
 
-type MutateOptions = {
+export type MutateOptions = {
   maxSegmentsToKeep: number;
   endWithDiscontinuity: boolean;
   targetDuration: number;
@@ -50,27 +40,15 @@ export class HlsPlaylistMutator {
     playlistLines: string[],
     opts: MutateOptions,
   ): TrimPlaylistResult {
-    const items = this.parsePlaylist(
-      start,
-      playlistLines,
-      opts.endWithDiscontinuity,
-    );
-
-    const generateResult = this.generatePlaylist(
-      items,
+    const result = this.trimIndex(
+      MediaPlaylistIndex.fromLines(start, playlistLines),
       filter,
-      opts.maxSegmentsToKeep,
-      opts.targetDuration,
-      opts.previousDiscontinuitySequence,
+      opts,
     );
-
-    return {
-      playlistStart: generateResult.nextPlaylistStart,
-      sequence: generateResult.startSequence,
-      playlist: generateResult.playlist,
-      segmentCount: generateResult.count,
-      discontinuitySequence: generateResult.discontinuitySequence,
-    };
+    if (result === undefined) {
+      throw new Error('A playlist parsed whole has no discarded segments');
+    }
+    return result;
   }
 
   parsePlaylist(
@@ -78,141 +56,50 @@ export class HlsPlaylistMutator {
     playlistLines: string[],
     endWithDiscontinuity: boolean,
   ): PlaylistLine[] {
-    const items: PlaylistLine[] = [];
-
-    let i = 0;
-    // Milliseconds, not Dayjs: this runs once per segment of the whole
-    // session's playlist on every playlist request.
-    let currentMs = start.valueOf();
-
-    while (
-      i < playlistLines.length &&
-      !playlistLines[i]!.startsWith('#EXTINF:')
-    ) {
-      // Skip header lines — DISCs in the header are FFmpeg artifacts from
-      // process restarts (discont_start), not actual program boundaries.
-      // The DISC-SEQ header is also ignored because with hls_list_size=0
-      // all DISCs are in the body; counting both would double-count.
-      // This is beacuse Tunarr has discrete ffmpeg processes continuouly write
-      // to the same underlying playlist file.
-      // TODO: We could consider writing out the trimmed playlist periodically
-      // in the session manager to keep things cleaner
-      i++;
-    }
-
-    while (i < playlistLines.length) {
-      const line = playlistLines[i];
-      if (!isNonEmptyString(line)) {
-        i++;
-        continue;
-      }
-
-      if (line.startsWith('#EXT-X-DISCONTINUITY')) {
-        items.push(PlaylistDiscontinuity());
-        i++;
-        continue;
-      }
-
-      // EXTINF
-      const duration = parseFloat(trimEnd(line.trim(), ',').split(':')[1]!);
-      items.push(
-        new PlaylistSegment(start, currentMs, line, playlistLines[i + 2]!),
-      );
-
-      // What dayjs's add(duration, 'seconds') did at each step: a Date holds
-      // whole milliseconds, so the sum is truncated every time.
-      currentMs = Math.trunc(currentMs + duration * 1000);
-      i += 3;
-    }
-
-    if (endWithDiscontinuity && last(items)?.type !== 'discontinuity') {
-      items.push(PlaylistDiscontinuity());
-    }
-
-    return items;
+    return MediaPlaylistIndex.fromLines(start, playlistLines).toLines(
+      endWithDiscontinuity,
+    );
   }
 
-  private generatePlaylist(
-    items: PlaylistLine[],
+  /**
+   * The playlist to serve from a parsed media playlist. Its work grows with
+   * the segments the index keeps, not with the whole playlist.
+   *
+   * Undefined when the filter would list a segment the index has discarded.
+   * Trim an index of the whole playlist then.
+   */
+  trimIndex(
+    index: MediaPlaylistIndex,
     filterOptions: HlsPlaylistFilterOptions,
-    maxSegmentsToKeep: number,
-    targetDuration: number,
-    previousDiscontinuitySequence?: number,
-  ) {
-    // Count and remove leading discontinuities
-    let leadingDiscontinuities = 0;
-    let discontinuitySequence = 0;
-    while (items[leadingDiscontinuities]?.type === 'discontinuity') {
-      leadingDiscontinuities++;
-    }
-    discontinuitySequence += leadingDiscontinuities;
-    items = items.slice(leadingDiscontinuities);
-
-    let allSegments = filter(
-      items,
-      (item): item is PlaylistSegment => item.type === 'segment',
+    opts: MutateOptions,
+  ): TrimPlaylistResult | undefined {
+    const selected = this.selectSegments(
+      index,
+      filterOptions,
+      opts.maxSegmentsToKeep,
     );
-
-    if (allSegments.length > maxSegmentsToKeep) {
-      const filtered = match(filterOptions)
-        .with({ type: 'before_date' }, ({ before }) =>
-          reject(allSegments, (segment) => segment.startTime.isBefore(before)),
-        )
-        .with(
-          {
-            type: 'before_segment_number',
-          },
-          (beforeSeg) => {
-            const minSeg = Math.max(
-              beforeSeg.segmentNumber - beforeSeg.segmentsToKeepBefore,
-              beforeSeg.segmentFloor ?? 0,
-            );
-            return seq.collect(allSegments, (segment) => {
-              const fileName = basename(segment.line);
-              const matches = fileName.match(SegmentNameRegex);
-              if (!matches || matches.length < 2) {
-                return;
-              }
-              const int = parseInt(matches[1]!);
-              if (isNaN(int)) {
-                return;
-              }
-              if (int < minSeg) {
-                return;
-              }
-              return segment;
-            });
-          },
-        )
-        .exhaustive();
-
-      allSegments =
-        filtered.length >= maxSegmentsToKeep
-          ? take(filtered, maxSegmentsToKeep)
-          : takeRight(allSegments, maxSegmentsToKeep);
+    if (selected === undefined) {
+      return;
     }
 
-    const startSequence = first(allSegments)?.startSequence ?? 0;
-    // The kept segments are the parsed objects themselves, so membership is
-    // identity. Comparing every item of a long session's playlist against
-    // each kept segment by value made this O(items x kept) date comparisons
-    // on every playlist request.
-    const selected = new Set<PlaylistLine>(allSegments);
+    const firstSegment = first(selected);
+    const startSequence = firstSegment?.number ?? 0;
 
-    if (!isEmpty(allSegments)) {
-      const firstSeg = first(allSegments)!;
-      const firstSegIndex = items.indexOf(firstSeg);
-      // ALL discontinuities before the first selected segment are folded into
-      // the discontinuity sequence number. They must never be emitted as tags
-      // because there are no selected segments before them — emitting a tag
-      // would create an empty leading period which confuses clients like Kodi
-      // (inputstream.adaptive maps each discontinuity to a "period" and
-      // errors with "No segments in the manifest" when a period is empty).
-      for (let i = 0; i < firstSegIndex; i++) {
-        if (items[i]!.type === 'discontinuity') {
-          discontinuitySequence++;
-        }
-      }
+    // ALL discontinuities before the first selected segment are folded into
+    // the discontinuity sequence number. They must never be emitted as tags
+    // because there are no selected segments before them — emitting a tag
+    // would create an empty leading period which confuses clients like Kodi
+    // (inputstream.adaptive maps each discontinuity to a "period" and
+    // errors with "No segments in the manifest" when a period is empty).
+    let discontinuitySequence: number;
+    if (firstSegment !== undefined) {
+      discontinuitySequence = firstSegment.discontinuitiesBefore;
+    } else if (index.segmentCount > 0) {
+      discontinuitySequence = index.leadingDiscontinuities;
+    } else {
+      discontinuitySequence =
+        index.discontinuities +
+        (opts.endWithDiscontinuity && !index.endsWithDiscontinuity ? 1 : 0);
     }
 
     // Cap disc-seq so it never jumps by more than 1 between consecutive polls.
@@ -222,72 +109,104 @@ export class HlsPlaylistMutator {
     // emit a trailing DISC to pre-create the next period for the following poll.
     let emitTrailingDisc = false;
     if (
-      previousDiscontinuitySequence !== undefined &&
-      discontinuitySequence > previousDiscontinuitySequence + 1
+      opts.previousDiscontinuitySequence !== undefined &&
+      discontinuitySequence > opts.previousDiscontinuitySequence + 1
     ) {
-      discontinuitySequence = previousDiscontinuitySequence + 1;
+      discontinuitySequence = opts.previousDiscontinuitySequence + 1;
       emitTrailingDisc = true;
     }
 
     const lines = [
       '#EXTM3U',
       '#EXT-X-VERSION:6',
-      `#EXT-X-TARGETDURATION:${targetDuration}`,
+      `#EXT-X-TARGETDURATION:${opts.targetDuration}`,
       `#EXT-X-MEDIA-SEQUENCE:${startSequence}`,
       `#EXT-X-DISCONTINUITY-SEQUENCE:${discontinuitySequence}`,
       '#EXT-X-INDEPENDENT-SEGMENTS',
     ];
 
-    // Track whether we've emitted at least one selected segment.
-    // A DISC tag is only emitted when it separates two groups of selected
-    // segments — never before the first selected segment (that case is
-    // handled above by incrementing discontinuitySequence).
-    let hasEmittedSegment = false;
+    selected.forEach((segment, i) => {
+      // A DISC tag is only emitted when it separates two selected segments,
+      // never before the first one (that case is counted in the
+      // discontinuity sequence above).
+      if (i > 0 && segment.afterDiscontinuity) {
+        lines.push('#EXT-X-DISCONTINUITY');
+      }
+      lines.push(
+        segment.extInf,
+        `#EXT-X-PROGRAM-DATE-TIME:${segment.startTime.format(
+          'YYYY-MM-DDTHH:mm:ss.SSSZZ',
+        )}`,
+        // A URI cut off at the end of the file was joined as an empty line
+        segment.line ?? '',
+      );
+    });
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]!;
-      switch (item.type) {
-        case 'discontinuity': {
-          if (!hasEmittedSegment) {
-            // Before the first selected segment — already counted in
-            // discontinuitySequence above, do not emit a tag.
-            break;
-          }
-          const next = items[i + 1];
-          const nextIsSelected = next !== undefined && selected.has(next);
-          if (i === items.length - 1 || nextIsSelected) {
-            lines.push('#EXT-X-DISCONTINUITY');
-          }
-          break;
-        }
-        case 'segment':
-          if (selected.has(item)) {
-            lines.push(item.extInf);
-            lines.push(
-              `#EXT-X-PROGRAM-DATE-TIME:${item.startTime.format(
-                'YYYY-MM-DDTHH:mm:ss.SSSZZ',
-              )}`,
-            );
-            lines.push(item.line);
-            hasEmittedSegment = true;
-          }
-          break;
+    if (firstSegment !== undefined) {
+      // A playlist that ends with a discontinuity keeps it after the last
+      // listed segment
+      if (index.endsWithDiscontinuity || opts.endWithDiscontinuity) {
+        lines.push('#EXT-X-DISCONTINUITY');
+      }
+      if (emitTrailingDisc) {
+        lines.push('#EXT-X-DISCONTINUITY');
       }
     }
 
-    if (emitTrailingDisc && hasEmittedSegment) {
-      lines.push('#EXT-X-DISCONTINUITY');
-    }
-
-    const playlist = lines.join('\n');
-    const nextPlaylistStart = first(allSegments)?.startTime ?? dayjs();
     return {
-      playlist,
-      nextPlaylistStart,
-      startSequence,
-      count: allSegments.length,
+      playlistStart: firstSegment?.startTime ?? dayjs(),
+      sequence: startSequence,
+      playlist: lines.join('\n'),
+      segmentCount: selected.length,
       discontinuitySequence,
     };
+  }
+
+  // The segments to list, oldest first: the first maxSegmentsToKeep that pass
+  // the filter, or the newest maxSegmentsToKeep when fewer pass. Undefined
+  // when that takes a discarded segment.
+  private selectSegments(
+    index: MediaPlaylistIndex,
+    filterOptions: HlsPlaylistFilterOptions,
+    maxSegmentsToKeep: number,
+  ): readonly PlaylistSegment[] | undefined {
+    const kept = index.segments;
+    if (!(index.segmentCount > maxSegmentsToKeep)) {
+      return index.discardedCount === 0 ? kept : undefined;
+    }
+
+    const filtered = match(filterOptions)
+      .with({ type: 'before_date' }, ({ before }) => {
+        // What Dayjs's isBefore compares: the timestamps
+        const beforeMs = before.valueOf();
+        return index.discardedSegmentStartingFrom(beforeMs)
+          ? undefined
+          : filter(kept, (segment) => !(segment.startMs < beforeMs));
+      })
+      .with({ type: 'before_segment_number' }, (beforeSeg) => {
+        const minSeg = Math.max(
+          beforeSeg.segmentNumber - beforeSeg.segmentsToKeepBefore,
+          beforeSeg.segmentFloor ?? 0,
+        );
+        return index.discardedSegmentNumberedFrom(minSeg)
+          ? undefined
+          : filter(kept, (segment) => {
+              const number = segment.number;
+              return number !== null && !(number < minSeg);
+            });
+      })
+      .exhaustive();
+
+    if (filtered === undefined) {
+      return;
+    }
+    if (filtered.length >= maxSegmentsToKeep) {
+      return take(filtered, maxSegmentsToKeep);
+    }
+    if (index.discardedCount > 0 && maxSegmentsToKeep > kept.length) {
+      return;
+    }
+    return takeRight(kept, maxSegmentsToKeep);
   }
 
   // The WebVTT subtitle sidecar (`HlsSubtitleOutputFormat`, ffmpeg's
@@ -380,48 +299,6 @@ export class HlsPlaylistMutator {
   }
 }
 
-class PlaylistSegment {
-  public readonly type = 'segment' as const;
-  #startTime?: Dayjs;
-
-  /**
-   * `startMs` is the segment's start as a timestamp; `playlistStart` is the
-   * time the parse began from. The Dayjs start time is only built when read:
-   * a long session's playlist has thousands of segments, and a request keeps
-   * about twenty of them.
-   */
-  constructor(
-    private readonly playlistStart: Dayjs,
-    public readonly startMs: number,
-    public extInf: string,
-    public line: string,
-  ) {}
-
-  /** The same value (and Dayjs settings) as adding each duration to the start. */
-  get startTime(): Dayjs {
-    this.#startTime ??= this.playlistStart.add(
-      this.startMs - this.playlistStart.valueOf(),
-      'millisecond',
-    );
-    return this.#startTime;
-  }
-
-  get startSequence() {
-    const matches = basename(this.line).match(SegmentNameRegex);
-    const match = nth(matches, 1);
-    return match ? parseInt(match) : null;
-  }
-
-  equals(other: PlaylistSegment) {
-    return (
-      this === other ||
-      (this.startMs === other.startMs &&
-        this.extInf === other.extInf &&
-        this.line === other.line)
-    );
-  }
-}
-
 export class SubtitlePlaylistSegment {
   public readonly duration: number;
 
@@ -449,19 +326,7 @@ export type SubtitleTrimResult = {
   segmentCount: number;
 };
 
-type PlaylistDiscontinuity = {
-  type: 'discontinuity';
-};
-
-function PlaylistDiscontinuity(): PlaylistDiscontinuity {
-  return {
-    type: 'discontinuity',
-  };
-}
-
-type PlaylistLine = PlaylistSegment | PlaylistDiscontinuity;
-
-type TrimPlaylistResult = {
+export type TrimPlaylistResult = {
   playlistStart: Dayjs;
   sequence: number;
   playlist: string;

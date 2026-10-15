@@ -44,6 +44,7 @@ import type {
   HlsPlaylistFilterOptions,
 } from './HlsPlaylistMutator.js';
 import { HlsPlaylistMutator } from './HlsPlaylistMutator.js';
+import { MediaPlaylistReader } from './MediaPlaylistReader.js';
 import { describeTranscodeSpeedEvent } from './TranscodeSpeedMonitor.js';
 import { TranscodeSpeedWatcher } from './TranscodeSpeedWatcher.js';
 
@@ -79,6 +80,8 @@ const EmptySubtitlePlaylist = [
   '#EXT-X-MEDIA-SEQUENCE:0',
   '',
 ].join('\n');
+// Segments in each trimmed playlist served to clients
+const PlaylistSegmentCount = 20;
 
 export interface HlsSessionOptions extends BaseHlsSessionOptions {
   streamMode: 'hls' | 'hls_direct_v2';
@@ -94,6 +97,8 @@ export interface HlsSessionOptions extends BaseHlsSessionOptions {
 export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   #playlistStart?: Dayjs;
   #hlsPlaylistMutator: HlsPlaylistMutator = new HlsPlaylistMutator();
+  // Parses only what ffmpeg appended to stream.m3u8 since the last request
+  #playlistReader: MediaPlaylistReader;
   #currentSession: Maybe<FfmpegTranscodeSession>;
   #lastDelete: Dayjs = dayjs().subtract(1, 'year');
   #lastSubtitleDelete: Dayjs = dayjs().subtract(1, 'year');
@@ -118,6 +123,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     private programStreamFactory: ProgramStreamFactory,
   ) {
     super(channel, options);
+    this.#playlistReader = new MediaPlaylistReader(this._m3u8PlaylistPath);
   }
 
   public get sessionType(): HlsSessionOptions['streamMode'] {
@@ -168,19 +174,28 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     };
     return Result.attemptAsync(async () => {
       return await this.lock.runExclusive(async () => {
-        const playlistLines = await this.readPlaylist();
-        if (playlistLines) {
-          const trimResult = this.#hlsPlaylistMutator.trimPlaylist(
-            this.#playlistStart!,
-            filterOpts,
-            playlistLines,
-            {
-              maxSegmentsToKeep: 20,
-              targetDuration: this.getHlsOptions().hlsTime,
-              previousDiscontinuitySequence: this.#lastDiscontinuitySequence,
-              endWithDiscontinuity: false,
-            },
+        const fullParses = this.#playlistReader.stats.fullParses;
+        const trimResult = await this.#playlistReader.trim(
+          this.#playlistStart,
+          filterOpts,
+          {
+            maxSegmentsToKeep: PlaylistSegmentCount,
+            targetDuration: this.getHlsOptions().hlsTime,
+            previousDiscontinuitySequence: this.#lastDiscontinuitySequence,
+            endWithDiscontinuity: false,
+          },
+        );
+        if (
+          fullParses > 0 &&
+          this.#playlistReader.stats.fullParses > fullParses
+        ) {
+          this.logger.debug(
+            'Parsed the whole HLS playlist again (channel id = %s, number = %d)',
+            this.channel.uuid,
+            this.channel.number,
           );
+        }
+        if (trimResult) {
           this.#lastDiscontinuitySequence = trimResult.discontinuitySequence;
           const now = dayjs();
           if (now.isAfter(this.#lastDelete.add(30, 'seconds'))) {
@@ -195,6 +210,12 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
             this.#segmentFloor = Math.max(
               this.#segmentFloor,
               trimResult.sequence,
+            );
+            // The default filter never lists them again, so a long session
+            // holds only its recent segments
+            this.#playlistReader.discardSegmentsBelow(
+              this.#segmentFloor,
+              PlaylistSegmentCount,
             );
             this.deleteOldSegmentFiles(trimResult.sequence, [
               '.ts',

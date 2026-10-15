@@ -9,6 +9,8 @@ import { Result } from '@/types/result.js';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
+import { sumBy } from 'lodash-es';
+import type { FileHandle } from 'node:fs/promises';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import tmp from 'tmp';
@@ -19,6 +21,7 @@ import {
   makeTsSegment,
   parseTsSegment,
 } from '../../testing/captions/MpegTsSegmentFixture.ts';
+import { ReferenceHlsPlaylistTrim } from '../../testing/hls/ReferenceHlsPlaylistTrim.ts';
 import type { ContentBackedStreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import type { ProgramCaptions } from '../captions/ProgramCaptions.ts';
 import { noCaptionsNotice } from '../captions/ProgramCaptions.ts';
@@ -480,6 +483,110 @@ describe('HlsSession', () => {
       for (const file of listed) {
         expect(onDisk).toContain(file);
       }
+    });
+
+    // ffmpeg never trims stream.m3u8, so after hours of watching it lists
+    // thousands of segments. Each playlist request read and parsed all of it.
+    test('a request on a long session reads only what ffmpeg appended', async () => {
+      const session = makeSession(dir.name, { segmentSeconds: 2 });
+      await (
+        session as unknown as { startInternal(): Promise<void> }
+      ).startInternal();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const workingDir = session.workingDirectory;
+      await fs.mkdir(workingDir, { recursive: true });
+      const playlistPath = path.join(workingDir, 'stream.m3u8');
+      const header = [
+        '#EXTM3U',
+        '#EXT-X-VERSION:6',
+        '#EXT-X-TARGETDURATION:2',
+        '#EXT-X-MEDIA-SEQUENCE:0',
+        '#EXT-X-INDEPENDENT-SEGMENTS',
+        '#EXT-X-DISCONTINUITY',
+      ];
+      const body: string[] = [];
+      const addSegments = (count: number) => {
+        for (let i = 0; i < count; i++) {
+          const n = body.length / 3;
+          body.push(
+            '#EXTINF:2.000000,',
+            `#EXT-X-PROGRAM-DATE-TIME:${new Date(Date.UTC(2026, 9, 15) + n * 2000).toISOString()}`,
+            `/stream/channels/${channelUuid}/hls/data${String(n).padStart(6, '0')}.ts`,
+          );
+        }
+      };
+      // Like ffmpeg: the whole file, renamed over the playlist
+      const writePlaylist = async () => {
+        await fs.writeFile(
+          `${playlistPath}.tmp`,
+          [...header, ...body].join('\n') + '\n',
+        );
+        await fs.rename(`${playlistPath}.tmp`, playlistPath);
+      };
+
+      // About 11 hours of 2-second segments
+      addSegments(20_000);
+      await writePlaylist();
+      session.onSegmentRequested('10.0.0.1', 'data019990.ts');
+      const first = (await session.trimPlaylist()).get();
+      expect(first?.sequence).toBe(19_980);
+
+      addSegments(2);
+      await writePlaylist();
+      session.onSegmentRequested('10.0.0.1', 'data019992.ts');
+
+      const probe = await fs.open(playlistPath, 'r');
+      const fileHandle = Object.getPrototypeOf(probe) as FileHandle;
+      await probe.close();
+      const readFile = vi.spyOn(fs, 'readFile');
+      const read = vi.spyOn(fileHandle, 'read');
+      let second;
+      let bytesRead: number;
+      try {
+        second = (await session.trimPlaylist()).get();
+        bytesRead =
+          sumBy(readFile.mock.settledResults, (result) =>
+            result.type === 'fulfilled' ? result.value.length : 0,
+          ) +
+          sumBy(read.mock.settledResults, (result) =>
+            result.type === 'fulfilled' ? result.value.bytesRead : 0,
+          );
+      } finally {
+        readFile.mockRestore();
+        read.mockRestore();
+      }
+
+      const wholeFile = (await fs.stat(playlistPath)).size;
+      expect(wholeFile).toBeGreaterThan(2_000_000);
+      // The header, the bytes the parse continues from, and two entries
+      expect(bytesRead).toBeLessThan(8 * 1024);
+
+      // The same playlist as trimming the whole file
+      const lines = (await fs.readFile(playlistPath, 'utf-8')).split('\n');
+      const playlistStart = first?.playlistStart.subtract(19_980 * 2, 'second');
+      expect(playlistStart).toBeDefined();
+      if (playlistStart === undefined) {
+        return;
+      }
+      const expected = new ReferenceHlsPlaylistTrim().trimPlaylist(
+        playlistStart,
+        {
+          type: 'before_segment_number',
+          segmentNumber: 19_992,
+          segmentsToKeepBefore: 10,
+          segmentFloor: 19_980,
+        },
+        lines,
+        {
+          maxSegmentsToKeep: 20,
+          endWithDiscontinuity: false,
+          targetDuration: 2,
+          previousDiscontinuitySequence: first?.discontinuitySequence,
+        },
+      );
+      expect(second?.playlist).toBe(expected.playlist);
+      expect(second?.sequence).toBe(19_982);
     });
   });
 
