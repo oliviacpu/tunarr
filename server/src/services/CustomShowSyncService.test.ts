@@ -556,6 +556,42 @@ describe('CustomShowSyncService', () => {
       expect(customShowDB.upsertCustomShowContent).not.toHaveBeenCalled();
       expect(customShowDB.updateLastSyncedAt).not.toHaveBeenCalled();
     });
+    it("a cancel during the last item's scan still leaves the show as it was", async () => {
+      const { service, customShowDB, mockScanner, mediaSourceId, libraryId } =
+        makeMocks();
+      const customShowId = faker.string.uuid();
+      vi.mocked(customShowDB.getShow).mockResolvedValue({
+        uuid: customShowId,
+        name: 'Canceled late',
+        syncMediaSourceId: mediaSourceId,
+        syncMediaSourceType: 'plex',
+        syncExternalPlaylistId: 'playlist-x',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        lastSyncedAt: null,
+        content: [],
+      });
+      vi.spyOn(
+        service as never,
+        'fetchPlaylistPrograms' as never,
+      ).mockResolvedValue([
+        makeMovie(mediaSourceId, libraryId),
+        makeMovie(mediaSourceId, libraryId),
+      ] as never);
+      const controller = new AbortController();
+      mockScanner.scanSingle
+        .mockResolvedValueOnce(Result.success(undefined))
+        .mockImplementationOnce(() => {
+          controller.abort();
+          return Promise.resolve(Result.success(undefined));
+        });
+
+      expect(await service.syncShow(customShowId, controller.signal)).toBe(
+        'canceled',
+      );
+      expect(mockScanner.scanSingle).toHaveBeenCalledTimes(2);
+      expect(customShowDB.upsertCustomShowContent).not.toHaveBeenCalled();
+    });
   });
 
   describe('playlist ordering', () => {

@@ -89,32 +89,31 @@ export class CustomShowSyncService {
       tag<MediaSourceId>(show.syncMediaSourceId),
       show.syncExternalPlaylistId,
     );
-    if (signal?.aborted) {
-      return 'canceled';
-    }
 
     // An empty playlist empties the show, matching an explicit empty list
     // saved through the API.
     if (programs.length > 0) {
-      const scanned = await this.ensureProgramsExist(
+      await this.ensureProgramsExist(
         tag<MediaSourceId>(show.syncMediaSourceId),
         programs,
         signal,
       );
-      // Writing a partial list would drop the rest of the show
-      if (!scanned) {
-        this.logger.info(
-          'Sync of custom show "%s" was canceled; its content is unchanged',
-          show.name,
-        );
-        return 'canceled';
-      }
     } else {
       this.logger.warn(
         'Got 0 items from external playlist (type = %s id = %s); clearing the custom show',
         show.syncMediaSourceType,
         show.syncExternalPlaylistId,
       );
+    }
+
+    // Checked here, however far the sync got: a partial list would drop the
+    // rest of the show
+    if (signal?.aborted) {
+      this.logger.info(
+        'Sync of custom show "%s" was canceled; its content is unchanged',
+        show.name,
+      );
+      return 'canceled';
     }
     await this.customShowDB.upsertCustomShowContent(
       show.uuid,
@@ -138,12 +137,12 @@ export class CustomShowSyncService {
     return 'completed';
   }
 
-  // False if the signal aborted before every program was scanned
+  // Stops at the next item once the signal aborts
   private async ensureProgramsExist(
     mediaSourceId: MediaSourceId,
     programs: TerminalProgram[],
     signal: AbortSignal | undefined,
-  ): Promise<boolean> {
+  ): Promise<void> {
     const mediaSource = await this.mediaSourceDB.getById(mediaSourceId);
     if (!mediaSource) {
       throw new Error(`Media source ${mediaSourceId} not found`);
@@ -173,7 +172,7 @@ export class CustomShowSyncService {
           );
           for (const [, episodes] of Object.entries(byShow)) {
             if (signal?.aborted) {
-              return false;
+              return;
             }
             const showExternalId = (episodes[0] as Episode).show?.externalId;
             if (showExternalId === undefined) {
@@ -208,7 +207,7 @@ export class CustomShowSyncService {
           );
           for (const [, tracks] of Object.entries(byArtist)) {
             if (signal?.aborted) {
-              return false;
+              return;
             }
             const artistExternalId = (tracks[0] as MusicTrack).artist
               ?.externalId;
@@ -239,7 +238,7 @@ export class CustomShowSyncService {
           // movies, other_videos, music_videos — scan each individually
           for (const program of typePrograms) {
             if (signal?.aborted) {
-              return false;
+              return;
             }
             const library = librariesById.get(program.libraryId);
             if (!library) continue;
@@ -287,7 +286,6 @@ export class CustomShowSyncService {
         program.uuid = dbUuid;
       }
     }
-    return true;
   }
 
   private async fetchPlaylistPrograms(
