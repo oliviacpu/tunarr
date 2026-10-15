@@ -204,6 +204,13 @@ export interface IProgramDB {
     libraryId: string,
   ): Promise<ProgramOrmWithExternalIds[]>;
 
+  /** A page of {@link getMediaSourceLibraryPrograms} in uuid order, after `afterUuid`. */
+  getMediaSourceLibraryProgramsPage(
+    libraryId: string,
+    afterUuid: string | undefined,
+    limit: number,
+  ): Promise<ProgramOrmWithExternalIds[]>;
+
   getProgramInfoForMediaSource(
     mediaSourceId: MediaSourceId,
     type: ProgramType,

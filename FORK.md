@@ -35,6 +35,46 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The library programs request no longer freezes Tunarr (2026-10-15)
+
+- **What you saw:** Live TV paused while a script ran against Tunarr (`build_grid.py`, even with `--dry-run`). A latency
+  probe saw two freezes, of 17,061 ms and 17,158 ms, one per run.
+- **Cause:** `GET /api/media-libraries/:libraryId/programs` built its whole response in one go on the main thread,
+  which also serves the streams:
+
+  - one Drizzle query with the full relation set, so every episode carries its show's and season's cast, artwork and
+    genres;
+  - then the conversion, the Zod encoding and `JSON.stringify` of the whole array.
+
+  better-sqlite3 is synchronous, so none of it let another request in. The TV library has 5,393 episodes.
+
+- **Fix:** the body is built a page at a time (`pagedJsonArray` and `libraryProgramsJson` in
+  `api/libraryProgramsJson.ts`).
+  - **Yielding:** it yields between pages, and between each page's read, conversion and encoding.
+  - **Page size:** it follows how long a read blocks, aiming for about 30 ms with 10 to 100 rows per page, so a slow
+    or busy server takes smaller pages.
+  - **Query:** the page query is prepared once and walks the uuid index
+    (`ProgramSearchRepository.getMediaSourceLibraryProgramsPage`). Building and compiling its nested query for every
+    page had cost about as much as reading the page.
+  - **Response:** each page is encoded with the route's own schema, so the items and fields are the same as before.
+    The route sends the finished JSON as is (`sendJsonText`). Items now come in uuid order.
+- **Numbers** (perf test, MacBook):
+
+  | Episodes | Worst stall of a concurrent request | The request itself |
+  | -------- | ----------------------------------- | ------------------ |
+  | 1,500    | 678 ms → 28 ms                      | 0.7 s → 1.3 s      |
+  | 5,400    | 2.6 s → 39 ms                       | 2.6 s → 5.6 s      |
+
+  On the production server the same request had frozen it for 17 s.
+
+- **Tests:**
+  - `api/libraryProgramsJson.test.ts`: paging across boundaries, an empty library, the yields, and page-size
+    adaptation.
+  - `tests/libraryProgramsResponse.test.ts`: the body matches the one-shot response for episodes and movies.
+  - `tests/perf/libraryProgramsLag.test.ts`: worst concurrent request under 250 ms. It fails before the fix. Scale
+    it with `TUNARR_PERF_SHOWS` / `_SEASONS` / `_EPISODES`.
+- **Upstream:** not sent.
+
 ### Uploaded images are saved with the public address, not `http://` (2026-10-15)
 
 - **What you saw:** images uploaded in the web UI behind the HTTPS proxy were saved as
