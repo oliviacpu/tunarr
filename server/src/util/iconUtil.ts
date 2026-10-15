@@ -59,15 +59,34 @@ export function extractLocalUploadFilename(url: string): string | null {
 }
 
 /**
- * The URL for an uploaded image. Uploads keep their file name (a channel's logo
- * is always `<channel id>_icon.<ext>`), so a replaced image would keep its URL,
- * and everything that caches images by URL (Plex, its apps, Tunarr's own image
- * cache) would go on showing the old one. A short hash of the contents in the
- * query string gives each different image its own URL; uploading the same image
- * again keeps it.
+ * The address that links Tunarr hands to other apps start with: the configured
+ * public URL (XMLTV settings) when there is one, else the scheme and host the
+ * request came in on. The request alone can't be trusted for this. Plex fetches
+ * the guide from an address only it can reach (localhost), and a proxy that
+ * terminates HTTPS forwards plain http, so a link built from the request would
+ * be `http://localhost:…` or `http://<public host>/…`.
+ */
+export function publicLinkOrigin(
+  publicUrl: string | undefined,
+  request: { protocol: string; host: string },
+): string {
+  if (isNonEmptyString(publicUrl)) {
+    return publicUrl.replace(/\/+$/, '');
+  }
+  return `${request.protocol}://${request.host}`;
+}
+
+/**
+ * The URL for an uploaded image, on {@link publicLinkOrigin}. Uploads keep their
+ * file name (a channel's logo is always `<channel id>_icon.<ext>`), so a
+ * replaced image would keep its URL, and everything that caches images by URL
+ * (Plex, its apps, Tunarr's own image cache) would go on showing the old one. A
+ * short hash of the contents in the query string gives each different image its
+ * own URL; uploading the same image again keeps it.
  */
 export function uploadedImageUrl(
-  origin: string,
+  publicUrl: string | undefined,
+  request: { protocol: string; host: string },
   filename: string,
   contents: Uint8Array,
 ): string {
@@ -75,7 +94,7 @@ export function uploadedImageUrl(
     .update(contents)
     .digest('hex')
     .slice(0, 12);
-  return `${origin}${LocalUploadPathPrefix}${filename}?v=${version}`;
+  return `${publicLinkOrigin(publicUrl, request)}${LocalUploadPathPrefix}${filename}?v=${version}`;
 }
 
 /**

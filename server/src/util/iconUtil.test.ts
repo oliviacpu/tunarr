@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   deleteIfLocalAndCleared,
   extractLocalUploadFilename,
+  publicLinkOrigin,
   resolveIconUrl,
   uploadedImageUrl,
   ImmutableCacheControl,
@@ -15,11 +16,13 @@ vi.mock('./fsUtil.ts', () => ({
 
 describe('iconUtil', () => {
   describe('uploadedImageUrl', () => {
-    const origin = 'https://tunarr.example';
+    const request = { protocol: 'https', host: 'tunarr.example' };
     const logo = new TextEncoder().encode('first logo');
 
     test('points at the uploaded file, with a version from its contents', () => {
-      expect(uploadedImageUrl(origin, 'ch1_icon.png', logo)).toMatch(
+      expect(
+        uploadedImageUrl(undefined, request, 'ch1_icon.png', logo),
+      ).toMatch(
         /^https:\/\/tunarr\.example\/images\/uploads\/ch1_icon\.png\?v=[0-9a-f]{12}$/,
       );
     });
@@ -27,9 +30,12 @@ describe('iconUtil', () => {
     // Plex, its apps and Tunarr's image cache key images by URL. A replaced
     // logo keeps its file name, so only the version can tell them apart.
     test('a different image under the same name gets a different URL', () => {
-      expect(uploadedImageUrl(origin, 'ch1_icon.png', logo)).not.toBe(
+      expect(
+        uploadedImageUrl(undefined, request, 'ch1_icon.png', logo),
+      ).not.toBe(
         uploadedImageUrl(
-          origin,
+          undefined,
+          request,
           'ch1_icon.png',
           new TextEncoder().encode('second logo'),
         ),
@@ -37,8 +43,13 @@ describe('iconUtil', () => {
     });
 
     test('uploading the same image again keeps its URL', () => {
-      expect(uploadedImageUrl(origin, 'ch1_icon.png', logo)).toBe(
-        uploadedImageUrl(origin, 'ch1_icon.png', Uint8Array.from(logo)),
+      expect(uploadedImageUrl(undefined, request, 'ch1_icon.png', logo)).toBe(
+        uploadedImageUrl(
+          undefined,
+          request,
+          'ch1_icon.png',
+          Uint8Array.from(logo),
+        ),
       );
     });
 
@@ -46,9 +57,53 @@ describe('iconUtil', () => {
     test('the file name can still be read back from the URL', () => {
       expect(
         extractLocalUploadFilename(
-          uploadedImageUrl(origin, 'ch1_icon.png', logo),
+          uploadedImageUrl(undefined, request, 'ch1_icon.png', logo),
         ),
       ).toBe('ch1_icon.png');
+    });
+  });
+
+  describe('uploads behind a proxy', () => {
+    const logo = new TextEncoder().encode('logo');
+
+    // The web UI behind a proxy that terminates HTTPS: Tunarr sees plain http
+    test('an upload gets the public URL, not the plain-http request', () => {
+      expect(
+        uploadedImageUrl(
+          'https://tunarr.example.com',
+          { protocol: 'http', host: 'tunarr.example.com' },
+          'ch1_icon.png',
+          logo,
+        ),
+      ).toMatch(
+        /^https:\/\/tunarr\.example\.com\/images\/uploads\/ch1_icon\.png\?v=/,
+      );
+    });
+
+    // The web UI through an SSH tunnel: the request's host is localhost
+    test('an upload made on localhost still gets the public URL', () => {
+      expect(
+        uploadedImageUrl(
+          'https://tunarr.example.com/',
+          { protocol: 'http', host: 'localhost:8000' },
+          'ch1_icon.png',
+          logo,
+        ),
+      ).toMatch(/^https:\/\/tunarr\.example\.com\/images\/uploads\//);
+    });
+
+    test('without a public URL, the request it came in on', () => {
+      expect(
+        uploadedImageUrl(
+          undefined,
+          { protocol: 'http', host: '192.168.1.10:8000' },
+          'ch1_icon.png',
+          logo,
+        ),
+      ).toMatch(/^http:\/\/192\.168\.1\.10:8000\/images\/uploads\//);
+      expect(
+        publicLinkOrigin('', { protocol: 'http', host: '192.168.1.10:8000' }),
+      ).toBe('http://192.168.1.10:8000');
     });
   });
 

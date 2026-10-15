@@ -2,7 +2,7 @@ import type { SettingsDB } from '@/db/SettingsDB.js';
 import type { ChannelOrm } from '@/db/schema/Channel.js';
 import { KEYS } from '@/types/inject.js';
 import { getChannelId } from '@/util/channels.js';
-import { resolveIconUrl } from '@/util/iconUtil.js';
+import { publicLinkOrigin, resolveIconUrl } from '@/util/iconUtil.js';
 import { firstDefined, groupByFunc, isNonEmptyString } from '@/util/index.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import type { Xmltv } from '@iptv/xmltv';
@@ -89,10 +89,7 @@ export function xmlTvLinkHost(
   publicUrl: string | undefined,
   request: { protocol: string; host: string },
 ): string {
-  if (isNonEmptyString(publicUrl)) {
-    return publicUrl.replace(/\/+$/, '');
-  }
-  return `${request.protocol}://${request.host}`;
+  return publicLinkOrigin(publicUrl, request);
 }
 
 @injectable()

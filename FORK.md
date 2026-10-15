@@ -34,6 +34,22 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Uploaded images are saved with the public address, not `http://` (2026-10-15)
+
+- **What you saw:** images uploaded in the web UI behind the HTTPS proxy were saved as
+  `http://<public host>/images/uploads/…`, so channel offline pictures pointed at plain http while the rest used https.
+- **Cause:** `POST /api/upload/image` built the address it returns from the request, `${req.protocol}://${req.host}`.
+  A proxy that terminates HTTPS forwards plain http, and Tunarr trusts no proxy headers by default, so the request
+  said `http`. An upload through an SSH tunnel got `http://localhost:…`, which no app can load.
+- **Fix:** an upload answers with the configured public address (Settings → XMLTV, the one the guide's pictures use)
+  when there is one, and with the request's address otherwise (`uploadedImageUrl` and the new `publicLinkOrigin`,
+  `util/iconUtil.ts`; `api/index.ts`). The guide's `xmlTvLinkHost` uses the same rule through `publicLinkOrigin`.
+  - **Existing uploads:** they keep the address they were saved with until uploaded again.
+  - **Docs:** `docs/configure/clients/plex.md`.
+- **Tests:** `iconUtil.test.ts`: behind an HTTPS proxy and through `localhost` an upload gets the public address, and
+  without one it gets the request's address. They fail without the fix.
+- **Upstream:** not sent.
+
 ### Guide posters are served from a public media folder, with versioned addresses (2026-10-15)
 
 - **What you saw:** guide posters loaded slowly in Plex's apps, and a replaced poster kept showing the old picture.
