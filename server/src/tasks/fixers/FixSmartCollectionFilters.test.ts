@@ -117,38 +117,22 @@ describe('FixSmartCollectionFilters', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  test('clears keywords that hold an older version of the filter', async () => {
+  // Only an exact copy proves the old fixer wrote the keywords. Anything
+  // else may be what the user typed, even if it parses as a filter, and
+  // even if it is an older version of the filter.
+  test.each([
+    'space opera',
+    'genre:horror movies',
+    'genres.name:horror movies',
+    'title in ["Movie A"] OR genres.name in ["Genre X"]',
+  ])('keeps keywords %s that differ from the filter', async (keywords) => {
     const filter =
       'title in ["Movie A"] OR genres.name in ["Genre X"] OR genres.name in ["Genre Y"] AND rating in ["G"]';
-    const uuid = insertCollection(
-      filter,
-      'title in ["Movie A"] OR genres.name in ["Genre X"]',
-    );
+    const uuid = insertCollection(filter, keywords);
 
     await runFixer();
 
-    expect(readCollection(uuid)).toEqual({ filter, keywords: '' });
-  });
-
-  test('keeps free-text keywords next to a filter', async () => {
-    const filter = 'genre in ["Genre X"]';
-    const uuid = insertCollection(filter, 'space opera');
-
-    await runFixer();
-
-    expect(readCollection(uuid)).toEqual({ filter, keywords: 'space opera' });
-  });
-
-  test('keeps keywords that parse as a filter but could have been typed', async () => {
-    const filter = 'genre in ["Genre X"]';
-    const uuid = insertCollection(filter, 'genre:horror movies');
-
-    await runFixer();
-
-    expect(readCollection(uuid)).toEqual({
-      filter,
-      keywords: 'genre:horror movies',
-    });
+    expect(readCollection(uuid)).toEqual({ filter, keywords });
   });
 
   // The API always saves keywords as a string, so these aren't legacy rows.

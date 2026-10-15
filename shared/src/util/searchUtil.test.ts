@@ -8,7 +8,6 @@ import {
   searchFilterToString,
   SearchParser,
   tokenizeSearchQuery,
-  usesIndexPathFieldName,
 } from './searchUtil.js';
 
 dayjs.extend(customParseFormat);
@@ -1331,15 +1330,6 @@ describe('saved filter strings', () => {
       expect(searchFilterToString(filter)).toEqual(
         `${field} in ["Value A", "Value B"]`,
       );
-    });
-
-    test('usesIndexPathFieldName finds index paths used as field names', () => {
-      expect(usesIndexPathFieldName('genres.name in ["Genre X"]')).toBe(true);
-      expect(
-        usesIndexPathFieldName('genre = "Genre X" OR grandparent.title ~ A'),
-      ).toBe(true);
-      expect(usesIndexPathFieldName('genre in ["genres.name"]')).toBe(false);
-      expect(usesIndexPathFieldName('genre:horror movies')).toBe(false);
     });
 
     test('a DSL field name followed by more letters is not a field', () => {

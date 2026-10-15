@@ -1,4 +1,4 @@
-import { isNonEmptyString, search } from '@tunarr/shared/util';
+import { isNonEmptyString } from '@tunarr/shared/util';
 import { inject, injectable } from 'inversify';
 import { SmartCollectionsDB } from '../../db/SmartCollectionsDB.ts';
 import { InjectLogger } from '../../util/inject.ts';
@@ -49,18 +49,14 @@ export class FixSmartCollectionFilters extends Fixer {
       }
 
       // Earlier versions of this fixer copied filters they couldn't parse
-      // into keywords and left the filter in place. Filters that name a
-      // field by its index path (`genres.name`) didn't parse then, and do
-      // now. Keywords like that are one of those copies, run as a full text
-      // search that matches the wrong programs. Other keywords that parse,
-      // such as `genre:horror`, may be what the user typed, so they stay.
-      if (
-        isNonEmptyString(collection.keywords) &&
-        search.usesIndexPathFieldName(collection.keywords) &&
-        (await this.parses(collection.keywords))
-      ) {
+      // into keywords (`keywords: collection.filter`) and left the filter in
+      // place. Now that the filter parses, that copy runs as a full text
+      // search that matches the wrong programs. Only an exact copy is proof
+      // of that: keywords that differ from the filter may be what the user
+      // typed, even if they look like a filter, so they stay.
+      if (collection.keywords === collection.filter) {
         this.logger.info(
-          'Clearing keywords of smart collection %s: they are a filter expression, not search keywords',
+          'Clearing keywords of smart collection %s: they are a copy of its filter',
           collection.name,
         );
         // An empty string, not NULL, which marks collections saved before
