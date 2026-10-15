@@ -332,6 +332,9 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
         syncMediaSourceType: updatedShow.syncMediaSourceType ?? undefined,
         syncExternalPlaylistId: updatedShow.syncExternalPlaylistId ?? undefined,
         lastSyncedAt: updatedShow.lastSyncedAt?.getTime() ?? undefined,
+        isSyncing: req.serverCtx.customShowSyncService.isShowSyncing(
+          updatedShow.uuid,
+        ),
       });
     },
   );
