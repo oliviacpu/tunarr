@@ -43,6 +43,8 @@ An initial sync runs immediately when a synced Custom Show is first created. Aft
 
 On an existing synced Custom Show, click **Sync Now** to trigger an immediate sync. The last sync time is displayed next to the button.
 
+Syncs share a queue with library scans, one at a time, and run in a worker thread so they don't pause live streams. **Sync Now**, and the first sync of a new Custom Show, go ahead of scans still waiting in the queue, but wait for a scan that's already running.
+
 ### Behavior
 
 - While a Custom Show is linked to an external playlist, its content is **read-only** — the "Add Media" button and drag-to-reorder controls are hidden.

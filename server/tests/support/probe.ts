@@ -96,6 +96,14 @@ export async function measureWithConcurrentProbe<T>({
       // necessarily started, let alone finished.
       await new Promise((resolve) => setTimeout(resolve, settleMs));
     }
+    // A stall the operation ends with hasn't been recorded yet. When its last
+    // stretch is synchronous work joined only by microtasks (chained database
+    // queries), `operation` resolves before the loop turns: the probe that
+    // waited through it hasn't completed, and the lag sampler hasn't ticked.
+    // Let both finish before reading them.
+    stopped = true;
+    await probeLoop;
+    await recorder.armed();
     return {
       result,
       probe: summarizeProbes(samples, failures, slowThresholdMs),

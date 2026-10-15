@@ -1,5 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { MediaSourceDB } from '../../db/mediaSourceDB.ts';
+import type { ScanOutcome } from '../../types/worker_schemas.ts';
+import type { CustomShowSyncService } from '../CustomShowSyncService.ts';
 import type { GenericExternalCollectionScanner } from './ExternalCollectionScanner.ts';
 import type { GenericLocalMediaSourceScannerFactory } from './FileSystemScanner.ts';
 import type { GenericMediaSourceScannerFactory } from './MediaSourceScanner.ts';
@@ -55,6 +57,11 @@ function makeSut(
   );
   const scannerFactory = vi.fn(() => scanner);
   const localScannerFactory = vi.fn(() => localScanner);
+  const customShowSync = {
+    syncShow: vi
+      .fn<(id: string, signal?: AbortSignal) => Promise<ScanOutcome>>()
+      .mockResolvedValue('completed'),
+  };
   const executor = new ScanJobExecutor(
     mediaSourceDB as unknown as MediaSourceDB,
     scannerFactory as unknown as GenericMediaSourceScannerFactory,
@@ -62,9 +69,11 @@ function makeSut(
     collectionScannerFactory as unknown as (
       sourceType: string,
     ) => GenericExternalCollectionScanner | undefined,
+    customShowSync as unknown as CustomShowSyncService,
   );
   return {
     executor,
+    customShowSync,
     scanner,
     localScanner,
     collectionScanner,
@@ -233,6 +242,55 @@ describe('ScanJobExecutor', () => {
       expect(await executor.run(collectionsJob, controller.signal)).toBe(
         'canceled',
       );
+    });
+  });
+
+  describe('custom show', () => {
+    const customShowJob = { kind: 'custom-show', customShowId: 'cs1' } as const;
+
+    test("syncs the show from its playlist, with the job's signal", async () => {
+      const { executor, customShowSync, scanner } = makeSut();
+      const controller = new AbortController();
+
+      expect(await executor.run(customShowJob, controller.signal)).toBe(
+        'completed',
+      );
+      expect(customShowSync.syncShow).toHaveBeenCalledWith(
+        'cs1',
+        controller.signal,
+      );
+      expect(scanner.scan).not.toHaveBeenCalled();
+    });
+
+    test("passes on the sync's outcome", async () => {
+      const { executor, customShowSync } = makeSut();
+      customShowSync.syncShow.mockResolvedValueOnce('skipped');
+
+      expect(
+        await executor.run(customShowJob, new AbortController().signal),
+      ).toBe('skipped');
+    });
+
+    test('a failed sync fails the job', async () => {
+      const { executor, customShowSync } = makeSut();
+      customShowSync.syncShow.mockRejectedValueOnce(
+        new Error('Plex is unreachable'),
+      );
+
+      await expect(
+        executor.run(customShowJob, new AbortController().signal),
+      ).rejects.toThrow('Plex is unreachable');
+    });
+
+    test('an already canceled job does not sync', async () => {
+      const { executor, customShowSync } = makeSut();
+      const controller = new AbortController();
+      controller.abort();
+
+      expect(await executor.run(customShowJob, controller.signal)).toBe(
+        'canceled',
+      );
+      expect(customShowSync.syncShow).not.toHaveBeenCalled();
     });
   });
 });

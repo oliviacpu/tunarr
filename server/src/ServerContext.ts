@@ -18,7 +18,6 @@ import type { DB } from './db/schema/db.ts';
 import type { DrizzleDBAccess } from './db/schema/index.ts';
 import { MediaSourceApiFactory } from './external/MediaSourceApiFactory.ts';
 import type { IWorkerPool } from './interfaces/IWorkerPool.ts';
-import { CustomShowSyncService } from './services/CustomShowSyncService.ts';
 import { EventService } from './services/EventService.ts';
 import { FeatureFlagService } from './services/FeatureFlagService.ts';
 import { FileCacheService } from './services/FileCacheService.ts';
@@ -93,9 +92,6 @@ export class ServerContext {
 
   @inject(SmartCollectionsDB)
   public readonly smartCollectionsDB!: SmartCollectionsDB;
-
-  @inject(CustomShowSyncService)
-  public readonly customShowSyncService!: CustomShowSyncService;
 
   @inject(FeatureFlagService)
   public readonly featureFlagService!: FeatureFlagService;

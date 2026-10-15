@@ -8,6 +8,7 @@ import type { Maybe } from '../../types/util.ts';
 import type { ScanJob, ScanOutcome } from '../../types/worker_schemas.ts';
 import { InjectLogger } from '../../util/inject.ts';
 import type { Logger } from '../../util/logging/LoggerFactory.ts';
+import { CustomShowSyncService } from '../CustomShowSyncService.ts';
 import type { GenericExternalCollectionScanner } from './ExternalCollectionScanner.ts';
 import type { GenericLocalMediaSourceScannerFactory } from './FileSystemScanner.ts';
 import type { GenericMediaSourceScannerFactory } from './MediaSourceScanner.ts';
@@ -15,8 +16,9 @@ import type { GenericMediaSourceScannerFactory } from './MediaSourceScanner.ts';
 /**
  * Runs one scan job: re-reads the library or media source, scans it, then (for
  * remote libraries) its collections. A collections job syncs a remote media
- * source's collections. Runs the same in-process and in a scan worker.
- * Aborting the signal cancels the scanner at its next item.
+ * source's collections, and a custom-show job syncs a custom show from its
+ * playlist. Runs the same in-process and in a scan worker. Aborting the signal
+ * cancels the scanner at its next item.
  */
 @injectable()
 export class ScanJobExecutor {
@@ -32,6 +34,8 @@ export class ScanJobExecutor {
     private collectionScannerFactory: (
       sourceType: MediaSourceType,
     ) => Maybe<GenericExternalCollectionScanner>,
+    @inject(CustomShowSyncService)
+    private customShowSync: CustomShowSyncService,
   ) {}
 
   async run(job: ScanJob, signal: AbortSignal): Promise<ScanOutcome> {
@@ -45,6 +49,9 @@ export class ScanJobExecutor {
         return this.runLocal(job, signal);
       case 'collections':
         return this.runCollections(job, signal);
+      case 'custom-show':
+        // Re-reads the show, and skips it if it's gone or no longer synced
+        return this.customShowSync.syncShow(job.customShowId, signal);
     }
   }
 

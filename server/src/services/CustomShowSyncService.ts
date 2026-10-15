@@ -8,9 +8,9 @@ import type {
 } from '@/db/schema/MediaSource.js';
 import { MediaSourceApiFactory } from '@/external/MediaSourceApiFactory.js';
 import { KEYS } from '@/types/inject.js';
+import type { ScanOutcome } from '@/types/worker_schemas.js';
 import { InjectLogger } from '@/util/inject.js';
 import type { Logger } from '@/util/logging/LoggerFactory.js';
-import type { MutexMap } from '@/util/mutexMap.js';
 import { seq } from '@tunarr/shared/util';
 import type { CondensedContentProgram } from '@tunarr/types';
 import {
@@ -26,6 +26,12 @@ import { groupByUniq, zipWithIndex } from '../util/index.ts';
 import { PlexHierarchyTraversal } from './PlexItemEnumerator.ts';
 import type { GenericMediaSourceScannerFactory } from './scanner/MediaSourceScanner.ts';
 
+/**
+ * Syncs a custom show's content from its external playlist: lists the
+ * playlist, scans each item into the database, then replaces the show's
+ * content. MediaSourceScanCoordinator runs it as a scan job (in a scan worker
+ * when there is one), so its database work doesn't stall streams.
+ */
 @injectable()
 export class CustomShowSyncService {
   @InjectLogger() declare private readonly logger: Logger;
@@ -34,43 +40,28 @@ export class CustomShowSyncService {
     @inject(CustomShowDB) private customShowDB: CustomShowDB,
     @inject(MediaSourceApiFactory)
     private mediaSourceApiFactory: MediaSourceApiFactory,
-    @inject(KEYS.MutexMap) private locks: MutexMap,
     @inject(KEYS.MediaSourceLibraryScanner)
     private scannerFactory: GenericMediaSourceScannerFactory,
     @inject(KEYS.ProgramDB) private programDB: IProgramDB,
     @inject(MediaSourceDB) private mediaSourceDB: MediaSourceDB,
   ) {}
 
-  async syncAll(): Promise<void> {
-    const syncedShows = await this.customShowDB.getSyncedShows();
-
-    if (syncedShows.length === 0) {
-      this.logger.debug('No synced custom shows to process');
-      return;
-    }
-
-    this.logger.info('Syncing %d custom show(s)', syncedShows.length);
-
-    for (const show of syncedShows) {
-      try {
-        await this.locks.runWithLockId(show.uuid, () =>
-          this.syncShow(show.uuid),
-        );
-      } catch (e) {
-        this.logger.error(
-          e,
-          'Failed to sync custom show %s (%s)',
-          show.name,
-          show.uuid,
-        );
-      }
-    }
-  }
-
-  async syncShow(customShowId: string): Promise<void> {
+  /**
+   * Skips a show that is gone or no longer linked to a playlist (the job may
+   * have waited in the queue). An abort stops it before the next item, and
+   * the show's content is left as it was.
+   */
+  async syncShow(
+    customShowId: string,
+    signal?: AbortSignal,
+  ): Promise<ScanOutcome> {
     const show = await this.customShowDB.getShow(customShowId);
     if (!show) {
-      throw new Error(`Custom show ${customShowId} not found`);
+      this.logger.warn(
+        'Custom show %s no longer exists; skipping its sync',
+        customShowId,
+      );
+      return 'skipped';
     }
 
     if (
@@ -78,7 +69,12 @@ export class CustomShowSyncService {
       !show.syncMediaSourceType ||
       !show.syncExternalPlaylistId
     ) {
-      throw new Error(`Custom show ${show.name} is not configured for sync`);
+      this.logger.warn(
+        'Custom show "%s" (%s) is not linked to a playlist; skipping its sync',
+        show.name,
+        show.uuid,
+      );
+      return 'skipped';
     }
 
     this.logger.info(
@@ -100,6 +96,7 @@ export class CustomShowSyncService {
       await this.ensureProgramsExist(
         tag<MediaSourceId>(show.syncMediaSourceId),
         programs,
+        signal,
       );
     } else {
       this.logger.warn(
@@ -107,6 +104,16 @@ export class CustomShowSyncService {
         show.syncMediaSourceType,
         show.syncExternalPlaylistId,
       );
+    }
+
+    // Checked here, however far the sync got: a partial list would drop the
+    // rest of the show
+    if (signal?.aborted) {
+      this.logger.info(
+        'Sync of custom show "%s" was canceled; its content is unchanged',
+        show.name,
+      );
+      return 'canceled';
     }
     await this.customShowDB.upsertCustomShowContent(
       show.uuid,
@@ -127,15 +134,14 @@ export class CustomShowSyncService {
       show.name,
       programs.length,
     );
+    return 'completed';
   }
 
-  isShowSyncing(id: string) {
-    return this.locks.isLocked(id);
-  }
-
+  // Stops at the next item once the signal aborts
   private async ensureProgramsExist(
     mediaSourceId: MediaSourceId,
     programs: TerminalProgram[],
+    signal: AbortSignal | undefined,
   ): Promise<void> {
     const mediaSource = await this.mediaSourceDB.getById(mediaSourceId);
     if (!mediaSource) {
@@ -165,6 +171,9 @@ export class CustomShowSyncService {
             (ep) => `${ep.libraryId}:${ep.show?.externalId}`,
           );
           for (const [, episodes] of Object.entries(byShow)) {
+            if (signal?.aborted) {
+              return;
+            }
             const showExternalId = (episodes[0] as Episode).show?.externalId;
             if (showExternalId === undefined) {
               this.logger.warn(
@@ -197,6 +206,9 @@ export class CustomShowSyncService {
             (t) => `${t.libraryId}:${t.artist?.externalId}`,
           );
           for (const [, tracks] of Object.entries(byArtist)) {
+            if (signal?.aborted) {
+              return;
+            }
             const artistExternalId = (tracks[0] as MusicTrack).artist
               ?.externalId;
             if (artistExternalId === undefined) {
@@ -225,6 +237,9 @@ export class CustomShowSyncService {
         default: {
           // movies, other_videos, music_videos — scan each individually
           for (const program of typePrograms) {
+            if (signal?.aborted) {
+              return;
+            }
             const library = librariesById.get(program.libraryId);
             if (!library) continue;
             const result = await scanner.scanSingle({
