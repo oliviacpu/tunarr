@@ -60,6 +60,31 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Tests:** `DBAccess.test.ts` ("connection settings"): the main thread's connection reports `mmap_size` 0 and
   `cache_size` -262144, with WAL and foreign keys still on, and workers keep the old values. Both tests fail before
   the change.
+### A long Live TV session no longer stalls Tunarr every few seconds (2026-10-15)
+
+- **What you saw:** about two hours into watching a channel, every request to Tunarr stalled for 270-380 ms about
+  every 4 seconds (seen with a latency probe and `curl`). The main thread was running JavaScript the whole time.
+- **Cause:**
+  - Each program's ffmpeg appends to the session's `stream.m3u8`, which is never trimmed on disk. After about 3 hours
+    it held 5,265 segments in 15,743 lines, while only the last 39 segment files still existed.
+  - Every playlist request (`HlsSession.trimPlaylist`) re-reads the whole file and `HlsPlaylistMutator` parses all of
+    it, to keep about 20 segments.
+  - The parse did one `dayjs` addition per segment.
+  - Writing out the playlist compared every item against each kept segment with `equals`, which uses `dayjs`'s
+    `isSame` and builds new date objects on each call. That's about 100,000 date comparisons per request.
+- **Fix** (`stream/hls/HlsPlaylistMutator.ts`):
+  - **Membership:** the kept segments are the parsed objects themselves, so the output loop and `findIndex` use a
+    `Set` and `indexOf` (identity).
+  - **Parsing:** the parse adds durations as milliseconds, truncating at each step as a `Date` does, so the times are
+    the same. A segment's `startTime` (a `Dayjs`) is only built when read: for the ~20 kept segments.
+  - **`equals`:** compares the millisecond start.
+- **Numbers:** on the real 5,265-segment playlist, `trimPlaylist` went from 58 ms to 6 ms (MacBook), with
+  byte-identical output. On the server that's about 330 ms → about 35 ms per request. The cost still grows with the
+  session, ten times more slowly. Rewriting the playlist on disk periodically (the TODO in `parsePlaylist`) would
+  bound it.
+- **Tests:** `HlsPlaylistMutator.test.ts` ("a long session"):
+  - trimming a 3,000-segment playlist calls `isSame` never and `add` at most once per kept segment (fails before);
+  - the kept segments' program date-times equal the old chained `add` results, millisecond truncation included.
 - **Upstream:** not sent.
 
 ### The library programs request no longer freezes Tunarr (2026-10-15)

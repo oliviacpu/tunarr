@@ -81,7 +81,9 @@ export class HlsPlaylistMutator {
     const items: PlaylistLine[] = [];
 
     let i = 0;
-    let currentTime = start;
+    // Milliseconds, not Dayjs: this runs once per segment of the whole
+    // session's playlist on every playlist request.
+    let currentMs = start.valueOf();
 
     while (
       i < playlistLines.length &&
@@ -113,9 +115,13 @@ export class HlsPlaylistMutator {
 
       // EXTINF
       const duration = parseFloat(trimEnd(line.trim(), ',').split(':')[1]!);
-      items.push(new PlaylistSegment(currentTime, line, playlistLines[i + 2]!));
+      items.push(
+        new PlaylistSegment(start, currentMs, line, playlistLines[i + 2]!),
+      );
 
-      currentTime = currentTime.add(duration, 'seconds');
+      // What dayjs's add(duration, 'seconds') did at each step: a Date holds
+      // whole milliseconds, so the sum is truncated every time.
+      currentMs = Math.trunc(currentMs + duration * 1000);
       i += 3;
     }
 
@@ -187,15 +193,15 @@ export class HlsPlaylistMutator {
     }
 
     const startSequence = first(allSegments)?.startSequence ?? 0;
+    // The kept segments are the parsed objects themselves, so membership is
+    // identity. Comparing every item of a long session's playlist against
+    // each kept segment by value made this O(items x kept) date comparisons
+    // on every playlist request.
+    const selected = new Set<PlaylistLine>(allSegments);
 
     if (!isEmpty(allSegments)) {
       const firstSeg = first(allSegments)!;
-      const firstSegIndex = firstSeg
-        ? items.findIndex(
-            (item): item is PlaylistSegment =>
-              item.type === 'segment' && item.equals(firstSeg),
-          )
-        : -1;
+      const firstSegIndex = items.indexOf(firstSeg);
       // ALL discontinuities before the first selected segment are folded into
       // the discontinuity sequence number. They must never be emitted as tags
       // because there are no selected segments before them — emitting a tag
@@ -248,16 +254,14 @@ export class HlsPlaylistMutator {
             break;
           }
           const next = items[i + 1];
-          const nextIsSelected =
-            next?.type === 'segment' &&
-            allSegments.some((seg) => seg.equals(next));
+          const nextIsSelected = next !== undefined && selected.has(next);
           if (i === items.length - 1 || nextIsSelected) {
             lines.push('#EXT-X-DISCONTINUITY');
           }
           break;
         }
         case 'segment':
-          if (allSegments.some((seg) => seg.equals(item))) {
+          if (selected.has(item)) {
             lines.push(item.extInf);
             lines.push(
               `#EXT-X-PROGRAM-DATE-TIME:${item.startTime.format(
@@ -378,12 +382,29 @@ export class HlsPlaylistMutator {
 
 class PlaylistSegment {
   public readonly type = 'segment' as const;
+  #startTime?: Dayjs;
 
+  /**
+   * `startMs` is the segment's start as a timestamp; `playlistStart` is the
+   * time the parse began from. The Dayjs start time is only built when read:
+   * a long session's playlist has thousands of segments, and a request keeps
+   * about twenty of them.
+   */
   constructor(
-    public startTime: Dayjs,
+    private readonly playlistStart: Dayjs,
+    public readonly startMs: number,
     public extInf: string,
     public line: string,
   ) {}
+
+  /** The same value (and Dayjs settings) as adding each duration to the start. */
+  get startTime(): Dayjs {
+    this.#startTime ??= this.playlistStart.add(
+      this.startMs - this.playlistStart.valueOf(),
+      'millisecond',
+    );
+    return this.#startTime;
+  }
 
   get startSequence() {
     const matches = basename(this.line).match(SegmentNameRegex);
@@ -394,7 +415,7 @@ class PlaylistSegment {
   equals(other: PlaylistSegment) {
     return (
       this === other ||
-      (this.startTime.isSame(other.startTime) &&
+      (this.startMs === other.startMs &&
         this.extInf === other.extInf &&
         this.line === other.line)
     );
