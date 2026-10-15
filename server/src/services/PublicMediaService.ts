@@ -178,7 +178,12 @@ export class PublicMediaService {
     for (const [key, ref] of unique) {
       void queue.add(async () => {
         try {
-          const entry = await this.publishOne(key, ref, index, run);
+          // Past the budget, a picture costs no lookups or fetches: it keeps
+          // the file it already has, or the artwork route.
+          const entry =
+            Date.now() >= run.deadline
+              ? await this.alreadyPublished(index.entries[key])
+              : await this.publishOne(key, ref, index, run);
           if (entry) {
             published.set(key, this.urlPath(entry));
             if (Date.now() - entry.referencedAt >= ReferencedResolutionMs) {
@@ -226,11 +231,7 @@ export class PublicMediaService {
 
     const sourceKey = await this.sourceKey(result);
     const existing = index.entries[key];
-    const onDisk =
-      existing !== undefined &&
-      (await fileSize(path.join(this.artworkDirectory, existing.file))) !==
-        undefined;
-    const current = onDisk ? existing : undefined;
+    const current = await this.alreadyPublished(existing);
     const now = Date.now();
     const backingOff =
       existing?.failedAt !== undefined &&
@@ -251,7 +252,10 @@ export class PublicMediaService {
       return current;
     }
 
-    const loaded = await this.loadPicture(result).catch((e: unknown) => {
+    const loaded = await this.loadPicture(
+      result,
+      Math.min(FetchTimeoutMs, run.deadline - now),
+    ).catch((e: unknown) => {
       this.logger.debug(e, 'Could not load guide picture %s', key);
       return undefined;
     });
@@ -352,8 +356,20 @@ export class PublicMediaService {
     return `file:${result.path}@${stat?.mtimeMs ?? 0}`;
   }
 
+  /** The entry, when its file is on disk. */
+  private async alreadyPublished(
+    entry: Maybe<IndexEntry>,
+  ): Promise<Maybe<IndexEntry>> {
+    if (entry === undefined || entry.file === '') {
+      return undefined;
+    }
+    const size = await fileSize(path.join(this.artworkDirectory, entry.file));
+    return size === undefined ? undefined : entry;
+  }
+
   protected async loadPicture(
     result: Exclude<ArtworkResult, { kind: 'not-found' }>,
+    timeoutMs: number,
   ): Promise<Maybe<{ bytes: Buffer; extension: string }>> {
     let bytes: Buffer;
     if (result.kind === 'file') {
@@ -367,7 +383,7 @@ export class PublicMediaService {
         url: result.url,
         headers: { Accept: 'image/*', ...result.headers },
         responseType: 'arraybuffer',
-        timeout: FetchTimeoutMs,
+        timeout: timeoutMs,
         maxContentLength: MaxPictureBytes,
         maxBodyLength: MaxPictureBytes,
       });

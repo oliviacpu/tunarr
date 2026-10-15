@@ -51,7 +51,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     again only when its source changes (a Plex path ends in Plex's own timestamp for the image), or after 7 days, at
     most 20 such refreshes per write. Only JPEG, PNG, WebP, GIF and AVIF are published, judged by the bytes; an SVG
     could run script on Tunarr's origin. A fetch is cut off at 10 s and 25 MB, a failed one is retried after an hour,
-    and one write waits at most 60 s on pictures. Anything not published keeps the artwork route address.
+    and one write spends at most 60 s on pictures: past that, the rest skip their lookups and keep the files
+    they have, and a fetch still running is cut off. Anything not published keeps the artwork route address.
   - **Index:** `<data>/media/artwork-index.json`, outside the served folder. A JSON file rather than a table, so the
     fork adds no migration to collide with upstream's numbering. If it is lost, files on disk are adopted with the
     version their modification time records.
@@ -64,7 +65,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   fetched again; the same bytes from a new source keep the address; new bytes in the same second get the next
   second; a week-old picture is refreshed and keeps its address when unchanged; an SVG is never published; a failed
   fetch keeps the artwork route and isn't retried for an hour; a replaced picture whose new source fails keeps the old
-  file and is retried after an hour, not a week; a lost index adopts the file; 30-day cleanup.
+  file and is retried after an hour, not a week; past the 60 s budget, later pictures skip their lookups and keep their files; a lost index
+  adopts the file; 30-day cleanup.
   `XmlTvWriter.test.ts`: a write publishes each picture once and the `<icon>` and `<image>` link to the file; a
   failed publish still writes the guide with artwork route links. `iconUtil.test.ts`: the upload header. Checked on a
   throwaway server with a local movie library: the guide linked both posters to `/media/artwork/…?v=20261015042028`

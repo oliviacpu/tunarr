@@ -29,9 +29,10 @@ class CountingPublicMediaService extends PublicMediaService {
 
   protected override loadPicture(
     result: Exclude<ArtworkResult, { kind: 'not-found' }>,
+    timeoutMs: number,
   ) {
     this.loads++;
-    return super.loadPicture(result);
+    return super.loadPicture(result, timeoutMs);
   }
 }
 
@@ -39,6 +40,8 @@ describe('PublicMediaService', () => {
   let dbDir: string;
   let sourceDir: string;
   let results: Map<string, ArtworkResult>;
+  let resolves: number;
+  let onResolve: (() => void) | undefined;
   let service: CountingPublicMediaService;
 
   const poster = (id: string): PublicArtworkRef => ({
@@ -63,10 +66,16 @@ describe('PublicMediaService', () => {
     dbDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-media-'));
     sourceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-art-'));
     results = new Map();
+    resolves = 0;
+    onResolve = undefined;
 
     const artwork = mock(ArtworkService);
     when(artwork.resolveArtwork(anything(), anything(), anything())).thenCall(
-      (id: string) => Promise.resolve(results.get(id) ?? { kind: 'not-found' }),
+      (id: string) => {
+        resolves++;
+        onResolve?.();
+        return Promise.resolve(results.get(id) ?? { kind: 'not-found' });
+      },
     );
     service = new CountingPublicMediaService(instance(artwork), {
       databaseDirectory: dbDir,
@@ -242,6 +251,44 @@ describe('PublicMediaService', () => {
     expect(fixed.get('show-poster')).toBe(
       '/media/artwork/show-poster.png?v=20261015051330',
     );
+  });
+
+  test('past the time budget, later pictures skip their lookups and keep the files they have', async () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+    for (const id of ids) {
+      results.set(id, {
+        kind: 'file',
+        path: await source(`${id}.png`, Png),
+        artworkType: 'poster',
+      });
+    }
+    const first = await service.publish(ids.map(poster));
+    expect(first.size).toBe(6);
+
+    // Every source changes, and the first lookup of the next write takes
+    // longer than the whole budget.
+    for (const id of ids) {
+      results.set(id, {
+        kind: 'file',
+        path: await source(`${id}-new.png`, OtherPng),
+        artworkType: 'poster',
+      });
+    }
+    resolves = 0;
+    onResolve = () => {
+      if (resolves === 1) {
+        vi.setSystemTime(Date.now() + 61_000);
+      }
+    };
+    const loadsBefore = service.loads;
+    const second = await service.publish(ids.map(poster));
+
+    // Only the slow first lookup ran. The others started after it had used up
+    // the budget and were skipped. Nothing was fetched, and every picture kept
+    // its address.
+    expect(resolves).toBe(1);
+    expect(service.loads).toBe(loadsBefore);
+    expect(second).toEqual(first);
   });
 
   test('a lost index adopts the file already on disk without changing its URL', async () => {
