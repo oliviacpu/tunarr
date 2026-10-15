@@ -60,6 +60,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Tests:** `DBAccess.test.ts` ("connection settings"): the main thread's connection reports `mmap_size` 0 and
   `cache_size` -262144, with WAL and foreign keys still on, and workers keep the old values. Both tests fail before
   the change.
+
 ### A long Live TV session no longer stalls Tunarr every few seconds (2026-10-15)
 
 - **What you saw:** about two hours into watching a channel, every request to Tunarr stalled for 270-380 ms about
