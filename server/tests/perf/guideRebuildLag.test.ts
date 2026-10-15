@@ -1,8 +1,6 @@
 import dayjs from 'dayjs';
 import type { FastifyInstance } from 'fastify';
 import { range, sortBy, sum, uniq } from 'lodash-es';
-import { writeFile } from 'node:fs/promises';
-import { Session } from 'node:inspector';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { container } from '../../src/container.ts';
 import type { IChannelDB } from '../../src/db/interfaces/IChannelDB.ts';
@@ -17,6 +15,7 @@ import { KEYS } from '../../src/types/inject.ts';
 import { OpenDateTimeRange } from '../../src/types/OpenDateTimeRange.ts';
 import { formatLagSummary } from '../../src/util/eventLoopLag.ts';
 import { getAvailablePort } from '../../src/util/net.ts';
+import { withCpuProfile } from '../support/cpuProfile.ts';
 import { formatMb, measurePeakHeap } from '../support/heap.ts';
 import {
   formatProbeSummary,
@@ -107,37 +106,6 @@ const PROBE_URL = '/api/xmltv-last-refresh';
 // Set to a file path to write a .cpuprofile of the rebuild. It covers the
 // operation and a settle window, and opens in Chrome DevTools.
 const CPU_PROFILE_PATH = process.env['TUNARR_PERF_CPU_PROFILE'];
-
-async function withCpuProfile<T>(
-  path: string | undefined,
-  operation: () => Promise<T>,
-): Promise<T> {
-  if (path === undefined) {
-    return operation();
-  }
-
-  const session = new Session();
-  session.connect();
-  const post = (method: string, params?: object) =>
-    new Promise<unknown>((resolve, reject) =>
-      session.post(method, params, (err, result) =>
-        err ? reject(err) : resolve(result),
-      ),
-    );
-
-  await post('Profiler.enable');
-  await post('Profiler.setSamplingInterval', { interval: 500 });
-  await post('Profiler.start');
-  try {
-    const result = await operation();
-    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    return result;
-  } finally {
-    const { profile } = (await post('Profiler.stop')) as { profile: object };
-    await writeFile(path, JSON.stringify(profile));
-    session.disconnect();
-  }
-}
 
 let app: FastifyInstance;
 let channelIds: string[];
@@ -448,8 +416,10 @@ describe('guide rebuild', () => {
       // The task fires the subtitle sweep after the guide is written.
       settleMs: SETTLE_MS,
       operation: () =>
-        withCpuProfile(CPU_PROFILE_PATH, () =>
-          GlobalScheduler.runScheduledJobNow(UpdateXmlTvTask.ID, false),
+        withCpuProfile(
+          CPU_PROFILE_PATH,
+          () => GlobalScheduler.runScheduledJobNow(UpdateXmlTvTask.ID, false),
+          SETTLE_MS,
         ),
     });
 
