@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { GlobalOptions } from '../globals.ts';
 import type { ArtworkResult } from './ArtworkService.ts';
 import { ArtworkService } from './ArtworkService.ts';
+import { AxiosError, AxiosHeaders } from 'axios';
 import {
+  describeLoadError,
+  publishedArtworkFile,
   formatArtworkVersion,
   nextArtworkVersion,
   PublicMediaService,
@@ -20,6 +23,11 @@ const Png = Buffer.from(
   'base64',
 );
 const OtherPng = Buffer.concat([Png, Buffer.from('other')]);
+// A 1x1 GIF.
+const Gif = Buffer.from(
+  'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+  'base64',
+);
 
 const Day = 24 * 60 * 60 * 1000;
 const Start = Date.UTC(2026, 9, 15, 4, 12, 30);
@@ -55,9 +63,17 @@ describe('PublicMediaService', () => {
     return file;
   }
 
-  async function publishedFile(urlPath: string) {
-    const name = urlPath.replace(/^\/media\/artwork\//, '').replace(/\?.*/, '');
-    return path.join(dbDir, 'media', 'artwork', name);
+  /** Where the server finds the file for a published URL. */
+  function publishedFile(urlPath: string) {
+    const url = new URL(urlPath, 'http://localhost');
+    const file = publishedArtworkFile(
+      url.pathname.replace(/^\/media\/artwork\//, ''),
+      url.searchParams.get('v') ?? undefined,
+    );
+    if (file === undefined) {
+      throw new Error(`Not a published URL: ${urlPath}`);
+    }
+    return path.join(dbDir, 'media', 'artwork', file);
   }
 
   beforeEach(async () => {
@@ -99,11 +115,9 @@ describe('PublicMediaService', () => {
 
     const url = published.get('show-poster');
     expect(url).toBe('/media/artwork/show-poster.png?v=20261015041230');
-    const file = await publishedFile(url ?? '');
+    const file = publishedFile(url ?? '');
+    expect(path.basename(file)).toBe('show-poster.20261015041230.png');
     expect(await fs.readFile(file)).toEqual(Png);
-    expect(Math.floor((await fs.stat(file)).mtimeMs / 1000)).toBe(
-      Math.floor(Start / 1000),
-    );
   });
 
   test('an unchanged source is not fetched again and keeps its URL', async () => {
@@ -158,7 +172,64 @@ describe('PublicMediaService', () => {
 
     const url = second.get('show-poster');
     expect(url).toBe('/media/artwork/show-poster.png?v=20261015041231');
-    expect(await fs.readFile(await publishedFile(url ?? ''))).toEqual(OtherPng);
+    expect(await fs.readFile(publishedFile(url ?? ''))).toEqual(OtherPng);
+    // The earlier URL still serves the bytes it was published with.
+    expect(
+      await fs.readFile(
+        publishedFile('/media/artwork/show-poster.png?v=20261015041230'),
+      ),
+    ).toEqual(Png);
+  });
+
+  test('a replaced version is kept for 30 days, then deleted', async () => {
+    results.set('show', {
+      kind: 'file',
+      path: await source('a.png', Png),
+      artworkType: 'poster',
+    });
+    const first = await service.publish([poster('show')]);
+    const oldFile = publishedFile(first.get('show-poster') ?? '');
+
+    vi.setSystemTime(Start + Day);
+    results.set('show', {
+      kind: 'file',
+      path: await source('b.png', OtherPng),
+      artworkType: 'poster',
+    });
+    const second = await service.publish([poster('show')]);
+    const newFile = publishedFile(second.get('show-poster') ?? '');
+
+    vi.setSystemTime(Start + 30 * Day);
+    await service.publish([poster('show')]);
+    expect(await fs.readFile(oldFile)).toEqual(Png);
+
+    vi.setSystemTime(Start + 32 * Day);
+    await service.publish([poster('show')]);
+    await expect(fs.stat(oldFile)).rejects.toThrow();
+    expect(await fs.readFile(newFile)).toEqual(OtherPng);
+  });
+
+  test('a picture in a new format keeps the old format at its old URL', async () => {
+    results.set('show', {
+      kind: 'file',
+      path: await source('a.png', Png),
+      artworkType: 'poster',
+    });
+    const first = await service.publish([poster('show')]);
+
+    results.set('show', {
+      kind: 'file',
+      path: await source('b.gif', Gif),
+      artworkType: 'poster',
+    });
+    const second = await service.publish([poster('show')]);
+
+    expect(second.get('show-poster')).toBe(
+      '/media/artwork/show-poster.gif?v=20261015041231',
+    );
+    expect(
+      await fs.readFile(publishedFile(first.get('show-poster') ?? '')),
+    ).toEqual(Png);
   });
 
   test('refreshes an unchanged source after a week, keeping the URL when the bytes match', async () => {
@@ -283,12 +354,41 @@ describe('PublicMediaService', () => {
     const loadsBefore = service.loads;
     const second = await service.publish(ids.map(poster));
 
-    // Only the slow first lookup ran. The others started after it had used up
-    // the budget and were skipped. Nothing was fetched, and every picture kept
-    // its address.
-    expect(resolves).toBe(1);
+    // The four running at once had started before the budget ran out and were
+    // looked up; the last two started after and weren't. Nothing was fetched,
+    // and every picture kept its address.
+    expect(resolves).toBe(4);
     expect(service.loads).toBe(loadsBefore);
     expect(second).toEqual(first);
+  });
+
+  test('a source hint that matches what was published skips the lookup', async () => {
+    results.set('show', {
+      kind: 'file',
+      path: await source('a.png', Png),
+      artworkType: 'poster',
+    });
+    const ref = { ...poster('show'), sourceHint: 'cache:aa/bb/a.png' };
+    const first = await service.publish([ref]);
+    expect(resolves).toBe(1);
+
+    const second = await service.publish([ref]);
+    expect(resolves).toBe(1);
+    expect(second).toEqual(first);
+
+    // A different hint means the source changed, so it is looked up again.
+    results.set('show', {
+      kind: 'file',
+      path: await source('b.png', OtherPng),
+      artworkType: 'poster',
+    });
+    const third = await service.publish([
+      { ...ref, sourceHint: 'cache:cc/dd/b.png' },
+    ]);
+    expect(resolves).toBe(2);
+    expect(third.get('show-poster')).toBe(
+      '/media/artwork/show-poster.png?v=20261015041231',
+    );
   });
 
   test('a lost index adopts the file already on disk without changing its URL', async () => {
@@ -313,7 +413,7 @@ describe('PublicMediaService', () => {
       artworkType: 'poster',
     });
     const first = await service.publish([poster('show')]);
-    const file = await publishedFile(first.get('show-poster') ?? '');
+    const file = publishedFile(first.get('show-poster') ?? '');
 
     vi.setSystemTime(Start + 29 * Day);
     await service.publish([]);
@@ -338,5 +438,58 @@ describe('artwork versions', () => {
     expect(nextArtworkVersion(Start, now - 10)).toBe(now);
     expect(nextArtworkVersion(Start, now)).toBe(now + 1);
     expect(nextArtworkVersion(Start, now + 5)).toBe(now + 6);
+  });
+});
+
+describe('describeLoadError', () => {
+  test('names the failure without the request or its headers', () => {
+    const config = {
+      headers: new AxiosHeaders({ 'X-Plex-Token': 'secret-token' }),
+    };
+    const refused = new AxiosError(
+      'connect ECONNREFUSED 127.0.0.1:32400',
+      'ECONNREFUSED',
+      config,
+    );
+    expect(describeLoadError(refused)).toBe('ECONNREFUSED');
+
+    const notFound = new AxiosError(
+      'Request failed',
+      'ERR_BAD_REQUEST',
+      config,
+      {},
+      {
+        status: 404,
+        statusText: 'Not Found',
+        data: undefined,
+        headers: {},
+        config,
+      },
+    );
+    expect(describeLoadError(notFound)).toBe('HTTP 404');
+    expect(describeLoadError(new Error('disk full'))).toBe('disk full');
+  });
+});
+
+describe('publishedArtworkFile', () => {
+  test('maps a published URL to the file for its version', () => {
+    expect(publishedArtworkFile('abc-poster.jpg', '20261015041230')).toBe(
+      'abc-poster.20261015041230.jpg',
+    );
+  });
+
+  test('refuses anything else', () => {
+    expect(publishedArtworkFile('abc-poster.jpg', undefined)).toBeUndefined();
+    expect(publishedArtworkFile('abc-poster.jpg', '2026')).toBeUndefined();
+    expect(
+      publishedArtworkFile('abc-poster.jpg', ['20261015041230']),
+    ).toBeUndefined();
+    expect(
+      publishedArtworkFile('../media/x.jpg', '20261015041230'),
+    ).toBeUndefined();
+    expect(publishedArtworkFile('abc.svg', '20261015041230')).toBeUndefined();
+    expect(
+      publishedArtworkFile('abc-poster.20261015041230.jpg', '20261015041230'),
+    ).toBeUndefined();
   });
 });

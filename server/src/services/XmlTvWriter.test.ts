@@ -1410,6 +1410,38 @@ describe('published guide pictures', () => {
     ).toBe(`{{host}}/api/programs/${program.uuid}/artwork/poster`);
   });
 
+  test('describe where each picture comes from, so an unchanged one needs no lookup', () => {
+    const cached = makeProgram({
+      artwork: [makeArtwork('poster', { cachePath: 'ab/cd/x.jpg' })],
+    });
+    const remote = makeProgram({
+      artwork: [
+        makeArtwork('poster', {
+          sourcePath: 'http://plex.local/library/metadata/1/thumb/1792036612',
+        }),
+      ],
+    });
+    const derived = makeProgram({
+      artwork: [],
+      sourceType: 'plex',
+      externalKey: '42',
+      mediaSourceId: tag<MediaSourceId>('ms-1'),
+    });
+
+    expect(
+      XmlTvWriter.resolveArtworkRef(cached, { useShowPoster: false })
+        ?.sourceHint,
+    ).toBe('cache:ab/cd/x.jpg');
+    expect(
+      XmlTvWriter.resolveArtworkRef(remote, { useShowPoster: false })
+        ?.sourceHint,
+    ).toBe('source:http://plex.local/library/metadata/1/thumb/1792036612');
+    expect(
+      XmlTvWriter.resolveArtworkRef(derived, { useShowPoster: false })
+        ?.sourceHint,
+    ).toBe('derived:plex:ms-1:42');
+  });
+
   test('a guide write publishes each picture once and links the icon and image to it', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-xmltv-'));
     try {

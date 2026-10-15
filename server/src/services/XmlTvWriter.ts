@@ -516,7 +516,13 @@ export class XmlTvWriter {
   ): PublicArtworkRef | undefined {
     type ArtworkCandidate = {
       id: string | null | undefined;
-      artwork: { artworkType: ArtworkType | null }[] | undefined;
+      artwork:
+        | {
+            artworkType: ArtworkType | null;
+            sourcePath?: string;
+            cachePath?: string | null;
+          }[]
+        | undefined;
       types: ArtworkType[];
       // The item the id points at, so a candidate with no stored artwork row
       // can still be checked for a derivable one.
@@ -565,7 +571,15 @@ export class XmlTvWriter {
         (a) => a.artworkType && candidate.types.includes(a.artworkType),
       );
       if (art?.artworkType) {
-        return { id: candidate.id, artworkType: art.artworkType };
+        return {
+          id: candidate.id,
+          artworkType: art.artworkType,
+          sourceHint: art.cachePath
+            ? `cache:${art.cachePath}`
+            : art.sourcePath
+              ? `source:${art.sourcePath}`
+              : undefined,
+        };
       }
     }
 
@@ -575,10 +589,15 @@ export class XmlTvWriter {
     // media source on request, so emit the URL it can answer rather than
     // dropping the <icon> — the same precedence, one layer later.
     for (const candidate of candidates) {
-      if (!candidate.id || !isDerivableArtworkSource(candidate.source)) {
+      const source = candidate.source;
+      if (!candidate.id || !source || !isDerivableArtworkSource(source)) {
         continue;
       }
-      return { id: candidate.id, artworkType: 'poster' };
+      return {
+        id: candidate.id,
+        artworkType: 'poster',
+        sourceHint: `derived:${source.sourceType}:${source.mediaSourceId}:${source.externalKey}`,
+      };
     }
 
     return undefined;

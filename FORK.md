@@ -41,37 +41,67 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Cause:** the guide linked each programme to `/api/programs/<id>/artwork/<type>`, which fetches the picture from
   the media server again on every request and passes the server's caching headers through. The address never
   changed when the picture did, and Plex's image cache (3 days) and its apps key by address.
-- **Fix:** each guide write publishes every programme's picture as a file in `<data>/media/artwork/`, served at
-  `/media/artwork/` with `Cache-Control: public, max-age=31536000, immutable` and `nosniff`
-  (`services/PublicMediaService.ts`, `services/XmlTvWriter.ts`, `Server.ts`).
-  - **Address:** `/media/artwork/<id>-<type>.<ext>?v=YYYYMMDDHHMMSS`. The version is the second (UTC) the bytes were
-    saved, and is the file's modification time. A file is rewritten only when its SHA-256 differs, so a rescan keeps
-    the address. Two changes within one second get versions one second apart.
-  - **Fetching:** the picture is resolved as the artwork route does (`ArtworkService.resolveArtwork`). It is fetched
-    again only when its source changes (a Plex path ends in Plex's own timestamp for the image), or after 7 days, at
-    most 20 such refreshes per write. Only JPEG, PNG, WebP, GIF and AVIF are published, judged by the bytes; an SVG
-    could run script on Tunarr's origin. A fetch is cut off at 10 s and 25 MB, a failed one is retried after an hour,
-    and one write spends at most 60 s on pictures: past that, the rest skip their lookups and keep the files
-    they have, and a fetch still running is cut off. Anything not published keeps the artwork route address.
-  - **Index:** `<data>/media/artwork-index.json`, outside the served folder. A JSON file rather than a table, so the
-    fork adds no migration to collide with upstream's numbering. If it is lost, files on disk are adopted with the
-    version their modification time records.
-  - **Cleanup:** pictures no guide write has linked for 30 days are deleted.
-  - **Uploads:** a `/images/uploads/…` request carrying `?v=` (every upload URL since the logo fix) now gets the same
+- **Fix:** each guide write publishes every programme's picture as a file in `<data>/media/artwork/`, and the guide
+  links to it (`services/PublicMediaService.ts`, `services/XmlTvWriter.ts`, `Server.ts`).
+  - **Address:** `/media/artwork/<id>-<type>.<ext>?v=YYYYMMDDHHMMSS`, served with
+    `Cache-Control: public, max-age=31536000, immutable` and `nosniff`. The version is the second (UTC) the bytes were
+    saved. A rescan that finds the same bytes keeps the address, and two changes within one second get versions one
+    second apart.
+  - **One file per version:** each version is its own file, `<id>-<type>.<version>.<ext>`. A small route maps the
+    `?v=` to it, so an address always serves the bytes it was published with, even to a client still holding an
+    older guide. A replaced version is kept for 30 days. A request without a valid version, or for a version that
+    doesn't exist, gets a 404 with no cache header.
+  - **Cheap when nothing changed:** the guide already loads each picture's artwork row, so it passes the row's cache
+    or source path along. A picture whose source matches what was published needs no lookup. Each picture yields to
+    the event loop first. On the guide rebuild perf test (1,375 pictures, all unreachable), the longest request stall
+    went from 2.6 s to 15 ms.
+  - **Fetching:**
+    - A picture is fetched again only when its source changes (a Plex path ends in Plex's own timestamp for the
+      image), or after 7 days, with at most 20 such refreshes per write.
+    - Only JPEG, PNG, WebP, GIF and AVIF are published, judged by the bytes; an SVG could run script on Tunarr's
+      origin.
+    - A fetch is cut off at 10 s and 25 MB, and a failed one is retried after an hour.
+    - One write spends at most 60 s on pictures. Past that, the rest skip their lookups and keep the files they have,
+      and a fetch still running is cut off.
+    - Anything not published keeps the artwork route address.
+    - A failed fetch is logged with its URL and error code only, never the error object, which carries the
+      request's headers and so the media server's token.
+  - **Index:** `<data>/media/artwork-index.json`, outside the served folder. It's a JSON file rather than a table, so
+    the fork adds no migration to collide with upstream's numbering. If it's lost, a version already on disk with the
+    same bytes is adopted, so its address doesn't change.
+  - **Cleanup:** pictures no guide write has linked for 30 days are deleted, along with their earlier versions.
+  - **Uploads:** an `/images/uploads/…` request carrying `?v=` (every upload URL since the logo fix) gets the same
     year-long immutable header. Without `?v=` it keeps `max-age=0` (`versionedUploadCacheControl`, `util/iconUtil.ts`).
   - **Not changed:** credit images and the web UI keep the artwork routes.
   - **Docs:** `docs/configure/clients/plex.md`.
-- **Tests:** `PublicMediaService.test.ts`: the version is the second the bytes were saved; an unchanged source isn't
-  fetched again; the same bytes from a new source keep the address; new bytes in the same second get the next
-  second; a week-old picture is refreshed and keeps its address when unchanged; an SVG is never published; a failed
-  fetch keeps the artwork route and isn't retried for an hour; a replaced picture whose new source fails keeps the old
-  file and is retried after an hour, not a week; past the 60 s budget, later pictures skip their lookups and keep their files; a lost index
-  adopts the file; 30-day cleanup.
-  `XmlTvWriter.test.ts`: a write publishes each picture once and the `<icon>` and `<image>` link to the file; a
-  failed publish still writes the guide with artwork route links. `iconUtil.test.ts`: the upload header. Checked on a
-  throwaway server with a local movie library: the guide linked both posters to `/media/artwork/…?v=20261015042028`
-  with the immutable header; a second write kept both addresses; replacing one poster and rescanning moved only its
-  version (`…042055`); the index file wasn't reachable.
+- **Tests:**
+  - **`PublicMediaService.test.ts`:**
+    - the file and version;
+    - an unchanged source isn't fetched again;
+    - a matching source hint skips the lookup;
+    - the same bytes from a new source keep the address;
+    - new bytes get the next second, and the old URL keeps its bytes;
+    - a new format keeps the old one at its old URL;
+    - a replaced version is kept 30 days, then deleted;
+    - the weekly refresh;
+    - an SVG is never published;
+    - failed fetches back off for an hour, including a replaced picture whose new source fails;
+    - past the budget, later pictures skip their lookups;
+    - a lost index adopts the file;
+    - the 30-day cleanup;
+    - URL-to-file mapping refuses malformed names and versions;
+    - load errors are described without headers.
+  - **`XmlTvWriter.test.ts`:**
+    - the source hints;
+    - a write publishes each picture once, and the `<icon>` and `<image>` link to the file;
+    - a failed publish still writes the guide.
+  - **`iconUtil.test.ts`:** the upload header.
+  - **Throwaway server, local movie library:**
+    - the guide linked both posters, served with the immutable header (`HEAD` too);
+    - a second write kept both addresses;
+    - after one poster was replaced and rescanned, its new address served the new bytes and its old address still
+      served the old ones;
+    - missing, short or unknown versions, `..` paths and `.svg` all returned 404, with no cache header.
 - **Upstream:** not sent.
 
 ### An HLS Direct v2 channel with subtitles starts even when no one is talking (2026-10-14)

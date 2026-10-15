@@ -1,6 +1,6 @@
 import type { ArtworkType } from '@/db/schema/Artwork.js';
 import { Mutex } from 'async-mutex';
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { fileTypeFromBuffer } from 'file-type';
 import { inject, injectable } from 'inversify';
 import { createHash, randomUUID } from 'node:crypto';
@@ -15,8 +15,10 @@ import {
   PublicMediaFolderName,
 } from '../util/constants.ts';
 import type { Maybe } from '../types/util.ts';
+import { caughtErrorToError } from '../util/index.ts';
 import { InjectLogger } from '../util/inject.ts';
 import type { Logger } from '../util/logging/LoggerFactory.ts';
+import throttle from '../util/throttle.ts';
 import { ArtworkService, type ArtworkResult } from './ArtworkService.ts';
 
 /** Where published guide pictures are served from. No login needed. */
@@ -28,6 +30,12 @@ const IndexFileName = 'artwork-index.json';
 export type PublicArtworkRef = {
   id: string;
   artworkType: ArtworkType;
+  /**
+   * What the picture comes from, as the caller already knows it, such as the
+   * artwork row's cache or source path. When it matches what was published,
+   * the picture is reused without looking anything up.
+   */
+  sourceHint?: string;
 };
 
 /** Published URL paths (no host) by `publicArtworkKey`. */
@@ -58,6 +66,38 @@ export function nextArtworkVersion(
 ): number {
   const now = Math.floor(nowMs / 1000);
   return previous !== undefined && previous >= now ? previous + 1 : now;
+}
+
+/** `YYYYMMDDHHMMSS` back to seconds since the epoch. */
+function parseArtworkVersion(version: string): number {
+  const [y, mo, d, h, mi, se] = [0, 4, 6, 8, 10, 12].map((start, i) =>
+    Number(version.slice(start, start + (i === 0 ? 4 : 2))),
+  );
+  return Date.UTC(y ?? 0, (mo ?? 1) - 1, d, h, mi, se) / 1000;
+}
+
+const PublicNamePattern = /^([0-9A-Za-z_-]+)\.(jpg|png|webp|gif|avif)$/;
+const VersionPattern = /^\d{14}$/;
+const DiskNamePattern = /^([0-9A-Za-z_-]+)\.(\d{14})\.(jpg|png|webp|gif|avif)$/;
+
+/**
+ * The file holding `/media/artwork/<name>?v=<version>`. Each version is its own
+ * file, so a URL keeps serving the bytes it was published with even after the
+ * picture changes. Undefined for a malformed request.
+ */
+export function publishedArtworkFile(
+  name: string,
+  version: unknown,
+): Maybe<string> {
+  const match = PublicNamePattern.exec(name);
+  if (!match || typeof version !== 'string' || !VersionPattern.test(version)) {
+    return undefined;
+  }
+  return `${match[1]}.${version}.${match[2]}`;
+}
+
+function diskFileName(key: string, version: number, extension: string) {
+  return `${key}.${formatArtworkVersion(version)}.${extension}`;
 }
 
 // Raster formats only. An SVG served from Tunarr's own origin could run script
@@ -99,6 +139,8 @@ const IndexEntrySchema = z.object({
   // them.
   failedAt: z.number().optional(),
   failedSourceKey: z.string().optional(),
+  // Earlier versions, kept so their URLs keep working until the cleanup.
+  retired: z.array(z.object({ file: z.string(), at: z.number() })).default([]),
 });
 
 type IndexEntry = z.infer<typeof IndexEntrySchema>;
@@ -166,7 +208,7 @@ export class PublicMediaService {
     }
 
     await fs.mkdir(this.artworkDirectory, { recursive: true });
-    const index = await this.loadIndex();
+    const { index, loaded: indexLoaded } = await this.loadIndex();
     const startedAt = Date.now();
     const run = {
       deadline: startedAt + PublishBudgetMs,
@@ -177,6 +219,9 @@ export class PublicMediaService {
     const queue = new PQueue({ concurrency: Concurrency });
     for (const [key, ref] of unique) {
       void queue.add(async () => {
+        // A picture that needs no I/O resolves in microtasks alone, and
+        // thousands in a row would hold the event loop. Let requests in.
+        await throttle();
         try {
           // Past the budget, a picture costs no lookups or fetches: it keeps
           // the file it already has, or the artwork route.
@@ -192,13 +237,17 @@ export class PublicMediaService {
             }
           }
         } catch (e) {
-          this.logger.warn(e, 'Could not publish guide picture %s', key);
+          this.logger.warn(
+            'Could not publish guide picture %s: %s',
+            key,
+            caughtErrorToError(e).message,
+          );
         }
       });
     }
     await queue.onIdle();
 
-    if (await this.collectGarbage(index)) {
+    if (await this.collectGarbage(index, indexLoaded)) {
       run.changed = true;
     }
     if (run.changed) {
@@ -220,6 +269,17 @@ export class PublicMediaService {
     index: Index,
     run: { deadline: number; refreshesLeft: number; changed: boolean },
   ): Promise<Maybe<IndexEntry>> {
+    const existing = index.entries[key];
+    const current = await this.alreadyPublished(existing);
+
+    // Known up front, an unchanged source needs no lookup at all.
+    if (ref.sourceHint !== undefined) {
+      const reuse = this.reusable(existing, current, ref.sourceHint, run);
+      if (reuse.reuse) {
+        return reuse.entry;
+      }
+    }
+
     const result = await this.artworkService.resolveArtwork(
       ref.id,
       'program',
@@ -229,25 +289,15 @@ export class PublicMediaService {
       return;
     }
 
-    const sourceKey = await this.sourceKey(result);
-    const existing = index.entries[key];
-    const current = await this.alreadyPublished(existing);
-    const now = Date.now();
-    const backingOff =
-      existing?.failedAt !== undefined &&
-      existing.failedSourceKey === sourceKey &&
-      now - existing.failedAt < RetryFailedAfterMs;
-
-    if (current && current.sourceKey === sourceKey) {
-      const due = now - current.fetchedAt >= RefreshAfterMs;
-      if (!due || backingOff || run.refreshesLeft <= 0) {
-        return current;
+    const sourceKey = ref.sourceHint ?? (await this.sourceKey(result));
+    if (ref.sourceHint === undefined) {
+      const reuse = this.reusable(existing, current, sourceKey, run);
+      if (reuse.reuse) {
+        return reuse.entry;
       }
-      run.refreshesLeft--;
-    } else if (backingOff) {
-      return current;
     }
 
+    const now = Date.now();
     if (now >= run.deadline) {
       return current;
     }
@@ -256,7 +306,14 @@ export class PublicMediaService {
       result,
       Math.min(FetchTimeoutMs, run.deadline - now),
     ).catch((e: unknown) => {
-      this.logger.debug(e, 'Could not load guide picture %s', key);
+      // Never the error itself: an HTTP client error carries the request's
+      // headers, credential included.
+      this.logger.debug(
+        'Could not load guide picture %s from %s: %s',
+        key,
+        result.kind === 'url' ? result.url : result.path,
+        describeLoadError(e),
+      );
       return undefined;
     });
     if (!loaded) {
@@ -268,6 +325,7 @@ export class PublicMediaService {
           version: 0,
           fetchedAt: 0,
           referencedAt: now,
+          retired: [],
         }),
         failedAt: now,
         failedSourceKey: sourceKey,
@@ -276,9 +334,12 @@ export class PublicMediaService {
       return current;
     }
 
-    const file = `${key}.${loaded.extension}`;
     const sha256 = createHash('sha256').update(loaded.bytes).digest('hex');
-    if (current && current.sha256 === sha256 && current.file === file) {
+    if (
+      current &&
+      current.sha256 === sha256 &&
+      current.file.endsWith(`.${loaded.extension}`)
+    ) {
       const entry: IndexEntry = {
         ...current,
         sourceKey,
@@ -291,20 +352,24 @@ export class PublicMediaService {
       return entry;
     }
 
-    const adopted = await this.adoptExistingFile(file, sha256);
-    const version =
-      adopted ??
-      nextArtworkVersion(
+    let file: string;
+    let version: number;
+    const adopted = await this.adoptExistingFile(key, loaded.extension, sha256);
+    if (adopted) {
+      ({ file, version } = adopted);
+    } else {
+      version = nextArtworkVersion(
         now,
         existing && existing.version > 0 ? existing.version : undefined,
       );
-    if (adopted === undefined) {
-      await this.writeAtomically(file, loaded.bytes, version);
+      file = diskFileName(key, version, loaded.extension);
+      await this.writeAtomically(file, loaded.bytes);
     }
-    if (existing && existing.file !== '' && existing.file !== file) {
-      await fs.rm(path.join(this.artworkDirectory, existing.file), {
-        force: true,
-      });
+
+    // The version it replaces stays, so its URL keeps its bytes.
+    const retired = (existing?.retired ?? []).filter((r) => r.file !== file);
+    if (current && current.file !== file) {
+      retired.push({ file: current.file, at: now });
     }
 
     const entry: IndexEntry = {
@@ -314,6 +379,7 @@ export class PublicMediaService {
       version,
       fetchedAt: now,
       referencedAt: now,
+      retired,
     };
     index.entries[key] = entry;
     run.changed = true;
@@ -321,24 +387,29 @@ export class PublicMediaService {
   }
 
   /**
-   * After the index is lost, a file already holding these bytes keeps the
-   * version its modification time records, so its URL doesn't change.
+   * A version already on disk holding these bytes, newest first, so a lost
+   * index or a picture that changes back doesn't get a new URL.
    */
   private async adoptExistingFile(
-    file: string,
+    key: string,
+    extension: string,
     sha256: string,
-  ): Promise<Maybe<number>> {
-    const full = path.join(this.artworkDirectory, file);
-    try {
-      const [bytes, stat] = await Promise.all([
-        fs.readFile(full),
-        fs.stat(full),
-      ]);
-      if (createHash('sha256').update(bytes).digest('hex') === sha256) {
-        return Math.floor(stat.mtimeMs / 1000);
+  ): Promise<Maybe<{ file: string; version: number }>> {
+    const candidates = (await fs.readdir(this.artworkDirectory))
+      .map((file) => ({ file, match: DiskNamePattern.exec(file) }))
+      .filter(({ match }) => match?.[1] === key && match[3] === extension)
+      .sort((a, b) => b.file.localeCompare(a.file));
+    for (const { file, match } of candidates) {
+      const bytes = await fs
+        .readFile(path.join(this.artworkDirectory, file))
+        .catch(() => undefined);
+      if (
+        match?.[2] !== undefined &&
+        bytes !== undefined &&
+        createHash('sha256').update(bytes).digest('hex') === sha256
+      ) {
+        return { file, version: parseArtworkVersion(match[2]) };
       }
-    } catch {
-      // No file to adopt.
     }
     return undefined;
   }
@@ -356,11 +427,42 @@ export class PublicMediaService {
     return `file:${result.path}@${stat?.mtimeMs ?? 0}`;
   }
 
+  /**
+   * Whether the published picture can be reused for this source as is: it is
+   * the same source and not due for a refresh, or a recent fetch of this
+   * source failed. A due refresh uses up one of the run's refreshes.
+   */
+  private reusable(
+    existing: Maybe<IndexEntry>,
+    current: Maybe<IndexEntry>,
+    sourceKey: string,
+    run: { refreshesLeft: number },
+  ): { reuse: true; entry: Maybe<IndexEntry> } | { reuse: false } {
+    const now = Date.now();
+    const backingOff =
+      existing?.failedAt !== undefined &&
+      existing.failedSourceKey === sourceKey &&
+      now - existing.failedAt < RetryFailedAfterMs;
+
+    if (current && current.sourceKey === sourceKey) {
+      const due = now - current.fetchedAt >= RefreshAfterMs;
+      if (!due || backingOff || run.refreshesLeft <= 0) {
+        return { reuse: true, entry: current };
+      }
+      run.refreshesLeft--;
+      return { reuse: false };
+    }
+    if (backingOff) {
+      return { reuse: true, entry: current };
+    }
+    return { reuse: false };
+  }
+
   /** The entry, when its file is on disk. */
   private async alreadyPublished(
     entry: Maybe<IndexEntry>,
   ): Promise<Maybe<IndexEntry>> {
-    if (entry === undefined || entry.file === '') {
+    if (entry === undefined || !DiskNamePattern.test(entry.file)) {
       return undefined;
     }
     const size = await fileSize(path.join(this.artworkDirectory, entry.file));
@@ -399,18 +501,12 @@ export class PublicMediaService {
     return { bytes, extension };
   }
 
-  private async writeAtomically(
-    file: string,
-    bytes: Buffer,
-    version: number,
-  ): Promise<void> {
+  private async writeAtomically(file: string, bytes: Buffer): Promise<void> {
     // Written next to the served folder, never inside it, so a half-written
     // file is never served. Same file system, so the rename is atomic.
     const temp = path.join(this.mediaDirectory, `.${randomUUID()}.tmp`);
     try {
       await fs.writeFile(temp, bytes);
-      const versionDate = new Date(version * 1000);
-      await fs.utimes(temp, versionDate, versionDate);
       await fs.rename(temp, path.join(this.artworkDirectory, file));
     } finally {
       await fs.rm(temp, { force: true });
@@ -418,26 +514,54 @@ export class PublicMediaService {
   }
 
   /**
-   * Deletes pictures no guide write has linked to for 30 days, and files the
-   * index doesn't know. Returns whether the index changed.
+   * Deletes pictures no guide write has linked to for 30 days, versions
+   * replaced 30 days ago, and files the index doesn't know. Returns whether the
+   * index changed.
    */
-  private async collectGarbage(index: Index): Promise<boolean> {
+  private async collectGarbage(
+    index: Index,
+    indexLoaded: boolean,
+  ): Promise<boolean> {
     const now = Date.now();
+    const remove = (file: string) =>
+      fs.rm(path.join(this.artworkDirectory, file), { force: true });
     let changed = false;
     for (const [key, entry] of Object.entries(index.entries)) {
-      if (now - entry.referencedAt < ForgetUnreferencedAfterMs) {
+      if (now - entry.referencedAt >= ForgetUnreferencedAfterMs) {
+        for (const file of [entry.file, ...entry.retired.map((r) => r.file)]) {
+          if (file !== '') {
+            await remove(file);
+          }
+        }
+        delete index.entries[key];
+        changed = true;
         continue;
       }
-      if (entry.file !== '') {
-        await fs.rm(path.join(this.artworkDirectory, entry.file), {
-          force: true,
-        });
+      const kept = entry.retired.filter(
+        (r) => now - r.at < ForgetUnreferencedAfterMs,
+      );
+      if (kept.length !== entry.retired.length) {
+        for (const r of entry.retired) {
+          if (!kept.includes(r)) {
+            await remove(r.file);
+          }
+        }
+        entry.retired = kept;
+        changed = true;
       }
-      delete index.entries[key];
-      changed = true;
     }
 
-    const known = new Set(Object.values(index.entries).map((e) => e.file));
+    // Without an index, every file looks unknown. They are adopted as their
+    // pictures are published again, so leave them until then.
+    if (!indexLoaded) {
+      return changed;
+    }
+    const known = new Set(
+      Object.values(index.entries).flatMap((e) => [
+        e.file,
+        ...e.retired.map((r) => r.file),
+      ]),
+    );
     for (const file of await fs.readdir(this.artworkDirectory)) {
       if (known.has(file)) {
         continue;
@@ -452,15 +576,19 @@ export class PublicMediaService {
   }
 
   private urlPath(entry: IndexEntry): string {
-    return `${PublicArtworkPathPrefix}${entry.file}?v=${formatArtworkVersion(entry.version)}`;
+    const match = DiskNamePattern.exec(entry.file);
+    if (!match) {
+      throw new Error(`Unexpected published file name: ${entry.file}`);
+    }
+    return `${PublicArtworkPathPrefix}${match[1]}.${match[3]}?v=${match[2]}`;
   }
 
-  private async loadIndex(): Promise<Index> {
+  private async loadIndex(): Promise<{ index: Index; loaded: boolean }> {
     try {
       const raw = await fs.readFile(this.indexPath, 'utf-8');
       const parsed = IndexSchema.safeParse(JSON.parse(raw));
       if (parsed.success) {
-        return parsed.data;
+        return { index: parsed.data, loaded: true };
       }
       this.logger.warn(
         'Guide picture index at %s is unreadable; starting a new one',
@@ -469,7 +597,7 @@ export class PublicMediaService {
     } catch {
       // A missing index starts empty. Files already on disk are adopted.
     }
-    return { entries: {} };
+    return { index: { entries: {} }, loaded: false };
   }
 
   private async saveIndex(index: Index): Promise<void> {
@@ -481,6 +609,13 @@ export class PublicMediaService {
       await fs.rm(temp, { force: true });
     }
   }
+}
+
+export function describeLoadError(e: unknown): string {
+  if (isAxiosError(e)) {
+    return e.response ? `HTTP ${e.response.status}` : (e.code ?? e.message);
+  }
+  return caughtErrorToError(e).message;
 }
 
 async function fileSize(file: string): Promise<Maybe<number>> {

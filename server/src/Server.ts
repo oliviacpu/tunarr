@@ -44,7 +44,10 @@ import { streamApi } from './api/streamApi.js';
 import { videoApiRouter } from './api/videoApi.js';
 import { createTunarrBasicAuthHook } from './util/basicAuth.js';
 import { defaultHlsOptions } from './ffmpeg/builder/constants.ts';
-import { PublicArtworkPathPrefix } from './services/PublicMediaService.ts';
+import {
+  PublicArtworkPathPrefix,
+  publishedArtworkFile,
+} from './services/PublicMediaService.ts';
 import {
   PublicArtworkFolderName,
   PublicMediaFolderName,
@@ -360,23 +363,28 @@ export class Server {
             prefix: '/images',
             decorateReply: false,
           })
-          // Published guide pictures. A file's URL carries the second its
-          // bytes were saved, so it never changes under the same URL.
-          .register(fpStatic, {
-            root: path.join(
-              serverOptions().databaseDirectory,
-              PublicMediaFolderName,
-              PublicArtworkFolderName,
-            ),
-            prefix: PublicArtworkPathPrefix,
-            decorateReply: false,
-            index: false,
-            maxAge: '365d',
-            immutable: true,
-            setHeaders: (res) => {
-              res.header('X-Content-Type-Options', 'nosniff');
+          // Published guide pictures. `?v=` names the version, and each
+          // version is its own file, so a URL always serves the same bytes.
+          .get<{ Params: { name: string }; Querystring: { v?: unknown } }>(
+            `${PublicArtworkPathPrefix}:name`,
+            async (req, res) => {
+              const file = publishedArtworkFile(req.params.name, req.query.v);
+              if (file === undefined) {
+                return res.status(404).send();
+              }
+              return res
+                .header('X-Content-Type-Options', 'nosniff')
+                .sendFile(
+                  file,
+                  path.join(
+                    serverOptions().databaseDirectory,
+                    PublicMediaFolderName,
+                    PublicArtworkFolderName,
+                  ),
+                  { maxAge: '365d', immutable: true },
+                );
             },
-          })
+          )
           .addHook('onSend', (req, reply, payload, done) => {
             const cacheControl = versionedUploadCacheControl(
               req.url,
