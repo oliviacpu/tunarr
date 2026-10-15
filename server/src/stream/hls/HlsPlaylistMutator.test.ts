@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readTestFile } from '../../testing/util.ts';
 import { HlsPlaylistMutator } from './HlsPlaylistMutator.ts';
 
@@ -1192,6 +1192,65 @@ describe('HlsPlaylistMutator', () => {
 
       expect(result.playlist).not.toContain('#EXT-X-PROGRAM-DATE-TIME');
       expect(result.playlist).not.toContain('#EXT-X-DISCONTINUITY');
+    });
+  });
+
+  // A channel watched for hours: each program's ffmpeg appends to the same
+  // playlist, which is never trimmed on disk, and every playlist request
+  // re-reads and trims all of it on the main thread. On 2026-10-15 a 5,265
+  // segment playlist (about 3 hours) took 58 ms per request on a laptop and
+  // ~330 ms on the server, every few seconds, pausing the stream it served.
+  describe('a long session', () => {
+    const segmentCount = 3000;
+    const lines = createPlaylist(segmentCount);
+    const start = dayjs('2024-10-18T14:00:00.000-0400');
+    const trim = () =>
+      mutator.trimPlaylist(
+        start,
+        {
+          type: 'before_segment_number',
+          segmentNumber: 2995,
+          segmentsToKeepBefore: 5,
+          segmentFloor: 0,
+        },
+        lines,
+        defaultOpts,
+      );
+
+    it('builds and compares dates only for the segments it keeps', () => {
+      const proto = Object.getPrototypeOf(start) as dayjs.Dayjs;
+      const isSame = vi.spyOn(proto, 'isSame');
+      const add = vi.spyOn(proto, 'add');
+      try {
+        const result = trim();
+
+        expect(result.segmentCount).toBe(10);
+        // Before: one add per segment of the whole playlist, and a value
+        // comparison of every item against each kept segment.
+        expect(isSame).not.toHaveBeenCalled();
+        expect(add.mock.calls.length).toBeLessThanOrEqual(10);
+      } finally {
+        isSame.mockRestore();
+        add.mockRestore();
+      }
+    });
+
+    it('dates each kept segment as the start plus every earlier duration, truncated to the millisecond at each step', () => {
+      let time = start;
+      const expected: string[] = [];
+      for (let i = 0; i < segmentCount; i++) {
+        if (i >= 2990) {
+          expected.push(time.format('YYYY-MM-DDTHH:mm:ss.SSSZZ'));
+        }
+        time = time.add(4.004, 'seconds');
+      }
+
+      const dates = trim()
+        .playlist.split('\n')
+        .filter((l) => l.startsWith('#EXT-X-PROGRAM-DATE-TIME:'))
+        .map((l) => l.slice('#EXT-X-PROGRAM-DATE-TIME:'.length));
+
+      expect(dates).toEqual(expected);
     });
   });
 });
