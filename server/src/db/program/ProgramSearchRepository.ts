@@ -3,6 +3,7 @@ import type {
   ProgramGroupingCanonicalIdLookupResult,
 } from '@/db/interfaces/IProgramDB.js';
 import { KEYS } from '@/types/inject.js';
+import { sql } from 'drizzle-orm';
 import { inject, injectable } from 'inversify';
 import type { Kysely } from 'kysely';
 import { jsonArrayFrom } from 'kysely/helpers/sqlite';
@@ -18,6 +19,25 @@ import type { DrizzleDBAccess } from '../schema/index.ts';
 import { isDefined } from '../../util/index.ts';
 import type { ProgramDao } from '../schema/Program.ts';
 import { MaterializedProgramRelations } from './programRelations.ts';
+
+function prepareLibraryProgramsPageQuery(drizzleDB: DrizzleDBAccess) {
+  return drizzleDB.query.program
+    .findMany({
+      where: (fields, { and, eq, gt }) =>
+        and(
+          eq(fields.libraryId, sql.placeholder('libraryId')),
+          gt(fields.uuid, sql.placeholder('afterUuid')),
+        ),
+      orderBy: (fields, { asc }) => asc(fields.uuid),
+      limit: sql.placeholder('limit'),
+      with: MaterializedProgramRelations,
+    })
+    .prepare();
+}
+
+type LibraryProgramsPageQuery = ReturnType<
+  typeof prepareLibraryProgramsPageQuery
+>;
 
 @injectable()
 export class ProgramSearchRepository {
@@ -52,6 +72,33 @@ export class ProgramSearchRepository {
       with: MaterializedProgramRelations,
     });
   }
+
+  /**
+   * One page of {@link getMediaSourceLibraryPrograms}, in uuid order: the
+   * programs after `afterUuid` (from the start when undefined). better-sqlite3
+   * is synchronous, so a whole large library in one query blocks every other
+   * request until it returns; callers page through it and yield in between.
+   *
+   * The query is prepared once and reused: building and compiling its nested
+   * relation subqueries for every page cost about as much as reading the page.
+   */
+  async getMediaSourceLibraryProgramsPage(
+    libraryId: string,
+    afterUuid: string | undefined,
+    limit: number,
+  ) {
+    this.libraryProgramsPageQuery ??= prepareLibraryProgramsPageQuery(
+      this.drizzleDB,
+    );
+    return this.libraryProgramsPageQuery.execute({
+      libraryId,
+      // Every uuid sorts after the empty string.
+      afterUuid: afterUuid ?? '',
+      limit,
+    });
+  }
+
+  private libraryProgramsPageQuery?: LibraryProgramsPageQuery;
 
   async getProgramInfoForMediaSource(
     mediaSourceId: MediaSourceId,

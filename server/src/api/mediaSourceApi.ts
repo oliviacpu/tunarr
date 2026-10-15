@@ -36,6 +36,7 @@ import { match, P } from 'ts-pattern';
 import { v4 } from 'uuid';
 import z from 'zod/v4';
 import { MaterializeProgramsCommand } from '../commands/MaterializeProgramsCommand.ts';
+import { libraryProgramsJson, sendJsonText } from './libraryProgramsJson.ts';
 import { DeleteMediaSourceCommand } from '../commands/media_source/DeleteMediaSourceCommand.ts';
 import { container } from '../container.ts';
 import type { MediaSourceWithRelations } from '../db/schema/derivedTypes.js';
@@ -327,22 +328,28 @@ export const mediaSourceRouter: RouterPluginAsyncCallback = async (
         return res.status(404).send();
       }
 
-      const programs =
-        await req.serverCtx.programDB.getMediaSourceLibraryPrograms(
-          req.params.libraryId,
-        );
-
-      const materialized = await container
-        .get<MaterializeProgramsCommand>(MaterializeProgramsCommand)
-        .execute(programs);
-
-      return res.send(
-        seq.collect(materialized, (program) =>
+      // Built a page at a time with yields in between: in one go, a large
+      // library froze the server (and its streams) for many seconds. The
+      // response schema stays for the API docs; the body is already JSON, and
+      // Fastify sends a string with a JSON content type as is.
+      const materializer = container.get<MaterializeProgramsCommand>(
+        MaterializeProgramsCommand,
+      );
+      const body = await libraryProgramsJson({
+        readPage: (afterUuid, limit) =>
+          req.serverCtx.programDB.getMediaSourceLibraryProgramsPage(
+            req.params.libraryId,
+            afterUuid,
+            limit,
+          ),
+        materialize: (programs) => materializer.execute(programs),
+        toContentProgram: (program) =>
           req.serverCtx.programConverter.materializedProgramToContentProgram(
             program,
           ),
-        ),
-      );
+      });
+
+      return sendJsonText(res, body);
     },
   );
 

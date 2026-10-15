@@ -133,6 +133,8 @@ export type SeedShowsOptions = {
 export type SeededShows = {
   showIds: string[];
   episodeIds: string[];
+  /** The media source library the shows and episodes belong to. */
+  libraryId: string;
 };
 
 /**
@@ -333,7 +335,7 @@ export async function seedShows({
     insertChunked(tagLinks, (c) => tx.insert(TagRelations).values(c).run());
   });
 
-  return { showIds, episodeIds: episodes.map((e) => e.uuid) };
+  return { showIds, episodeIds: episodes.map((e) => e.uuid), libraryId };
 }
 
 /**
