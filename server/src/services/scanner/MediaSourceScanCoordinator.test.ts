@@ -360,6 +360,57 @@ describe('MediaSourceScanCoordinator', () => {
       ]);
     });
 
+    test('Sync Now moves a sync the hourly task queued ahead of queued scans', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+
+      await coordinator.add({ libraryId: 'lib1', forceScan: false });
+      await coordinator.add({ libraryId: 'lib2', forceScan: false });
+      // The hourly task's sync, behind lib2
+      const hourly = coordinator.syncCustomShow('cs1');
+      await vi.waitFor(() =>
+        expect(coordinator.isCustomShowSyncing('cs1')).toBe(true),
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      const syncNow = coordinator.syncCustomShow('cs1', { priority: true });
+      running.finish('completed');
+      expect(await syncNow).toBe('completed');
+      expect(await hourly).toBe('completed');
+      await coordinator.awaitAllFinished();
+
+      expect(runner.run.mock.calls.map(([job]) => job.kind)).toEqual([
+        'library',
+        'custom-show',
+        'library',
+      ]);
+    });
+
+    test('Sync Now raises a sync that joined while it was being queued', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+
+      await coordinator.add({ libraryId: 'lib1', forceScan: false });
+      await coordinator.add({ libraryId: 'lib2', forceScan: false });
+      // Both in the same tick: the first hasn't reached the queue yet
+      const hourly = coordinator.syncCustomShow('cs1');
+      const syncNow = coordinator.syncCustomShow('cs1', { priority: true });
+      await vi.waitFor(() =>
+        expect(coordinator.isCustomShowSyncing('cs1')).toBe(true),
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      running.finish('completed');
+      await Promise.all([hourly, syncNow]);
+      await coordinator.awaitAllFinished();
+
+      expect(runner.run.mock.calls.map(([job]) => job.kind)).toEqual([
+        'library',
+        'custom-show',
+        'library',
+      ]);
+    });
+
     test('a sync canceled while queued resolves as canceled without running', async () => {
       const running = deferredRun();
       const { coordinator, runner } = makeSut();

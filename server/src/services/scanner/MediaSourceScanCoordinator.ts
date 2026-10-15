@@ -27,7 +27,10 @@ export class MediaSourceScanCoordinator {
   private readonly inFlight = new Set<Promise<unknown>>();
   // Custom show syncs queued or running, by show ID, so a second request joins
   // the first
-  private readonly customShowSyncs = new Map<string, Promise<ScanOutcome>>();
+  private readonly customShowSyncs = new Map<
+    string,
+    { settled: Promise<ScanOutcome>; priority: number }
+  >();
   private shuttingDown = false;
 
   @InjectLogger() declare private readonly logger: Logger;
@@ -192,32 +195,48 @@ export class MediaSourceScanCoordinator {
     customShowId: string,
     { priority = false }: { priority?: boolean } = {},
   ): Promise<ScanOutcome> {
+    const wanted = priority ? 1 : 0;
+    const jobId = `custom_show.${customShowId}`;
     const existing = this.customShowSyncs.get(customShowId);
     if (existing) {
-      return existing;
+      // Someone now waits on a sync the hourly task queued
+      if (wanted > existing.priority) {
+        existing.priority = wanted;
+        this.raisePriority(jobId, wanted);
+      }
+      return existing.settled;
     }
 
     const settled = this.enqueue({
-      id: `custom_show.${customShowId}`,
+      id: jobId,
       label: `custom show ${customShowId}`,
       getLock: () => this.entityMutex.getLockForCustomShow(customShowId),
       job: { kind: 'custom-show', customShowId },
       // A sync never reconciled channel durations, and still doesn't
       reconcileDurations: false,
-      priority: priority ? 1 : 0,
+      priority: wanted,
     }).then((queued) => {
       if (queued === undefined) {
         throw new Error(
           `Could not queue a sync of custom show ${customShowId}`,
         );
       }
+      // Raised by a request that joined while this one was being queued
+      const raised = this.customShowSyncs.get(customShowId)?.priority ?? wanted;
+      if (raised > wanted) {
+        this.raisePriority(jobId, raised);
+      }
       return queued.settled;
     });
-    this.customShowSyncs.set(customShowId, settled);
+    this.customShowSyncs.set(customShowId, { settled, priority: wanted });
     // Failures are logged where the job runs; callers see them too
     void settled
       .catch(() => {})
-      .finally(() => this.customShowSyncs.delete(customShowId));
+      .finally(() => {
+        if (this.customShowSyncs.get(customShowId)?.settled === settled) {
+          this.customShowSyncs.delete(customShowId);
+        }
+      });
     return settled;
   }
 
@@ -228,6 +247,15 @@ export class MediaSourceScanCoordinator {
 
   private async queued(scan: QueuedScan): Promise<boolean> {
     return (await this.enqueue(scan)) !== undefined;
+  }
+
+  // Moves a job still waiting in the queue; one that has started is left be
+  private raisePriority(id: string, priority: number) {
+    try {
+      this.queue.setPriority(id, priority);
+    } catch {
+      // Not waiting in the queue any more: it's running or done
+    }
   }
 
   /**
@@ -275,7 +303,8 @@ export class MediaSourceScanCoordinator {
         outcome = await this.runner.run(job, controller.signal);
         return outcome;
       },
-      { priority },
+      // The job's ID, so a waiting job can be moved up
+      { priority, id },
     );
     const done = run
       .catch((e) => this.logger.error(e, 'Error scanning %s', label))
