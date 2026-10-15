@@ -1272,3 +1272,326 @@ describe('dateValue parser rule', () => {
     });
   });
 });
+
+// Filters that API clients save to smart collections. The server stores each
+// one as a string (searchFilterToString) and parses it back on every read, so
+// whatever it writes has to parse into the same tree.
+describe('saved filter strings', () => {
+  function stringIn(
+    key: string,
+    name: string,
+    type: 'string' | 'faceted_string',
+    value: string[],
+    op: 'in' | 'not in' = 'in',
+  ): SearchFilter {
+    return { type: 'value', fieldSpec: { key, name, op, type, value } };
+  }
+
+  const genreIn = (value: string[], op: 'in' | 'not in' = 'in') =>
+    stringIn('genres.name', 'genre', 'faceted_string', value, op);
+  const titleIn = (value: string[], op: 'in' | 'not in' = 'in') =>
+    stringIn('title', 'title', 'string', value, op);
+  const ratingIn = (value: string[]) =>
+    stringIn('rating', 'rating', 'faceted_string', value);
+
+  function parseToFilter(input: string): SearchFilter {
+    return parsedSearchToRequest(parseAndCheckExpression(input));
+  }
+
+  // `grouped` only records that the source had parentheses; it doesn't
+  // change what the filter matches.
+  function withoutGrouped(filter: SearchFilter): SearchFilter {
+    if (filter.type === 'value') {
+      return filter;
+    }
+    return {
+      type: 'op',
+      op: filter.op,
+      children: filter.children.map(withoutGrouped),
+    };
+  }
+
+  describe('search-index paths as field names', () => {
+    test.each([
+      ['genres.name', 'genre', 'faceted_string'],
+      ['actors.name', 'actor', 'faceted_string'],
+      ['writer.name', 'writer', 'faceted_string'],
+      ['director.name', 'director', 'faceted_string'],
+      ['studio.name', 'studio', 'faceted_string'],
+      ['grandparent.title', 'show_title', 'string'],
+      ['grandparent.genres', 'show_genre', 'faceted_string'],
+      ['grandparent.tags', 'show_tags', 'faceted_string'],
+      ['videoCodec', 'video_codec', 'faceted_string'],
+    ] as const)('%s parses as %s', (path, field, type) => {
+      const filter = parseToFilter(`${path} in ["Value A", "Value B"]`);
+      expect(filter).toEqual(
+        stringIn(path, field, type, ['Value A', 'Value B']),
+      );
+      expect(searchFilterToString(filter)).toEqual(
+        `${field} in ["Value A", "Value B"]`,
+      );
+    });
+
+    test('a DSL field name followed by more letters is not a field', () => {
+      const lexerResult = tokenizeSearchQuery('genres in ["Genre X"]');
+      const parser = new SearchParser();
+      parser.input = lexerResult.tokens;
+      parser.searchExpression();
+      expect(parser.errors.length).toBeGreaterThan(0);
+    });
+  });
+
+  // One case per smart collection shape seen in a real database, with the
+  // values replaced. AND and OR have equal precedence and group from the
+  // right, so `A AND B OR C` is `A AND (B OR C)`.
+  test.each<[string, string, SearchFilter]>([
+    ['a single genre list', 'genres.name in ["Genre X"]', genreIn(['Genre X'])],
+    [
+      'genre lists and an excluded title list',
+      'genres.name in ["Genre X"] AND genres.name in ["Genre Y"] AND title not in ["Movie A: Part 2", "Movie B"]',
+      {
+        type: 'op',
+        op: 'and',
+        children: [
+          genreIn(['Genre X']),
+          genreIn(['Genre Y']),
+          titleIn(['Movie A: Part 2', 'Movie B'], 'not in'),
+        ],
+      },
+    ],
+    [
+      'one genre list and one excluded title',
+      'genres.name in ["Genre X"] AND title not in ["Movie A"]',
+      {
+        type: 'op',
+        op: 'and',
+        children: [genreIn(['Genre X']), titleIn(['Movie A'], 'not in')],
+      },
+    ],
+    [
+      'an OR chain ending in an AND',
+      `title in ["Movie A", "Movie's Night (2008)", "Where's My Movie?", "Movie B!", "Movie C 2"] OR genres.name in ["Genre X"] OR genres.name in ["Genre Y"] AND rating in ["G", "PG", "TV-Y", "TV-Y7", "TV-G"]`,
+      {
+        type: 'op',
+        op: 'or',
+        children: [
+          titleIn([
+            'Movie A',
+            "Movie's Night (2008)",
+            "Where's My Movie?",
+            'Movie B!',
+            'Movie C 2',
+          ]),
+          genreIn(['Genre X']),
+          {
+            type: 'op',
+            op: 'and',
+            children: [
+              genreIn(['Genre Y']),
+              ratingIn(['G', 'PG', 'TV-Y', 'TV-Y7', 'TV-G']),
+            ],
+          },
+        ],
+      },
+    ],
+    [
+      'an AND followed by an OR, grouped from the right',
+      'genres.name in ["Genre X"] AND genres.name not in ["Genre Y", "Genre Z", "Genre W"] OR title in ["Movie A", "Movie B", "Movie C 3"]',
+      {
+        type: 'op',
+        op: 'and',
+        children: [
+          genreIn(['Genre X']),
+          {
+            type: 'op',
+            op: 'or',
+            children: [
+              genreIn(['Genre Y', 'Genre Z', 'Genre W'], 'not in'),
+              titleIn(['Movie A', 'Movie B', 'Movie C 3']),
+            ],
+          },
+        ],
+      },
+    ],
+    [
+      'an OR followed by an AND',
+      'genres.name in ["Genre X"] OR genres.name in ["Genre Y"] AND genres.name in ["Genre Z"]',
+      {
+        type: 'op',
+        op: 'or',
+        children: [
+          genreIn(['Genre X']),
+          {
+            type: 'op',
+            op: 'and',
+            children: [genreIn(['Genre Y']), genreIn(['Genre Z'])],
+          },
+        ],
+      },
+    ],
+  ])('parses %s', (_, input, expected) => {
+    const filter = parseToFilter(input);
+    expect(filter).toEqual(expected);
+
+    // Saving it again writes the DSL names, and that string parses back to
+    // the same filter.
+    const saved = searchFilterToString(filter);
+    expect(saved).not.toContain('genres.name');
+    expect(parseToFilter(saved)).toEqual(expected);
+  });
+
+  describe('searchFilterToString', () => {
+    test('writes the DSL field when fieldSpec.name is the index path', () => {
+      const filter = stringIn('genres.name', 'genres.name', 'faceted_string', [
+        'Genre X',
+      ]);
+      expect(searchFilterToString(filter)).toEqual('genre in ["Genre X"]');
+    });
+
+    test('writes the key when it is a DSL field and there is no name', () => {
+      const filter = {
+        type: 'value',
+        fieldSpec: {
+          key: 'duration',
+          op: '>',
+          type: 'numeric',
+          value: 3_600_000,
+        },
+      } satisfies SearchFilter;
+      const saved = searchFilterToString(filter);
+      expect(saved).toEqual('duration > 3600000');
+      expect(parseToFilter(saved)).toMatchObject(filter);
+    });
+
+    test('round-trips an added_date comparison', () => {
+      const input = 'added_date >= 2024-06-01';
+      expect(searchFilterToString(parseToFilter(input))).toEqual(input);
+    });
+
+    test('parenthesizes a nested group that another clause follows', () => {
+      const filter = {
+        type: 'op',
+        op: 'or',
+        children: [
+          {
+            type: 'op',
+            op: 'and',
+            children: [
+              genreIn(['Genre X']),
+              genreIn(['Genre Y', 'Genre Z'], 'not in'),
+            ],
+          },
+          titleIn(['Movie A', 'Movie B']),
+        ],
+      } satisfies SearchFilter;
+
+      const saved = searchFilterToString(filter);
+      expect(saved).toEqual(
+        '(genre in ["Genre X"] AND genre not in ["Genre Y", "Genre Z"]) OR title in ["Movie A", "Movie B"]',
+      );
+      expect(withoutGrouped(parseToFilter(saved))).toEqual(filter);
+    });
+
+    test('parenthesizes a group that ends a nested chain of the same operator', () => {
+      const filter = {
+        type: 'op',
+        op: 'and',
+        children: [
+          {
+            type: 'op',
+            op: 'and',
+            children: [
+              genreIn(['Genre X']),
+              {
+                type: 'op',
+                op: 'or',
+                children: [genreIn(['Genre Y']), genreIn(['Genre Z'])],
+              },
+            ],
+          },
+          titleIn(['Movie A'], 'not in'),
+        ],
+      } satisfies SearchFilter;
+
+      const saved = searchFilterToString(filter);
+      expect(saved).toEqual(
+        'genre in ["Genre X"] AND (genre in ["Genre Y"] OR genre in ["Genre Z"]) AND title not in ["Movie A"]',
+      );
+      expect(withoutGrouped(parseToFilter(saved))).toEqual({
+        type: 'op',
+        op: 'and',
+        children: [
+          genreIn(['Genre X']),
+          {
+            type: 'op',
+            op: 'or',
+            children: [genreIn(['Genre Y']), genreIn(['Genre Z'])],
+          },
+          titleIn(['Movie A'], 'not in'),
+        ],
+      });
+    });
+
+    test('leaves a nested group in last place unparenthesized', () => {
+      const filter = {
+        type: 'op',
+        op: 'or',
+        children: [
+          genreIn(['Genre X']),
+          {
+            type: 'op',
+            op: 'and',
+            children: [genreIn(['Genre Y']), genreIn(['Genre Z'])],
+          },
+        ],
+      } satisfies SearchFilter;
+
+      const saved = searchFilterToString(filter);
+      expect(saved).toEqual(
+        'genre in ["Genre X"] OR genre in ["Genre Y"] AND genre in ["Genre Z"]',
+      );
+      expect(parseToFilter(saved)).toEqual(filter);
+    });
+
+    test('a filter written with index paths parses back to the same filter', () => {
+      const filter = {
+        type: 'op',
+        op: 'or',
+        children: [
+          {
+            type: 'op',
+            op: 'and',
+            children: [
+              stringIn('genres.name', 'genres.name', 'faceted_string', [
+                'Genre X',
+              ]),
+              stringIn(
+                'genres.name',
+                'genres.name',
+                'faceted_string',
+                ['Genre Y'],
+                'not in',
+              ),
+            ],
+          },
+          titleIn(['Movie A']),
+        ],
+      } satisfies SearchFilter;
+
+      expect(
+        withoutGrouped(parseToFilter(searchFilterToString(filter))),
+      ).toEqual({
+        type: 'op',
+        op: 'or',
+        children: [
+          {
+            type: 'op',
+            op: 'and',
+            children: [genreIn(['Genre X']), genreIn(['Genre Y'], 'not in')],
+          },
+          titleIn(['Movie A']),
+        ],
+      });
+    });
+  });
+});

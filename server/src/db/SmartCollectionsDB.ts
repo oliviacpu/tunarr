@@ -215,7 +215,21 @@ export class SmartCollectionsDB {
     return results;
   }
 
-  private async parseSearchQueryString(
+  /**
+   * Writes the stored filter string and keywords as given, without parsing
+   * or serializing them. Unlike {@link update}, null clears a column.
+   */
+  async updateStoredQuery(
+    id: string,
+    values: { filter?: string | null; keywords?: string | null },
+  ) {
+    await this.db
+      .update(SmartCollection)
+      .set(values)
+      .where(eq(SmartCollection.uuid, id));
+  }
+
+  async parseSearchQueryString(
     queryString: string,
   ): Promise<Result<Maybe<SearchFilter>>> {
     const tokenized = search.tokenizeSearchQuery(queryString);
