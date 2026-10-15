@@ -35,6 +35,33 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Tunarr keeps its database in its own memory, so it stops stalling on the hour (2026-10-15)
+
+- **What you saw:** Live TV paused briefly at the top of the hour. A latency probe saw stalls at :00 every hour,
+  from 0.4 s to 5.9 s; the worst was at 07:00 UTC.
+- **Cause**, measured on the deployment, a shared server:
+  - At 19:00 UTC the main thread spent 4.5 s in uninterruptible disk wait (state `D`, not in a system call, so on
+    page faults). It used no CPU, while the server's disk pressure rose from 26% to 42%.
+  - The main connection memory-mapped the database (`mmap_size` 256 MiB, a 140 MB database). Mapped pages live in
+    the operating system's file cache, which the other users' processes share.
+  - At 19:02, just after an hourly run, 96% of the database file was cached. By 19:58 it was 2%.
+  - Tunarr's hourly tasks start at :00, the same second as the other users' hourly jobs, so their reads waited on
+    the busiest disk of the hour.
+  - Reading the file once at 19:59:30 (back to 100%) cut the 20:00 disk wait to about 0.15 s.
+- **Fix** (`db/DBAccess.ts`, `connectionPragmas`):
+  - The main thread's connection doesn't map the file (`mmap_size = 0`) and keeps up to 256 MiB of pages in its own
+    page cache (`cache_size = -262144`), room for the whole database. Process memory isn't evicted for other
+    processes, and the box has no swap.
+  - Another connection's write (a scan worker, say) empties that cache, so it refills after scans.
+  - Workers keep the previous settings: a worker waiting on the disk blocks nothing else.
+- **Numbers:** the perf tests got no slower (guide rebuild worst probe 7.8 ms, slot save 15 ms, library request
+  21 ms). The deployment's hourly stall will be re-measured after the release. Memory: up to about 150 MB more for
+  Tunarr's main process on this database.
+- **Tests:** `DBAccess.test.ts` ("connection settings"): the main thread's connection reports `mmap_size` 0 and
+  `cache_size` -262144, with WAL and foreign keys still on, and workers keep the old values. Both tests fail before
+  the change.
+- **Upstream:** not sent.
+
 ### The library programs request no longer freezes Tunarr (2026-10-15)
 
 - **What you saw:** Live TV paused while a script ran against Tunarr (`build_grid.py`, even with `--dry-run`). A latency

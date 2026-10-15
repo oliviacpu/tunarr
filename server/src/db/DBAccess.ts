@@ -35,6 +35,45 @@ const lock = new Mutex();
 export const MigrationTableName = 'migrations';
 export const MigrationLockTableName = 'migration_lock';
 
+/**
+ * The PRAGMAs each connection starts with.
+ *
+ * The main thread serves the streams, and better-sqlite3 blocks it for the
+ * whole of every read. So it keeps the database in its own page cache, and
+ * doesn't map the file into memory: mapped pages live in the operating
+ * system's file cache, which other processes push out. On a shared server that
+ * happened within the hour, and the next reads waited on the disk: Tunarr's
+ * hourly tasks at :00 met everyone's hourly jobs there and stalled the main
+ * thread (and Live TV) for up to 6 s (2026-10-15). Workers keep the previous
+ * settings: a worker waiting on the disk blocks nothing else.
+ */
+export function connectionPragmas(mainThread: boolean): string[] {
+  return [
+    // Write to a separate WAL file, reads continue from main database
+    // Multiple readers can work simultaneously with one writer.
+    'journal_mode = WAL',
+    // Syncs to disk at critical moments, but not after every write.
+    // ~2-3x faster writes than FULL synchronization.
+    'synchronous = NORMAL',
+    // Use RAM for temporary operations (temp tables, sorting)
+    'temp_store = MEMORY',
+    ...(mainThread
+      ? [
+          // Up to 256 MiB of pages in this process's own memory (negative =
+          // KiB): room for the whole database of a large install. Another
+          // connection's write empties it, so it refills after scans.
+          'cache_size = -262144',
+          'mmap_size = 0',
+        ]
+      : [
+          // Keeps 10k DB pages in RAM; adds about 40MB of memory overhead.
+          'cache_size = 10000',
+          'mmap_size = 268435456',
+        ]),
+    'foreign_keys = ON',
+  ];
+}
+
 class Connection {
   private logger!: Logger;
 
@@ -54,18 +93,9 @@ class Connection {
       timeout: isMainThread ? 5_000 : 30_000,
     });
 
-    // Write to a separate WAL file, reads continue from main database
-    // Multiple readers can work simultaneously with one writer.
-    this.sqlite.pragma('journal_mode = WAL');
-    // Syncs to disk at critical moments, but not after every write.
-    // ~2-3x faster writes than FULL synchronization.
-    this.sqlite.pragma('synchronous = NORMAL');
-    // Use RAM for temporary operations (temp tables, sorting)
-    this.sqlite.pragma('temp_store = MEMORY');
-    // Keeps 10k DB pages in RAM; adds about 40MB of memory overhead.
-    this.sqlite.pragma('cache_size = 10000');
-    this.sqlite.pragma('mmap_size = 268435456');
-    this.sqlite.pragma('foreign_keys = ON');
+    for (const pragma of connectionPragmas(isMainThread)) {
+      this.sqlite.pragma(pragma);
+    }
 
     this.kysely = new Kysely<DB>({
       dialect: new SqliteDialect({
