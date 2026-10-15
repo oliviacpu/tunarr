@@ -1,7 +1,8 @@
 # Fork-only (oliviacpu/tunarr): build the Docker image this fork deploys, when an oliviacpu-* tag is pushed
 # (e.g. oliviacpu-2026.10.13; add .2 for a second one the same day). Pushes to main build nothing.
-# linux/amd64 only (the deployment is x86_64). Pushes ghcr.io/<owner>/tunarr:<tag>, :sha-<commit> and :latest (the
-# newest), then creates the GitHub Release for the tag, listing the fork changes, so each image has a changelog.
+# linux/amd64 only (the deployment is x86_64). Pushes ghcr.io/<owner>/tunarr:<tag>, :sha-<commit> and :latest (only for
+# the newest tag; the deployment runs :latest), then creates the GitHub Release for the tag, listing the fork changes,
+# so each image has a changelog.
 # Upstream's workflow files are unchanged. The ones triggered by releases or tags (Docker, binaries, release, docs,
 # translations, stale, PR policy) are disabled in this fork's Actions settings, so these releases don't start them.
 name: Fork image
@@ -16,9 +17,10 @@ permissions:
   contents: write # the release
   packages: write # the image
 
+# One tag build at a time, so the newest-tag check and the :latest retag below never race another build.
 concurrency:
-  group: fork-image-${{ github.ref }}
-  cancel-in-progress: true
+  group: fork-image
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -66,12 +68,25 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.ref_name }}
             ${{ env.IMAGE }}:sha-${{ env.TUNARR_BUILD }}
-            ${{ env.IMAGE }}:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ env.TUNARR_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # The deployment runs :latest, so a tag is a release. It moves to this build only if the tag is still the newest
+      # oliviacpu-* tag (version order) once the image is pushed, so an older tag's build, or a rerun of one, can't move
+      # it back however the runs overlap.
+      - name: Move latest
+        run: |
+          git fetch --quiet --force --tags origin
+          newest=$(git tag -l 'oliviacpu-*' --sort=-v:refname | head -n 1)
+          if [ "$newest" != "$GITHUB_REF_NAME" ]; then
+            echo "::notice::$GITHUB_REF_NAME is older than $newest, so :latest stays put"
+            exit 0
+          fi
+          docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}:${GITHUB_REF_NAME}"
+          echo "LATEST_NOTE=, and \`:latest\` until the next release" >> "$GITHUB_ENV"
 
       # The changelog for this image: the fork commits since the previous oliviacpu-* tag, then every commit this fork
       # adds on top of upstream (reachable from the tag but not from upstream's main). The why and how are in FORK.md.
@@ -83,7 +98,7 @@ jobs:
           {
             echo "Based on upstream [${UPSTREAM_BASE}](https://github.com/chrisbenincasa/tunarr/releases/tag/${UPSTREAM_BASE})."
             echo
-            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\` (also \`:sha-${TUNARR_BUILD}\`, and \`:latest\` until the next release)."
+            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\` (also \`:sha-${TUNARR_BUILD}\`${LATEST_NOTE:-})."
             echo
             if [ -n "$prev" ]; then
               echo "## New since ${prev}"
