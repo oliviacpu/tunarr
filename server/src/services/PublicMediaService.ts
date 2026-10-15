@@ -139,6 +139,9 @@ const IndexEntrySchema = z.object({
   // them.
   failedAt: z.number().optional(),
   failedSourceKey: z.string().optional(),
+  // The last weekly refresh tried, whatever came of it. A refresh that keeps
+  // failing waits its turn again instead of taking the run's quota each time.
+  refreshTriedAt: z.number().optional(),
   // Earlier versions, kept so their URLs keep working until the cleanup.
   retired: z.array(z.object({ file: z.string(), at: z.number() })).default([]),
 });
@@ -329,6 +332,8 @@ export class PublicMediaService {
         }),
         failedAt: now,
         failedSourceKey: sourceKey,
+        refreshTriedAt:
+          current?.sourceKey === sourceKey ? now : existing?.refreshTriedAt,
       };
       run.changed = true;
       return current;
@@ -346,6 +351,7 @@ export class PublicMediaService {
         fetchedAt: now,
         failedAt: undefined,
         failedSourceKey: undefined,
+        refreshTriedAt: undefined,
       };
       index.entries[key] = entry;
       run.changed = true;
@@ -354,14 +360,23 @@ export class PublicMediaService {
 
     let file: string;
     let version: number;
-    const adopted = await this.adoptExistingFile(key, loaded.extension, sha256);
+    const onDisk = await this.versionsOnDisk(key);
+    const adopted = await this.adoptExistingFile(
+      onDisk,
+      loaded.extension,
+      sha256,
+    );
     if (adopted) {
       ({ file, version } = adopted);
     } else {
-      version = nextArtworkVersion(
-        now,
-        existing && existing.version > 0 ? existing.version : undefined,
+      // Above every version this picture has, not just the active one: after
+      // a change back to earlier bytes the active version is an older one, and
+      // a newer retired file must never be overwritten.
+      const highest = Math.max(
+        existing?.version ?? 0,
+        ...onDisk.map((v) => v.version),
       );
+      version = nextArtworkVersion(now, highest > 0 ? highest : undefined);
       file = diskFileName(key, version, loaded.extension);
       await this.writeAtomically(file, loaded.bytes);
     }
@@ -386,29 +401,45 @@ export class PublicMediaService {
     return entry;
   }
 
+  /** Every version of a picture on disk, newest first. */
+  private async versionsOnDisk(
+    key: string,
+  ): Promise<{ file: string; version: number; extension: string }[]> {
+    const versions: { file: string; version: number; extension: string }[] = [];
+    for (const file of await fs.readdir(this.artworkDirectory)) {
+      const match = DiskNamePattern.exec(file);
+      if (match?.[1] === key && match[2] !== undefined && match[3]) {
+        versions.push({
+          file,
+          version: parseArtworkVersion(match[2]),
+          extension: match[3],
+        });
+      }
+    }
+    return versions.sort((a, b) => b.version - a.version);
+  }
+
   /**
    * A version already on disk holding these bytes, newest first, so a lost
    * index or a picture that changes back doesn't get a new URL.
    */
   private async adoptExistingFile(
-    key: string,
+    onDisk: { file: string; version: number; extension: string }[],
     extension: string,
     sha256: string,
   ): Promise<Maybe<{ file: string; version: number }>> {
-    const candidates = (await fs.readdir(this.artworkDirectory))
-      .map((file) => ({ file, match: DiskNamePattern.exec(file) }))
-      .filter(({ match }) => match?.[1] === key && match[3] === extension)
-      .sort((a, b) => b.file.localeCompare(a.file));
-    for (const { file, match } of candidates) {
+    for (const candidate of onDisk) {
+      if (candidate.extension !== extension) {
+        continue;
+      }
       const bytes = await fs
-        .readFile(path.join(this.artworkDirectory, file))
+        .readFile(path.join(this.artworkDirectory, candidate.file))
         .catch(() => undefined);
       if (
-        match?.[2] !== undefined &&
         bytes !== undefined &&
         createHash('sha256').update(bytes).digest('hex') === sha256
       ) {
-        return { file, version: parseArtworkVersion(match[2]) };
+        return { file: candidate.file, version: candidate.version };
       }
     }
     return undefined;
@@ -445,7 +476,11 @@ export class PublicMediaService {
       now - existing.failedAt < RetryFailedAfterMs;
 
     if (current && current.sourceKey === sourceKey) {
-      const due = now - current.fetchedAt >= RefreshAfterMs;
+      const lastTried = Math.max(
+        current.fetchedAt,
+        current.refreshTriedAt ?? 0,
+      );
+      const due = now - lastTried >= RefreshAfterMs;
       if (!due || backingOff || run.refreshesLeft <= 0) {
         return { reuse: true, entry: current };
       }

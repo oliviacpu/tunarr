@@ -57,7 +57,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     went from 2.6 s to 15 ms.
   - **Fetching:**
     - A picture is fetched again only when its source changes (a Plex path ends in Plex's own timestamp for the
-      image), or after 7 days, with at most 20 such refreshes per write.
+      image), or after 7 days, with at most 20 such refreshes per write. A refresh that fails waits another week, so
+      it can't take the quota from the rest.
     - Only JPEG, PNG, WebP, GIF and AVIF are published, judged by the bytes; an SVG could run script on Tunarr's
       origin.
     - A fetch is cut off at 10 s and 25 MB, and a failed one is retried after an hour.
@@ -81,9 +82,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     - a matching source hint skips the lookup;
     - the same bytes from a new source keep the address;
     - new bytes get the next second, and the old URL keeps its bytes;
+    - a change after changing back gets a version above every earlier one, so no retired file is overwritten;
     - a new format keeps the old one at its old URL;
     - a replaced version is kept 30 days, then deleted;
-    - the weekly refresh;
+    - the weekly refresh, and refreshes that keep failing wait a week so the rest get their turn;
     - an SVG is never published;
     - failed fetches back off for an hour, including a replaced picture whose new source fails;
     - past the budget, later pictures skip their lookups;

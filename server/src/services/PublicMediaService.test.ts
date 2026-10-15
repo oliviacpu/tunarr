@@ -23,6 +23,7 @@ const Png = Buffer.from(
   'base64',
 );
 const OtherPng = Buffer.concat([Png, Buffer.from('other')]);
+const ThirdPng = Buffer.concat([Png, Buffer.from('third')]);
 // A 1x1 GIF.
 const Gif = Buffer.from(
   'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
@@ -179,6 +180,64 @@ describe('PublicMediaService', () => {
         publishedFile('/media/artwork/show-poster.png?v=20261015041230'),
       ),
     ).toEqual(Png);
+  });
+
+  test('a change after changing back gets a version above every earlier one', async () => {
+    const publishBytes = async (name: string, bytes: Buffer) => {
+      results.set('show', {
+        kind: 'file',
+        path: await source(name, bytes),
+        artworkType: 'poster',
+      });
+      return (await service.publish([poster('show')])).get('show-poster');
+    };
+
+    // A, B, A again and C, all within one second.
+    const a = await publishBytes('a.png', Png);
+    const b = await publishBytes('b.png', OtherPng);
+    const aAgain = await publishBytes('a2.png', Png);
+    const c = await publishBytes('c.png', ThirdPng);
+
+    expect(a).toBe('/media/artwork/show-poster.png?v=20261015041230');
+    expect(b).toBe('/media/artwork/show-poster.png?v=20261015041231');
+    expect(aAgain).toBe(a);
+    expect(c).toBe('/media/artwork/show-poster.png?v=20261015041232');
+    expect(await fs.readFile(publishedFile(b ?? ''))).toEqual(OtherPng);
+    expect(await fs.readFile(publishedFile(c ?? ''))).toEqual(ThirdPng);
+  });
+
+  test('refreshes that keep failing wait a week, so the others get their turn', async () => {
+    const ids = Array.from({ length: 21 }, (_, i) => `p${i}`);
+    for (const id of ids) {
+      results.set(id, {
+        kind: 'file',
+        path: await source(`${id}.png`, Png),
+        artworkType: 'poster',
+      });
+    }
+    const refs = ids.map((id) => ({ ...poster(id), sourceHint: `hint:${id}` }));
+    await service.publish(refs);
+
+    // A week on, the first 20 can't be reached, and their source hasn't
+    // changed, so each is only a due refresh.
+    for (const id of ids.slice(0, 20)) {
+      results.set(id, {
+        kind: 'url',
+        url: `http://127.0.0.1:9/library/metadata/${id}/thumb/1`,
+      });
+    }
+    vi.setSystemTime(Start + 8 * Day);
+    const before = service.loads;
+    await service.publish(refs);
+    expect(service.loads - before).toBe(20);
+
+    // The next write, four hours later, refreshes the one left out.
+    vi.setSystemTime(Start + 8 * Day + 4 * 60 * 60 * 1000);
+    const next = service.loads;
+    resolves = 0;
+    await service.publish(refs);
+    expect(service.loads - next).toBe(1);
+    expect(resolves).toBe(1);
   });
 
   test('a replaced version is kept for 30 days, then deleted', async () => {
