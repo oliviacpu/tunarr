@@ -24,7 +24,10 @@ export class MediaSourceScanCoordinator {
   private readonly queue = new PQueue({ concurrency: 1 });
   private readonly signalById = new Map<string, AbortController>();
   // Each queued job including its cleanup, so callers can wait for both
-  private readonly inFlight = new Set<Promise<void>>();
+  private readonly inFlight = new Set<Promise<unknown>>();
+  // Custom show syncs queued or running, by show ID, so a second request joins
+  // the first
+  private readonly customShowSyncs = new Map<string, Promise<ScanOutcome>>();
   private shuttingDown = false;
 
   @InjectLogger() declare private readonly logger: Logger;
@@ -80,7 +83,7 @@ export class MediaSourceScanCoordinator {
       return false;
     }
 
-    return this.enqueue({
+    return this.queued({
       id: mediaSource.uuid,
       label: `media source ${mediaSource.uuid}`,
       getLock: () => this.entityMutex.getLockForMediaSource(mediaSource),
@@ -133,7 +136,7 @@ export class MediaSourceScanCoordinator {
       return false;
     }
 
-    return this.enqueue({
+    return this.queued({
       id: library.uuid,
       label: `library ${library.uuid}`,
       getLock: () => this.entityMutex.getLockForLibrary(library),
@@ -166,7 +169,7 @@ export class MediaSourceScanCoordinator {
       return false;
     }
 
-    return this.enqueue({
+    return this.queued({
       id: `collections.${mediaSource.uuid}`,
       label: `collections of media source ${mediaSource.uuid}`,
       getLock: () => this.entityMutex.getLockForCollections(mediaSource.uuid),
@@ -177,9 +180,64 @@ export class MediaSourceScanCoordinator {
   }
 
   /**
+   * Syncs a custom show from its external playlist, in the scan queue: in a
+   * scan worker when there is one, one job at a time. Resolves with the
+   * outcome once the sync has run, and rejects if it failed. A sync of the
+   * same show that is already queued or running is joined, not queued again.
+   *
+   * `priority` puts it ahead of the jobs waiting in the queue (not the one
+   * running), for a sync someone is waiting on.
+   */
+  syncCustomShow(
+    customShowId: string,
+    { priority = false }: { priority?: boolean } = {},
+  ): Promise<ScanOutcome> {
+    const existing = this.customShowSyncs.get(customShowId);
+    if (existing) {
+      return existing;
+    }
+
+    const settled = this.enqueue({
+      id: `custom_show.${customShowId}`,
+      label: `custom show ${customShowId}`,
+      getLock: () => this.entityMutex.getLockForCustomShow(customShowId),
+      job: { kind: 'custom-show', customShowId },
+      // A sync never reconciled channel durations, and still doesn't
+      reconcileDurations: false,
+      priority: priority ? 1 : 0,
+    }).then((queued) => {
+      if (queued === undefined) {
+        throw new Error(
+          `Could not queue a sync of custom show ${customShowId}`,
+        );
+      }
+      return queued.settled;
+    });
+    this.customShowSyncs.set(customShowId, settled);
+    // Failures are logged where the job runs; callers see them too
+    void settled
+      .catch(() => {})
+      .finally(() => this.customShowSyncs.delete(customShowId));
+    return settled;
+  }
+
+  // Whether a sync of the custom show is queued or running
+  isCustomShowSyncing(customShowId: string) {
+    return this.entityMutex.isCustomShowLocked(customShowId);
+  }
+
+  private async queued(scan: QueuedScan): Promise<boolean> {
+    return (await this.enqueue(scan)) !== undefined;
+  }
+
+  /**
    * Takes the scan's lock and queues the job for the runner. Whatever happens
    * to the job, the lock is released, its progress ends and its abort
    * controller is dropped; a job canceled while still queued never runs.
+   *
+   * Returns undefined if the job couldn't be queued. `settled` is the job's
+   * outcome (or failure) once it has run and been cleaned up; nothing has to
+   * wait for it, since a failure is logged here.
    */
   private async enqueue({
     id,
@@ -187,7 +245,8 @@ export class MediaSourceScanCoordinator {
     getLock,
     job,
     reconcileDurations = true,
-  }: QueuedScan): Promise<boolean> {
+    priority = 0,
+  }: QueuedScan): Promise<Maybe<{ settled: Promise<ScanOutcome> }>> {
     let releaser: MutexInterface.Releaser;
     try {
       releaser = await tryAcquire(await getLock()).acquire();
@@ -197,7 +256,7 @@ export class MediaSourceScanCoordinator {
       } else {
         this.logger.error(e, 'Error while scheduling scan for %s', label);
       }
-      return false;
+      return;
     }
 
     const controller = new AbortController();
@@ -206,15 +265,19 @@ export class MediaSourceScanCoordinator {
     let started = false;
     let outcome: Maybe<ScanOutcome>;
 
-    const done = this.queue
-      .add(async () => {
+    const run = this.queue.add(
+      async (): Promise<ScanOutcome> => {
         if (controller.signal.aborted) {
           this.logger.info('Scan of %s was canceled before it started', label);
-          return;
+          return 'canceled';
         }
         started = true;
         outcome = await this.runner.run(job, controller.signal);
-      })
+        return outcome;
+      },
+      { priority },
+    );
+    const done = run
       .catch((e) => this.logger.error(e, 'Error scanning %s', label))
       .finally(() => {
         releaser();
@@ -238,7 +301,10 @@ export class MediaSourceScanCoordinator {
     this.inFlight.add(done);
     void done.finally(() => this.inFlight.delete(done));
 
-    return true;
+    const settled = done.then(() => run.then((result) => result ?? 'canceled'));
+    void settled.catch(() => {});
+    // Wrapped, so the caller isn't made to wait for it
+    return { settled };
   }
 
   // A scan can change program durations. Channel lineups keep their own copy,
@@ -284,6 +350,8 @@ type QueuedScan = {
   job: ScanJob;
   // Reconcile channel durations after the job runs (default true)
   reconcileDurations?: boolean;
+  // Higher runs sooner among the queued jobs (default 0)
+  priority?: number;
 };
 
 type CollectionsScanRequest = {

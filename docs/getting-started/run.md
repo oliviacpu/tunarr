@@ -96,7 +96,7 @@ Tunarr has various command line / environment variables for configuration. These
 | -------------------- | ----------------- | ------- | ----------- |
 | `TUNARR_USE_WORKER_POOL` | N/A | `true` | Runs heavy background work (slot schedule generation, library scans) in worker threads so it doesn't slow down streaming. Set to `false` to run everything on the main thread. |
 | `TUNARR_WORKER_POOL_SIZE` | N/A | (CPU count, at most 8) | Number of worker threads in the pool, which generates slot schedules. Recommended: no more than the number of CPUs on the host. |
-| `TUNARR_SCAN_IN_WORKER` | N/A | `true` | Runs each library scan in its own worker thread, so a scan's database work can't pause live streams. Needs `TUNARR_USE_WORKER_POOL`. Set to `false` to scan on the main thread. |
+| `TUNARR_SCAN_IN_WORKER` | N/A | `true` | Runs each library scan, collection sync and custom show playlist sync in its own worker thread, so its database work can't pause live streams. Needs `TUNARR_USE_WORKER_POOL`. Set to `false` to run them on the main thread. |
 
 ### Debug
 

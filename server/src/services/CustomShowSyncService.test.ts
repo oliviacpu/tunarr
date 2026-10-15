@@ -4,7 +4,6 @@ import type { MediaSourceDB } from '@/db/mediaSourceDB.js';
 import type { MediaSourceId, MediaSourceName } from '@/db/schema/base.js';
 import type { MediaSourceApiFactory } from '@/external/MediaSourceApiFactory.js';
 import { Result } from '@/types/result.js';
-import type { MutexMap } from '@/util/mutexMap.js';
 import { faker } from '@faker-js/faker';
 import type {
   CondensedContentProgram,
@@ -106,11 +105,6 @@ function makeMocks() {
     getPlexApiClientById: vi.fn(),
   } as unknown as MediaSourceApiFactory;
 
-  const locks: MutexMap = {
-    runWithLockId: vi.fn((_id: string, cb: () => Promise<unknown>) => cb()),
-    isLocked: vi.fn().mockReturnValue(false),
-  } as unknown as MutexMap;
-
   const mockScanner = {
     scanSingle: vi.fn().mockResolvedValue(Result.success(undefined)),
   };
@@ -145,7 +139,6 @@ function makeMocks() {
   const service = new CustomShowSyncService(
     customShowDB,
     mediaSourceApiFactory,
-    locks,
     scannerFactory as unknown as GenericMediaSourceScannerFactory,
     programDB,
     mediaSourceDB,
@@ -157,7 +150,6 @@ function makeMocks() {
     service,
     customShowDB,
     mediaSourceApiFactory,
-    locks,
     mockScanner,
     scannerFactory,
     programDB,
@@ -235,7 +227,7 @@ describe('CustomShowSyncService', () => {
         },
       ] as never);
 
-      await service.syncShow(customShowId);
+      expect(await service.syncShow(customShowId)).toBe('completed');
 
       // 1. Scanner was created for the correct source/library type
       expect(scannerFactory).toHaveBeenCalledWith('plex', 'movies');
@@ -489,6 +481,80 @@ describe('CustomShowSyncService', () => {
 
       // Content is still upserted — movie2 got a DB UUID, movie1 keeps its original
       expect(customShowDB.upsertCustomShowContent).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('as a scan job', () => {
+    // The job may wait in the scan queue; the show can change meanwhile
+    it('skips a show that no longer exists', async () => {
+      const { service, customShowDB, mockScanner } = makeMocks();
+      vi.mocked(customShowDB.getShow).mockResolvedValue(undefined);
+      const fetchSpy = vi.spyOn(
+        service as never,
+        'fetchPlaylistPrograms' as never,
+      );
+
+      expect(await service.syncShow(faker.string.uuid())).toBe('skipped');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockScanner.scanSingle).not.toHaveBeenCalled();
+      expect(customShowDB.upsertCustomShowContent).not.toHaveBeenCalled();
+    });
+
+    it('skips a show no longer linked to a playlist', async () => {
+      const { service, customShowDB } = makeMocks();
+      const customShowId = faker.string.uuid();
+      vi.mocked(customShowDB.getShow).mockResolvedValue({
+        uuid: customShowId,
+        name: 'Unlinked',
+        syncMediaSourceId: null,
+        syncMediaSourceType: null,
+        syncExternalPlaylistId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        lastSyncedAt: null,
+        content: [],
+      });
+
+      expect(await service.syncShow(customShowId)).toBe('skipped');
+      expect(customShowDB.upsertCustomShowContent).not.toHaveBeenCalled();
+    });
+
+    it('a sync canceled partway leaves the show as it was', async () => {
+      const { service, customShowDB, mockScanner, mediaSourceId, libraryId } =
+        makeMocks();
+      const customShowId = faker.string.uuid();
+      vi.mocked(customShowDB.getShow).mockResolvedValue({
+        uuid: customShowId,
+        name: 'Canceled',
+        syncMediaSourceId: mediaSourceId,
+        syncMediaSourceType: 'plex',
+        syncExternalPlaylistId: 'playlist-x',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        lastSyncedAt: null,
+        content: [],
+      });
+      vi.spyOn(
+        service as never,
+        'fetchPlaylistPrograms' as never,
+      ).mockResolvedValue([
+        makeMovie(mediaSourceId, libraryId),
+        makeMovie(mediaSourceId, libraryId),
+        makeMovie(mediaSourceId, libraryId),
+      ] as never);
+      const controller = new AbortController();
+      mockScanner.scanSingle.mockImplementationOnce(() => {
+        controller.abort();
+        return Promise.resolve(Result.success(undefined));
+      });
+
+      expect(await service.syncShow(customShowId, controller.signal)).toBe(
+        'canceled',
+      );
+      // Stopped at the next item, and wrote no partial list
+      expect(mockScanner.scanSingle).toHaveBeenCalledTimes(1);
+      expect(customShowDB.upsertCustomShowContent).not.toHaveBeenCalled();
+      expect(customShowDB.updateLastSyncedAt).not.toHaveBeenCalled();
     });
   });
 

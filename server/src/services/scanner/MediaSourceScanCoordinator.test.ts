@@ -277,4 +277,104 @@ describe('MediaSourceScanCoordinator', () => {
       expect(runner.run).not.toHaveBeenCalled();
     });
   });
+
+  describe('custom show sync', () => {
+    test('runs as a job for the runner and resolves with its outcome', async () => {
+      const { coordinator, runner } = makeSut();
+
+      expect(await coordinator.syncCustomShow('cs1')).toBe('completed');
+
+      expect(runner.run).toHaveBeenCalledWith(
+        { kind: 'custom-show', customShowId: 'cs1' },
+        expect.any(AbortSignal),
+      );
+      // A sync never reconciled channel durations
+      expect(runTask).not.toHaveBeenCalled();
+      expect(coordinator.isCustomShowSyncing('cs1')).toBe(false);
+    });
+
+    test('shows as syncing while queued or running', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+
+      const synced = coordinator.syncCustomShow('cs1');
+      await vi.waitFor(() => expect(runner.run).toHaveBeenCalled());
+      expect(coordinator.isCustomShowSyncing('cs1')).toBe(true);
+      expect(coordinator.isCustomShowSyncing('cs2')).toBe(false);
+
+      running.finish('completed');
+      await synced;
+      expect(coordinator.isCustomShowSyncing('cs1')).toBe(false);
+    });
+
+    test('a second request for the same show joins the first', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+
+      const first = coordinator.syncCustomShow('cs1');
+      const second = coordinator.syncCustomShow('cs1', { priority: true });
+      running.finish('completed');
+
+      expect(await first).toBe('completed');
+      expect(await second).toBe('completed');
+      expect(runner.run).toHaveBeenCalledTimes(1);
+    });
+
+    test('a failed sync rejects for the caller and frees the show', async () => {
+      const { coordinator, progress, runner } = makeSut();
+      runner.run.mockRejectedValueOnce(new Error('Plex is unreachable'));
+
+      await expect(coordinator.syncCustomShow('cs1')).rejects.toThrow(
+        'Plex is unreachable',
+      );
+      expect(coordinator.isCustomShowSyncing('cs1')).toBe(false);
+      expect(progress.getScanProgress('custom_show.cs1').state).toBe(
+        'not_scanning',
+      );
+      // It can be synced again
+      expect(await coordinator.syncCustomShow('cs1')).toBe('completed');
+      expect(runner.run).toHaveBeenCalledTimes(2);
+    });
+
+    test('a prioritized sync runs ahead of queued scans, after the running one', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+
+      await coordinator.add({ libraryId: 'lib1', forceScan: false });
+      await coordinator.add({ libraryId: 'lib2', forceScan: false });
+      const synced = coordinator.syncCustomShow('cs1', { priority: true });
+      await vi.waitFor(() =>
+        expect(coordinator.isCustomShowSyncing('cs1')).toBe(true),
+      );
+      running.finish('completed');
+      await synced;
+      await coordinator.awaitAllFinished();
+
+      expect(runner.run.mock.calls.map(([job]) => job)).toEqual([
+        { kind: 'library', libraryId: 'lib1', force: false },
+        { kind: 'custom-show', customShowId: 'cs1' },
+        { kind: 'library', libraryId: 'lib2', force: false },
+      ]);
+    });
+
+    test('a sync canceled while queued resolves as canceled without running', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+
+      await coordinator.add({ libraryId: 'lib1', forceScan: false });
+      const synced = coordinator.syncCustomShow('cs1');
+      await vi.waitFor(() =>
+        expect(coordinator.isCustomShowSyncing('cs1')).toBe(true),
+      );
+      coordinator.cancelAll();
+      running.finish('canceled');
+
+      expect(await synced).toBe('canceled');
+      expect(runner.run).toHaveBeenCalledTimes(1);
+    });
+  });
 });

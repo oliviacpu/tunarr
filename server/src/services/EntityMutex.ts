@@ -49,6 +49,22 @@ export class EntityMutex {
     return this.lock(`${this.mediaSourceKey(mediaSourceId)}.collections`);
   }
 
+  // Held while a custom show's sync from its playlist is queued or running
+  getLockForCustomShow(customShowId: string) {
+    return this.lock(this.customShowKey(customShowId));
+  }
+
+  isCustomShowLocked(customShowId: string) {
+    return (
+      this.mutexMap.getLockSync(this.customShowKey(customShowId))?.isLocked() ??
+      false
+    );
+  }
+
+  customShowKey(customShowId: string) {
+    return `custom_show.${customShowId}`;
+  }
+
   libraryKey(mediaSourceId: string, libraryId: string) {
     return `media_source.${mediaSourceId}.library.${libraryId}`;
   }

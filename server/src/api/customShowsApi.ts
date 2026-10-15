@@ -54,7 +54,8 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
           syncMediaSourceType: cs.syncMediaSourceType ?? undefined,
           syncExternalPlaylistId: cs.syncExternalPlaylistId ?? undefined,
           lastSyncedAt: cs.lastSyncedAt?.getTime() ?? undefined,
-          isSyncing: req.serverCtx.customShowSyncService.isShowSyncing(cs.id),
+          isSyncing:
+            req.serverCtx.mediaSourceScanCoordinator.isCustomShowSyncing(cs.id),
         })),
       );
     },
@@ -96,7 +97,7 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
         syncMediaSourceType: customShow.syncMediaSourceType ?? undefined,
         syncExternalPlaylistId: customShow.syncExternalPlaylistId ?? undefined,
         lastSyncedAt: customShow.lastSyncedAt?.getTime() ?? undefined,
-        isSyncing: req.serverCtx.customShowSyncService.isShowSyncing(
+        isSyncing: req.serverCtx.mediaSourceScanCoordinator.isCustomShowSyncing(
           customShow.uuid,
         ),
       });
@@ -150,7 +151,7 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
         syncMediaSourceType: customShow.syncMediaSourceType ?? undefined,
         syncExternalPlaylistId: customShow.syncExternalPlaylistId ?? undefined,
         lastSyncedAt: customShow.lastSyncedAt?.getTime() ?? undefined,
-        isSyncing: req.serverCtx.customShowSyncService.isShowSyncing(
+        isSyncing: req.serverCtx.mediaSourceScanCoordinator.isCustomShowSyncing(
           customShow.uuid,
         ),
       });
@@ -214,10 +215,13 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
     async (req, res) => {
       const newId = await req.serverCtx.customShowDB.createShow(req.body);
 
-      // If this is a synced custom show, trigger an immediate sync
+      // If this is a synced custom show, sync it now. It runs in the scan
+      // queue (in a scan worker), ahead of any scans waiting there.
       if (req.body.syncMediaSourceId && req.body.syncExternalPlaylistId) {
         try {
-          await req.serverCtx.customShowSyncService.syncShow(newId);
+          await req.serverCtx.mediaSourceScanCoordinator.syncCustomShow(newId, {
+            priority: true,
+          });
         } catch (e) {
           logger.error(e, 'Failed initial sync for new custom show %s', newId);
         }
@@ -245,7 +249,7 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
         syncMediaSourceType: newShow.syncMediaSourceType ?? undefined,
         syncExternalPlaylistId: newShow.syncExternalPlaylistId ?? undefined,
         lastSyncedAt: newShow.lastSyncedAt?.getTime() ?? undefined,
-        isSyncing: req.serverCtx.customShowSyncService.isShowSyncing(
+        isSyncing: req.serverCtx.mediaSourceScanCoordinator.isCustomShowSyncing(
           newShow.uuid,
         ),
       });
@@ -310,7 +314,11 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
           .send({ error: 'Custom show is not configured for sync' });
       }
 
-      await req.serverCtx.customShowSyncService.syncShow(show.uuid);
+      // Runs in the scan queue (in a scan worker), ahead of any scans waiting
+      // there, and joins a sync of this show that's already queued
+      await req.serverCtx.mediaSourceScanCoordinator.syncCustomShow(show.uuid, {
+        priority: true,
+      });
 
       const updatedShow = await req.serverCtx.customShowDB.getShow(show.uuid);
       if (!updatedShow) {
@@ -332,7 +340,7 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
         syncMediaSourceType: updatedShow.syncMediaSourceType ?? undefined,
         syncExternalPlaylistId: updatedShow.syncExternalPlaylistId ?? undefined,
         lastSyncedAt: updatedShow.lastSyncedAt?.getTime() ?? undefined,
-        isSyncing: req.serverCtx.customShowSyncService.isShowSyncing(
+        isSyncing: req.serverCtx.mediaSourceScanCoordinator.isCustomShowSyncing(
           updatedShow.uuid,
         ),
       });

@@ -10,9 +10,9 @@ import {
 } from '../services/scheduling/TimeSlotSchedulerService.ts';
 
 /**
- * A library scan as the scan coordinator hands it to a runner: IDs and flags
- * only, so it can cross a thread boundary. The runner re-reads the library or
- * media source when the job starts.
+ * A library scan (or a sync) as the scan coordinator hands it to a runner: IDs
+ * and flags only, so it can cross a thread boundary. The runner re-reads the
+ * library, media source or custom show when the job starts.
  */
 export const ScanJob = z.discriminatedUnion('kind', [
   z.object({
@@ -31,6 +31,11 @@ export const ScanJob = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('collections'),
     mediaSourceId: z.string(),
+  }),
+  // A custom show's sync from its external playlist
+  z.object({
+    kind: z.literal('custom-show'),
+    customShowId: z.string(),
   }),
 ]);
 
