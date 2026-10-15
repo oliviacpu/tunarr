@@ -4,6 +4,8 @@ import {
   extractLocalUploadFilename,
   resolveIconUrl,
   uploadedImageUrl,
+  ImmutableCacheControl,
+  versionedUploadCacheControl,
 } from './iconUtil.ts';
 import * as fsUtil from './fsUtil.ts';
 
@@ -182,5 +184,31 @@ describe('iconUtil', () => {
         deleteIfLocalAndCleared(localIconUrl, '', dbDir),
       ).rejects.toThrow('ENOENT: no such file');
     });
+  });
+});
+
+describe('versionedUploadCacheControl', () => {
+  test('a versioned upload may be cached for good', () => {
+    expect(
+      versionedUploadCacheControl('/images/uploads/ch1_icon.png?v=ab12cd', 200),
+    ).toBe(ImmutableCacheControl);
+    expect(
+      versionedUploadCacheControl('/images/uploads/ch1_icon.png?v=ab12cd', 304),
+    ).toBe(ImmutableCacheControl);
+  });
+
+  test('leaves unversioned uploads, other paths and errors alone', () => {
+    expect(
+      versionedUploadCacheControl('/images/uploads/ch1_icon.png', 200),
+    ).toBeUndefined();
+    expect(
+      versionedUploadCacheControl('/images/uploads/ch1_icon.png?v=', 200),
+    ).toBeUndefined();
+    expect(
+      versionedUploadCacheControl('/images/tunarr.png?v=ab12cd', 200),
+    ).toBeUndefined();
+    expect(
+      versionedUploadCacheControl('/images/uploads/gone.png?v=ab12cd', 404),
+    ).toBeUndefined();
   });
 });

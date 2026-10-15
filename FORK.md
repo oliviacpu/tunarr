@@ -34,6 +34,78 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Guide posters are served from a public media folder, with versioned addresses (2026-10-15)
+
+- **What you saw:** guide posters loaded slowly in Plex's apps, and a replaced poster kept showing the old picture.
+  One poster took 1.4 s and 628 KB per load, with `Cache-Control: no-cache`.
+- **Cause:** the guide linked each programme to `/api/programs/<id>/artwork/<type>`, which fetches the picture from
+  the media server again on every request and passes the server's caching headers through. The address never
+  changed when the picture did, and Plex's image cache (3 days) and its apps key by address.
+- **Fix:** each guide write publishes every programme's picture as a file in `<data>/media/artwork/`, and the guide
+  links to it (`services/PublicMediaService.ts`, `services/XmlTvWriter.ts`, `Server.ts`).
+  - **Address:** `/media/artwork/<id>-<type>.<ext>?v=YYYYMMDDHHMMSS`, served with
+    `Cache-Control: public, max-age=31536000, immutable` and `nosniff`. The version is the second (UTC) the bytes were
+    saved. A rescan that finds the same bytes keeps the address, and two changes within one second get versions one
+    second apart.
+  - **One file per version:** each version is its own file, `<id>-<type>.<version>.<ext>`. A small route maps the
+    `?v=` to it, so an address always serves the bytes it was published with, even to a client still holding an
+    older guide. A replaced version is kept for 30 days. A request without a valid version, or for a version that
+    doesn't exist, gets a 404 with no cache header.
+  - **Cheap when nothing changed:** the guide already loads each picture's artwork row, so it passes the row's cache
+    or source path along. A picture whose source matches what was published needs no lookup. Each picture yields to
+    the event loop first. On the guide rebuild perf test (1,375 pictures, all unreachable), the longest request stall
+    went from 2.6 s to 15 ms.
+  - **Fetching:**
+    - A picture is fetched again only when its source changes (a Plex path ends in Plex's own timestamp for the
+      image), or after 7 days, with at most 20 such refreshes per write. A refresh that fails waits another week, so
+      it can't take the quota from the rest.
+    - Only JPEG, PNG, WebP, GIF and AVIF are published, judged by the bytes; an SVG could run script on Tunarr's
+      origin.
+    - A fetch is cut off at 10 s and 25 MB, and a failed one is retried after an hour.
+    - One write spends at most 60 s on pictures. Past that, the rest skip their lookups and keep the files they have,
+      and a fetch still running is cut off.
+    - Anything not published keeps the artwork route address.
+    - A failed fetch is logged with its URL and error code only, never the error object, which carries the
+      request's headers and so the media server's token.
+  - **Index:** `<data>/media/artwork-index.json`, outside the served folder. It's a JSON file rather than a table, so
+    the fork adds no migration to collide with upstream's numbering. If it's lost, a version already on disk with the
+    same bytes is adopted, so its address doesn't change.
+  - **Cleanup:** pictures no guide write has linked for 30 days are deleted, along with their earlier versions.
+  - **Uploads:** an `/images/uploads/…` request carrying `?v=` (every upload URL since the logo fix) gets the same
+    year-long immutable header. Without `?v=` it keeps `max-age=0` (`versionedUploadCacheControl`, `util/iconUtil.ts`).
+  - **Not changed:** credit images and the web UI keep the artwork routes.
+  - **Docs:** `docs/configure/clients/plex.md`.
+- **Tests:**
+  - **`PublicMediaService.test.ts`:**
+    - the file and version;
+    - an unchanged source isn't fetched again;
+    - a matching source hint skips the lookup;
+    - the same bytes from a new source keep the address;
+    - new bytes get the next second, and the old URL keeps its bytes;
+    - a change after changing back gets a version above every earlier one, so no retired file is overwritten;
+    - a new format keeps the old one at its old URL;
+    - a replaced version is kept 30 days, then deleted;
+    - the weekly refresh, and refreshes that keep failing wait a week so the rest get their turn;
+    - an SVG is never published;
+    - failed fetches back off for an hour, including a replaced picture whose new source fails;
+    - past the budget, later pictures skip their lookups;
+    - a lost index adopts the file;
+    - the 30-day cleanup;
+    - URL-to-file mapping refuses malformed names and versions;
+    - load errors are described without headers.
+  - **`XmlTvWriter.test.ts`:**
+    - the source hints;
+    - a write publishes each picture once, and the `<icon>` and `<image>` link to the file;
+    - a failed publish still writes the guide.
+  - **`iconUtil.test.ts`:** the upload header.
+  - **Throwaway server, local movie library:**
+    - the guide linked both posters, served with the immutable header (`HEAD` too);
+    - a second write kept both addresses;
+    - after one poster was replaced and rescanned, its new address served the new bytes and its old address still
+      served the old ones;
+    - missing, short or unknown versions, `..` paths and `.svg` all returned 404, with no cache header.
+- **Upstream:** not sent.
+
 ### An HLS Direct v2 channel with subtitles starts even when no one is talking (2026-10-14)
 
 - **What you saw:** an HLS Direct v2 channel with subtitles on never started. Tunarr waited for the subtitle

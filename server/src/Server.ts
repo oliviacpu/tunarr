@@ -44,6 +44,15 @@ import { streamApi } from './api/streamApi.js';
 import { videoApiRouter } from './api/videoApi.js';
 import { createTunarrBasicAuthHook } from './util/basicAuth.js';
 import { defaultHlsOptions } from './ffmpeg/builder/constants.ts';
+import {
+  PublicArtworkPathPrefix,
+  publishedArtworkFile,
+} from './services/PublicMediaService.ts';
+import {
+  PublicArtworkFolderName,
+  PublicMediaFolderName,
+} from './util/constants.ts';
+import { versionedUploadCacheControl } from './util/iconUtil.ts';
 import { type ServerOptions, serverOptions } from './globals.js';
 import type { IWorkerPool } from './interfaces/IWorkerPool.ts';
 import { ServerContext, ServerRequestContext } from './ServerContext.js';
@@ -353,6 +362,38 @@ export class Server {
             root: path.join(currentDirectory, 'resources', 'images'),
             prefix: '/images',
             decorateReply: false,
+          })
+          // Published guide pictures. `?v=` names the version, and each
+          // version is its own file, so a URL always serves the same bytes.
+          .get<{ Params: { name: string }; Querystring: { v?: unknown } }>(
+            `${PublicArtworkPathPrefix}:name`,
+            async (req, res) => {
+              const file = publishedArtworkFile(req.params.name, req.query.v);
+              if (file === undefined) {
+                return res.status(404).send();
+              }
+              return res
+                .header('X-Content-Type-Options', 'nosniff')
+                .sendFile(
+                  file,
+                  path.join(
+                    serverOptions().databaseDirectory,
+                    PublicMediaFolderName,
+                    PublicArtworkFolderName,
+                  ),
+                  { maxAge: '365d', immutable: true },
+                );
+            },
+          )
+          .addHook('onSend', (req, reply, payload, done) => {
+            const cacheControl = versionedUploadCacheControl(
+              req.url,
+              reply.statusCode,
+            );
+            if (cacheControl !== undefined) {
+              reply.header('cache-control', cacheControl);
+            }
+            done(null, payload);
           })
           .get('/favicon.svg', async (_, res) => {
             return res.sendFile(

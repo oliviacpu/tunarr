@@ -1,6 +1,10 @@
 import { faker } from '@faker-js/faker';
 import { parseXmltv, writeXmltv } from '@iptv/xmltv';
 import { tag } from '@tunarr/types';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { anything, instance, mock, when } from 'ts-mockito';
 import { v4 } from 'uuid';
 import type { Artwork } from '../db/schema/Artwork.ts';
 import type { MediaSourceId } from '../db/schema/base.ts';
@@ -19,6 +23,10 @@ import {
   inMemorySettingsDB,
   setTestGlobalOptions,
 } from '../testing/getFakeSettingsDb.ts';
+import {
+  PublicMediaService,
+  type PublicArtworkRef,
+} from './PublicMediaService.ts';
 import {
   MaterializedChannelPrograms,
   XmlTvWriter,
@@ -1350,5 +1358,158 @@ describe('gaps in the guide', () => {
         },
       }),
     ).toBe('https://example.com/logo.png');
+  });
+});
+
+describe('published guide pictures', () => {
+  function guide(
+    programs: ProgramWithRelationsOrm[],
+  ): MaterializedChannelPrograms[] {
+    return [
+      {
+        channel: createChannelOrm({ number: 1, name: 'Channel 1' }),
+        programs: programs.map((program, i) => ({
+          programming: { type: 'program' as const, program },
+          title: program.title,
+          start: i * 1_800_000,
+          stop: (i + 1) * 1_800_000,
+          durationMs: 1_800_000,
+        })),
+      },
+    ];
+  }
+
+  test('link to the published file when there is one', () => {
+    const show = makeGrouping({ artwork: [makeArtwork('poster')] });
+    const program = makeProgram({ type: 'episode', show });
+    const published = new Map([
+      [
+        `${show.uuid}-poster`,
+        `/media/artwork/${show.uuid}-poster.jpg?v=20261015041230`,
+      ],
+    ]);
+
+    expect(
+      XmlTvWriter.resolveArtworkUrl(
+        program,
+        { useShowPoster: true },
+        published,
+      ),
+    ).toBe(`{{host}}/media/artwork/${show.uuid}-poster.jpg?v=20261015041230`);
+  });
+
+  test('keep the artwork route for a picture that was not published', () => {
+    const program = makeProgram({ artwork: [makeArtwork('poster')] });
+
+    expect(
+      XmlTvWriter.resolveArtworkUrl(
+        program,
+        { useShowPoster: true },
+        new Map(),
+      ),
+    ).toBe(`{{host}}/api/programs/${program.uuid}/artwork/poster`);
+  });
+
+  test('describe where each picture comes from, so an unchanged one needs no lookup', () => {
+    const cached = makeProgram({
+      artwork: [makeArtwork('poster', { cachePath: 'ab/cd/x.jpg' })],
+    });
+    const remote = makeProgram({
+      artwork: [
+        makeArtwork('poster', {
+          sourcePath: 'http://plex.local/library/metadata/1/thumb/1792036612',
+        }),
+      ],
+    });
+    const derived = makeProgram({
+      artwork: [],
+      sourceType: 'plex',
+      externalKey: '42',
+      mediaSourceId: tag<MediaSourceId>('ms-1'),
+    });
+
+    expect(
+      XmlTvWriter.resolveArtworkRef(cached, { useShowPoster: false })
+        ?.sourceHint,
+    ).toBe('cache:ab/cd/x.jpg');
+    expect(
+      XmlTvWriter.resolveArtworkRef(remote, { useShowPoster: false })
+        ?.sourceHint,
+    ).toBe('source:http://plex.local/library/metadata/1/thumb/1792036612');
+    expect(
+      XmlTvWriter.resolveArtworkRef(derived, { useShowPoster: false })
+        ?.sourceHint,
+    ).toBe('derived:plex:ms-1:42');
+  });
+
+  test('a guide write publishes each picture once and links the icon and image to it', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-xmltv-'));
+    try {
+      const outputPath = path.join(dir, 'xmltv.xml');
+      const show = makeGrouping({ artwork: [makeArtwork('poster')] });
+      const episodes = [1, 2].map((episode) =>
+        makeProgram({ type: 'episode', episode, show }),
+      );
+      const movie = makeProgram({ artwork: [makeArtwork('poster')] });
+
+      const publicMedia = mock(PublicMediaService);
+      let requested: PublicArtworkRef[] = [];
+      when(publicMedia.publish(anything())).thenCall(
+        (refs: PublicArtworkRef[]) => {
+          requested = refs;
+          return Promise.resolve(
+            new Map([[`${show.uuid}-poster`, `/media/artwork/s.jpg?v=1`]]),
+          );
+        },
+      );
+      const writer = new XmlTvWriter(
+        inMemorySettingsDB({
+          settings: { xmltv: { outputPath, useShowPoster: true } },
+        }),
+        instance(publicMedia),
+      );
+
+      await writer.write(guide([...episodes, movie]));
+
+      expect(new Set(requested.map((r) => `${r.id}-${r.artworkType}`))).toEqual(
+        new Set([`${show.uuid}-poster`, `${movie.uuid}-poster`]),
+      );
+      const programmes =
+        parseXmltv(await fs.readFile(outputPath, 'utf-8')).programmes ?? [];
+      expect(programmes.map((p) => p.icon?.[0]?.src)).toEqual([
+        '{{host}}/media/artwork/s.jpg?v=1',
+        '{{host}}/media/artwork/s.jpg?v=1',
+        `{{host}}/api/programs/${movie.uuid}/artwork/poster`,
+      ]);
+      expect(programmes[0]?.image?.[0]?._value).toBe(
+        '{{host}}/media/artwork/s.jpg?v=1',
+      );
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a failed publish still writes the guide with artwork route links', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-xmltv-'));
+    try {
+      const outputPath = path.join(dir, 'xmltv.xml');
+      const movie = makeProgram({ artwork: [makeArtwork('poster')] });
+      const publicMedia = mock(PublicMediaService);
+      when(publicMedia.publish(anything())).thenReject(new Error('disk full'));
+      const writer = new XmlTvWriter(
+        inMemorySettingsDB({ settings: { xmltv: { outputPath } } }),
+        instance(publicMedia),
+      );
+
+      await writer.write(guide([movie]));
+
+      const programmes =
+        parseXmltv(await fs.readFile(outputPath, 'utf-8')).programmes ?? [];
+      expect(programmes[0]?.icon?.[0]?.src).toBe(
+        `{{host}}/api/programs/${movie.uuid}/artwork/poster`,
+      );
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });
