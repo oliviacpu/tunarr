@@ -9,8 +9,9 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 - Images are built only for tags named `oliviacpu-…`, by date: `oliviacpu-2026.10.13`, with `.2` for a second one the same
   day. Pushes to `main` build nothing (`.github/workflows/fork-image.yml`). To release:
   `git tag oliviacpu-2026.10.13 && git push origin oliviacpu-2026.10.13`.
-- Each build pushes `ghcr.io/oliviacpu/tunarr:<tag>`, `:sha-<commit>` and `:latest` (always the newest) for
-  linux/amd64, and creates a GitHub Release for the tag. Its notes list what's new since the previous `oliviacpu-` tag and
+- Each build pushes `ghcr.io/oliviacpu/tunarr:<tag>`, `:sha-<commit>` and, when its tag is the newest `oliviacpu-` tag,
+  `:latest`, for linux/amd64, and creates a GitHub Release for the tag. The deployment runs `:latest`, so pushing a tag
+  releases it; an older tag's build finishing last can't move `:latest` back. Its notes list what's new since the previous `oliviacpu-` tag and
   every fork commit on top of upstream. To roll back, deploy an older release's `:<tag>` image.
 - The version Tunarr reports is `<upstream version>-<tag>`, e.g. `2026.10.2-oliviacpu-2026.10.13`.
 - Upstream updates come in with `git fetch upstream && git merge upstream/main`.
