@@ -43,7 +43,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - The lookup that ends every sync (`lookupByExternalIds`, which loads each program with all its relations) stalled requests for 163–186 ms, and 870 ms at 3,000 movies.
 - **Fix:** the sync is a scan job, `{kind: 'custom-show', customShowId}` (`types/worker_schemas.ts`). `MediaSourceScanCoordinator.syncCustomShow` runs it like a library scan: in a scan worker when there is one, one job at a time, in-process with `TUNARR_SCAN_IN_WORKER=false`.
   - **The job:** `ScanJobExecutor` hands it to `CustomShowSyncService.syncShow`, which skips a show that's gone or unlinked, and on a cancel stops before the next item without writing a partial list.
-  - **Routes:** create and Sync Now wait for the sync and answer with the synced show, or a 500 on failure. They go ahead of waiting scans, even when Sync Now joins a sync the hourly task queued, but wait for a running one.
+  - **Routes:** create and Sync Now wait for the sync and answer with the synced show. If the sync fails, Sync Now
+    answers 500, while create still creates the show and answers 201 with it unsynced (as before). Both go ahead of
+    waiting scans, even when Sync Now joins a sync the hourly task queued, but wait for a running one.
   - **Joining and locks:** a second request for a show joins the first. Each show has its own lock, which `isSyncing` reads.
   - **No reconcile:** a sync doesn't reconcile channel durations.
   - **The task:** `SyncCustomShowsTask` queues every linked show and ends when they've run.
