@@ -151,6 +151,16 @@ describe('FixSmartCollectionFilters', () => {
     });
   });
 
+  test('keeps an unparseable structured filter as a filter, and warns', async () => {
+    const filter = 'title in ["Movie {A}", "Movie B"]';
+    const uuid = insertCollection(filter, null);
+
+    const warn = await runFixer();
+
+    expect(readCollection(uuid)).toEqual({ filter, keywords: null });
+    expect(warn).toHaveBeenCalled();
+  });
+
   test('leaves an unparseable filter alone when keywords are set, and warns', async () => {
     const uuid = insertCollection('title = "Movie \\"A\\""', 'space opera');
 

@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
 import {
   BinarySearchClause,
+  looksLikeFilterExpression,
   parsedSearchToRequest,
   SearchClause,
   searchFilterToString,
@@ -1340,6 +1341,16 @@ describe('saved filter strings', () => {
       ).toBe(true);
       expect(usesIndexPathFieldName('genre in ["genres.name"]')).toBe(false);
       expect(usesIndexPathFieldName('genre:horror movies')).toBe(false);
+    });
+
+    test('looksLikeFilterExpression tells filters that fail to parse from free text', () => {
+      expect(looksLikeFilterExpression('title = "Movie \\"A\\""')).toBe(true);
+      expect(looksLikeFilterExpression('(genre in ["Movie {A}"]')).toBe(true);
+      expect(looksLikeFilterExpression('added_date >= 1717218000000')).toBe(
+        true,
+      );
+      expect(looksLikeFilterExpression('space opera classics')).toBe(false);
+      expect(looksLikeFilterExpression('title fight')).toBe(false);
     });
 
     test('a DSL field name followed by more letters is not a field', () => {

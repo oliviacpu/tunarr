@@ -32,6 +32,16 @@ export class FixSmartCollectionFilters extends Fixer {
           continue;
         }
 
+        // A structured filter that doesn't parse, such as one with a `{` in
+        // a value, stays a filter.
+        if (search.looksLikeFilterExpression(collection.filter)) {
+          this.logger.warn(
+            'Collection %s has an unparseable filter. It will not work as expected.',
+            collection.name,
+          );
+          continue;
+        }
+
         // Collections saved before keywords had their own column kept free
         // text in the filter column.
         this.logger.debug(
