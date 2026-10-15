@@ -1,5 +1,4 @@
-import { isNonEmptyString, search } from '@tunarr/shared/util';
-import type { SmartCollection } from '@tunarr/types';
+import { isNonEmptyString } from '@tunarr/shared/util';
 import { inject, injectable } from 'inversify';
 import { SmartCollectionsDB } from '../../db/SmartCollectionsDB.ts';
 import { InjectLogger } from '../../util/inject.ts';
@@ -12,7 +11,6 @@ export class FixSmartCollectionFilters extends Fixer {
 
   constructor(
     @inject(SmartCollectionsDB) private smartCollectionDB: SmartCollectionsDB,
-    @inject(search.SearchParser) private searchParser: search.SearchParser,
   ) {
     super();
   }
@@ -25,12 +23,7 @@ export class FixSmartCollectionFilters extends Fixer {
         continue;
       }
 
-      const tokenized = search.tokenizeSearchQuery(collection.filter);
-      this.searchParser.reset();
-      this.searchParser.input = tokenized.tokens;
-      this.searchParser.searchExpression();
-      // This collection needs fixing
-      if (this.searchParser.errors.length > 0) {
+      if (!(await this.parses(collection.filter))) {
         if (isNonEmptyString(collection.keywords)) {
           this.logger.warn(
             'Collection %s has keywords set but an unparseable filter. It will not work as expected.',
@@ -39,19 +32,41 @@ export class FixSmartCollectionFilters extends Fixer {
           continue;
         }
 
+        // Collections saved before keywords had their own column kept free
+        // text in the filter column.
         this.logger.debug(
           'Updating smart collection %s which had an unparseable filter',
           collection.name,
         );
-
-        const newColl: SmartCollection = {
-          ...collection,
+        await this.smartCollectionDB.updateStoredQuery(collection.uuid, {
+          filter: null,
           keywords: collection.filter,
-          filter: undefined,
-        };
+        });
+        continue;
+      }
 
-        await this.smartCollectionDB.update(collection.uuid, newColl);
+      // Earlier versions of this fixer copied filters they couldn't parse
+      // into keywords and left the filter in place. Once the filter parses,
+      // those keywords are a filter expression run as a full text search,
+      // which matches the wrong programs.
+      if (
+        isNonEmptyString(collection.keywords) &&
+        (await this.parses(collection.keywords))
+      ) {
+        this.logger.info(
+          'Clearing keywords of smart collection %s: they are a filter expression, not search keywords',
+          collection.name,
+        );
+        await this.smartCollectionDB.updateStoredQuery(collection.uuid, {
+          keywords: null,
+        });
       }
     }
+  }
+
+  private async parses(query: string) {
+    return (
+      await this.smartCollectionDB.parseSearchQueryString(query)
+    ).isSuccess();
   }
 }
