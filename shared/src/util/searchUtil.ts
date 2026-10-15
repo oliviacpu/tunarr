@@ -1047,6 +1047,18 @@ export function tokenizeSearchQuery(queryString: string) {
   return SearchExpressionLexer.tokenize(queryString);
 }
 
+/**
+ * Whether a query names a string field by its search index path, such as
+ * `genres.name`. Parsers before these names were added rejected such queries.
+ */
+export function usesIndexPathFieldName(queryString: string): boolean {
+  return tokenizeSearchQuery(queryString).tokens.some(
+    (token) =>
+      token.tokenType === StringField &&
+      StringFieldByIndexPath.has(token.image),
+  );
+}
+
 // Helper to flatten chains of same-operator binary clauses
 // e.g., binary_clause(A, and, binary_clause(B, and, C)) -> [A, B, C]
 function collectBinaryClauseChildren(

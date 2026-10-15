@@ -139,6 +139,18 @@ describe('FixSmartCollectionFilters', () => {
     expect(readCollection(uuid)).toEqual({ filter, keywords: 'space opera' });
   });
 
+  test('keeps keywords that parse as a filter but could have been typed', async () => {
+    const filter = 'genre in ["Genre X"]';
+    const uuid = insertCollection(filter, 'genre:horror movies');
+
+    await runFixer();
+
+    expect(readCollection(uuid)).toEqual({
+      filter,
+      keywords: 'genre:horror movies',
+    });
+  });
+
   test('leaves an unparseable filter alone when keywords are set, and warns', async () => {
     const uuid = insertCollection('title = "Movie \\"A\\""', 'space opera');
 
