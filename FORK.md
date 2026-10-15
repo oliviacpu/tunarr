@@ -35,6 +35,57 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Custom show syncs run in a scan worker (2026-10-15)
+
+- **What you saw:** nothing reported. It was the last sync work on the main thread.
+- **Cause:** `CustomShowSyncService` ran on the main thread, which serves streams. It ran from the hourly `SyncCustomShowsTask` and from the create and Sync Now routes.
+  - A 1,000-movie playlist kept that thread busy for 7 s on the first sync and 2.8 s on each hourly resync.
+  - The lookup that ends every sync (`lookupByExternalIds`, which loads each program with all its relations) stalled requests for 163–186 ms, and 870 ms at 3,000 movies.
+- **Fix:** the sync is a scan job, `{kind: 'custom-show', customShowId}` (`types/worker_schemas.ts`). `MediaSourceScanCoordinator.syncCustomShow` runs it like a library scan: in a scan worker when there is one, one job at a time, in-process with `TUNARR_SCAN_IN_WORKER=false`.
+  - **The job:** `ScanJobExecutor` hands it to `CustomShowSyncService.syncShow`, which skips a show that's gone or unlinked, and on a cancel stops before the next item without writing a partial list.
+  - **Routes:** create and Sync Now wait for the sync and answer with the synced show, or a 500 on failure. They go ahead of waiting scans, even when Sync Now joins a sync the hourly task queued, but wait for a running one.
+  - **Joining and locks:** a second request for a show joins the first. Each show has its own lock, which `isSyncing` reads.
+  - **No reconcile:** a sync doesn't reconcile channel durations.
+  - **The task:** `SyncCustomShowsTask` queues every linked show and ends when they've run.
+  - **Sync Now 500:** Sync Now always answered 500, because its response left out `isSyncing`. Fixed in its own commit.
+  - **Probe harness:** `measureWithConcurrentProbe` missed a stall at the very end of an operation. Fixed in its own commit.
+- **Numbers:** `pnpm bench:custom-show-sync`, 1,000 movies, median of 2 trials, main-thread CPU and worst stall:
+  - first sync: 7.4 s and 176 ms in-process, against nothing measurable and 9 ms in a worker;
+  - resync: 2.3 s and 165 ms in-process, against nothing measurable and 19 ms in a worker;
+  - 3,000 movies, first sync: 26 s and 875 ms in-process, against nothing measurable and 10 ms in a worker.
+- **Tests:**
+  - `ScanJobExecutor.test.ts`, `MediaSourceScanCoordinator.test.ts`, `ScanWorkerRoundTrip.test.ts` and `CustomShowSyncService.test.ts`;
+  - new `SyncCustomShowsTask.test.ts`, `tests/customShowSync.test.ts` (API against a stand-in Plex server) and `tests/support/probe.test.ts`;
+  - new perf test `tests/perf/customShowSyncLag.test.ts`.
+- **Upstream:** not sent.
+
+### Live TV playlist requests no longer slow down the longer a channel is watched (2026-10-15)
+
+- **What you saw:** after PR #11, a Live TV playlist request still re-read and re-parsed the session's whole `stream.m3u8`. The cost grew with the session: ~6 ms at 3 hours and ~25 ms at 11 hours on a laptop, about 6 times that on the server, on the main thread every few seconds per viewer.
+- **Cause:** ffmpeg never trims the playlist (`hls_list_size 0`, `append_list`), and `HlsSession.trimPlaylist` parsed all of it on every request to keep 20 segments.
+- **Fix:**
+  - `MediaPlaylistReader` parses only the bytes ffmpeg appended since the last request. It checks the first and last 256 parsed bytes, and parses the whole file again when the file shrank or changed. ffmpeg rewrites old entries byte for byte; only its header changes.
+  - `MediaPlaylistIndex` keeps per-segment discontinuity counts, so `HlsPlaylistMutator.trimIndex` builds the playlist from the segments it holds.
+  - `HlsSession` drops segments below the pruning floor, which bounds memory too.
+  - Served playlists are unchanged.
+- **Numbers:** per request at 5,265 / 20,000 / 43,200 segments: 6.0 / 23.6 / 51.3 ms before, 0.13 / 0.15 / 0.16 ms after (MacBook, median of 31).
+- **Tests:**
+  - `HlsSession.test.ts`: a request on a 20,000-segment session reads under 8 KiB (2.8 MB on `main`, which fails).
+  - `MediaPlaylistReader.test.ts`: scenario tests plus randomized tests against main's trim (kept as `src/testing/hls/ReferenceHlsPlaylistTrim.ts`).
+  - `HlsPlaylistMutator.test.ts`: 1,000 random playlists against main's trim.
+  - stream-repro shadow check: every real request matched main's trim.
+- **Upstream:** not sent.
+
+### Smart collection filters with `genres.name` (2026-10-15)
+
+- **What you saw:** Six smart collections logged "has unparseable filter … Results will be wrong" whenever smart collections were listed, and the startup fixer logged "has keywords set but an unparseable filter". Their filters (`genres.name in [...]` with `title in`/`title not in`, joined by AND/OR) were ignored, and a copy of each filter in `keywords` ran as a full-text search.
+- **Cause:** The query language calls the field `genre`, and `genres.name` is its search index path. The API stored the filter tree with the field name the client gave, so it wrote a string its own parser rejects at the `.`. The startup fixer then copied each filter into `keywords` and tried to clear the filter. The clear never happened, because `update` skips an undefined filter, so the warning repeated on every start.
+- **Fix:** The parser accepts a string field's index path as another name for the field. `searchFilterToString` writes field names the parser knows, writes `added_date` as a date, and adds parentheses where a nested AND/OR group would otherwise be read back differently. The fixer writes columns directly, so `null` clears them. It moves a filter into keywords only for rows saved before the keywords column (NULL keywords). Any other filter stays a filter. When the filter parses, it clears keywords that exactly equal the filter, which is what the old fixer copied. One collection whose keywords are an older copy of a since-edited filter keeps them until the client re-saves it with `keywords: ""`.
+- **Tests:** `shared/src/util/searchUtil.test.ts` ("saved filter strings"), `server/src/db/SmartCollectionsDB.test.ts`, `server/src/tasks/fixers/FixSmartCollectionFilters.test.ts`.
+- **Upstream:** not sent.
+
+- **Known limit:** a collection saved before the keywords column (keywords NULL) whose free-text query starts with an index path such as `genres.name:` now parses as a filter instead of a text search. This fork's deployment has no NULL-keyword collections (checked 2026-10-15). Sending this upstream would need the fixer to move such NULL-keyword filters into keywords.
+
 ### Tunarr keeps its database in its own memory, so it stops stalling on the hour (2026-10-15)
 
 - **What you saw:** Live TV paused briefly at the top of the hour. A latency probe saw stalls at :00 every hour,
