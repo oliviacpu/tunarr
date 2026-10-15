@@ -17,9 +17,10 @@ permissions:
   contents: write # the release
   packages: write # the image
 
+# One tag build at a time, so the newest-tag check and the :latest retag below never race another build.
 concurrency:
-  group: fork-image-${{ github.ref }}
-  cancel-in-progress: true
+  group: fork-image
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -85,6 +86,7 @@ jobs:
             exit 0
           fi
           docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}:${GITHUB_REF_NAME}"
+          echo "LATEST_NOTE=, and \`:latest\` until the next release" >> "$GITHUB_ENV"
 
       # The changelog for this image: the fork commits since the previous oliviacpu-* tag, then every commit this fork
       # adds on top of upstream (reachable from the tag but not from upstream's main). The why and how are in FORK.md.
@@ -96,7 +98,7 @@ jobs:
           {
             echo "Based on upstream [${UPSTREAM_BASE}](https://github.com/chrisbenincasa/tunarr/releases/tag/${UPSTREAM_BASE})."
             echo
-            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\` (also \`:sha-${TUNARR_BUILD}\`, and \`:latest\` until the next release)."
+            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\` (also \`:sha-${TUNARR_BUILD}\`${LATEST_NOTE:-})."
             echo
             if [ -n "$prev" ]; then
               echo "## New since ${prev}"
