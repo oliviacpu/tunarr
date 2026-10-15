@@ -18,6 +18,8 @@ import {
   CacheFolderName,
   ChannelLineupsFolderName,
   ImagesFolderName,
+  PublicArtworkFolderName,
+  PublicMediaFolderName,
   SubtitlesCacheFolderName,
 } from './util/constants.ts';
 import { fileExists } from './util/fsUtil.js';
@@ -36,6 +38,8 @@ async function initDbDirectories(opts: GlobalOptions) {
     [CacheFolderName],
     [CacheFolderName, ImagesFolderName],
     [CacheFolderName, SubtitlesCacheFolderName],
+    [PublicMediaFolderName],
+    [PublicMediaFolderName, PublicArtworkFolderName],
     ['backups'],
   ]) {
     const pathToCheck = path.join(opts.databaseDirectory, ...subpaths);

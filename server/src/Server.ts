@@ -44,6 +44,12 @@ import { streamApi } from './api/streamApi.js';
 import { videoApiRouter } from './api/videoApi.js';
 import { createTunarrBasicAuthHook } from './util/basicAuth.js';
 import { defaultHlsOptions } from './ffmpeg/builder/constants.ts';
+import { PublicArtworkPathPrefix } from './services/PublicMediaService.ts';
+import {
+  PublicArtworkFolderName,
+  PublicMediaFolderName,
+} from './util/constants.ts';
+import { versionedUploadCacheControl } from './util/iconUtil.ts';
 import { type ServerOptions, serverOptions } from './globals.js';
 import type { IWorkerPool } from './interfaces/IWorkerPool.ts';
 import { ServerContext, ServerRequestContext } from './ServerContext.js';
@@ -353,6 +359,33 @@ export class Server {
             root: path.join(currentDirectory, 'resources', 'images'),
             prefix: '/images',
             decorateReply: false,
+          })
+          // Published guide pictures. A file's URL carries the second its
+          // bytes were saved, so it never changes under the same URL.
+          .register(fpStatic, {
+            root: path.join(
+              serverOptions().databaseDirectory,
+              PublicMediaFolderName,
+              PublicArtworkFolderName,
+            ),
+            prefix: PublicArtworkPathPrefix,
+            decorateReply: false,
+            index: false,
+            maxAge: '365d',
+            immutable: true,
+            setHeaders: (res) => {
+              res.header('X-Content-Type-Options', 'nosniff');
+            },
+          })
+          .addHook('onSend', (req, reply, payload, done) => {
+            const cacheControl = versionedUploadCacheControl(
+              req.url,
+              reply.statusCode,
+            );
+            if (cacheControl !== undefined) {
+              reply.header('cache-control', cacheControl);
+            }
+            done(null, payload);
           })
           .get('/favicon.svg', async (_, res) => {
             return res.sendFile(

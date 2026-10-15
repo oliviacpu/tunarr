@@ -14,7 +14,7 @@ import {
   type XmltvProgramme,
 } from '@iptv/xmltv';
 import { Mutex } from 'async-mutex';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 import throttle from '@/util/throttle.js';
 import { chunk, compact, escape, flatMap, isNil, map, round } from 'lodash-es';
 import { writeFile } from 'node:fs/promises';
@@ -24,12 +24,20 @@ import type { ProgramWithRelationsOrm } from '../db/schema/derivedTypes.ts';
 import type { MaterializedGuideItem } from '../types/guide.ts';
 import { parseAirDate } from '../util/airDate.ts';
 import { loggingDef } from '../util/logging/loggingDef.ts';
+import {
+  PublicMediaService,
+  publicArtworkKey,
+  type PublicArtworkRef,
+  type PublishedArtwork,
+} from './PublicMediaService.ts';
 
 const lock = new Mutex();
 
 // Batch cost grows with credits per programme. At 100, the perf seed with
 // credit images on keeps every slice under 25ms; at 250 slices reached 50ms.
 const SerializeBatchSize = 100;
+
+const NothingPublished: PublishedArtwork = new Map();
 
 const TvOpen = '<tv>';
 const TvClose = '</tv>';
@@ -95,7 +103,12 @@ export class XmlTvWriter {
     className: this.constructor.name,
   });
 
-  constructor(@inject(KEYS.SettingsDB) private settingsDB: SettingsDB) {}
+  constructor(
+    @inject(KEYS.SettingsDB) private settingsDB: SettingsDB,
+    @inject(PublicMediaService)
+    @optional()
+    private publicMedia?: PublicMediaService,
+  ) {}
 
   async write(channels: MaterializedChannelPrograms[]) {
     const start = performance.now();
@@ -110,7 +123,8 @@ export class XmlTvWriter {
   }
 
   private async writeInternal(channels: MaterializedChannelPrograms[]) {
-    const content = await this.serialize(channels);
+    const published = await this.publishArtwork(channels);
+    const content = await this.serialize(channels, published);
 
     return await writeFile(this.settingsDB.xmlTvSettings().outputPath, content);
   }
@@ -124,7 +138,10 @@ export class XmlTvWriter {
    * hundreds of milliseconds. Each batch serializes as its own document, and
    * its programmes are spliced between the shared header and `</tv>`.
    */
-  async serialize(channels: MaterializedChannelPrograms[]): Promise<string> {
+  async serialize(
+    channels: MaterializedChannelPrograms[],
+    published: PublishedArtwork = NothingPublished,
+  ): Promise<string> {
     const header = writeXmltv(
       this.generateXmltv(channels.map((c) => ({ ...c, programs: [] }))),
     );
@@ -139,7 +156,7 @@ export class XmlTvWriter {
         await throttle();
         const body = writeXmltv({
           programmes: batch.map((p) =>
-            this.makeXmlTvProgram(p, xmlChannelId, channel),
+            this.makeXmlTvProgram(p, xmlChannelId, channel, published),
           ),
         });
 
@@ -157,7 +174,10 @@ export class XmlTvWriter {
     return parts.join('');
   }
 
-  generateXmltv(channels: MaterializedChannelPrograms[]) {
+  generateXmltv(
+    channels: MaterializedChannelPrograms[],
+    published: PublishedArtwork = NothingPublished,
+  ) {
     const xmlChannelIdById = groupByFunc(
       channels,
       ({ channel }) => channel.uuid,
@@ -175,7 +195,12 @@ export class XmlTvWriter {
       ),
       programmes: flatMap(channels, ({ channel, programs }) =>
         map(programs, (p) =>
-          this.makeXmlTvProgram(p, xmlChannelIdById[channel.uuid]!, channel),
+          this.makeXmlTvProgram(
+            p,
+            xmlChannelIdById[channel.uuid]!,
+            channel,
+            published,
+          ),
         ),
       ),
     } satisfies Xmltv;
@@ -220,6 +245,7 @@ export class XmlTvWriter {
     guideItem: MaterializedGuideItem,
     xmlChannelId: string,
     channel: Pick<ChannelOrm, 'offline' | 'icon'>,
+    published: PublishedArtwork,
   ): XmltvProgramme {
     const title = match(guideItem)
       .with(
@@ -376,9 +402,11 @@ export class XmlTvWriter {
 
       const useShowPoster =
         this.settingsDB.xmlTvSettings().useShowPoster ?? false;
-      const url = XmlTvWriter.resolveArtworkUrl(program, {
-        useShowPoster,
-      });
+      const url = XmlTvWriter.resolveArtworkUrl(
+        program,
+        { useShowPoster },
+        published,
+      );
 
       if (url) {
         partial.icon = [{ src: url }];
@@ -462,10 +490,30 @@ export class XmlTvWriter {
     );
   }
 
+  /**
+   * The guide's picture for a program: a published file when there is one,
+   * else the artwork route that serves the same picture.
+   */
   static resolveArtworkUrl(
     program: ProgramWithRelationsOrm,
     opts: { useShowPoster: boolean },
+    published: PublishedArtwork = NothingPublished,
   ): string | undefined {
+    const ref = XmlTvWriter.resolveArtworkRef(program, opts);
+    if (!ref) {
+      return undefined;
+    }
+    const publishedPath = published.get(publicArtworkKey(ref));
+    if (publishedPath !== undefined) {
+      return `{{host}}${publishedPath}`;
+    }
+    return `{{host}}/api/programs/${ref.id}/artwork/${ref.artworkType}`;
+  }
+
+  static resolveArtworkRef(
+    program: ProgramWithRelationsOrm,
+    opts: { useShowPoster: boolean },
+  ): PublicArtworkRef | undefined {
     type ArtworkCandidate = {
       id: string | null | undefined;
       artwork: { artworkType: ArtworkType | null }[] | undefined;
@@ -517,7 +565,7 @@ export class XmlTvWriter {
         (a) => a.artworkType && candidate.types.includes(a.artworkType),
       );
       if (art?.artworkType) {
-        return `{{host}}/api/programs/${candidate.id}/artwork/${art.artworkType}`;
+        return { id: candidate.id, artworkType: art.artworkType };
       }
     }
 
@@ -530,10 +578,47 @@ export class XmlTvWriter {
       if (!candidate.id || !isDerivableArtworkSource(candidate.source)) {
         continue;
       }
-      return `{{host}}/api/programs/${candidate.id}/artwork/poster`;
+      return { id: candidate.id, artworkType: 'poster' };
     }
 
     return undefined;
+  }
+
+  /**
+   * Publishes the picture of every program in the guide, so the guide can link
+   * to static files. A picture that isn't published keeps its artwork route
+   * URL, and a failure here never stops the guide from being written.
+   */
+  private async publishArtwork(
+    channels: MaterializedChannelPrograms[],
+  ): Promise<PublishedArtwork> {
+    if (!this.publicMedia) {
+      return NothingPublished;
+    }
+
+    const useShowPoster =
+      this.settingsDB.xmlTvSettings().useShowPoster ?? false;
+    const refs: PublicArtworkRef[] = [];
+    for (const { programs } of channels) {
+      for (const item of programs) {
+        if (item.programming.type !== 'program') {
+          continue;
+        }
+        const ref = XmlTvWriter.resolveArtworkRef(item.programming.program, {
+          useShowPoster,
+        });
+        if (ref) {
+          refs.push(ref);
+        }
+      }
+    }
+
+    try {
+      return await this.publicMedia.publish(refs);
+    } catch (e) {
+      this.logger.warn(e, 'Could not publish guide pictures');
+      return NothingPublished;
+    }
   }
 
   isWriting() {

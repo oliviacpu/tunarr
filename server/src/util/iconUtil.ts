@@ -4,7 +4,36 @@ import type { ChannelIcon } from '@tunarr/types';
 import { deleteUploadedFile } from './fsUtil.js';
 import { isNonEmptyString } from './index.js';
 
-const LocalUploadPathPrefix = '/images/uploads/';
+export const LocalUploadPathPrefix = '/images/uploads/';
+
+/**
+ * For a picture whose URL changes whenever its bytes do. Caches may keep it for
+ * a year without asking again.
+ */
+export const ImmutableCacheControl = 'public, max-age=31536000, immutable';
+
+/**
+ * The Cache-Control for a successful response to `url`, when the URL is an
+ * upload carrying a version (`?v=`). Every upload URL Tunarr hands out has one,
+ * and a different image gets a different version, so the response can be
+ * cached for good. Older links without a version keep revalidating.
+ */
+export function versionedUploadCacheControl(
+  url: string,
+  statusCode: number,
+): string | undefined {
+  if (statusCode !== 200 && statusCode !== 304) {
+    return undefined;
+  }
+  const parsed = URL.parse(url, 'http://localhost');
+  if (
+    !parsed?.pathname.startsWith(LocalUploadPathPrefix) ||
+    !isNonEmptyString(parsed.searchParams.get('v'))
+  ) {
+    return undefined;
+  }
+  return ImmutableCacheControl;
+}
 
 /**
  * If the given URL points to a locally-uploaded file under the server's
