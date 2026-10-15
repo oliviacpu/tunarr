@@ -6,7 +6,7 @@ import { bootstrapTunarr } from '../bootstrap.ts';
 import { setGlobalOptionsUnchecked } from '../globals.ts';
 import { DatabaseSchemaTooNewError } from '../migration/DatabaseSchemaTooNewError.ts';
 import { copyPreMigratedDb } from '../testing/testDbFactory.ts';
-import { DBAccess } from './DBAccess.ts';
+import { DBAccess, connectionPragmas } from './DBAccess.ts';
 
 type Fixture = {
   dbDir: string;
@@ -152,5 +152,30 @@ describe('init - connection reuse', () => {
     // the map entry, abandoning the previous sqlite handle without closing it.
     expect(reinitialized).toBe(live);
     expect(DBAccess.instance.getConnection(dbPath)).toBe(live);
+  });
+});
+
+describe('connection settings', () => {
+  // The main thread keeps the database in its own memory: pages mapped from
+  // the file live in the shared OS file cache, which other processes evict,
+  // and reading them back then stalls the thread that serves the streams.
+  test('the main thread caches pages itself and maps nothing', async ({
+    dbDir,
+  }) => {
+    const conn = DBAccess.instance.getOrCreateConnection(
+      path.join(dbDir, 'db.db'),
+    );
+
+    expect(conn.sqlite.pragma('mmap_size', { simple: true })).toBe(0);
+    expect(conn.sqlite.pragma('cache_size', { simple: true })).toBe(-262144);
+    expect(conn.sqlite.pragma('journal_mode', { simple: true })).toBe('wal');
+    expect(conn.sqlite.pragma('foreign_keys', { simple: true })).toBe(1);
+  });
+
+  test('workers keep the mapped file and the smaller cache', () => {
+    expect(connectionPragmas(false)).toEqual(
+      expect.arrayContaining(['mmap_size = 268435456', 'cache_size = 10000']),
+    );
+    expect(connectionPragmas(true)).not.toContain('mmap_size = 268435456');
   });
 });
