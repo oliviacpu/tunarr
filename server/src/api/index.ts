@@ -211,9 +211,11 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
 
       return res.send({
         name: data.filename,
-        // Versioned by contents, so a replaced image gets a new URL
+        // On the public URL when one is set (behind an HTTPS proxy the request
+        // is plain http), versioned by contents so a replaced image gets a new URL
         fileUrl: uploadedImageUrl(
-          `${req.protocol}://${req.host}`,
+          req.serverCtx.settings.xmlTvSettings().publicUrl,
+          req,
           data.filename,
           await fsPromises.readFile(savedPath),
         ),

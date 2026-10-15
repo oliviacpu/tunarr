@@ -38,6 +38,8 @@ A new channel logo appears in Plex after Plex next refreshes the guide: daily by
 
 To fix this, set **Public Address for Guide Pictures** (Settings → XMLTV) to an address the apps can reach, such as `https://tunarr.example.com`. The guide's picture links then use it. Plex keeps fetching the guide from its usual address. The picture paths (`/media/artwork/…`, `/api/programs/<id>/artwork/<type>`, `/api/credits/<id>/artwork/<type>` and `/images/…`) must be reachable at that address without a login.
 
+Images uploaded in the web UI (channel logos, offline pictures) are saved with that address too, so they load in Plex's apps even when you upload them from a browser on the server (`localhost`) or behind a proxy that terminates HTTPS. Without it, an upload gets the address the browser used, and behind such a proxy Tunarr sees plain `http://`. Images uploaded before you set it keep their saved address; upload them again to change it.
+
 Each time Tunarr writes the guide, it saves every programme's poster as a file in the `media/artwork` folder of its data directory and links the guide to it, such as `/media/artwork/<id>-poster.jpg?v=20261015041230`. The `v` is the second Tunarr saved that picture, and it changes only when the picture's bytes do, so Plex and its apps fetch a replaced poster once and can cache the rest for good. Each version stays at its own address for 30 days after it's replaced, so a guide Plex fetched earlier keeps its pictures. A rescan that finds the same picture keeps its address. A poster Tunarr can't save keeps the `/api/programs/…` address. Pictures no guide has used for 30 days are deleted.
 
 Play your channel by hovering over the channel icon and selecting the play icon.
