@@ -14,7 +14,7 @@ import type {
 import { createToken, EmbeddedActionsParser, Lexer } from 'chevrotain';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
-import { has, head, identity, isArray, isNumber } from 'lodash-es';
+import { escapeRegExp, has, identity, isArray, isNumber } from 'lodash-es';
 import type {
   Dictionary,
   NonEmptyArray,
@@ -74,19 +74,7 @@ const StringFields = [
   'show_title',
 ] as const;
 
-const StringField = createToken({
-  name: 'StringField',
-  pattern: new RegExp(StringFields.join('|')),
-  longer_alt: Identifier,
-});
-
 const DateFields = ['release_date', 'added_date'] as const;
-
-const DateField = createToken({
-  name: 'DateField',
-  pattern: new RegExp(DateFields.join('|')),
-  longer_alt: Identifier,
-});
 
 const NumericFields = [
   'duration',
@@ -101,9 +89,91 @@ const NumericFields = [
   'season',
 ] as const;
 
+const QueryFields: ReadonlySet<string> = new Set<string>([
+  ...StringFields,
+  ...DateFields,
+  ...NumericFields,
+]);
+
+export const virtualFieldToIndexField: Record<string, string> = {
+  genre: 'genres.name',
+  actor: 'actors.name',
+  writer: 'writer.name',
+  director: 'director.name',
+  studio: 'studio.name',
+  year: 'originalReleaseYear',
+  release_date: 'originalReleaseDate',
+  added_date: 'addedAt',
+  release_year: 'originalReleaseYear',
+  // these get mapped to the duration field and their
+  // values get converted to the appropriate units
+  minutes: 'duration',
+  seconds: 'duration',
+  // This isn't really true, since this could map to multiple fields
+  // TODO: Make grouping-tyhpe specific subdocs
+  show_genre: 'grandparent.genres',
+  show_title: 'grandparent.title',
+  show_tags: 'grandparent.tags',
+  show_studio: 'grandparent.studio',
+  grandparent_genre: 'grandparent.genres',
+  video_bit_depth: 'videoBitDepth',
+  video_codec: 'videoCodec',
+  video_height: 'videoHeight',
+  video_width: 'videoWidth',
+  audio_language: 'audioLanguages',
+  subtitle_language: 'subtitleLanguages',
+  audio_codec: 'audioCodec',
+  audio_channels: 'audioChannels',
+  media_source_id: 'mediaSourceId',
+  library_id: 'libraryId',
+  season: 'seasonIndex',
+};
+
+export const indexFieldToVirtualField = invert(virtualFieldToIndexField, true);
+
+// A string field can also be written as its search index path, such as
+// `genres.name` for `genre`. API clients may name fields by the path
+// (fieldSpec.key), and saved smart collections can hold those names. Numeric
+// and date fields don't get these names: the lexer tries the OR keyword
+// before field names, so it would read originalReleaseYear as a plain word.
+const StringFieldByIndexPath: ReadonlyMap<string, string> = new Map(
+  Object.entries(virtualFieldToIndexField)
+    .filter(
+      ([field, path]) =>
+        inConstArr(StringFields, field) && !QueryFields.has(path),
+    )
+    .map(([field, path]) => [path, field] as const),
+);
+
+// Longer names go first, so a name that begins with another one (`genres.name`
+// and `genre`) matches in full.
+function fieldNamePattern(names: ReadonlyArray<string>) {
+  return new RegExp(
+    [...names]
+      .sort((a, b) => b.length - a.length)
+      .map(escapeRegExp)
+      .join('|'),
+  );
+}
+
+const StringField = createToken({
+  name: 'StringField',
+  pattern: fieldNamePattern([
+    ...StringFields,
+    ...StringFieldByIndexPath.keys(),
+  ]),
+  longer_alt: Identifier,
+});
+
+const DateField = createToken({
+  name: 'DateField',
+  pattern: fieldNamePattern(DateFields),
+  longer_alt: Identifier,
+});
+
 const NumericField = createToken({
   name: 'NumericField',
-  pattern: new RegExp(NumericFields.join('|')),
+  pattern: fieldNamePattern(NumericFields),
   longer_alt: Identifier,
 });
 
@@ -382,42 +452,6 @@ export type BinarySearchClause = {
   rhs: SearchClause;
 };
 
-export const virtualFieldToIndexField: Record<string, string> = {
-  genre: 'genres.name',
-  actor: 'actors.name',
-  writer: 'writer.name',
-  director: 'director.name',
-  studio: 'studio.name',
-  year: 'originalReleaseYear',
-  release_date: 'originalReleaseDate',
-  added_date: 'addedAt',
-  release_year: 'originalReleaseYear',
-  // these get mapped to the duration field and their
-  // values get converted to the appropriate units
-  minutes: 'duration',
-  seconds: 'duration',
-  // This isn't really true, since this could map to multiple fields
-  // TODO: Make grouping-tyhpe specific subdocs
-  show_genre: 'grandparent.genres',
-  show_title: 'grandparent.title',
-  show_tags: 'grandparent.tags',
-  show_studio: 'grandparent.studio',
-  grandparent_genre: 'grandparent.genres',
-  video_bit_depth: 'videoBitDepth',
-  video_codec: 'videoCodec',
-  video_height: 'videoHeight',
-  video_width: 'videoWidth',
-  audio_language: 'audioLanguages',
-  subtitle_language: 'subtitleLanguages',
-  audio_codec: 'audioCodec',
-  audio_channels: 'audioChannels',
-  media_source_id: 'mediaSourceId',
-  library_id: 'libraryId',
-  season: 'seasonIndex',
-};
-
-export const indexFieldToVirtualField = invert(virtualFieldToIndexField, true);
-
 const indexOperatorToSyntax: Dictionary<string> = {
   contains: '~',
   'not contains': '!~',
@@ -453,9 +487,12 @@ const dateFieldNormalizersByField = {
   added_date: normalizeReleaseDate,
 } satisfies Record<string, Converter<string, number>>;
 
+// Date values are stored as epoch ms but parsed only as YYYY-MM-DD or
+// YYYYMMDD, so every date field needs one of these.
 const dateFieldDenormalizersByField = {
   release_date: (ms) => dayjs(ms).format('YYYY-MM-DD'),
-} satisfies Record<string, Converter<number, string>>;
+  added_date: (ms) => dayjs(ms).format('YYYY-MM-DD'),
+} satisfies Record<(typeof DateFields)[number], Converter<number, string>>;
 
 export class SearchParser extends EmbeddedActionsParser {
   constructor() {
@@ -844,7 +881,8 @@ export class SearchParser extends EmbeddedActionsParser {
   });
 
   private singleStringSearch = this.RULE('singleStringSearch', () => {
-    const field = this.CONSUME(StringField, { LABEL: 'field' }).image;
+    const name = this.CONSUME(StringField, { LABEL: 'field' }).image;
+    const field = StringFieldByIndexPath.get(name) ?? name;
     const { op, value, negate } = this.SUBRULE(this.stringOperator, {
       LABEL: 'op',
     });
@@ -1403,28 +1441,85 @@ function findDenormalizer(
     .otherwise(() => identity);
 }
 
+/**
+ * The field name to write for a field spec, so the parser can read it back:
+ * the spec's name if the parser knows it, else its key if the parser knows
+ * that, else the field whose search index path it is. API clients may send
+ * the index path (`genres.name`) as the name.
+ */
+function queryFieldName(fieldSpec: SearchField): string {
+  const name = emptyStringToNull(fieldSpec.name);
+  const candidates = name === null ? [fieldSpec.key] : [name, fieldSpec.key];
+  for (const candidate of candidates) {
+    if (QueryFields.has(candidate)) {
+      return candidate;
+    }
+  }
+  for (const candidate of candidates) {
+    const field = indexFieldToVirtualField[candidate]?.find((virtual) =>
+      QueryFields.has(virtual),
+    );
+    if (field !== undefined) {
+      return field;
+    }
+  }
+  return name ?? fieldSpec.key;
+}
+
+/** An operator node with a single child means the same as that child. */
+function unwrapSingleChild(filter: SearchFilter): SearchFilter {
+  let current = filter;
+  while (current.type === 'op' && current.children.length === 1) {
+    current = current.children[0];
+  }
+  return current;
+}
+
+/**
+ * The children of an operator node, with ungrouped child nodes of the same
+ * operator merged in, since `A AND (B AND C)` matches `A AND B AND C`.
+ */
+function flattenOperatorChildren(
+  node: SearchFilterOperatorNode,
+): SearchFilter[] {
+  return node.children.flatMap((child) => {
+    const unwrapped = unwrapSingleChild(child);
+    return unwrapped.type === 'op' &&
+      unwrapped.op === node.op &&
+      !unwrapped.grouped
+      ? flattenOperatorChildren(unwrapped)
+      : [unwrapped];
+  });
+}
+
 export function searchFilterToString(input: SearchFilter): string {
   switch (input.type) {
     case 'op': {
-      const children = input.children.map((child) =>
-        searchFilterToString(child),
-      );
+      const children = flattenOperatorChildren(input).flatMap((child) => {
+        const str = searchFilterToString(child);
+        return isNonEmptyString(str) ? [{ child, str }] : [];
+      });
       if (children.length === 0) {
         return '';
       }
       if (children.length === 1) {
-        return children[0];
+        return children[0].str;
       }
-      const joined = children.join(` ${input.op.toUpperCase()} `);
+      // The parser groups AND and OR from the right: `A AND B OR C` is
+      // `A AND (B OR C)`. So a nested node needs parentheses unless it comes
+      // last, or its `grouped` flag already adds them.
+      const joined = children
+        .map(({ child, str }, idx) =>
+          idx < children.length - 1 && child.type === 'op' && !child.grouped
+            ? `(${str})`
+            : str,
+        )
+        .join(` ${input.op.toUpperCase()} `);
       // Only wrap in parentheses if this was an explicit group in the original query
       return input.grouped ? `(${joined})` : joined;
     }
     case 'value': {
-      // Use the original field name if stored, otherwise fall back to index field mapping
-      const key =
-        emptyStringToNull(input.fieldSpec.name) ??
-        head(indexFieldToVirtualField[input.fieldSpec.key]) ??
-        input.fieldSpec.key;
+      const key = queryFieldName(input.fieldSpec);
 
       // Relative date expressions round-trip as their original syntax
       if (input.fieldSpec.type === 'date' && input.fieldSpec.relativeDate) {
@@ -1437,7 +1532,7 @@ export function searchFilterToString(input: SearchFilter): string {
         indexOperatorToSyntax[input.fieldSpec.op] ?? input.fieldSpec.op;
 
       // Get denormalizer for numeric fields (e.g., convert ms back to minutes)
-      const denormalizer = findDenormalizer(input.fieldSpec);
+      const denormalizer = findDenormalizer({ ...input.fieldSpec, name: key });
 
       let valueString: string;
       if (isNumber(input.fieldSpec.value)) {

@@ -86,6 +86,12 @@ Query clauses can be combined using the standard boolean operators `AND` and `OR
 genre IN [Horror, Comedy] AND title <= A
 ```
 
+`AND` and `OR` have equal precedence and group from the right, so `A AND B OR C` means `A AND (B OR C)`. To match `A AND B` or `C`, write `(A AND B) OR C`:
+
+```
+(genre IN [Comedy] AND rating IN [G, PG]) OR title IN ["Airplane!"]
+```
+
 ## Fields
 
 Fields available for search:
@@ -124,3 +130,5 @@ Fields available for search:
 
 !!! note
     The `season` field is only populated for content indexed after this change. Force-rescan existing TV libraries to populate it for previously indexed episodes and season groupings.
+
+A `string` field can also be written as its path in the search index, such as `genres.name` for `genre`, `actors.name` for `actor`, or `grandparent.title` for `show_title`. Tunarr saves it under the name in the table above.
