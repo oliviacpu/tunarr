@@ -11,7 +11,6 @@ import type {
   SearchFilterValueNode,
   StringOperators,
 } from '@tunarr/types/schemas';
-import type { TokenType } from 'chevrotain';
 import { createToken, EmbeddedActionsParser, Lexer } from 'chevrotain';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
@@ -1058,45 +1057,6 @@ export function usesIndexPathFieldName(queryString: string): boolean {
       token.tokenType === StringField &&
       StringFieldByIndexPath.has(token.image),
   );
-}
-
-const FieldTokens: ReadonlySet<TokenType> = new Set([
-  StringField,
-  DateField,
-  NumericField,
-]);
-
-const OperatorTokens: ReadonlySet<TokenType> = new Set([
-  EqOperator,
-  NeqOperator,
-  NotContainsOperator,
-  ContainsOperator,
-  LessThanOrEqualOperator,
-  LessThanOperator,
-  GreaterThanOrEqualOperator,
-  GreaterThanOperator,
-  NotInTheLastOperator,
-  InTheLastOperator,
-  NotOperator,
-  InOperator,
-  BetweenOperator,
-]);
-
-/**
- * Whether a query has a field name followed by an operator, such as
- * `title =`, even if the query as a whole doesn't parse. Free text such as
- * `space opera` doesn't.
- */
-export function looksLikeFilterExpression(queryString: string): boolean {
-  const { tokens } = tokenizeSearchQuery(queryString);
-  return tokens.some((token, idx) => {
-    const next = tokens.at(idx + 1);
-    return (
-      FieldTokens.has(token.tokenType) &&
-      next !== undefined &&
-      OperatorTokens.has(next.tokenType)
-    );
-  });
 }
 
 // Helper to flatten chains of same-operator binary clauses

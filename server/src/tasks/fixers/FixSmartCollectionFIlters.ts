@@ -24,17 +24,12 @@ export class FixSmartCollectionFilters extends Fixer {
       }
 
       if (!(await this.parses(collection.filter))) {
-        if (isNonEmptyString(collection.keywords)) {
-          this.logger.warn(
-            'Collection %s has keywords set but an unparseable filter. It will not work as expected.',
-            collection.name,
-          );
-          continue;
-        }
-
-        // A structured filter that doesn't parse, such as one with a `{` in
-        // a value, stays a filter.
-        if (search.looksLikeFilterExpression(collection.filter)) {
+        // Collections saved before keywords had their own column kept free
+        // text in the filter column. Migration 0037 gave them NULL keywords,
+        // and the API has written a string there ever since. Any other
+        // filter is a structured one that should stay a filter, even if it
+        // doesn't parse.
+        if (collection.keywords !== null) {
           this.logger.warn(
             'Collection %s has an unparseable filter. It will not work as expected.',
             collection.name,
@@ -42,8 +37,6 @@ export class FixSmartCollectionFilters extends Fixer {
           continue;
         }
 
-        // Collections saved before keywords had their own column kept free
-        // text in the filter column.
         this.logger.debug(
           'Updating smart collection %s which had an unparseable filter',
           collection.name,
@@ -70,8 +63,10 @@ export class FixSmartCollectionFilters extends Fixer {
           'Clearing keywords of smart collection %s: they are a filter expression, not search keywords',
           collection.name,
         );
+        // An empty string, not NULL, which marks collections saved before
+        // the keywords column.
         await this.smartCollectionDB.updateStoredQuery(collection.uuid, {
-          keywords: null,
+          keywords: '',
         });
       }
     }

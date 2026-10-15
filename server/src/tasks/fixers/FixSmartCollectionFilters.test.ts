@@ -113,7 +113,7 @@ describe('FixSmartCollectionFilters', () => {
 
     const warn = await runFixer();
 
-    expect(readCollection(uuid)).toEqual({ filter, keywords: null });
+    expect(readCollection(uuid)).toEqual({ filter, keywords: '' });
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -127,7 +127,7 @@ describe('FixSmartCollectionFilters', () => {
 
     await runFixer();
 
-    expect(readCollection(uuid)).toEqual({ filter, keywords: null });
+    expect(readCollection(uuid)).toEqual({ filter, keywords: '' });
   });
 
   test('keeps free-text keywords next to a filter', async () => {
@@ -151,15 +151,21 @@ describe('FixSmartCollectionFilters', () => {
     });
   });
 
-  test('keeps an unparseable structured filter as a filter, and warns', async () => {
-    const filter = 'title in ["Movie {A}", "Movie B"]';
-    const uuid = insertCollection(filter, null);
+  // The API always saves keywords as a string, so these aren't legacy rows.
+  test.each([
+    'title in ["Movie {A}", "Movie B"]',
+    'parent.id = "a5c9d2a4-4b1e-4c4e-9a37-1f0e6f1c2b3d"',
+  ])(
+    'keeps the unparseable filter %s of a collection saved through the API, and warns',
+    async (filter) => {
+      const uuid = insertCollection(filter, '');
 
-    const warn = await runFixer();
+      const warn = await runFixer();
 
-    expect(readCollection(uuid)).toEqual({ filter, keywords: null });
-    expect(warn).toHaveBeenCalled();
-  });
+      expect(readCollection(uuid)).toEqual({ filter, keywords: '' });
+      expect(warn).toHaveBeenCalled();
+    },
+  );
 
   test('leaves an unparseable filter alone when keywords are set, and warns', async () => {
     const uuid = insertCollection('title = "Movie \\"A\\""', 'space opera');
@@ -187,7 +193,7 @@ describe('FixSmartCollectionFilters', () => {
     );
     expect(afterFirst).toEqual([
       { filter: null, keywords: 'weekend matinee' },
-      { filter, keywords: null },
+      { filter, keywords: '' },
     ]);
   });
 });
