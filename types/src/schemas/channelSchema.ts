@@ -162,6 +162,24 @@ export const ChannelSessionSchema = z.object({
   connections: z.array(StreamConnectionDetailsSchema),
 });
 
+/**
+ * A channel's fixed audio track layout, for switchable audio in Plex Live TV: ISO 639-2 codes in output order. Every
+ * program, gap and commercial on the channel then outputs exactly these tracks, so Plex, which keeps the track list it
+ * saw at tune-in, offers the same audio menu all session. Empty = off (one track, as before).
+ */
+export const MaxChannelAudioTracks = 4;
+
+export const StrictChannelAudioTracksSchema = z
+  .array(
+    z
+      .string()
+      .regex(/^[a-z]{3}$/, 'Use three-letter ISO 639-2 codes, such as eng'),
+  )
+  .max(MaxChannelAudioTracks)
+  .refine((codes) => new Set(codes).size === codes.length, {
+    message: 'Each language can only be listed once',
+  });
+
 export const ChannelSchema = z.object({
   disableFillerOverlay: z.boolean(),
   duration: z.number(),
@@ -189,6 +207,7 @@ export const ChannelSchema = z.object({
   sessions: z.array(ChannelSessionSchema).optional(),
   subtitlesEnabled: z.boolean(),
   subtitlePreferences: z.array(SubtitlePreference).nonempty().optional(),
+  audioTracks: z.array(z.string()).optional(),
 });
 
 // The write path validates strictly: a bad icon or watermark value is a 400,
@@ -206,6 +225,7 @@ export const SaveableChannelSchema = ChannelSchema.omit({
   .extend({
     icon: StrictChannelIconSchema,
     watermark: StrictWatermarkSchema.optional(),
+    audioTracks: StrictChannelAudioTracksSchema.optional(),
   });
 
 export const NewChannelSaveRequestSchema = z.object({

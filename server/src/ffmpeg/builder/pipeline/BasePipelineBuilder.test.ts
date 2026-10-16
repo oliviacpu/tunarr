@@ -533,7 +533,7 @@ describe('BasePipelineBuilder', () => {
         { index: 1, channels: 2, language: 'eng' },
         { index: 2, channels: 2, language: 'jpn' },
       ]);
-      const graph = args[args.indexOf('-filter_complex') + 1];
+      const graph = args[args.indexOf('-filter_complex') + 1] ?? '';
 
       expect(maps(args)).toEqual(['0:0', '[a0]', '[a1]']);
       // the audio file is the second input
@@ -547,7 +547,7 @@ describe('BasePipelineBuilder', () => {
         { index: 1, channels: 2, language: 'eng' },
         { index: 1, channels: 2, language: 'jpn' },
       ]);
-      const graph = args[args.indexOf('-filter_complex') + 1];
+      const graph = args[args.indexOf('-filter_complex') + 1] ?? '';
 
       expect(maps(args)).toEqual(['0:0', '[a0]', '[a1]']);
       expect(graph.match(/\[1:1\]/g)).toHaveLength(2);

@@ -1,0 +1,1 @@
+ALTER TABLE `channel` ADD `audio_tracks` text;
