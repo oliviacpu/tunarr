@@ -41,6 +41,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--reanalyze DIR` | | Re-score an existing capture without booting a server |
 | `--flex-first MS` | | `synthetic` only. Put an offline (flex) gap of MS milliseconds before the clips |
 | `--ffmpeg-setting KEY=VALUE` | | Override one field of the server's ffmpeg settings before streaming. Repeatable. Values parse as JSON when they can, so `true` and `3` are not strings |
+| `--channel-setting KEY=VALUE` | | Set one field of the channel. Repeatable. Values parse as JSON when they can, such as `audioTracks=["eng","jpn"]`. A synthetic channel is created with it; a copied channel is updated. The run fails if a field does not stick. `report.channelSettings` records what was set |
 | `--resolution WxH` | | Set the output resolution of the channel's transcode config, such as `1280x720` |
 | `--hwaccel MODE` | | Set the hardware acceleration of the channel's transcode config: `none`, `cuda`, `vaapi`, `qsv`, or `videotoolbox` |
 | `--vaapi-device PATH` | | With `--hwaccel vaapi` or `qsv`, the render node to use, such as `/dev/dri/renderD128` |
