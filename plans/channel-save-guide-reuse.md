@@ -42,8 +42,10 @@ main thread for up to a second.
   `serialize` builds the same document from the same two pieces (one channel's programmes, then the assembly), so its
   output is unchanged.
 - **`TvGuideService.writeXmlTvInternal`:** remembers each channel's rendered programmes, with the guide entry, channel
-  object and programs array they came from, and the render settings (XMLTV settings, credit-images flag).
-  - **Reused** while all four are the same: a guide rebuild assigns a new guide entry, and a channel save
+  object and programs array they came from, the render settings (XMLTV settings, credit-images flag), and each
+  redirect target's presence, name and number. A redirect not followed at build time renders from its target at
+  write time (Codex on PR #26); a followed one has copied the target's programmes.
+  - **Reused** while all of these are the same: a guide rebuild assigns a new guide entry, and a channel save
     (`updateCachedChannel`) a new channel object.
   - **Fetched and rendered:** only the rest. Channels that leave the guide are forgotten.
 - **Trade-off:** a program edited since (a scan) reaches an unchanged channel's entries at its next guide rebuild (the
@@ -63,7 +65,9 @@ main thread for up to a second.
   - a reused channel keeps its programmes, isn't rendered and publishes no artwork.
 - `TvGuideService.test.ts`:
   - after a full build, a channel save fetches and renders only that channel and reuses the other;
-  - a rebuild or a render-settings change renders every channel again.
+  - a rebuild or a render-settings change renders every channel again;
+  - a channel with an unresolved redirect is rendered again when its target appears, is renumbered or leaves;
+  - a followed redirect stays reused when its target is renumbered.
 
 ## Measurement
 
