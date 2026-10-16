@@ -3,7 +3,10 @@ import type { StreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import { isImageBasedSubtitle } from '../util.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
 import type { CaptionAppearance, CaptionCue } from './Cea608Encoder.ts';
-import { captionLoadFrames } from './Cea608Encoder.ts';
+import {
+  captionLoadFrames,
+  numpadFromLegacyAlignment,
+} from './Cea608Encoder.ts';
 
 /**
  * A program's captions, on its own clock: time 0 is the program's first output
@@ -79,40 +82,142 @@ function parseSrtOrVtt(text: string): CaptionCue[] {
   return cues;
 }
 
-// ASS/SSA: "Dialogue:" lines in the [Events] section, fields per its Format line
+// ASS/SSA script size when the script gives neither PlayResX nor PlayResY, as
+// libass has it
+const DefaultPlayRes = { x: 384, y: 288 };
+
+// The script size libass uses when only one of PlayResX/PlayResY is given
+function playRes(x: number | undefined, y: number | undefined) {
+  if (x === undefined && y === undefined) {
+    return { playResX: DefaultPlayRes.x, playResY: DefaultPlayRes.y };
+  }
+  if (y === undefined) {
+    const width = x ?? DefaultPlayRes.x;
+    return {
+      playResX: width,
+      playResY: width === 1280 ? 1024 : Math.max(1, (width * 3) / 4),
+    };
+  }
+  if (x === undefined) {
+    return {
+      playResX: y === 1024 ? 1280 : Math.max(1, (y * 4) / 3),
+      playResY: y,
+    };
+  }
+  return { playResX: x, playResY: y };
+}
+
+// "Key: value" lines, as ASS sections are written
+function keyValue(line: string): [string, string] | undefined {
+  const match = /^\s*([^:]+):\s*(.*)$/.exec(line);
+  return match
+    ? [match[1]?.trim().toLowerCase() ?? '', match[2] ?? '']
+    : undefined;
+}
+
+const DefaultEventFields = [
+  'layer',
+  'start',
+  'end',
+  'style',
+  'name',
+  'marginl',
+  'marginr',
+  'marginv',
+  'effect',
+  'text',
+];
+
+// ASS/SSA: the "Dialogue:" lines of [Events], fields per its Format line, with
+// what placing them needs: the script's size ([Script Info] PlayResX and
+// PlayResY) and each style's alignment ([V4+ Styles], or [V4 Styles] in SSA's
+// numbering). Layered copies of a line (the same text at the same times, as
+// typesetting stacks for outlines and glows) are kept once.
 function parseAss(text: string): CaptionCue[] {
   const cues: CaptionCue[] = [];
-  let fields = [
-    'layer',
-    'start',
-    'end',
-    'style',
-    'name',
-    'marginl',
-    'marginr',
-    'marginv',
-    'effect',
-    'text',
-  ];
+  let section = '';
+  let eventFields = DefaultEventFields;
+  let styleFields: string[] | undefined;
+  const styleAlignments = new Map<string, number>();
+  let resX: number | undefined;
+  let resY: number | undefined;
+  const events: {
+    startMs: number;
+    endMs: number;
+    text: string;
+    style: string;
+  }[] = [];
+
   for (const line of text.replace(/\r/g, '').split('\n')) {
-    const format = /^Format:\s*(.*)$/i.exec(line);
-    if (format && /text/i.test(format[1] ?? '')) {
-      fields = (format[1] ?? '').split(',').map((f) => f.trim().toLowerCase());
+    const header = /^\s*\[(.+)\]\s*$/.exec(line);
+    if (header) {
+      section = header[1]?.trim().toLowerCase() ?? '';
       continue;
     }
-    const dialogue = /^Dialogue:\s*(.*)$/i.exec(line);
-    if (!dialogue) {
+    const entry = keyValue(line);
+    if (!entry) {
       continue;
     }
-    // The text field is last and may itself contain commas
-    const values = (dialogue[1] ?? '').split(',');
-    const textValue = values.splice(fields.length - 1).join(',');
-    const field = (name: string) => values[fields.indexOf(name)] ?? '';
-    const startMs = parseTimestamp(field('start'));
-    const endMs = parseTimestamp(field('end'));
-    if (startMs !== undefined && endMs !== undefined && endMs > startMs) {
-      cues.push({ startMs, endMs, text: textValue });
+    const [key, value] = entry;
+    if (section === 'script info') {
+      const n = Number(value.trim());
+      if (key === 'playresx' && n > 0) {
+        resX = n;
+      } else if (key === 'playresy' && n > 0) {
+        resY = n;
+      }
+    } else if (section === 'v4+ styles' || section === 'v4 styles') {
+      if (key === 'format') {
+        styleFields = value.split(',').map((f) => f.trim().toLowerCase());
+      } else if (key === 'style' && styleFields) {
+        const values = value.split(',');
+        const name = values[styleFields.indexOf('name')]?.trim();
+        const alignment = Number(values[styleFields.indexOf('alignment')]);
+        const numpad =
+          section === 'v4 styles'
+            ? numpadFromLegacyAlignment(alignment)
+            : alignment;
+        if (name !== undefined && numpad !== undefined) {
+          styleAlignments.set(name.replace(/^\*/, ''), numpad);
+        }
+      }
+    } else if (key === 'format' && /text/i.test(value)) {
+      eventFields = value.split(',').map((f) => f.trim().toLowerCase());
+    } else if (key === 'dialogue') {
+      // The text field is last and may itself contain commas
+      const values = value.split(',');
+      const textValue = values.splice(eventFields.length - 1).join(',');
+      const field = (name: string) => values[eventFields.indexOf(name)] ?? '';
+      const startMs = parseTimestamp(field('start'));
+      const endMs = parseTimestamp(field('end'));
+      if (startMs !== undefined && endMs !== undefined && endMs > startMs) {
+        events.push({
+          startMs,
+          endMs,
+          text: textValue,
+          style: field('style').trim().replace(/^\*/, ''),
+        });
+      }
     }
+  }
+
+  const size = playRes(resX, resY);
+  const seen = new Set<string>();
+  for (const event of events) {
+    const key = `${event.startMs}|${event.endMs}|${event.text}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    // An unknown style is drawn in Default, as libass does
+    const styleAlignment =
+      styleAlignments.get(event.style) ?? styleAlignments.get('Default');
+    cues.push({
+      startMs: event.startMs,
+      endMs: event.endMs,
+      text: event.text,
+      ass: { ...size, styleAlignment },
+    });
   }
   return cues.sort((a, b) => a.startMs - b.startMs);
 }

@@ -875,6 +875,50 @@ describe('caption placement', () => {
     ).toEqual([[15, 12]]);
   });
 
+  // An ASS line's place: its \\pos or \\move point's third of the screen,
+  // then its alignment override, then its style's alignment
+  describe('from an ASS file', () => {
+    const ass = { playResX: 1920, playResY: 1080, styleAlignment: 8 };
+    const placed = (text: string, { fromAss = true } = {}) =>
+      decodeCaptions(
+        framePairs(
+          [
+            {
+              startMs: 3000,
+              endMs: 6000,
+              text,
+              ass: fromAss ? ass : undefined,
+            },
+          ],
+          30 * 12,
+        ),
+      )[0]?.map((r) => [r.row, r.column]);
+
+    test("uses the style's alignment", () => {
+      // Four columns wide, block-centred at column 16
+      expect(placed('Sign')).toEqual([[1, 16]]);
+    });
+
+    test("puts an alignment override over the style's", () => {
+      expect(placed('{\\an2}Talk')).toEqual([[15, 16]]);
+    });
+
+    test('puts a position over both, by the third of the screen it is in', () => {
+      // Bottom right, though the line says top and the style says top
+      expect(placed('{\\an8\\pos(1800,1000)}Corner')).toEqual([[15, 26]]);
+      // Middle left
+      expect(placed('{\\pos(100,540)}Side')).toEqual([[8, 0]]);
+      // \\move: where it starts
+      expect(placed('{\\move(960,900,960,100)}Rising')).toEqual([[15, 12]]);
+    });
+
+    test('ignores a position outside an ASS file, with no screen to place it on', () => {
+      expect(placed('{\\pos(100,100)}SRT', { fromAss: false })).toEqual([
+        [15, 16],
+      ]);
+    });
+  });
+
   test('leaves out vector drawings', () => {
     expect(
       decode('{\\p1}m 0 0 l 100 0 100 100{\\p0}Sign text')[0]?.map(

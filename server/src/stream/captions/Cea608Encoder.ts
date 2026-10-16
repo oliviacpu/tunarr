@@ -21,6 +21,15 @@ export type CaptionCue = {
   text: string;
   // This cue's own look, over the schedule's (the test pattern sets these)
   appearance?: Partial<CaptionAppearance>;
+  // For a cue from an ASS/SSA file: the script's size, which \pos and \move
+  // coordinates are in, and its style's alignment as a numpad position
+  ass?: AssContext;
+};
+
+export type AssContext = {
+  playResX: number;
+  playResY: number;
+  styleAlignment?: number;
 };
 
 export type CcPair = readonly [number, number];
@@ -288,11 +297,17 @@ export type CaptionLayout = {
   lines: StyledChar[][];
 };
 
-// A cue's text as read: its lines, and the first alignment override in it as
-// a numpad position (7-9 top, 4-6 middle, 1-3 bottom)
-type ParsedCue = { lines: StyledChar[][]; alignment?: number };
+// A cue's text as read: its lines, the first alignment override in it as a
+// numpad position (7-9 top, 4-6 middle, 1-3 bottom), and the first \pos (or
+// \move's starting point)
+type ParsedCue = {
+  lines: StyledChar[][];
+  alignment?: number;
+  position?: { x: number; y: number };
+};
 
-// SSA's {\aN}: 1-3 at the bottom, +4 at the top, +8 in the middle
+// SSA's alignments ({\aN}, and [V4 Styles]): 1-3 at the bottom, +4 at the
+// top, +8 in the middle
 const LegacyAlignment: Record<number, number> = {
   1: 1,
   2: 2,
@@ -304,6 +319,11 @@ const LegacyAlignment: Record<number, number> = {
   10: 5,
   11: 6,
 };
+
+// An SSA alignment as a numpad position
+export function numpadFromLegacyAlignment(n: number): number | undefined {
+  return LegacyAlignment[n];
+}
 
 // How captions look: the appearance settings, the alignment setting, and
 // flashing text, which only the test pattern sends
@@ -341,6 +361,7 @@ function resolveAppearance(
 function parseCueText(text: string): ParsedCue {
   let style = PlainStyle;
   let alignment: number | undefined;
+  let position: ParsedCue['position'];
   // ASS vector drawings ({\p1}...{\p0}) are shapes, not text
   let drawing = false;
   const lines: StyledChar[][] = [[]];
@@ -349,6 +370,13 @@ function parseCueText(text: string): ParsedCue {
     /\{[^}]*\}|<[^>]*>|\\[Nnh]|\n|[\s\S]/gu,
   )) {
     if (token.length > 1 && token.startsWith('{')) {
+      // The first \pos, or where the first \move starts
+      const moveOrPos = /\\(?:pos|move)\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)/.exec(
+        token,
+      );
+      if (moveOrPos && position === undefined) {
+        position = { x: Number(moveOrPos[1]), y: Number(moveOrPos[2]) };
+      }
       for (const [, tag, value] of token.matchAll(/\\(an|a|i|u|p)(\d+)|\\r/g)) {
         const n = Number(value);
         if (tag === 'p') {
@@ -382,7 +410,25 @@ function parseCueText(text: string): ParsedCue {
   }
   return {
     alignment,
+    position,
     lines: lines.map(collapseSpaces).filter((line) => line.length > 0),
+  };
+}
+
+// The third of the screen a point is in, as a placement
+function positionPlacement(
+  { x, y }: { x: number; y: number },
+  ass: AssContext,
+): CaptionPlacement {
+  const third = (v: number, size: number) =>
+    v < size / 3 ? 0 : v > (2 * size) / 3 ? 2 : 1;
+  return {
+    vertical:
+      (['top', 'middle', 'bottom'] as const)[third(y, ass.playResY)] ??
+      'bottom',
+    horizontal:
+      (['left', 'center', 'right'] as const)[third(x, ass.playResX)] ??
+      'center',
   };
 }
 
@@ -398,17 +444,28 @@ function numpadPlacement(n: number): CaptionPlacement | undefined {
   };
 }
 
-// Where a cue goes: where the subtitle file puts it (its alignment override),
-// else at the bottom, centred by the alignment setting. With placement from
-// the file turned off, always the default.
+// Where a cue goes, as the subtitle file puts it, first match:
+// 1. an ASS \pos or \move: the third of the script's screen its point is in
+// 2. its alignment override ({\anN}, {\aN})
+// 3. its ASS style's alignment
+// 4. the bottom, centred by the alignment setting
+// With placement from the file turned off, always the last.
 function resolvePlacement(
   cue: ParsedCue,
   appearance: CaptionAppearance,
+  ass?: AssContext,
 ): CaptionPlacement {
-  if (!appearance.keepTopPlacement || cue.alignment === undefined) {
+  if (!appearance.keepTopPlacement) {
     return DefaultPlacement;
   }
-  return numpadPlacement(cue.alignment) ?? DefaultPlacement;
+  if (ass && cue.position) {
+    return positionPlacement(cue.position, ass);
+  }
+  const alignment = cue.alignment ?? ass?.styleAlignment;
+  return (
+    (alignment !== undefined ? numpadPlacement(alignment) : undefined) ??
+    DefaultPlacement
+  );
 }
 
 // Whitespace runs become one space, and none at either end
@@ -555,9 +612,10 @@ function applyTextOptions(
 export function layoutCaption(
   text: string,
   appearance: CaptionAppearance = DefaultCaptionAppearance,
+  ass?: AssContext,
 ): CaptionLayout[] {
   const parsed = parseCueText(text);
-  const placement = resolvePlacement(parsed, appearance);
+  const placement = resolvePlacement(parsed, appearance, ass);
   const cueLines = applyTextOptions(parsed.lines, appearance);
   const maxWidth = appearance.lineWidth;
 
@@ -851,7 +909,7 @@ export function buildCaptionSchedule(
             maxLines: Number.MAX_SAFE_INTEGER,
             keepTopPlacement: false,
           })
-        : layoutCaption(cue.text, appearance);
+        : layoutCaption(cue.text, appearance, cue.ass);
       const lengths = parts.map(
         ({ lines }) =>
           lines.reduce((n, line) => n + line.length, 0) + lines.length - 1,
