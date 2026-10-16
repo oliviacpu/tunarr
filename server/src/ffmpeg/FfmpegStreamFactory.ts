@@ -912,6 +912,7 @@ export class FfmpegStreamFactory {
         opts.outputFormat,
         realtime,
         ptsOffset,
+        opts.isFirstTranscode,
       );
     } else {
       session = await this.createOfflineSession(
@@ -920,6 +921,7 @@ export class FfmpegStreamFactory {
         ptsOffset,
         realtime,
         opts.backgroundMusic,
+        opts.isFirstTranscode,
       );
     }
 
@@ -935,6 +937,7 @@ export class FfmpegStreamFactory {
     outputFormat: OutputFormat,
     realtime: boolean,
     ptsOffset?: number,
+    isFirstTranscode?: boolean,
   ): Promise<Maybe<FfmpegTranscodeSession>> {
     const calculator = new FfmpegPlaybackParamsCalculator(
       this.transcodeConfig,
@@ -1006,6 +1009,7 @@ export class FfmpegStreamFactory {
         version: await this.ffmpegInfo.getVersion(),
         duration,
         ptsOffset,
+        isFirstTranscode,
         threadCount: this.transcodeConfig.threadCount,
         outputFormat,
         softwareDeinterlaceFilter: this.ffmpegSettings.deinterlaceFilter,
@@ -1050,6 +1054,7 @@ export class FfmpegStreamFactory {
     ptsOffset: number = 0,
     realtime: boolean = true,
     backgroundMusic?: OfflineBackgroundMusic,
+    isFirstTranscode?: boolean,
   ): Promise<Maybe<FfmpegTranscodeSession>> {
     const offlineInput = VideoInputSource.withStream(
       new HttpStreamSource(
@@ -1117,6 +1122,7 @@ export class FfmpegStreamFactory {
         version: await this.ffmpegInfo.getVersion(),
         duration,
         ptsOffset,
+        isFirstTranscode,
         threadCount: this.transcodeConfig.threadCount,
         outputFormat,
         softwareDeinterlaceFilter: this.ffmpegSettings.deinterlaceFilter,

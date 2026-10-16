@@ -536,6 +536,48 @@ describe('FfmpegStreamFactory', () => {
     });
   });
 
+  // A session's first program starts at SessionStartPts, not 0, so the
+  // pipeline can't infer a first transcode from the offset; without the flag
+  // its HLS output would open with a discontinuity
+  describe("a session's first transcode", () => {
+    test.each(['offline', 'error'] as const)(
+      'reaches the pipeline for an %s placeholder',
+      async (kind) => {
+        const { factory, getCapturedFfmpegState } =
+          createCapturingPipelineBuilderFactory();
+        const sut = new FfmpegStreamFactory(
+          makeMockFfmpegInfo(),
+          makeMockSettingsDB(makeFfmpegSettings()),
+          factory,
+          makeMockChannelDB(),
+          makeMockFeatureFlagService(),
+          makeMockStreamSelector(),
+          makeTranscodeConfig({
+            hardwareAccelerationMode: 'none',
+            videoFormat: 'h264',
+            errorScreen: 'testsrc',
+          }),
+          makeChannel(),
+        );
+        const common = {
+          duration: dayjs.duration({ seconds: 10 }),
+          outputFormat: MpegTsOutputFormat,
+          ptsOffset: 90_000,
+          isFirstTranscode: true,
+        };
+
+        await sut.createPlaceholderSession(
+          kind === 'error'
+            ? { ...common, kind, title: 'Error' }
+            : { ...common, kind },
+        );
+
+        expect(getCapturedFfmpegState()?.isFirstTranscode).toBe(true);
+        expect(getCapturedFfmpegState()?.ptsOffset).toBe(90_000);
+      },
+    );
+  });
+
   describe('gap music under the offline picture', () => {
     function makeSut() {
       const config = makeTranscodeConfig({

@@ -35,6 +35,9 @@ export type PlaceholderSessionOpts = {
   outputFormat: OutputFormat;
   realtime?: boolean;
   ptsOffset?: number;
+  // See StreamOptions.isFirstTranscode. A session's first program no longer
+  // starts at ptsOffset 0, so the fallback can't tell.
+  isFirstTranscode?: boolean;
 } & (
   | { kind: 'error'; title: string; subtitle?: string }
   | { kind: 'offline'; backgroundMusic?: OfflineBackgroundMusic }
