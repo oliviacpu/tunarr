@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { v4 } from 'uuid';
 import type { ChannelOrm } from '../db/schema/Channel.ts';
 import type { Lineup, LineupItem } from '../db/derived_types/Lineup.ts';
-import type { MaterializedChannelPrograms } from './XmlTvWriter.ts';
+import type {
+  MaterializedChannelPrograms,
+  XmlTvWriteOptions,
+} from './XmlTvWriter.ts';
 import type { ChannelPrograms } from './TvGuideService.ts';
 import dayjsBase from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime.js';
@@ -1199,5 +1202,208 @@ describe('TVGuideService', () => {
         expect([a.uuid, b.uuid]).toContain(redirect.channelId);
       }
     });
+  });
+});
+
+// Saving one channel rewrote the guide for every channel, refetching each
+// channel's programs with all their relations, and stalled the main thread
+// (and the Live TV it serves) for up to 1 s on a shared server (2026-10-16).
+describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
+  const HOUR = 60 * 60 * 1000;
+
+  // `aItems` builds channel A's lineup, given channel B's id
+  function setup(
+    aItems: (channelBId: string) => LineupItem[] = () => [
+      { type: 'content', id: 'program-a', durationMs: 4 * HOUR },
+    ],
+  ) {
+    const channelB = {
+      channel: makeChannelOrm({ number: 2, name: 'Channel B' }),
+      lineup: makeLineup([
+        { type: 'content', id: 'program-b', durationMs: 4 * HOUR },
+      ]),
+    };
+    const channelA = {
+      channel: makeChannelOrm({ number: 1, name: 'Channel A' }),
+      lineup: makeLineup(aItems(channelB.channel.uuid)),
+    };
+    // What channel B looks like when it is next saved
+    let savedB: Partial<ChannelOrm> = {};
+    // Whether a build loads channel A alone
+    let onlyA = false;
+    let xmltvSettings = { programmingHours: 4, useShowPoster: false };
+
+    // Behaves like XmlTvWriter.write: renders every channel it isn't told to reuse
+    const mockWrite = vi.fn(
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (
+        channels: MaterializedChannelPrograms[],
+        options?: XmlTvWriteOptions,
+      ) => {
+        for (const { channel } of channels) {
+          if (!options?.reuse?.has(channel.uuid)) {
+            options?.onRendered?.(
+              channel.uuid,
+              `<programmes of ${channel.name}>`,
+            );
+          }
+        }
+      },
+    );
+    const mockGetProgramsByIds = vi.fn().mockResolvedValue([]);
+    const service = new TVGuideService(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { write: mockWrite } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { push: vi.fn() } as any,
+      {
+        loadAllLineups: vi.fn(() =>
+          Promise.resolve(
+            onlyA
+              ? { [channelA.channel.uuid]: channelA }
+              : {
+                  [channelA.channel.uuid]: channelA,
+                  [channelB.channel.uuid]: channelB,
+                },
+          ),
+        ),
+        // A save reloads the channel: a new object with the same uuid
+        getChannelOrm: vi.fn((id: string) =>
+          Promise.resolve(
+            id === channelA.channel.uuid
+              ? { ...channelA.channel }
+              : { ...channelB.channel, ...savedB },
+          ),
+        ),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { getGuideProgramsByIds: mockGetProgramsByIds } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      {
+        featureFlags: () => ({ xmltvCreditImagesEnabled: false }),
+        xmlTvSettings: () => xmltvSettings,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+    );
+    const fetchedIds = (call: number) =>
+      [...(mockGetProgramsByIds.mock.calls[call]?.[0] as string[])].sort();
+    const reused = (call: number) => [
+      ...(
+        (mockWrite.mock.calls[call]?.[1]?.reuse ?? new Map()) as Map<
+          string,
+          string
+        >
+      ).entries(),
+    ];
+    return {
+      service,
+      channelA,
+      channelB,
+      mockWrite,
+      fetchedIds,
+      reused,
+      changeSettings: () => {
+        xmltvSettings = { ...xmltvSettings, useShowPoster: true };
+      },
+      saveB: (changes: Partial<ChannelOrm>) => {
+        savedB = changes;
+      },
+      loadOnlyA: () => {
+        onlyA = true;
+      },
+      // A channel in the guide cache without rebuilding the others, as a
+      // single channel's refresh leaves it
+      putInGuide: (channel: ChannelOrm) => {
+        (
+          service as unknown as {
+            cachedGuide: Record<string, { channel: ChannelOrm; programs: [] }>;
+          }
+        ).cachedGuide[channel.uuid] = { channel, programs: [] };
+      },
+    };
+  }
+
+  // A redirect followed when the guide was built copies the target's
+  // programmes into the redirecting channel's guide, so the target's own
+  // name and number don't appear in it: renumbering the target keeps it.
+  it('a channel whose redirect was followed is reused when the target is renumbered', async () => {
+    const r = setup((channelBId) => [
+      { type: 'redirect', channel: channelBId, durationMs: 4 * HOUR },
+    ]);
+    await r.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+
+    r.saveB({ number: 7 });
+    await r.service.updateCachedChannel(r.channelB.channel.uuid);
+    expect(r.reused(1).map(([id]) => id)).toEqual([r.channelA.channel.uuid]);
+  });
+
+  // Codex on PR #26: a redirect whose target wasn't in the guide when the
+  // channel was built stays a redirect, and renders from the target as it is
+  // at write time (materializeGuideItem): flex while it's missing, its name
+  // and number once it's there. Each change to that must render the
+  // redirecting channel again.
+  it('a channel with an unresolved redirect is rendered again when its target appears, changes or leaves', async () => {
+    const r = setup((channelBId) => [
+      { type: 'redirect', channel: channelBId, durationMs: 4 * HOUR },
+    ]);
+    // Only A is loaded, so its redirect to B can't be followed
+    r.loadOnlyA();
+    await r.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    const a = r.channelA.channel.uuid;
+    const b = r.channelB.channel.uuid;
+
+    // B enters the guide; any later write must not reuse A's flex render
+    r.putInGuide(r.channelB.channel);
+    await r.service.updateCachedChannel(b);
+    expect(r.reused(1).map(([id]) => id)).not.toContain(a);
+
+    // B saved with nothing A shows changed: A is reused
+    await r.service.updateCachedChannel(b);
+    expect(r.reused(2).map(([id]) => id)).toContain(a);
+
+    // B renumbered, then removed: A is rendered again each time
+    r.saveB({ number: 7 });
+    await r.service.updateCachedChannel(b);
+    expect(r.reused(3).map(([id]) => id)).not.toContain(a);
+    await r.service.removeCachedChannel(b);
+    expect(r.reused(4).map(([id]) => id)).not.toContain(a);
+  });
+
+  it('a channel save fetches and renders only that channel', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    expect(t.fetchedIds(0)).toEqual(['program-a', 'program-b']);
+    expect(t.reused(0)).toEqual([]);
+
+    await t.service.updateCachedChannel(t.channelA.channel.uuid);
+
+    expect(t.fetchedIds(1)).toEqual(['program-a']);
+    expect(t.reused(1)).toEqual([
+      [t.channelB.channel.uuid, '<programmes of Channel B>'],
+    ]);
+  });
+
+  it('a guide rebuild or a settings change renders every channel again', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+
+    // A rebuild replaces every channel's guide
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    expect(t.fetchedIds(1)).toEqual(['program-a', 'program-b']);
+    expect(t.reused(1)).toEqual([]);
+
+    // So does a change to a setting the programmes are rendered with
+    t.changeSettings();
+    await t.service.updateCachedChannel(t.channelA.channel.uuid);
+    expect(t.fetchedIds(2)).toEqual(['program-a', 'program-b']);
+    expect(t.reused(2)).toEqual([]);
   });
 });
