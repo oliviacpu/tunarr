@@ -1487,6 +1487,7 @@ describe('FfmpegStreamFactory', () => {
         // none, which the stream details leave undefined
         subtitles?: NonEmptyArray<SubtitleStreamDetails> | null;
         lineupItem?: ContentBackedStreamLineupItem;
+        settings?: Partial<ReturnType<typeof makeFfmpegSettings>>;
       }) {
         const capturing = createCapturingPipelineBuilderFactory();
         const details = makeStreamDetails();
@@ -1499,6 +1500,7 @@ describe('FfmpegStreamFactory', () => {
           makeMockSettingsDB({
             ...makeFfmpegSettings(),
             hdhrClosedCaptions: opts.hdhrClosedCaptions ?? true,
+            ...opts.settings,
           }),
           capturing.factory,
           makeMockChannelDB(),
@@ -1662,6 +1664,24 @@ describe('FfmpegStreamFactory', () => {
             durationMs: 30000,
             language: 'eng',
           });
+        });
+
+        // A box and a colour take longer to load, so the notice waits for them
+        test('starts the notice later when the appearance takes longer to load', async () => {
+          const { captions } = await run({
+            selected: null,
+            subtitles: null,
+            settings: {
+              hdhrCaptionAppearance: {
+                ...makeFfmpegSettings().hdhrCaptionAppearance,
+                backgroundColor: 'blue',
+                textColor: 'red',
+                lineWidth: 20,
+              },
+            },
+          });
+
+          expect(captions?.cues[0]?.startMs).toBeGreaterThan(1000);
         });
 
         test('leaves a program whose subtitles cannot become captions as it is', async () => {

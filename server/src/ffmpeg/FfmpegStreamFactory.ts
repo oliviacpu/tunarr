@@ -700,6 +700,10 @@ export class FfmpegStreamFactory {
         language:
           this.ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ??
           'eng',
+        appearance: {
+          ...this.ffmpegSettings.hdhrCaptionAppearance,
+          alignment: this.ffmpegSettings.hdhrCaptionAlignment,
+        },
       });
     }
 

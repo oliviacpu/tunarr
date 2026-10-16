@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import type { StreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import { isImageBasedSubtitle } from '../util.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
-import type { CaptionCue } from './Cea608Encoder.ts';
+import type { CaptionAppearance, CaptionCue } from './Cea608Encoder.ts';
+import { captionLoadFrames } from './Cea608Encoder.ts';
 
 /**
  * A program's captions, on its own clock: time 0 is the program's first output
@@ -235,12 +236,23 @@ export const NoCaptionsNoticeMs = 4000;
 // a late start. So the notice starts no earlier than this many frames in, 3
 // to spare: 1 s from 23.976 fps up, about 1.5 s at 15 fps.
 export const NoCaptionsNoticeLeadFrames = 23;
+// A box, a colour or narrower lines make the load longer; then the notice
+// waits for it, with the same 5 frames to spare
+const NoCaptionsNoticeSpareFrames = 5;
 
-// When the notice appears, for a stream at `frameRate`
-export function noCaptionsNoticeStartMs(frameRate: number): number {
+// When the notice appears, for a stream at `frameRate`, in `appearance`
+export function noCaptionsNoticeStartMs(
+  frameRate: number,
+  appearance?: Partial<CaptionAppearance>,
+): number {
+  const leadFrames = Math.max(
+    NoCaptionsNoticeLeadFrames,
+    captionLoadFrames(NoCaptionsNoticeText, appearance) +
+      NoCaptionsNoticeSpareFrames,
+  );
   return Math.max(
     NoCaptionsNoticeStartMs,
-    Math.ceil((NoCaptionsNoticeLeadFrames / frameRate) * 1000),
+    Math.ceil((leadFrames / frameRate) * 1000),
   );
 }
 
@@ -273,6 +285,9 @@ export function noCaptionsNotice(
     frameRate: number | undefined;
     // ISO 639-2, the language the stream labels its captions with
     language: string;
+    // How the captions will look, which decides how long the notice takes
+    // to load
+    appearance?: Partial<CaptionAppearance>;
   },
 ): ProgramCaptions | undefined {
   if (
@@ -283,7 +298,7 @@ export function noCaptionsNotice(
   ) {
     return;
   }
-  const startMs = noCaptionsNoticeStartMs(stream.frameRate);
+  const startMs = noCaptionsNoticeStartMs(stream.frameRate, stream.appearance);
   // The clearing code needs a second of program after it, too
   if (
     stream.durationMs < 2 * NoCaptionsNoticeMs ||

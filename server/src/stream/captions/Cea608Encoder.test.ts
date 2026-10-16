@@ -851,6 +851,34 @@ describe('the no-captions notice', () => {
     expect(indexOfPair(pairs, EraseDisplayedMemory)).toBe(150);
   });
 
+  test('loads in full before it shows, whatever the appearance', () => {
+    for (const appearance of [
+      { backgroundColor: 'blue', textColor: 'red', flash: true },
+      { lineWidth: 20, alignment: 'centeredLines', backgroundColor: 'white' },
+      { maxLines: 4, lineWidth: 20, textColor: 'magenta' },
+    ] as const) {
+      const startMs = noCaptionsNoticeStartMs(FrameRate, appearance);
+      const pairs = framePairs(
+        [
+          {
+            startMs,
+            endMs: startMs + NoCaptionsNoticeMs,
+            text: NoCaptionsNoticeText,
+          },
+        ],
+        30 * 7,
+        0,
+        appearance,
+      );
+      expect(indexOfPair(pairs, EndOfCaption)).toBe(
+        Math.round((startMs * FrameRate) / 1000),
+      );
+      expect(indexOfPair(pairs, ResumeCaptionLoading)).toBeGreaterThanOrEqual(
+        2,
+      );
+    }
+  });
+
   // The notice loads clear of the first 2 frame slots, which a program whose
   // video starts late never sends, even where 1 s is only 15 frames
   test('loads after the first 2 frames at 15 fps', () => {

@@ -285,6 +285,22 @@ export const DefaultCaptionAppearance: CaptionAppearance = {
   flash: false,
 };
 
+// The defaults, overridden by each layer in turn. A layer's undefined fields
+// leave what is below them.
+function resolveAppearance(
+  ...layers: (Partial<CaptionAppearance> | undefined)[]
+): CaptionAppearance {
+  const resolved: CaptionAppearance = { ...DefaultCaptionAppearance };
+  for (const layer of layers) {
+    for (const [key, value] of Object.entries(layer ?? {})) {
+      if (value !== undefined) {
+        Object.assign(resolved, { [key]: value });
+      }
+    }
+  }
+  return resolved;
+}
+
 // Reads a cue's text into lines of styled characters. Italics and underline
 // come from SRT/WebVTT tags (<i>, <u>) and ASS overrides ({\i1}, {\u1}, {\r});
 // an alignment override at the top ({\an7}-{\an9}, or SSA's {\a5}-{\a7}) puts
@@ -640,6 +656,23 @@ function loadSequence(
   ];
 }
 
+/**
+ * How many frames of caption data a cue needs before it can show: for
+ * pop-on, its first caption's whole load; for paint-on and roll-up, the
+ * commands that set the mode.
+ */
+export function captionLoadFrames(
+  text: string,
+  appearance: Partial<CaptionAppearance> = {},
+): number {
+  const resolved = resolveAppearance(appearance);
+  if (resolved.mode !== 'popOn') {
+    return 2;
+  }
+  const [first] = layoutCaption(text, resolved);
+  return first ? loadSequence(first, resolved).flat().length : 0;
+}
+
 // Roll-up: each line is drawn on the base row after a carriage return, which
 // moves the lines above it up one row
 function rollUpLines(
@@ -727,11 +760,7 @@ export function buildCaptionSchedule(
   // Each cue becomes one or more captions, sharing its time
   const captions = cues
     .flatMap((cue) => {
-      const appearance: CaptionAppearance = {
-        ...DefaultCaptionAppearance,
-        ...options.appearance,
-        ...cue.appearance,
-      };
+      const appearance = resolveAppearance(options.appearance, cue.appearance);
       // A cue too long for one caption is shown in parts, each for a share of
       // the cue's time in proportion to its text. Roll-up scrolls a cue's
       // lines up one by one at the bottom, so its cue stays whole.
