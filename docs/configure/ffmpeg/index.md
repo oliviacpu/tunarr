@@ -85,7 +85,7 @@ In a local library, a subtitle file belongs to a video when it sits in the same 
 | `Movie (2010).fr.forced.ass` | French, forced |
 | `Movie (2010).srt` | Unknown language |
 
-Language codes can be two or three letters (`en`, `eng`), with a region (`en-us`, `en_US`). Subtitle files added after a scan are found at the library's next scan. Versions before 2026-10-16 never found these files; to pick up the ones already on disk in a folder that hasn't changed since, run **Force Scan** on the library once.
+Language codes can be two or three letters (`en`, `eng`), with a region (`en-us`, `en_US`). The first part that is a language code is the language, so `Movie (2010).hi.srt` is Hindi, while the `.hi` in `Movie (2010).en.hi.srt` means hard of hearing. Subtitle files added after a scan are found at the library's next scan. Versions before 2026-10-16 never found these files; to pick up the ones already on disk in a folder that hasn't changed since, run **Force Scan** on the library once.
 
 For Plex, Jellyfin, and Emby sources, external subtitles are always resolved to a local file during scanning, so that starting a stream never waits on the media server:
 

@@ -80,23 +80,32 @@ export class LocalSubtitlesService {
     }
 
     // Subtitles generally are meant to be in the form {media_name}(.{lang})?(.{opts})*.{codec_ext}
-    // Remove the media name and the codec_ext, read out the options, and take the first
-    // other part as the language. A file with no language part is "unknown".
+    // Remove the media name and the codec_ext. The language is the first part that is a
+    // language code, as Jellyfin reads it: "Movie.hi.srt" is Hindi and "Movie.en.hi.srt" is
+    // English for the hard of hearing. Failing that, it is the first part that isn't an
+    // option, and "unknown" when there is none. The other parts are the options.
     const parts = basename(fileName, codecExt)
       .replace(itemName, '')
       .toLowerCase()
       .split('.')
       .filter((s) => s.length > 0);
+    const languageCode = (part: string) =>
+      LanguageService.getAlpha3TCode(part.split(/[-_]/)[0] ?? part);
+    let languageIndex = parts.findIndex(
+      (part) => languageCode(part) !== undefined,
+    );
+    if (languageIndex < 0) {
+      languageIndex = parts.findIndex((part) => !SubtitleFileFlags.has(part));
+    }
     const lang =
-      parts.find((part) => !SubtitleFileFlags.has(part)) ?? 'unknown';
+      languageIndex >= 0 ? (parts[languageIndex] ?? 'unknown') : 'unknown';
+    const opts = parts.filter((_, index) => index !== languageIndex);
 
     const sdh =
-      parts.includes('hi') || parts.includes('cc') || parts.includes('sdh');
-    const forced = parts.includes('forced');
+      opts.includes('hi') || opts.includes('cc') || opts.includes('sdh');
+    const forced = opts.includes('forced');
 
-    const maybeLang3T = LanguageService.getAlpha3TCode(
-      lang.split(/[-_]/)?.[0] ?? lang,
-    );
+    const maybeLang3T = languageCode(lang);
 
     if (isNonEmptyString(maybeLang3T)) {
       return {

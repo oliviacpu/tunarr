@@ -65,6 +65,25 @@ describe('LocalSubtitlesService', () => {
     expect(subs?.sdh).toBe(false);
   });
 
+  test.each([
+    ['Movie (2010).hi.srt', 'hin', false],
+    ['Movie (2010).en.hi.srt', 'eng', true],
+    ['Movie (2010).hi.sdh.srt', 'hin', true],
+    ['Movie (2010).sdh.srt', 'unknown', true],
+    ['Movie (2010).cc.de.srt', 'deu', true],
+  ])(
+    '"hi" is Hindi where the language goes, and hard of hearing after it: %s',
+    (file, language, sdh) => {
+      const subs = LocalSubtitlesService.parseSubtitleFilePath(
+        '/a/b/c/Movie (2010).mkv',
+        `/a/b/c/${file}`,
+      );
+
+      expect(subs?.language).toEqual(language);
+      expect(subs?.sdh).toBe(sdh);
+    },
+  );
+
   test('upper-case extensions are recognised', () => {
     const subs = LocalSubtitlesService.parseSubtitleFilePath(
       '/a/b/c/Movie (2010).mkv',
