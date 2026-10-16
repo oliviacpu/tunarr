@@ -186,11 +186,20 @@ export class SubtitleExtractorTask extends Task2<
     );
     const mediaSources = await this.mediaSourceDB.getAll();
 
+    // A program can air more than once in the hour (a repeat, or the same
+    // program on two channels); everything handleProgram does is per program,
+    // so it runs once a run. That keeps a heal that can't succeed (the item is
+    // gone, or its new subtitle 404s too) from re-reading the item each time.
+    const handled = new Set<string>();
     for (const { programs } of nextHourGuide) {
       for (const program of programs) {
         if (program.type !== 'content') {
           continue;
         }
+        if (handled.has(program.id)) {
+          continue;
+        }
+        handled.add(program.id);
 
         const mediaSource = mediaSources.find(
           (ms) => ms.uuid === program.program.mediaSourceId,

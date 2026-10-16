@@ -92,6 +92,8 @@ function makeHarness(opts: {
   itemResult?: unknown;
   // The rows mintSubtitles makes from that item
   minted?: Record<string, unknown>[];
+  // A second channel with subtitles on, airing the same program
+  otherChannelSubtitlesEnabled?: boolean;
 }) {
   const sourceType = opts.sourceType ?? 'jellyfin';
 
@@ -156,27 +158,24 @@ function makeHarness(opts: {
     (programId: string, rows: unknown[]) => Promise<void>
   >(() => Promise.resolve());
 
+  // The program airs on every subtitled channel asked for
   const getChannelGuides = vi.fn((_range: unknown, channelIds: string[]) =>
     Promise.resolve(
-      channelIds.includes(CHANNEL_ID)
-        ? [
-            {
-              id: CHANNEL_ID,
-              programs: [
-                {
-                  type: 'content',
-                  id: PROGRAM_ID,
-                  program: {
-                    title: 'Test Movie',
-                    externalId: 'jf-item-1',
-                    mediaSourceId: MEDIA_SOURCE_ID,
-                    sourceType,
-                  },
-                },
-              ],
+      channelIds.map((id) => ({
+        id,
+        programs: [
+          {
+            type: 'content',
+            id: PROGRAM_ID,
+            program: {
+              title: 'Test Movie',
+              externalId: 'jf-item-1',
+              mediaSourceId: MEDIA_SOURCE_ID,
+              sourceType,
             },
-          ]
-        : [],
+          },
+        ],
+      })),
     ),
   );
 
@@ -192,7 +191,10 @@ function makeHarness(opts: {
             uuid: CHANNEL_ID,
             subtitlesEnabled: opts.subtitlesEnabled ?? true,
           },
-          { uuid: OTHER_CHANNEL_ID, subtitlesEnabled: false },
+          {
+            uuid: OTHER_CHANNEL_ID,
+            subtitlesEnabled: opts.otherChannelSubtitlesEnabled ?? false,
+          },
         ]),
     } as never,
     {
@@ -685,6 +687,27 @@ describe('SubtitleExtractorTask heals a sidecar the media server answers 404 for
     await run(harness);
 
     expect(harness.mintSubtitles).not.toHaveBeenCalled();
+    expect(harness.replaceProgramSubtitles).not.toHaveBeenCalled();
+  });
+
+  it('heals a program airing on two channels once a run', async () => {
+    const harness = makeHarness({
+      sourceType: 'plex',
+      otherChannelSubtitlesEnabled: true,
+      fetchResults: { [OLD_KEY]: { type: 'not_found' } },
+      // The heal can't succeed: the item is gone as well
+      itemResult: Result.failure(QueryError.create('not_found', '404')),
+      subtitles: [missingRow()],
+    });
+
+    await run(harness);
+
+    expect(harness.getChannelGuides).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      [CHANNEL_ID, OTHER_CHANNEL_ID],
+    );
+    expect(harness.apiClient.getEpisode).toHaveBeenCalledTimes(1);
+    expect(harness.fetchToCache).toHaveBeenCalledTimes(1);
     expect(harness.replaceProgramSubtitles).not.toHaveBeenCalled();
   });
 
