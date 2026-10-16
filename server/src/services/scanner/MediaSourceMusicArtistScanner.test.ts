@@ -32,10 +32,11 @@ import {
 } from '../../db/schema/MediaSourceLibrary.ts';
 import { ProgramGroupingType } from '../../db/schema/ProgramGrouping.ts';
 import { PlexApiClient } from '../../external/plex/PlexApiClient.ts';
-import { globalOptions, setGlobalOptions } from '../../globals.ts';
+import { globalOptions, setGlobalOptionsUnchecked } from '../../globals.ts';
 import { FileSystemService } from '../FileSystemService.ts';
 import type { ExternalSubtitleDownloader } from '../../stream/ExternalSubtitleDownloader.ts';
 import { copyPreMigratedDb } from '../../testing/testDbFactory.ts';
+import { getDefaultDatabaseName } from '../../util/defaults.ts';
 import type { PlexAlbum, PlexArtist, PlexTrack } from '../../types/Media.ts';
 import { Result } from '../../types/result.ts';
 import type { MeilisearchService } from '../MeilisearchService.ts';
@@ -75,13 +76,18 @@ const test = baseTest.extend<Fixture>({
   drizzle: async ({}, use) => {
     const dbResult = await tmp.dir({ unsafeCleanup: true });
     await copyPreMigratedDb(dbResult.path);
-    setGlobalOptions({
+    // Every test gets its own database. setGlobalOptions only takes effect
+    // once, so later tests kept the first test's database (through its still
+    // open connection) and collided with its programs on the
+    // (source_type, external_source_id, external_key) unique index.
+    setGlobalOptionsUnchecked({
       database: dbResult.path,
       log_level: 'error',
       verbose: 0,
     });
     await bootstrapTunarr();
     await use(DBAccess.instance.drizzle!);
+    await DBAccess.instance.closeConnection(getDefaultDatabaseName());
     await dbResult.cleanup();
   },
   programDb: async ({ drizzle }, use) => {
@@ -211,7 +217,7 @@ async function createTestMediaSourceLibrary(
 ): Promise<{ mediaSource: MediaSourceOrm; library: MediaSourceLibraryOrm }> {
   const mediaSource = {
     uuid: v4() as MediaSourceId,
-    name: tag(faker.string.alpha()),
+    name: tag('Test Plex'),
     type: MediaSourceType.Plex,
     createdAt: +dayjs(),
     updatedAt: +dayjs(),
