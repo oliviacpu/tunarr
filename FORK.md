@@ -57,7 +57,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - **A 404 heals at once:** the task reads the item again (`getMovie`/`getEpisode`), mints its subtitles and saves
     them with `replaceProgramSubtitles`, the scan's own save split out per program (new on `IProgramDB`). Sidecars
     that are still the same stream keep their file; replaced copies are deleted, and an item that lists no subtitles
-    any more has its rows cleared. An item that is gone is left to the next scan.
+    any more has its rows cleared. If the item still lists the stream that 404'd (the server hasn't rescanned yet),
+    nothing is saved and the rows and copy stay until it does. An item that is gone is left to the next scan.
   - **Each program once a run:** a program airing twice in the hour (a repeat, or on two channels) is handled once,
     so a heal that can't succeed doesn't re-read the item each time.
   - **The scan says so:** a Plex scan logs once when sidecar paths are hidden while the video's path came through.
@@ -70,7 +71,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     - a copy older than 6 hours is fetched again, a younger one isn't, nor one whose live file is readable;
     - on a 404 the item is read once, re-minted and saved, the new stream downloaded, and a still-valid sidecar keeps
       its file; films use the movie call; a gone item is left alone; a second 404 doesn't loop; an empty mint clears
-      the rows; a program on two channels is read again once.
+      the rows; a program on two channels is read again once; an item that still lists the 404'd stream is left
+      alone.
   - `ProgramDB.test.ts`: replacing a program's subtitles with none clears its rows and cached copies.
   - `MediaSourceScanner.test.ts`: the info line once a scan, again in the next scan, and not when the paths are
     reported or the video has none.

@@ -101,7 +101,7 @@ Every hour, for programs airing in the next hour on channels that have subtitles
 
 - **Missing:** a subtitle that could not be resolved during a scan (because the media server was unreachable, for example), or whose cached copy has since been deleted, is fetched, without waiting for a rescan of the whole library.
 - **Old copies:** a downloaded copy more than 6 hours old is fetched again and replaced only if it changed. The media server can rewrite a subtitle's file under the same stream (a re-sync, a better download). The copy is swapped in whole, so a program that is playing never reads half a file.
-- **Gone from the media server:** if the media server answers "not found" for a subtitle (its file was replaced or removed), Tunarr reads the program from the media server again at once, saves its subtitles as they are now, and downloads the replacement. It does this once per program per hour. A program the media server no longer has at all is left to the next library scan, which marks it missing.
+- **Gone from the media server:** if the media server answers "not found" for a subtitle (its file was replaced or removed), Tunarr reads the program from the media server again at once, saves its subtitles as they are now, and downloads the replacement. It does this once per program per hour. If the media server still lists the subtitle (it hasn't rescanned the item yet), Tunarr keeps what it has until it does. A program the media server no longer has at all is left to the next library scan, which marks it missing.
 
 !!! note
     External subtitles from Jellyfin and Emby libraries scanned by an older version of Tunarr are picked up by that hourly pass once the program is scheduled, or immediately on the next rescan of the library.

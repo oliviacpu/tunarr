@@ -690,6 +690,23 @@ describe('SubtitleExtractorTask heals a sidecar the media server answers 404 for
     expect(harness.replaceProgramSubtitles).not.toHaveBeenCalled();
   });
 
+  it('leaves the rows alone while the media server still lists the stream that 404s', async () => {
+    const harness = makeHarness({
+      sourceType: 'plex',
+      fetchResults: { [OLD_KEY]: { type: 'not_found' } },
+      // Not rescanned yet: the item still lists the same stream
+      minted: [sidecar(OLD_KEY)],
+      subtitles: [missingRow()],
+    });
+
+    await run(harness);
+
+    expect(harness.apiClient.getEpisode).toHaveBeenCalledTimes(1);
+    // No second fetch, which would only hand back the stale copy
+    expect(harness.fetchToCache).toHaveBeenCalledTimes(1);
+    expect(harness.replaceProgramSubtitles).not.toHaveBeenCalled();
+  });
+
   it('heals a program airing on two channels once a run', async () => {
     const harness = makeHarness({
       sourceType: 'plex',
