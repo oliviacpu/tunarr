@@ -83,6 +83,86 @@ export const CaptionAlignments = [
 
 export type CaptionAlignment = TupleToUnion<typeof CaptionAlignments>;
 
+// Colours 608 can draw caption text in. Black isn't offered: its code is
+// optional, and decoders of FFmpeg's family (Plex's among them) draw it as
+// white italics.
+export const CaptionTextColors = [
+  'white',
+  'green',
+  'blue',
+  'cyan',
+  'red',
+  'yellow',
+  'magenta',
+] as const;
+
+export type CaptionTextColor = TupleToUnion<typeof CaptionTextColors>;
+
+// The box behind caption text. 'player' sends no code, so the player draws
+// its own (Plex: a near-black box).
+export const CaptionBackgroundColors = [
+  'player',
+  'black',
+  'white',
+  'green',
+  'blue',
+  'cyan',
+  'red',
+  'yellow',
+  'magenta',
+] as const;
+
+export type CaptionBackgroundColor = TupleToUnion<
+  typeof CaptionBackgroundColors
+>;
+
+export const CaptionBackgroundOpacities = [
+  'opaque',
+  'semiTransparent',
+  'transparent',
+] as const;
+
+export type CaptionBackgroundOpacity = TupleToUnion<
+  typeof CaptionBackgroundOpacities
+>;
+
+// How captions come on screen: pop-on (each caption whole, at once), roll-up
+// (lines scroll up from the bottom, with 2, 3 or 4 on screen), or paint-on
+// (characters appear as they arrive)
+export const CaptionModes = [
+  'popOn',
+  'rollUp2',
+  'rollUp3',
+  'rollUp4',
+  'paintOn',
+] as const;
+
+export type CaptionMode = TupleToUnion<typeof CaptionModes>;
+
+// How closed captions look. The defaults send what Tunarr always sent; the
+// player decides the font, the text size and, unless a background colour is
+// chosen, the box.
+export const CaptionAppearanceSchema = z.object({
+  textColor: z.enum(CaptionTextColors).default('white'),
+  backgroundColor: z.enum(CaptionBackgroundColors).default('player'),
+  backgroundOpacity: z.enum(CaptionBackgroundOpacities).default('opaque'),
+  // The screen has 15 caption rows: captions at the bottom end on bottomRow,
+  // captions placed at the top start on topRow
+  bottomRow: z.number().int().min(1).max(15).default(15),
+  topRow: z.number().int().min(1).max(15).default(1),
+  maxLines: z.number().int().min(2).max(4).default(2),
+  // Columns a line may use, of the 32 the screen has
+  lineWidth: z.number().int().min(20).max(32).default(32),
+  upperCase: z.boolean().default(false),
+  mode: z.enum(CaptionModes).default('popOn'),
+  // Italics and underline from the subtitle file
+  keepStyles: z.boolean().default(true),
+  // Top-of-screen placement from the subtitle file
+  keepTopPlacement: z.boolean().default(true),
+});
+
+export type CaptionAppearanceSettings = z.infer<typeof CaptionAppearanceSchema>;
+
 export const FfmpegNumericLogLevels: Record<
   TupleToUnion<typeof FfmpegLogLevels>,
   number
@@ -141,6 +221,12 @@ export const FfmpegSettingsSchema = z.object({
   // program are sent as captions (and WebVTT) instead; forced ones stay burned.
   hdhrClosedCaptions: z.boolean().default(false),
   hdhrCaptionAlignment: z.enum(CaptionAlignments).default('centeredBlock'),
+  hdhrCaptionAppearance: CaptionAppearanceSchema.default(() =>
+    CaptionAppearanceSchema.parse({}),
+  ),
+  // Replaces every captioned program's captions with a looping set of numbered
+  // samples, one per appearance feature, to see which ones a player honours
+  hdhrCaptionTestPattern: z.boolean().default(false),
   enableSubtitleExtraction: z.boolean().optional().default(false),
 });
 
