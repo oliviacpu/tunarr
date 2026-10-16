@@ -31,6 +31,7 @@ import type { Dictionary, MarkOptional, StrictExclude } from 'ts-essentials';
 import type { NewArtwork } from '../schema/Artwork.ts';
 import type { NewGenre } from '../schema/Genre.ts';
 import type { ProgramGroupingType } from '../schema/ProgramGrouping.ts';
+import type { NewProgramSubtitles } from '../schema/ProgramSubtitles.ts';
 import type { MediaSourceId, MediaSourceType } from '../schema/base.js';
 import type { PageParams } from './IChannelDB.ts';
 
@@ -62,6 +63,17 @@ export interface IProgramDB {
   clearExtractedSubtitle(uuid: string): Promise<void>;
 
   setSubtitlePath(uuid: string, path: string): Promise<void>;
+
+  /**
+   * Replaces a program's subtitle rows with freshly minted ones, as a scan
+   * does: sidecar rows are replaced, embedded ones matched by stream index,
+   * and cached copies the new rows no longer use are deleted. An empty list
+   * removes them all.
+   */
+  replaceProgramSubtitles(
+    programId: string,
+    subtitles: NewProgramSubtitles[],
+  ): Promise<void>;
 
   getProgramsByIds(
     ids: string[] | readonly string[],

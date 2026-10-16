@@ -2894,6 +2894,53 @@ describe('ProgramDB', () => {
         expect(indexes).toEqual([2, 3]);
       });
 
+      test("replacing a program's subtitles with none clears its rows and cached copies", async ({
+        programDb,
+        drizzle,
+      }) => {
+        const library = await createTestMediaSourceLibrary(drizzle);
+        const programData = createBaseProgram('movie', library.uuid, 'local', {
+          mediaSourceId: library.mediaSourceId,
+        });
+        const cacheFolder = new FileSystemService(
+          globalOptions(),
+        ).getSubtitleCacheFolder();
+        const copy = path.join(cacheFolder, 'ab', 'cd', 'gone.srt');
+        await fs.mkdir(path.dirname(copy), { recursive: true });
+        await fs.writeFile(copy, '1\n');
+
+        const [inserted] = await programDb.upsertPrograms([
+          {
+            program: programData,
+            externalIds: [],
+            genres: [],
+            studios: [],
+            artwork: [],
+            credits: [],
+            versions: [],
+            tags: [],
+            subtitles: [
+              createSubtitle(programData.uuid, {
+                subtitleType: 'sidecar',
+                streamIndex: null,
+                path: copy,
+                sourceKey: '/library/streams/1',
+              }),
+              createSubtitle(programData.uuid, { streamIndex: 2 }),
+            ],
+          },
+        ]);
+        const programId = inserted!.uuid;
+
+        await programDb.replaceProgramSubtitles(programId, []);
+
+        const left = await drizzle.query.programSubtitles.findMany({
+          where: (fields, { eq }) => eq(fields.programId, programId),
+        });
+        expect(left).toEqual([]);
+        expect(await fileExists(copy)).toBe(false);
+      });
+
       test('should add new subtitles and remove old ones on re-upsert', async ({
         programDb,
         drizzle,

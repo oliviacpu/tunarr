@@ -1,9 +1,9 @@
 import { seq } from '@tunarr/shared/util';
-import type { ContentGuideProgram } from '@tunarr/types';
+import type { ContentGuideProgram, TerminalProgram } from '@tunarr/types';
 import { tag } from '@tunarr/types';
 import dayjs from 'dayjs';
 import { inject, injectable } from 'inversify';
-import { isUndefined } from 'lodash-es';
+import { capitalize, isUndefined } from 'lodash-es';
 import { createReadStream, createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path, { dirname, extname } from 'node:path';
@@ -11,6 +11,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { tmpName } from 'tmp-promise';
 import z from 'zod';
+import { ProgramDaoMinter } from '../db/converters/ProgramMinter.ts';
 import type { IChannelDB } from '../db/interfaces/IChannelDB.ts';
 import type { IProgramDB } from '../db/interfaces/IProgramDB.ts';
 import type { ISettingsDB } from '../db/interfaces/ISettingsDB.ts';
@@ -41,9 +42,36 @@ import { fileExists } from '../util/fsUtil.ts';
 import { isDefined, isNonEmptyString } from '../util/index.ts';
 import { InjectLogger } from '../util/inject.ts';
 import type { Logger } from '../util/logging/LoggerFactory.ts';
-import { getSubtitleCacheFilePath } from '../util/subtitles.ts';
+import type { Maybe } from '../types/util.ts';
+import {
+  externalSubtitleStreamId,
+  getSubtitleCacheFilePath,
+} from '../util/subtitles.ts';
 import { Task2 } from './Task.ts';
 import { taskDef } from './TaskRegistry.ts';
+
+/**
+ * How old a downloaded copy of an external subtitle gets before the hourly
+ * top-up fetches it again, for programs airing within the hour. The media
+ * server's file can be rewritten under the same stream (a re-sync, a better
+ * download), and a copy never notices on its own.
+ */
+export const STALE_CACHE_COPY_MS = 6 * 60 * 60 * 1000;
+
+export function isInsideFolder(folder: string, file: string) {
+  const relative = path.relative(path.resolve(folder), path.resolve(file));
+  return (
+    relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+  );
+}
+
+async function isOlderThan(file: string, ageMs: number) {
+  try {
+    return Date.now() - (await fs.stat(file)).mtimeMs > ageMs;
+  } catch {
+    return false;
+  }
+}
 
 const ChannelExtractionFilter = z.object({
   type: z.literal('channel'),
@@ -112,6 +140,7 @@ export class SubtitleExtractorTask extends Task2<
     private externalSubtitleDownloader: ExternalSubtitleDownloader,
     @inject(MediaSourceApiFactory)
     private mediaSourceApiFactory: MediaSourceApiFactory,
+    @inject(ProgramDaoMinter) private programMinter: ProgramDaoMinter,
   ) {
     super();
   }
@@ -157,11 +186,20 @@ export class SubtitleExtractorTask extends Task2<
     );
     const mediaSources = await this.mediaSourceDB.getAll();
 
+    // A program can air more than once in the hour (a repeat, or the same
+    // program on two channels); everything handleProgram does is per program,
+    // so it runs once a run. That keeps a heal that can't succeed (the item is
+    // gone, or its new subtitle 404s too) from re-reading the item each time.
+    const handled = new Set<string>();
     for (const { programs } of nextHourGuide) {
       for (const program of programs) {
         if (program.type !== 'content') {
           continue;
         }
+        if (handled.has(program.id)) {
+          continue;
+        }
+        handled.add(program.id);
 
         const mediaSource = mediaSources.find(
           (ms) => ms.uuid === program.program.mediaSourceId,
@@ -190,37 +228,55 @@ export class SubtitleExtractorTask extends Task2<
    * because the media source was unreachable when the library was scanned, or
    * because the cached copy has since been deleted. Without this, such a
    * subtitle stays missing until the library happens to be rescanned.
+   *
+   * It also keeps downloaded copies fresh where Tunarr can't read the media
+   * server's file: a copy older than STALE_CACHE_COPY_MS is fetched again and
+   * replaced only if it changed. And a stream the media server answers 404
+   * for (its file was replaced) heals at once: see healMissingSidecar.
    */
   private async topUpExternalSubtitles(
     dbProgram: ProgramWithRelationsOrm,
     mediaSource: MediaSourceWithRelations,
   ) {
+    const cacheFolder = this.subtitleCacheFolder();
     for (const subtitle of dbProgram.subtitles ?? []) {
       if (subtitle.subtitleType !== 'sidecar') {
         continue;
       }
 
-      if (
-        isNonEmptyString(subtitle.path) &&
-        (await fileExists(subtitle.path))
-      ) {
+      const recorded =
+        isNonEmptyString(subtitle.path) && (await fileExists(subtitle.path))
+          ? subtitle.path
+          : undefined;
+      // A file outside the cache (a local library's sidecar, or one on shared
+      // storage) is the live file: nothing to fetch.
+      if (recorded && !isInsideFolder(cacheFolder, recorded)) {
         continue;
       }
 
       // Storage shared with the media source is preferred: no download, and no
-      // second copy of a file we can already read.
+      // second copy of a file we can already read. With a copy recorded,
+      // playback already reads the shared file ahead of it.
       const sharedPath = await PathCalculator.findLocalPath(
         subtitle.sourcePath,
         mediaSource.replacePaths,
       );
       if (sharedPath) {
-        this.logger.debug(
-          'Found external subtitle %s for program %s on shared storage: %s',
-          subtitle.uuid,
-          dbProgram.uuid,
-          sharedPath,
-        );
-        await this.saveResolvedSubtitlePath(subtitle, sharedPath);
+        if (!recorded) {
+          this.logger.debug(
+            'Found external subtitle %s for program %s on shared storage: %s',
+            subtitle.uuid,
+            dbProgram.uuid,
+            sharedPath,
+          );
+          await this.saveResolvedSubtitlePath(subtitle, sharedPath);
+        }
+        continue;
+      }
+
+      // A copy is fetched again once it is STALE_CACHE_COPY_MS old: the
+      // media server's file may have been rewritten under the same stream.
+      if (recorded && !(await isOlderThan(recorded, STALE_CACHE_COPY_MS))) {
         continue;
       }
 
@@ -229,15 +285,9 @@ export class SubtitleExtractorTask extends Task2<
         continue;
       }
 
-      const downloadResult = await Result.attemptAsync(() =>
-        this.externalSubtitleDownloader.downloadSubtitlesIfNecessary(
-          {
-            externalKey: dbProgram.externalKey,
-            externalSourceId: mediaSource.uuid,
-            sourceType: dbProgram.sourceType,
-            uuid: dbProgram.uuid,
-            title: dbProgram.title,
-          },
+      const fetchResult = await Result.attemptAsync(() =>
+        this.externalSubtitleDownloader.fetchToCache(
+          this.externalItem(dbProgram, mediaSource),
           {
             streamIndex: subtitle.streamIndex ?? undefined,
             codec: subtitle.codec,
@@ -246,12 +296,13 @@ export class SubtitleExtractorTask extends Task2<
             key: subtitleKey,
           },
           () => this.fetchExternalSubtitle(mediaSource, subtitleKey),
+          { refresh: recorded !== undefined },
         ),
       );
 
-      if (downloadResult.isFailure()) {
+      if (fetchResult.isFailure()) {
         this.logger.warn(
-          downloadResult.error,
+          fetchResult.error,
           'Error downloading external subtitle %s for program %s',
           subtitle.uuid,
           dbProgram.uuid,
@@ -259,19 +310,256 @@ export class SubtitleExtractorTask extends Task2<
         continue;
       }
 
-      const fullPath = downloadResult.get();
-      if (!isNonEmptyString(fullPath)) {
+      const fetched = fetchResult.get();
+      if (fetched.type === 'not_found') {
+        // The media server no longer has this stream: its file was replaced
+        // or removed. Re-read the item and save its subtitles as they are
+        // now. That replaces every sidecar row of the program, so the rest
+        // of this loop would work on stale rows.
+        await this.healMissingSidecar(dbProgram, mediaSource, subtitle);
+        return;
+      }
+
+      if (fetched.type === 'failed' || !isNonEmptyString(fetched.path)) {
         continue;
       }
 
-      this.logger.debug(
-        'Downloaded external subtitle %s for program %s to local cache: %s',
-        subtitle.uuid,
-        dbProgram.uuid,
-        fullPath,
-      );
-      await this.saveResolvedSubtitlePath(subtitle, fullPath);
+      if (fetched.type === 'replaced') {
+        this.logger.info(
+          'Refreshed external subtitle %s for "%s": it changed on the media server since it was downloaded',
+          externalSubtitleStreamId(subtitleKey),
+          dbProgram.title,
+        );
+      } else {
+        this.logger.debug(
+          'External subtitle %s for program %s: %s (%s)',
+          subtitle.uuid,
+          dbProgram.uuid,
+          fetched.path,
+          fetched.type,
+        );
+      }
+
+      if (subtitle.path !== fetched.path) {
+        await this.saveResolvedSubtitlePath(subtitle, fetched.path);
+      }
     }
+  }
+
+  /**
+   * A sidecar's stream answered 404: the media server replaced or removed its
+   * file. Rather than wait for the media server's rescan and then Tunarr's,
+   * read the item again now, mint its subtitle rows from what it lists today
+   * and save them the way a scan does (cached copies the new rows don't use
+   * are deleted), resolving or downloading the sidecars first. Once per
+   * program per run, no retry loop. An item that is gone itself is left to
+   * the next library scan, which marks the program missing.
+   */
+  private async healMissingSidecar(
+    dbProgram: ProgramWithRelationsOrm,
+    mediaSource: MediaSourceWithRelations,
+    missing: ProgramSubtitles,
+  ) {
+    const missingId = externalSubtitleStreamId(missing.sourceKey ?? '');
+    const server = capitalize(mediaSource.type);
+
+    const itemResult = await Result.attemptAsync(() =>
+      this.fetchTerminalItem(mediaSource, dbProgram),
+    );
+    if (itemResult.isFailure()) {
+      this.logger.warn(
+        itemResult.error,
+        'Could not re-read "%s" after its subtitle stream %s went missing',
+        dbProgram.title,
+        missingId,
+      );
+      return;
+    }
+
+    const item = itemResult.get();
+    if (!item) {
+      this.logger.info(
+        '%s no longer has subtitle stream %s for "%s" (item %s); re-reading items of this type is not supported, so it waits for the next scan.',
+        server,
+        missingId,
+        dbProgram.title,
+        dbProgram.externalKey,
+      );
+      return;
+    }
+
+    if (item.isFailure()) {
+      if (item.error.type === 'not_found') {
+        this.logger.info(
+          '%s no longer has "%s" (item %s); the next scan of its library marks it missing.',
+          server,
+          dbProgram.title,
+          dbProgram.externalKey,
+        );
+      } else {
+        this.logger.warn(
+          item.error,
+          'Could not re-read "%s" after its subtitle stream %s went missing',
+          dbProgram.title,
+          missingId,
+        );
+      }
+      return;
+    }
+
+    const minted = this.programMinter.mintSubtitles(
+      dbProgram.uuid,
+      item.get(),
+      mediaSource.type,
+    );
+
+    // The media server still lists the stream it just answered 404 for: it
+    // hasn't rescanned the item since the file changed, so there is nothing
+    // new to save. The rows and whatever copy there is stay as they are (the
+    // best subtitle available now) until it does; this is checked again at
+    // most once an hour, for a program about to air.
+    if (
+      minted.some(
+        (row) =>
+          row.subtitleType === 'sidecar' && row.sourceKey === missing.sourceKey,
+      )
+    ) {
+      this.logger.info(
+        '%s still lists subtitle stream %s for "%s" but no longer serves it; waiting for %s to rescan the item.',
+        server,
+        missingId,
+        dbProgram.title,
+        server,
+      );
+      return;
+    }
+
+    // Sidecars that are still the same stream keep the file they have; the
+    // others are resolved on shared storage or downloaded, as a scan does.
+    const kept = new Map(
+      seq.collect(dbProgram.subtitles ?? [], (sub) =>
+        sub.subtitleType === 'sidecar' &&
+        sub.uuid !== missing.uuid &&
+        isNonEmptyString(sub.sourceKey) &&
+        isNonEmptyString(sub.path)
+          ? ([sub.sourceKey, sub.path] as const)
+          : undefined,
+      ),
+    );
+    for (const row of minted) {
+      if (row.subtitleType !== 'sidecar' || isNonEmptyString(row.path)) {
+        continue;
+      }
+      const keptPath = row.sourceKey ? kept.get(row.sourceKey) : undefined;
+      if (keptPath && (await fileExists(keptPath))) {
+        row.path = keptPath;
+        continue;
+      }
+      const sharedPath = await PathCalculator.findLocalPath(
+        row.sourcePath,
+        mediaSource.replacePaths,
+      );
+      if (sharedPath) {
+        row.path = sharedPath;
+        continue;
+      }
+      const key = row.sourceKey;
+      if (!isNonEmptyString(key)) {
+        continue;
+      }
+      const fetched = await Result.attemptAsync(() =>
+        this.externalSubtitleDownloader.fetchToCache(
+          this.externalItem(dbProgram, mediaSource),
+          { streamIndex: row.streamIndex ?? undefined, codec: row.codec, key },
+          () => this.fetchExternalSubtitle(mediaSource, key),
+        ),
+      );
+      const result = fetched.isSuccess() ? fetched.get() : undefined;
+      if (result && result.type !== 'not_found' && result.path) {
+        row.path = result.path;
+      }
+    }
+
+    // By program, so an item that lists no subtitles any more clears its rows
+    await this.programDB.replaceProgramSubtitles(dbProgram.uuid, minted);
+
+    const replacement = minted.find(
+      (row) =>
+        row.subtitleType === 'sidecar' &&
+        row.language === missing.language &&
+        row.forced === missing.forced &&
+        row.sdh === missing.sdh,
+    );
+    this.logger.info(
+      '%s no longer had subtitle stream %s for "%s"; re-read the item and saved its subtitles as they are now (%s).',
+      server,
+      missingId,
+      dbProgram.title,
+      replacement
+        ? `the ${missing.language} one is now stream ${externalSubtitleStreamId(replacement.sourceKey ?? '')}${replacement.path ? '' : ', not downloaded yet'}`
+        : `no ${missing.language} sidecar any more`,
+    );
+  }
+
+  /**
+   * The program as its media server lists it now, for re-minting its
+   * subtitles. Undefined for item types this doesn't re-read.
+   */
+  private async fetchTerminalItem(
+    mediaSource: MediaSourceWithRelations,
+    dbProgram: ProgramWithRelationsOrm,
+  ): Promise<Maybe<QueryResult<TerminalProgram>>> {
+    const key = dbProgram.externalKey;
+    if (dbProgram.type !== 'movie' && dbProgram.type !== 'episode') {
+      return;
+    }
+    const movie = dbProgram.type === 'movie';
+    switch (mediaSource.type) {
+      case 'plex': {
+        const client =
+          await this.mediaSourceApiFactory.getPlexApiClientForMediaSource(
+            mediaSource,
+          );
+        return movie ? client.getMovie(key) : client.getEpisode(key);
+      }
+      case 'jellyfin': {
+        const client =
+          await this.mediaSourceApiFactory.getJellyfinApiClientForMediaSource(
+            mediaSource,
+          );
+        return movie ? client.getMovie(key) : client.getEpisode(key);
+      }
+      case 'emby': {
+        const client =
+          await this.mediaSourceApiFactory.getEmbyApiClientForMediaSource(
+            mediaSource,
+          );
+        return movie ? client.getMovie(key) : client.getEpisode(key);
+      }
+      case 'local':
+        return;
+    }
+  }
+
+  private externalItem(
+    dbProgram: ProgramWithRelationsOrm,
+    mediaSource: MediaSourceWithRelations,
+  ) {
+    return {
+      externalKey: dbProgram.externalKey,
+      externalSourceId: mediaSource.uuid,
+      sourceType: dbProgram.sourceType,
+      uuid: dbProgram.uuid,
+      title: dbProgram.title,
+    };
+  }
+
+  private subtitleCacheFolder() {
+    return path.join(
+      this.globalOptions.databaseDirectory,
+      CacheFolderName,
+      SubtitlesCacheFolderName,
+    );
   }
 
   private async saveResolvedSubtitlePath(
