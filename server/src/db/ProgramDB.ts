@@ -31,6 +31,7 @@ import type {
   ProgramExternalId,
 } from './schema/ProgramExternalId.js';
 import type { ProgramGroupingType } from './schema/ProgramGrouping.js';
+import type { NewProgramSubtitles } from './schema/ProgramSubtitles.js';
 import type {
   MediaSourceId,
   MediaSourceType,
@@ -103,6 +104,10 @@ export class ProgramDB implements IProgramDB {
 
   setSubtitlePath(uuid: string, path: string): Promise<void> {
     return this.metadataRepo.setSubtitlePath(uuid, path);
+  }
+
+  upsertSubtitles(subtitles: NewProgramSubtitles[]): Promise<void> {
+    return this.metadataRepo.upsertSubtitles(subtitles);
   }
 
   getProgramsByIds(
