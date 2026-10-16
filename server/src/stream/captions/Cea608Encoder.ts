@@ -1449,17 +1449,24 @@ export function buildCaptionSchedule(
 
     if (mode === 'popOn') {
       // Show it on its start frame, or as soon as loading finishes when there
-      // isn't room before it (a short gap, or a cue already under way)
+      // isn't room before it (a short gap, or a cue already under way).
       // Lines with a box colour load clear of the previous caption's clear
-      // (groupedLoadSequence)
+      // (groupedLoadSequence), but only where that doesn't move the frame
+      // the caption shows on: a later caption holds up the next one's load,
+      // which could then miss its own time and be left out.
       const { atoms: load, groups: lineGroups } = groupedLoadSequence(
         caption.blocks,
         appearance,
       );
-      let groups: (number | undefined)[] | undefined = lineGroups;
+      const boxed = lineGroups.some((g) => g !== undefined);
       let showAt = wanted;
-      if (!placeBefore(load, wanted, loadAfter, { groups })) {
-        const lateShow = () =>
+      if (
+        boxed &&
+        placeBefore(load, wanted, loadAfter, { groups: lineGroups })
+      ) {
+        // On time, each boxed line on one side of any clear
+      } else if (!placeBefore(load, wanted, loadAfter)) {
+        const lateShow = (groups?: (number | undefined)[]) =>
           firstFreeFrom(
             Math.max(
               wanted,
@@ -1467,20 +1474,14 @@ export function buildCaptionSchedule(
             ),
           );
         showAt = lateShow();
-        // A caption is never left out for its box: when keeping its lines
-        // clear of a clear would push it past its end, it loads as before
-        if (
-          showAt >= slotOf(caption.endMs) &&
-          lineGroups.some((g) => g !== undefined)
-        ) {
-          groups = undefined;
-          showAt = lateShow();
-        }
         if (showAt >= slotOf(caption.endMs)) {
           leaveOut();
           continue;
         }
-        placeFrom(load, loadAfter, { groups });
+        placeFrom(load, loadAfter, {
+          groups:
+            boxed && lateShow(lineGroups) === showAt ? lineGroups : undefined,
+        });
       }
       showAt = firstFreeFrom(showAt);
       take(showAt, EndOfCaption);
