@@ -79,6 +79,13 @@ export type MaterializedChannelPrograms = {
   programs: MaterializedGuideItem[];
 };
 
+export type XmlTvWriteOptions = {
+  /** Channel id -> programmes an earlier write rendered, written as they are. */
+  reuse?: ReadonlyMap<string, string>;
+  /** Called with each channel's programmes as this write rendered them. */
+  onRendered?: (channelId: string, programmes: string) => void;
+};
+
 /**
  * The address the guide's links (programme and channel pictures) use. A client
  * such as Plex may fetch the guide from an address only it can reach
@@ -107,10 +114,19 @@ export class XmlTvWriter {
     private publicMedia?: PublicMediaService,
   ) {}
 
-  async write(channels: MaterializedChannelPrograms[]) {
+  /**
+   * Writes the guide file. A channel in `options.reuse` keeps the programmes an
+   * earlier write rendered for it (its `programs` can be empty): they aren't
+   * rendered again and their artwork isn't published again. Every channel that
+   * is rendered is passed to `options.onRendered`, for the caller to reuse.
+   */
+  async write(
+    channels: MaterializedChannelPrograms[],
+    options: XmlTvWriteOptions = {},
+  ) {
     const start = performance.now();
     return await lock.runExclusive(async () => {
-      return await this.writeInternal(channels).finally(() => {
+      return await this.writeInternal(channels, options).finally(() => {
         const end = performance.now();
         this.logger.debug(
           `Generated and wrote xmltv file in ${round(end - start, 3)}ms`,
@@ -119,11 +135,36 @@ export class XmlTvWriter {
     });
   }
 
-  private async writeInternal(channels: MaterializedChannelPrograms[]) {
-    const published = await this.publishArtwork(channels);
-    const content = await this.serialize(channels, published);
+  private async writeInternal(
+    channels: MaterializedChannelPrograms[],
+    { reuse = new Map(), onRendered }: XmlTvWriteOptions,
+  ) {
+    const published = await this.publishArtwork(
+      channels.filter(({ channel }) => !reuse.has(channel.uuid)),
+    );
+    const programmes: string[] = [];
+    for (const channelPrograms of channels) {
+      const uuid = channelPrograms.channel.uuid;
+      const reused = reuse.get(uuid);
+      if (reused !== undefined) {
+        programmes.push(reused);
+        continue;
+      }
+      const rendered = await this.serializeProgrammes(
+        channelPrograms,
+        published,
+      );
+      onRendered?.(uuid, rendered);
+      programmes.push(rendered);
+    }
 
-    return await writeFile(this.settingsDB.xmlTvSettings().outputPath, content);
+    return await writeFile(
+      this.settingsDB.xmlTvSettings().outputPath,
+      this.assemble(
+        channels.map(({ channel }) => channel),
+        programmes,
+      ),
+    );
   }
 
   /**
@@ -139,36 +180,61 @@ export class XmlTvWriter {
     channels: MaterializedChannelPrograms[],
     published: PublishedArtwork = NothingPublished,
   ): Promise<string> {
+    const programmes: string[] = [];
+    for (const channelPrograms of channels) {
+      programmes.push(
+        await this.serializeProgrammes(channelPrograms, published),
+      );
+    }
+    return this.assemble(
+      channels.map(({ channel }) => channel),
+      programmes,
+    );
+  }
+
+  /**
+   * One channel's `<programme>` elements as XMLTV text, to go between the
+   * header and `</tv>`.
+   */
+  private async serializeProgrammes(
+    { channel, programs }: MaterializedChannelPrograms,
+    published: PublishedArtwork,
+  ): Promise<string> {
+    const xmlChannelId = getChannelId(channel.number);
+    const parts: string[] = [];
+    for (const batch of chunk(programs, SerializeBatchSize)) {
+      await throttle();
+      const body = writeXmltv({
+        programmes: batch.map((p) =>
+          this.makeXmlTvProgram(p, xmlChannelId, channel, published),
+        ),
+      });
+
+      // The declaration and DOCTYPE before <tv> come and go with the content,
+      // so cut at <tv> itself. Batch documents carry no <tv> attributes.
+      const open = body.indexOf(TvOpen);
+      if (open === -1 || !body.endsWith(TvClose)) {
+        throw new Error('Unexpected XMLTV batch shape from @iptv/xmltv');
+      }
+      parts.push(body.slice(open + TvOpen.length, -TvClose.length));
+    }
+    return parts.join('');
+  }
+
+  /**
+   * The document: a header with every channel, then each channel's
+   * programmes in the same order, then `</tv>`.
+   */
+  private assemble(channels: ChannelOrm[], programmes: string[]): string {
     const header = writeXmltv(
-      this.generateXmltv(channels.map((c) => ({ ...c, programs: [] }))),
+      this.generateXmltv(
+        channels.map((channel) => ({ channel, programs: [] })),
+      ),
     );
     if (!header.endsWith(TvClose)) {
       throw new Error('Unexpected XMLTV header shape from @iptv/xmltv');
     }
-
-    const parts = [header.slice(0, -TvClose.length)];
-    for (const { channel, programs } of channels) {
-      const xmlChannelId = getChannelId(channel.number);
-      for (const batch of chunk(programs, SerializeBatchSize)) {
-        await throttle();
-        const body = writeXmltv({
-          programmes: batch.map((p) =>
-            this.makeXmlTvProgram(p, xmlChannelId, channel, published),
-          ),
-        });
-
-        // The declaration and DOCTYPE before <tv> come and go with the content,
-        // so cut at <tv> itself. Batch documents carry no <tv> attributes.
-        const open = body.indexOf(TvOpen);
-        if (open === -1 || !body.endsWith(TvClose)) {
-          throw new Error('Unexpected XMLTV batch shape from @iptv/xmltv');
-        }
-        parts.push(body.slice(open + TvOpen.length, -TvClose.length));
-      }
-    }
-    parts.push(TvClose);
-
-    return parts.join('');
+    return [header.slice(0, -TvClose.length), ...programmes, TvClose].join('');
   }
 
   generateXmltv(
