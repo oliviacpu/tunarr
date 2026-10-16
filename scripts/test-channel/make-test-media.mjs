@@ -172,8 +172,9 @@ function toLayout(wav, layout) {
 
 // SRT caption cases: [label, [[start, end, text], ...]]. Every case is shown on screen while it plays.
 const SRT_CASES = [
-  ['CASE 1  plain lines', [
-    [0.5, 3.0, 'Good evening, and welcome to the test channel.'],
+  // the first line is on screen from the clip's first frame: a caption already under way at a program boundary
+  ['CASE 1  plain lines (the first is up from the very start)', [
+    [0.0, 3.0, 'Good evening, and welcome to the test channel.'],
     [3.4, 6.2, 'Every line here should appear while it is spoken.'],
     [6.6, 9.6, 'If a line is late or early, note the clock.']]],
   ['CASE 2  italics and underline', [
@@ -224,7 +225,7 @@ function srtSuite() {
   return cues.map(([s, e, t], i) => `${i + 1}\n${srtTime(s)} --> ${srtTime(e)}\n${t}\n`).join('\n');
 }
 function caseLabels(cases) {
-  return cases.map(([label, list]) => [label, list[0][0] - 0.4, Math.max(...list.map((c) => c[1])) + 0.3]);
+  return cases.map(([label, list]) => [label, Math.max(0, list[0][0] - 0.4), Math.max(...list.map((c) => c[1])) + 0.3]);
 }
 
 const ASS_EVENTS = [
@@ -329,7 +330,8 @@ const CLIPS = [
     video: { w: 720, h: 480, fps: '30000/1001', sar: '8/9' }, audio: [{ lang: 'eng', codec: 'aac', layout: 'stereo', pattern: 'eng', rate: 44100 }] },
 ];
 
-const SHORT_SUBS = [[1.0, 4.0, 'Transition B has subtitles.'], [5.0, 9.0, 'The clip before it had none.'],
+// starts at the clip's first frame, so a caption is under way at the boundary from transition A
+const SHORT_SUBS = [[0.0, 4.0, 'Transition B has subtitles from its first frame.'], [5.0, 9.0, 'The clip before it had none.'],
   [24.0, 29.0, 'The next clip has none again.']];
 
 // ------------------------------------------------------------------ building one clip
