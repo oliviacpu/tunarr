@@ -33,6 +33,7 @@ import {
   NumericFormControllerText,
 } from '../util/TypedController.tsx';
 import { ChannelAudioTracksField } from './ChannelAudioTracksField.tsx';
+import { ChannelCaptionsField } from './ChannelCaptionsField.tsx';
 import { ChannelSubtitlePreferencesTable } from './ChannelSubtitlePreferencesTable.tsx';
 
 const watermarkPositionOptions: {
@@ -241,6 +242,8 @@ export default function ChannelTranscodingConfig() {
               </Typography>
               <ChannelSubtitlePreferencesTable />
             </Collapse>
+            <Divider sx={{ my: 2 }} />
+            <ChannelCaptionsField />
           </Stack>
         </Stack>
         <Box>

@@ -28,22 +28,9 @@ import type {
   TupleToUnion,
 } from '@tunarr/types';
 import { defaultFfmpegSettings } from '@tunarr/types';
-import type {
-  CaptionAlignment,
-  CaptionBackgroundColor,
-  CaptionBackgroundOpacity,
-  CaptionMode,
-  CaptionOverlap,
-  CaptionTextColor,
-  TonemapAlgorithm,
-} from '@tunarr/types/schemas';
+import type { TonemapAlgorithm } from '@tunarr/types/schemas';
 import {
   CaptionAlignments,
-  CaptionBackgroundColors,
-  CaptionBackgroundOpacities,
-  CaptionModes,
-  CaptionOverlaps,
-  CaptionTextColors,
   FfmpegLogLevels,
   TonemapAlgorithms,
 } from '@tunarr/types/schemas';
@@ -58,6 +45,7 @@ import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { LanguagePreferencesList } from '@/components/LanguagePreferencesList';
 import type { DeepRequired } from 'ts-essentials';
+import { CaptionAppearanceFields } from '../../components/settings/ffmpeg/CaptionAppearanceFields.tsx';
 import { TranscodeConfigsTable } from '../../components/settings/ffmpeg/TranscodeConfigsTable.tsx';
 import {
   deleteApiTranscodeConfigsByIdMutation,
@@ -68,6 +56,7 @@ import {
   putApiFfmpegSettingsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { useFfmpegSettings } from '../../hooks/settingsHooks.ts';
+import { useCaptionAlignmentNames } from '../../hooks/useCaptionAlignmentNames.ts';
 
 const FfmpegLogOptions = ['disable', 'console', 'file'] as const;
 type FfmpegLogOptions = TupleToUnion<typeof FfmpegLogOptions>;
@@ -114,57 +103,8 @@ export default function FfmpegSettingsPage() {
     'enableFileLogging',
   ]);
   const hdhrClosedCaptions = watch('hdhrClosedCaptions');
-  const [captionBackground, captionMode, captionKeepTop] = watch([
-    'hdhrCaptionAppearance.backgroundColor',
-    'hdhrCaptionAppearance.mode',
-    'hdhrCaptionAppearance.keepTopPlacement',
-  ]);
-  const captionRollUp = captionMode.startsWith('rollUp');
 
-  const captionTextColorNames: Record<CaptionTextColor, string> = {
-    white: t`White`,
-    green: t`Green`,
-    blue: t`Blue`,
-    cyan: t`Cyan`,
-    red: t`Red`,
-    yellow: t`Yellow`,
-    magenta: t`Magenta`,
-  };
-  const captionBackgroundNames: Record<CaptionBackgroundColor, string> = {
-    player: t`The player's own`,
-    black: t`Black`,
-    white: t`White`,
-    green: t`Green`,
-    blue: t`Blue`,
-    cyan: t`Cyan`,
-    red: t`Red`,
-    yellow: t`Yellow`,
-    magenta: t`Magenta`,
-  };
-  const captionOpacityNames: Record<CaptionBackgroundOpacity, string> = {
-    opaque: t`Solid`,
-    semiTransparent: t`See-through`,
-    transparent: t`None (text only)`,
-  };
-  const captionModeNames: Record<CaptionMode, string> = {
-    popOn: t`Pop-on (each caption appears whole)`,
-    rollUp2: t`Roll-up, 2 rows`,
-    rollUp3: t`Roll-up, 3 rows`,
-    rollUp4: t`Roll-up, 4 rows`,
-    paintOn: t`Paint-on (letters appear as they arrive)`,
-  };
-  const captionOverlapNames: Record<CaptionOverlap, string> = {
-    together: t`Show both, stacked`,
-    apart: t`Show each where the subtitle file puts it`,
-    newest: t`Show the newest`,
-  };
-  const captionRows = Array.from({ length: 15 }, (_, i) => i + 1);
-
-  const captionAlignmentNames: Record<CaptionAlignment, string> = {
-    centeredBlock: t`Centered block (lines start in the same column)`,
-    centeredLines: t`Each line centered`,
-    left: t`Left`,
-  };
+  const captionAlignmentNames = useCaptionAlignmentNames();
 
   let logSelectValue: FfmpegLogOptions = 'disable';
   if (ffmpegFileLoggingEnabled) {
@@ -595,271 +535,16 @@ export default function FfmpegSettingsPage() {
                     effect from the next program.
                   </Trans>
                 </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <FormControl fullWidth>
-                    <InputLabel id="caption-text-color-label">
-                      <Trans>Text color</Trans>
-                    </InputLabel>
-                    <Controller
-                      control={control}
-                      name="hdhrCaptionAppearance.textColor"
-                      render={({ field }) => (
-                        <Select
-                          label={t`Text color`}
-                          labelId="caption-text-color-label"
-                          {...field}
-                        >
-                          {map(CaptionTextColors, (color) => (
-                            <MenuItem key={color} value={color}>
-                              {captionTextColorNames[color]}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      )}
+                <Controller
+                  control={control}
+                  name="hdhrCaptionAppearance"
+                  render={({ field }) => (
+                    <CaptionAppearanceFields
+                      value={field.value}
+                      onChange={field.onChange}
                     />
-                    <FormHelperText>
-                      <Trans>Italic words are always white.</Trans>
-                    </FormHelperText>
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <InputLabel id="caption-background-label">
-                      <Trans>Box behind the text</Trans>
-                    </InputLabel>
-                    <Controller
-                      control={control}
-                      name="hdhrCaptionAppearance.backgroundColor"
-                      render={({ field }) => (
-                        <Select
-                          label={t`Box behind the text`}
-                          labelId="caption-background-label"
-                          {...field}
-                        >
-                          {map(CaptionBackgroundColors, (color) => (
-                            <MenuItem key={color} value={color}>
-                              {captionBackgroundNames[color]}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      )}
-                    />
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <InputLabel id="caption-opacity-label">
-                      <Trans>Box opacity</Trans>
-                    </InputLabel>
-                    <Controller
-                      control={control}
-                      name="hdhrCaptionAppearance.backgroundOpacity"
-                      render={({ field }) => (
-                        <Select
-                          label={t`Box opacity`}
-                          labelId="caption-opacity-label"
-                          disabled={captionBackground === 'player'}
-                          {...field}
-                        >
-                          {map(CaptionBackgroundOpacities, (opacity) => (
-                            <MenuItem key={opacity} value={opacity}>
-                              {captionOpacityNames[opacity]}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      )}
-                    />
-                  </FormControl>
-                </Stack>
-                <FormControl fullWidth>
-                  <InputLabel id="caption-mode-label">
-                    <Trans>How captions appear</Trans>
-                  </InputLabel>
-                  <Controller
-                    control={control}
-                    name="hdhrCaptionAppearance.mode"
-                    render={({ field }) => (
-                      <Select
-                        label={t`How captions appear`}
-                        labelId="caption-mode-label"
-                        {...field}
-                      >
-                        {map(CaptionModes, (mode) => (
-                          <MenuItem key={mode} value={mode}>
-                            {captionModeNames[mode]}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    )}
-                  />
-                  <FormHelperText>
-                    <Trans>
-                      Roll-up scrolls lines up from the bottom row like live TV
-                      captions, keeping the last lines up for up to 2 seconds
-                      between subtitles.
-                    </Trans>
-                  </FormHelperText>
-                </FormControl>
-                <FormControl fullWidth>
-                  <InputLabel id="caption-overlap-label">
-                    <Trans>When subtitles overlap</Trans>
-                  </InputLabel>
-                  <Controller
-                    control={control}
-                    name="hdhrCaptionAppearance.overlappingCues"
-                    render={({ field }) => (
-                      <Select
-                        label={t`When subtitles overlap`}
-                        labelId="caption-overlap-label"
-                        {...field}
-                      >
-                        {map(CaptionOverlaps, (overlap) => (
-                          <MenuItem key={overlap} value={overlap}>
-                            {captionOverlapNames[overlap]}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    )}
-                  />
-                  <FormHelperText>
-                    <Trans>
-                      Stacked shows both in one block, older above newer, at the
-                      bottom when the file places them apart. Each where the
-                      file puts it needs a player that places every line; test
-                      pattern sample 38 shows whether yours does. Newest shows
-                      one at a time, bringing the earlier back when the newer
-                      ends. Roll-up and paint-on show them one at a time.
-                    </Trans>
-                  </FormHelperText>
-                </FormControl>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <FormControl fullWidth>
-                    <InputLabel id="caption-max-lines-label">
-                      <Trans>Lines per caption</Trans>
-                    </InputLabel>
-                    <Controller
-                      control={control}
-                      name="hdhrCaptionAppearance.maxLines"
-                      render={({ field }) => (
-                        <Select
-                          label={t`Lines per caption`}
-                          labelId="caption-max-lines-label"
-                          disabled={captionRollUp}
-                          {...field}
-                        >
-                          {map([2, 3, 4], (lines) => (
-                            <MenuItem key={lines} value={lines}>
-                              {lines}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      )}
-                    />
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <InputLabel id="caption-line-width-label">
-                      <Trans>Line width</Trans>
-                    </InputLabel>
-                    <Controller
-                      control={control}
-                      name="hdhrCaptionAppearance.lineWidth"
-                      render={({ field }) => (
-                        <Select
-                          label={t`Line width`}
-                          labelId="caption-line-width-label"
-                          {...field}
-                        >
-                          {map([20, 22, 24, 26, 28, 30, 32], (width) => (
-                            <MenuItem key={width} value={width}>
-                              <Trans>{width} columns</Trans>
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      )}
-                    />
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <InputLabel id="caption-bottom-row-label">
-                      <Trans>Bottom row</Trans>
-                    </InputLabel>
-                    <Controller
-                      control={control}
-                      name="hdhrCaptionAppearance.bottomRow"
-                      render={({ field }) => (
-                        <Select
-                          label={t`Bottom row`}
-                          labelId="caption-bottom-row-label"
-                          {...field}
-                        >
-                          {map(captionRows, (row) => (
-                            <MenuItem key={row} value={row}>
-                              {row}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      )}
-                    />
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <InputLabel id="caption-top-row-label">
-                      <Trans>Top row</Trans>
-                    </InputLabel>
-                    <Controller
-                      control={control}
-                      name="hdhrCaptionAppearance.topRow"
-                      render={({ field }) => (
-                        <Select
-                          label={t`Top row`}
-                          labelId="caption-top-row-label"
-                          disabled={captionRollUp || !captionKeepTop}
-                          {...field}
-                        >
-                          {map(captionRows, (row) => (
-                            <MenuItem key={row} value={row}>
-                              {row}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      )}
-                    />
-                  </FormControl>
-                </Stack>
-                <FormHelperText>
-                  <Trans>
-                    The screen has 15 caption rows. Captions end on the bottom
-                    row; ones the subtitle file places at the top start on the
-                    top row, and ones it places in the middle sit between the
-                    two. A narrower line wraps sooner.
-                  </Trans>
-                </FormHelperText>
-                <Box>
-                  <Controller
-                    control={control}
-                    name="hdhrCaptionAppearance.upperCase"
-                    render={({ field }) => (
-                      <FormControlLabel
-                        control={<Switch {...field} checked={field.value} />}
-                        label={t`All capitals`}
-                      />
-                    )}
-                  />
-                  <Controller
-                    control={control}
-                    name="hdhrCaptionAppearance.keepStyles"
-                    render={({ field }) => (
-                      <FormControlLabel
-                        control={<Switch {...field} checked={field.value} />}
-                        label={t`Italics and underline from the subtitle file`}
-                      />
-                    )}
-                  />
-                  <Controller
-                    control={control}
-                    name="hdhrCaptionAppearance.keepTopPlacement"
-                    render={({ field }) => (
-                      <FormControlLabel
-                        control={<Switch {...field} checked={field.value} />}
-                        label={t`Placement from the subtitle file (top, middle, sides)`}
-                      />
-                    )}
-                  />
-                </Box>
+                  )}
+                />
                 <FormControl fullWidth>
                   <Controller
                     control={control}
