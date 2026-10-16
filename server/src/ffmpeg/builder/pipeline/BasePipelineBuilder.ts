@@ -279,6 +279,9 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
     }
 
     pipelineSteps.push(NoSceneDetectOutputOption(0), new CopyAllEncoder());
+    if (state.mapAllStreams) {
+      pipelineSteps.push(MapAllStreamsOutputOption());
+    }
     if (state.metadataServiceName) {
       pipelineSteps.push(
         MetadataServiceNameOutputOption(state.metadataServiceName),

@@ -114,6 +114,13 @@ export class FfmpegState {
   readrateInitialBurstSeconds: number = 0;
 
   /**
+   * The MPEG-TS concat (which copies the joined programs) maps every input
+   * stream instead of leaving the choice to ffmpeg, which keeps one audio
+   * track. Set for a channel with a fixed audio track layout.
+   */
+  mapAllStreams: boolean = false;
+
+  /**
    * When true, maps all streams from the input and copies them,
    * bypassing individual video/audio pipeline construction.
    * Used for passthrough modes like `hls_direct_v2`.

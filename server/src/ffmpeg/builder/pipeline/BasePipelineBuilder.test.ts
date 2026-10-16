@@ -803,6 +803,36 @@ describe('BasePipelineBuilder HLS stream timing', () => {
         .getCommandArgs();
     }
 
+    test.each([
+      [true, ['-map', '0']],
+      [false, []],
+    ])(
+      'the MPEG-TS concat maps every stream only when asked (%s)',
+      (mapAllStreams, expected) => {
+        const input = new ConcatInputSource(
+          new HttpStreamSource('http://localhost:8000/stream/channels/x.ts'),
+          FrameSize.FHD,
+        );
+        const concatState = FfmpegState.forConcat(version, 'Test');
+        concatState.mapAllStreams = mapAllStreams;
+        const args = new NoopPipelineBuilder(
+          null,
+          null,
+          null,
+          null,
+          input,
+          withBurstOption,
+        )
+          .concat(input, concatState)
+          .getCommandArgs();
+
+        // without it ffmpeg keeps one audio track of a fixed layout
+        expect(
+          args.filter((a, i) => a === '-map' || args[i - 1] === '-map'),
+        ).toEqual(expected);
+      },
+    );
+
     test('reads the playlist at real-time pace by default', () => {
       const args = wrapArgs(0);
 

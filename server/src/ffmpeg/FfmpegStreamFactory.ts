@@ -54,6 +54,7 @@ import { FfmpegPlaybackParamsCalculator } from './FfmpegPlaybackParamsCalculator
 import { FfmpegProcess } from './FfmpegProcess.ts';
 import { FfmpegTranscodeSession } from './FfmpegTrancodeSession.ts';
 import { StreamSelector } from './StreamSelector.ts';
+import { audioTrackSlots, pickSlotAudioStreams } from './AudioTrackLayout.ts';
 import { SubtitleStreamPicker } from './SubtitleStreamPicker.ts';
 import {
   AudioStream,
@@ -186,13 +187,13 @@ export class FfmpegStreamFactory {
       .setConcatInputSource(concatInput)
       .build();
 
-    const pipeline = pipelineBuilder.concat(
-      concatInput,
-      FfmpegState.forConcat(
-        await this.ffmpegInfo.getVersion(),
-        this.channel.name,
-      ),
+    const concatState = FfmpegState.forConcat(
+      await this.ffmpegInfo.getVersion(),
+      this.channel.name,
     );
+    // ffmpeg's own pick would keep one of the layout's audio tracks
+    concatState.mapAllStreams = this.audioSlots.length > 0;
+    const pipeline = pipelineBuilder.concat(concatInput, concatState);
 
     return this.wrapInSession(
       pipeline,
@@ -261,15 +262,30 @@ export class FfmpegStreamFactory {
       videoStream,
     );
 
-    const audioStream = AudioStream.create({
-      index: 1,
-      codec: '', // Unknown
-      channels: this.transcodeConfig.audioChannels,
-    });
+    // The joined programs carry one audio track, or one per slot of the
+    // channel's audio track layout, right after the video
+    const slots = this.audioSlots;
+    const audioStreams =
+      slots.length > 0
+        ? slots.map((language, i) =>
+            AudioStream.create({
+              index: 1 + i,
+              codec: '', // Unknown
+              channels: this.transcodeConfig.audioChannels,
+              language,
+            }),
+          )
+        : [
+            AudioStream.create({
+              index: 1,
+              codec: '', // Unknown
+              channels: this.transcodeConfig.audioChannels,
+            }),
+          ];
 
     const audioInputSource = new AudioInputSource(
       concatInput.source,
-      [audioStream],
+      audioStreams,
       this.createAudioState(playbackParams, null),
     );
 
@@ -585,16 +601,34 @@ export class FfmpegStreamFactory {
           subtitleStreams: streamDetails.subtitleDetails ?? [],
         });
 
+      // With the channel's audio track layout: the program's track for each
+      // slot (its main track where it has none), tagged with the slot language
+      const slots = this.audioSlots;
+      const outputStreams =
+        slots.length > 0
+          ? pickSlotAudioStreams(
+              slots,
+              streamDetails.audioDetails,
+              audioStream,
+            ).map((stream, i) =>
+              AudioStream.create({
+                index: stream.index,
+                codec: stream.codec ?? 'unknown',
+                channels: stream.channels ?? -2,
+                language: slots[i],
+              }),
+            )
+          : [
+              AudioStream.create({
+                index: audioStream.index,
+                codec: audioStream.codec ?? 'unknown',
+                channels: audioStream.channels ?? -2,
+                language: audioStream.languageCodeISO6392,
+              }),
+            ];
       audioInput = new AudioInputSource(
         streamSource,
-        [
-          AudioStream.create({
-            index: audioStream.index,
-            codec: audioStream.codec ?? 'unknown',
-            channels: audioStream.channels ?? -2,
-            language: audioStream.languageCodeISO6392,
-          }),
-        ],
+        outputStreams,
         audioState,
       );
 
@@ -656,10 +690,12 @@ export class FfmpegStreamFactory {
         }
       }
     } else {
-      audioInput = new NullAudioInputSource({
-        ...audioState,
-        audioDuration: duration.asMilliseconds(),
-      });
+      audioInput = this.withAudioSlots(
+        new NullAudioInputSource({
+          ...audioState,
+          audioDuration: duration.asMilliseconds(),
+        }),
+      );
     }
 
     // Otherwise caption from the program's full text track, if it has one
@@ -1005,7 +1041,9 @@ export class FfmpegStreamFactory {
       duration.asMilliseconds(),
     );
 
-    const audioInput = this.createPlaceholderAudioInput(audioState);
+    const audioInput = this.withAudioSlots(
+      this.createPlaceholderAudioInput(audioState),
+    );
 
     const builder = await this.pipelineBuilderFactory(this.transcodeConfig)
       .setHardwareAccelerationMode(
@@ -1108,17 +1146,19 @@ export class FfmpegStreamFactory {
         : null,
     );
 
-    const audioInput = backgroundMusic
-      ? AudioInputSource.withStream(
-          backgroundMusic.source,
-          AudioStream.create({
-            index: backgroundMusic.audioStream.index,
-            codec: backgroundMusic.audioStream.codec ?? 'unknown',
-            channels: backgroundMusic.audioStream.channels ?? -2,
-          }),
-          audioState,
-        )
-      : this.createPlaceholderAudioInput(audioState);
+    const audioInput = this.withAudioSlots(
+      backgroundMusic
+        ? AudioInputSource.withStream(
+            backgroundMusic.source,
+            AudioStream.create({
+              index: backgroundMusic.audioStream.index,
+              codec: backgroundMusic.audioStream.codec ?? 'unknown',
+              channels: backgroundMusic.audioStream.channels ?? -2,
+            }),
+            audioState,
+          )
+        : this.createPlaceholderAudioInput(audioState),
+    );
 
     const builder = await this.pipelineBuilderFactory(this.transcodeConfig)
       .setHardwareAccelerationMode(
@@ -1189,6 +1229,32 @@ export class FfmpegStreamFactory {
       duration,
       endTime,
     );
+  }
+
+  // The channel's fixed audio track layout (plans/switchable-audio.md): slot
+  // languages in output order; [] = off, one audio track as before
+  private get audioSlots(): string[] {
+    return audioTrackSlots(this.channel.audioTracks);
+  }
+
+  // A single-stream audio input (gap music, silence, tones) repeated into
+  // every slot of the channel's layout, so gaps carry the same tracks as
+  // programs; unchanged without a layout
+  private withAudioSlots<T extends AudioInputSource>(input: T): T {
+    const slots = this.audioSlots;
+    const [stream] = input.streams;
+    if (slots.length === 0 || stream === undefined) {
+      return input;
+    }
+    input.streams = slots.map((language) =>
+      AudioStream.create({
+        index: stream.index,
+        codec: stream.codec,
+        channels: stream.channels,
+        language,
+      }),
+    );
+    return input;
   }
 
   private createAudioState(
