@@ -228,6 +228,24 @@ describe('parseSubtitleCues', () => {
     });
   });
 
+  test('keeps the same line in two places', () => {
+    const ass = assWith(
+      [
+        '[V4+ Styles]',
+        'Format: Name, Alignment',
+        'Style: Default,2',
+        'Style: Sign,8',
+      ],
+      [
+        'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Twice',
+        'Dialogue: 0,0:00:01.00,0:00:02.00,Sign,,0,0,0,,Twice',
+      ],
+    );
+    expect(
+      parseSubtitleCues(ass, 'ass')?.map((c) => c.ass?.styleAlignment),
+    ).toEqual([2, 8]);
+  });
+
   // Typesetting stacks copies of a line (outline, glow) on several layers
   test('keeps a layered line once', () => {
     const ass = assWith(

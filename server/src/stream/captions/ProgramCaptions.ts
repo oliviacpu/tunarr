@@ -132,7 +132,8 @@ const DefaultEventFields = [
 // what placing them needs: the script's size ([Script Info] PlayResX and
 // PlayResY) and each style's alignment ([V4+ Styles], or [V4 Styles] in SSA's
 // numbering). Layered copies of a line (the same text at the same times, as
-// typesetting stacks for outlines and glows) are kept once.
+// typesetting stacks for outlines and glows) are kept once; the same text in another
+// place (another style's alignment) is a line of its own.
 function parseAss(text: string): CaptionCue[] {
   const cues: CaptionCue[] = [];
   let section = '';
@@ -204,14 +205,16 @@ function parseAss(text: string): CaptionCue[] {
   const size = playRes(resX, resY);
   const seen = new Set<string>();
   for (const event of events) {
-    const key = `${event.startMs}|${event.endMs}|${event.text}`;
+    // An unknown style is drawn in Default, as libass does
+    const styleAlignment =
+      styleAlignments.get(event.style) ?? styleAlignments.get('Default');
+    // The same text at the same times and place is a layered copy; in another
+    // place (another style's alignment) it is a line of its own
+    const key = `${event.startMs}|${event.endMs}|${styleAlignment}|${event.text}`;
     if (seen.has(key)) {
       continue;
     }
     seen.add(key);
-    // An unknown style is drawn in Default, as libass does
-    const styleAlignment =
-      styleAlignments.get(event.style) ?? styleAlignments.get('Default');
     cues.push({
       startMs: event.startMs,
       endMs: event.endMs,

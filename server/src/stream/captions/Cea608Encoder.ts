@@ -906,42 +906,53 @@ function resolveOverlaps(
 ): ScheduleItem[] {
   const out: ScheduleItem[] = [];
   let changed = false;
-  for (let i = 0; i < items.length; ) {
-    const first = items[i];
-    if (!first) {
-      break;
+  const taken = new Set<ScheduleItem>();
+  for (const [i, first] of items.entries()) {
+    if (taken.has(first)) {
+      continue;
     }
+    taken.add(first);
     const policy = first.appearance.overlappingCues;
     const minOverlap = policy === 'newest' ? 0 : MinOverlapMs;
     const cluster = [first];
     let clusterEnd = first.endMs;
-    let j = i + 1;
-    for (; first.appearance.mode === 'popOn' && j < items.length; j++) {
-      const next = items[j];
-      if (
-        !next ||
-        next.appearance.mode !== 'popOn' ||
-        next.appearance.overlappingCues !== policy ||
-        // How long it overlaps what is already in the cluster: to the
-        // earlier of its own end and the cluster's
-        !(Math.min(clusterEnd, next.endMs) - next.startMs > minOverlap)
-      ) {
+    let after: ScheduleItem | undefined;
+    // Later subtitles that start while the cluster is up join it when they
+    // overlap it long enough. One that doesn't (a short overlap) stays on its
+    // own, and the scan goes on past it.
+    for (const next of items.slice(i + 1)) {
+      if (next.startMs >= clusterEnd) {
+        after ??= next;
         break;
       }
-      cluster.push(next);
-      clusterEnd = Math.max(clusterEnd, next.endMs);
+      // How long it overlaps the cluster: to the earlier of its own end and
+      // the cluster's
+      const overlap = Math.min(clusterEnd, next.endMs) - next.startMs;
+      if (
+        first.appearance.mode === 'popOn' &&
+        !taken.has(next) &&
+        next.appearance.mode === 'popOn' &&
+        next.appearance.overlappingCues === policy &&
+        overlap > minOverlap
+      ) {
+        cluster.push(next);
+        taken.add(next);
+        clusterEnd = Math.max(clusterEnd, next.endMs);
+      } else {
+        after ??= next;
+      }
     }
     const resolved =
       cluster.length === 1
         ? cluster
         : policy === 'newest'
-          ? newestOf(cluster, frameMs, items[j])
+          ? newestOf(cluster, frameMs, after)
           : stackedOf(cluster, policy === 'apart');
     changed ||= resolved !== cluster;
     out.push(...resolved);
-    i = j;
   }
-  return changed ? out : items;
+  // Subtitles left out of a cluster can start inside it, so back in order
+  return changed ? out.sort((a, b) => a.startMs - b.startMs) : items;
 }
 
 // The stretches of a cluster with the same subtitles on screen, in order;

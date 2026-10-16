@@ -821,6 +821,25 @@ describe('overlapping subtitles', () => {
     expect(rowsAt(pairs, 152)).toEqual([[15, 'Blip']]);
   });
 
+  // A short overlap stays sequential, but doesn't end the stacking of what
+  // overlaps the long subtitle after it
+  test('stacks a later overlap after a short one', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 10000, text: 'Long' },
+        { startMs: 5000, endMs: 5300, text: 'Blip' },
+        { startMs: 6000, endMs: 8000, text: 'Next' },
+      ],
+      330,
+    );
+    expect(rowsAt(pairs, 152)).toEqual([[15, 'Blip']]);
+    expect(rowsAt(pairs, 210)).toEqual([
+      [14, 'Long'],
+      [15, 'Next'],
+    ]);
+    expect(rowsAt(pairs, 270)).toEqual([[15, 'Long']]);
+  });
+
   test('never folds away a subtitle shorter than a second', () => {
     const pairs = framePairs(
       [
