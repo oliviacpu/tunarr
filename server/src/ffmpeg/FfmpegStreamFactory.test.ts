@@ -1643,6 +1643,35 @@ describe('FfmpegStreamFactory', () => {
         expect(captions).toBeUndefined();
       });
 
+      describe('the caption test pattern', () => {
+        test("replaces a program's captions", async () => {
+          const { captions } = await run({
+            selected: null,
+            settings: { hdhrCaptionTestPattern: true },
+          });
+          expect(captions?.cues[0]?.text).toBe('1 WHITE TEXT');
+          expect(captions?.frameRate).toBe(24);
+        });
+
+        test('replaces the notice for a program without subtitles', async () => {
+          const { captions } = await run({
+            selected: null,
+            subtitles: null,
+            settings: { hdhrCaptionTestPattern: true },
+          });
+          expect(captions?.cues[0]?.text).toBe('1 WHITE TEXT');
+        });
+
+        test('sends nothing when captions are off', async () => {
+          const { captions } = await run({
+            selected: null,
+            hdhrClosedCaptions: false,
+            settings: { hdhrCaptionTestPattern: true },
+          });
+          expect(captions).toBeUndefined();
+        });
+      });
+
       describe('the notice for a program without subtitles', () => {
         test('captions a program without subtitles with a short notice', async () => {
           const { method, captions } = await run({
