@@ -56,8 +56,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     airing within the hour, to copies more than 6 hours old whose live file it can't read.
   - **A 404 heals at once:** the task reads the item again (`getMovie`/`getEpisode`), mints its subtitles and saves
     them with `upsertSubtitles`, the scan's own save (new on `IProgramDB`). Sidecars that are still the same stream
-    keep their file; replaced copies are deleted. Once per program per run. An item that is gone is left to the next
-    scan.
+    keep their file; replaced copies are deleted. An item that lists no subtitles any more has its rows cleared
+    (`replaceProgramSubtitles`). An item that is gone is left to the next scan.
+  - **Each program once a run:** a program airing twice in the hour (a repeat, or on two channels) is handled once,
+    so a heal that can't succeed doesn't re-read the item each time.
   - **The scan says so:** a Plex scan logs once when sidecar paths are hidden while the video's path came through.
 - **Tests:**
   - `ExternalSubtitleDownloader.test.ts`: refresh replaces a changed copy, keeps an unchanged one and renews its age,
@@ -67,7 +69,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `SubtitleExtractorTask.test.ts`:
     - a copy older than 6 hours is fetched again, a younger one isn't, nor one whose live file is readable;
     - on a 404 the item is read once, re-minted and saved, the new stream downloaded, and a still-valid sidecar keeps
-      its file; films use the movie call; a gone item is left alone; a second 404 doesn't loop.
+      its file; films use the movie call; a gone item is left alone; a second 404 doesn't loop; an empty mint clears
+      the rows; a program on two channels is read again once.
+  - `ProgramDB.test.ts`: replacing a program's subtitles with none clears its rows and cached copies.
   - `MediaSourceScanner.test.ts`: the info line once a scan, again in the next scan, and not when the paths are
     reported or the video has none.
 - **Upstream:** not sent.
