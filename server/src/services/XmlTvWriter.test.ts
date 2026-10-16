@@ -1573,8 +1573,16 @@ describe('XmlTvWriter reused programmes', () => {
 
   test('a reused channel keeps its programmes, is not rendered, and publishes nothing', async () => {
     await withOutput(async (outputPath) => {
-      const kept = makeProgram({ artwork: [makeArtwork('poster')] });
-      const changed = makeProgram({ artwork: [makeArtwork('poster')] });
+      // Fixed titles: the check below looks for the title in the rendered XML,
+      // where a random one with ' & < > " comes out escaped
+      const kept = makeProgram({
+        title: 'Kept programme',
+        artwork: [makeArtwork('poster')],
+      });
+      const changed = makeProgram({
+        title: 'Changed programme',
+        artwork: [makeArtwork('poster')],
+      });
       const first = channelGuide(1, [kept]);
       const second = channelGuide(2, [changed]);
 
