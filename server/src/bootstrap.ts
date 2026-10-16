@@ -6,6 +6,7 @@ import path from 'node:path';
 import { isMainThread } from 'node:worker_threads';
 import type { DeepPartial } from 'ts-essentials';
 import { DBAccess } from './db/DBAccess.ts';
+import { readIntoFileCache } from './db/readIntoFileCache.ts';
 import type { SettingsFile } from './db/SettingsDB.ts';
 import { SettingsDBFactory } from './db/SettingsDBFactory.ts';
 import {
@@ -22,6 +23,7 @@ import {
   PublicMediaFolderName,
   SubtitlesCacheFolderName,
 } from './util/constants.ts';
+import { getDefaultDatabaseName } from './util/defaults.ts';
 import { fileExists } from './util/fsUtil.js';
 import { LoggerFactory, RootLogger } from './util/logging/LoggerFactory.js';
 
@@ -81,6 +83,18 @@ export async function bootstrapTunarr(
   }
 
   await initDbDirectories(opts);
+
+  // Before the main connection's first query: see readIntoFileCache.
+  if (isMainThread && hasTunarrDb) {
+    const dbPath = dbName ?? getDefaultDatabaseName();
+    const { bytes, ms } = await readIntoFileCache([dbPath, `${dbPath}-wal`]);
+    if (bytes > 0) {
+      RootLogger.info(
+        `Read the database into the file cache: ${Math.round(bytes / 1024 / 1024)} MB in ${Math.round(ms)} ms`,
+      );
+    }
+  }
+
   const conn = DBAccess.init(dbName);
 
   // Workers attach to a database the parent has already migrated. Running the

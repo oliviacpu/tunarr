@@ -35,6 +35,34 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Tunarr no longer sits for minutes at startup on a cold disk (2026-10-16)
+
+- **What you saw:** a release's first start hung after the `/dev/dri` log line: 7 minutes at 03:09 UTC (rolled back by
+  hand), and 259 s at 11:13 UTC. Nothing else was logged, then a 60 s Plex timeout and "Still waiting for guide to
+  generate" arrived together. Other starts of the same images took 4 to 13 s.
+- **Cause**, reproduced on the deployment with a copy of its database:
+  - The main thread's connection keeps pages in its own cache and doesn't map the file (the hourly-stall fix below).
+    A new process starts with that cache empty.
+  - On the shared server, the operating system's file cache drops the database within the hour.
+  - So every page the startup queries read is a separate wait on a busy disk, and better-sqlite3 blocks the main
+    thread for each one.
+  - Sampled once a second during a cold start, the main thread sat in `pread64` on the database, in state `D`, using
+    no CPU. It was the same picture as the 03:09 hang: a finished `vainfo` that nobody reaped, because the event loop
+    never ran.
+  - **Cold copy:** ready in 35 s. **The same copy read through once with `cat` (0.8 s) first:** ready in 6 s. The
+    disk was quiet during the test; under the 11:13 load the same reads took 259 s.
+- **Fix:** before the main thread opens the database, `bootstrapTunarr` reads `db.db` and `db.db-wal` once, front to
+  back, in 1 MiB chunks (`db/readIntoFileCache.ts`). The kernel's readahead turns that into a streaming read.
+  - It's capped at 512 MiB and skips missing files. A failure only means a slower start; it never stops one.
+  - It logs `Read the database into the file cache: <MB> in <ms>`.
+  - Workers and new installs skip it.
+- **Tests:**
+  - `readIntoFileCache.test.ts`: whole files across chunks, a missing WAL, the byte cap across files, and a directory
+    in place of a file.
+  - `bootstrap.test.ts`: an existing database and its WAL are read before `DBAccess.init`; a new install reads
+    nothing. The first fails without the bootstrap change.
+- **Upstream:** not sent.
+
 ### Local libraries find the subtitle files next to their videos (2026-10-16)
 
 - **What you saw:** nothing; found while reading the subtitle code. A local library never picked up `Movie.en.srt`
