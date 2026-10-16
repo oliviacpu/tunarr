@@ -99,15 +99,15 @@ describe('ChannelCaptionsField', () => {
     expect(await save()).toBeNull();
   });
 
-  test('its own look starts from the global look', async () => {
+  test('its own look shows the global look and saves nothing until a setting changes', async () => {
     const { user, save } = await renderField(null);
 
     await user.click(screen.getByLabelText('Use own caption look'));
 
-    expect(await save()).toEqual({
-      alignment: 'centeredLines',
-      appearance: globalSettings.hdhrCaptionAppearance,
-    });
+    expect(
+      screen.getByRole('combobox', { name: 'Text color' }),
+    ).toHaveTextContent('Yellow');
+    expect(await save()).toBeNull();
   });
 
   test('shows and saves a changed setting', async () => {
@@ -121,10 +121,42 @@ describe('ChannelCaptionsField', () => {
     await user.click(screen.getByRole('combobox', { name: 'Text color' }));
     await user.click(screen.getByRole('option', { name: 'Red' }));
 
-    expect(await save()).toEqual({
-      alignment: 'centeredLines',
-      appearance: { ...globalSettings.hdhrCaptionAppearance, textColor: 'red' },
+    expect(await save()).toEqual({ appearance: { textColor: 'red' } });
+  });
+
+  test('saves only the settings changed; the rest keep following the global look', async () => {
+    const { user, save } = await renderField({
+      appearance: { textColor: 'magenta' },
     });
+
+    await user.click(
+      screen.getByRole('combobox', { name: 'Lines per caption' }),
+    );
+    await user.click(screen.getByRole('option', { name: '4' }));
+    await user.click(
+      screen.getByRole('combobox', { name: 'Caption Alignment' }),
+    );
+    await user.click(screen.getByRole('option', { name: 'Left' }));
+
+    expect(await save()).toEqual({
+      alignment: 'left',
+      appearance: { textColor: 'magenta', maxLines: 4 },
+    });
+  });
+
+  test('turning its own look off drops it and keeps the test pattern', async () => {
+    const { user, save } = await renderField({
+      testPattern: true,
+      appearance: { textColor: 'magenta' },
+    });
+
+    await user.click(screen.getByLabelText('Use own caption look'));
+
+    // The fields close once the collapse's transition ends
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Text color')).not.toBeInTheDocument(),
+    );
+    expect(await save()).toEqual({ testPattern: true });
   });
 
   test('the test pattern alone leaves the look global', async () => {

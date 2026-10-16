@@ -108,8 +108,9 @@ FFmpeg settings; that switch stays the one for every channel. Changes take effec
   [test pattern](../ffmpeg/index.md#caption-appearance-experimental). Other channels keep their captions. When the
   FFmpeg settings' test pattern is on, every channel shows it, whatever this switch says.
 - **Use own caption look:** gives the channel its own caption alignment and
-  [caption appearance](../ffmpeg/index.md#caption-appearance-experimental). The fields start from the global look, and
-  only this channel's captions change. Turned off, the channel follows the global look again.
+  [caption appearance](../ffmpeg/index.md#caption-appearance-experimental). The fields show the global look; a setting
+  you change becomes this channel's own, and only this channel's captions change. Turned off, the channel follows the
+  global look again.
 - **Copy to all channels:** makes this channel's look the global one, for every channel without a look of its own.
   Use it once a look works in your player.
 - **Reset to global:** drops the channel's own look and keeps its test pattern switch.
