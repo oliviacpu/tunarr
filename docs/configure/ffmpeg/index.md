@@ -101,13 +101,44 @@ Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. T
 - **No longer burned in:** full text subtitles that would have been burned in for the whole program are sent as captions instead, so viewers who want them must turn captions on. Tunarr's own players get them as selectable WebVTT subtitles.
 - **Always burned in:** image-based subtitles (PGS, VobSub) can't become captions and are still burned in.
 - **Requirements:** text subtitles on disk, either sidecar files or [extracted](#subtitle-extraction) ones. The channel must use the **HLS** stream mode and have subtitles enabled.
-- **Formatting:** italics and underline from the subtitle file (`<i>`, `<u>`, and ASS `{\i1}`, `{\u1}`) are kept. A cue the file places at the top of the screen (`{\an7}`, `{\an8}` or `{\an9}`) is shown at the top; all others go at the bottom. Other formatting (bold, colors, exact positions) is dropped.
+- **Formatting:** italics and underline from the subtitle file (`<i>`, `<u>`, and ASS `{\i1}`, `{\u1}`) are kept. A cue the file places at the top of the screen (`{\an7}`, `{\an8}` or `{\an9}`) is shown at the top; all others go at the bottom. Other formatting (bold, colors, exact positions) is dropped. Both can be turned off under [Caption appearance](#caption-appearance-experimental).
 - **Caption Alignment:** where lines sit across the screen. **Centered block** (the default) starts every line in the same column, with the block centered. **Each line centered** centers each line on its own. **Left** starts every line at the left edge.
-- **Look:** text size, font and background are the player's, not Tunarr's. Plex Live TV (on Apple TV, for example) burns captions into the picture in its own style, a solid dark box behind the text. The text size follows the Plex app's subtitle size setting. CEA-608's optional background codes (semi-transparent or transparent) don't change it, so Tunarr doesn't send them.
-- **Format limits:** lines hold up to 32 characters, two lines at a time, and long cues are split over time. A style change in the middle of a word takes a column of its own. Characters outside the caption character set (most non-Latin scripts) are dropped.
+- **Look:** text size and font are the player's, not Tunarr's, and so is the box behind the text unless you choose one under [Caption appearance](#caption-appearance-experimental). Plex Live TV (on Apple TV, for example) burns captions into the picture in its own style, a solid dark box behind the text. The text size follows the Plex app's subtitle size setting. In a test, Plex ignored CEA-608's see-through and transparent box codes.
+- **Format limits:** lines hold up to 32 characters, two lines at a time (both adjustable under [Caption appearance](#caption-appearance-experimental)), and long cues are split over time. A style change in the middle of a word takes a column of its own, and so do a text color and a box. Characters outside the caption character set (most non-Latin scripts) are dropped.
 - **Every frame carries caption data,** even when nothing is being said, so players detect the caption track as soon as they tune in.
-- **Programs without subtitles:** players offer captions for the whole stream, so a program with no subtitle track shows a short caption, "No captions for this program", from 1 to 5 seconds into the program (or into the stream, if you tune in partway through), a little later for video below 23.976 fps. A viewer who turns captions on can then tell they work. Filler, flex time and music tracks don't show it, and neither does a program whose subtitles can't become captions (image-based ones are burned in instead).
+- **Programs without subtitles:** players offer captions for the whole stream, so a program with no subtitle track shows a short caption, "No captions for this program", from 1 to 5 seconds into the program (or into the stream, if you tune in partway through), a little later for video below 23.976 fps or when the caption appearance makes it slower to load. A viewer who turns captions on can then tell they work. Filler, flex time and music tracks don't show it, and neither does a program whose subtitles can't become captions (image-based ones are burned in instead).
 - **Language:** the stream labels the captions with the first language in your [Language Preference](#language-preference), so players such as Plex can name the track by language instead of "Unknown".
+
+#### Caption appearance (experimental)
+
+Everything CEA-608 captions can ask for, under **Caption appearance (experimental)** below Caption Alignment. A player may ignore any of it: Plex draws captions with its own decoder. Turn on the **Test pattern** to see what yours shows. Changes take effect from the next program.
+
+- **Text color:** white, green, blue, cyan, red, yellow or magenta. Italic words are always white, which is how CEA-608 defines italics.
+- **Box behind the text:** the player's own (the default: Tunarr sends nothing), or black, white, green, blue, cyan, red, yellow or magenta. **Box opacity** makes a chosen box solid, see-through, or none at all (the text alone).
+- **How captions appear:** **Pop-on** (the default) shows each caption whole, on its start frame. **Roll-up** scrolls lines up from the bottom row with 2, 3 or 4 rows on screen, as live TV captions do; a cue's lines stay together, and the last lines stay up for up to 2 seconds for the next subtitle to scroll. **Paint-on** draws each caption's letters as they arrive.
+- **Lines per caption:** 2 (the default), 3 or 4. More lines split long subtitles less often. Roll-up uses its own number of rows.
+- **Line width:** 20 to 32 columns. A narrower line wraps sooner.
+- **Bottom row and Top row:** the screen has 15 caption rows. Captions end on the bottom row (15, the default); captions the subtitle file places at the top start on the top row (1).
+- **All capitals**, and whether to keep the subtitle file's **italics and underline** and its **top placement**.
+
+A box, a color or narrower lines make each caption take longer to send, so in fast dialogue a caption can come a little late.
+
+**Test pattern:** replaces every program's captions with 34 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples.
+
+| # | Sample |
+| --- | --- |
+| 1–7 | Text colors: white, green, blue, cyan, red, yellow, magenta |
+| 8 | Red text with white italics in the middle |
+| 9, 10 | Italics, underline |
+| 11–18 | Boxes: black, red, green, blue, cyan, magenta, then blue text on yellow and on white |
+| 19, 20 | See-through black and blue boxes |
+| 21 | No box at all |
+| 22–25 | Rows 1 and 5 (top), 11 and 13 (bottom) |
+| 26, 27 | Three and four lines |
+| 28, 29 | Left-aligned lines, and each line centered |
+| 30 | Flashing text |
+| 31 | Paint-on |
+| 32–34 | Roll-up with 2, 3 and 4 rows |
 
 The setting takes effect from the next program, and the HDHomeRun stream picks it up the next time it is started.
 

@@ -35,6 +35,36 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Closed caption appearance settings, and a test pattern (2026-10-15)
+
+- **What you wanted:** every presentation feature CEA-608 closed captions have, as settings, to find out which ones Plex Live TV shows. Plex draws captions itself, with a decoder of FFmpeg's family, so what it honours can only be found by trying.
+- **Settings** (Settings > FFmpeg > Caption appearance (experimental), `hdhrCaptionAppearance`, and `hdhrCaptionTestPattern`):
+
+  - text color; the box behind the text (the player's own by default) and its opacity;
+  - pop-on, roll-up with 2, 3 or 4 rows, or paint-on;
+  - lines per caption (2–4), line width (20–32 columns), bottom and top rows;
+  - all capitals; keeping the subtitle file's italics and underline, and its top placement.
+
+  The defaults send what Tunarr always sent. `Cea608Encoder.golden.test.ts` pins those bytes for a varied cue set, each alignment, three frame rates and a program end; the snapshot was recorded before any encoder change and never updated.
+
+- **Encoder** (`server/src/stream/captions/Cea608Encoder.ts`): `buildCaptionSchedule` takes an appearance (the settings, the alignment, and flash for the test pattern), and a cue can carry its own.
+  - **Color:** a mid-row color code at the start of each line. 608's italics are white, so an italic run loses the color and the code ending it restores it.
+  - **Box:** a space, then the background code (semi-transparent with the low bit, or transparent `0x17 0x2d`), at the start of each line. One column each, counted in the width.
+  - **Rows, lines, width, capitals:** bottom captions end on the bottom row and top ones start on the top row, always on screen. Capitals and the style and placement switches apply before the width is measured.
+  - **Paint-on:** Resume Direct Captioning before the cue, Erase Displayed Memory on its start frame, then the text as it arrives.
+  - **Roll-up:** erase and the roll-up command when the mode starts, then each line as a carriage return, a preamble on the base row, and its text, from the cue's start frame. A cue's lines stay together, aligned as a block, and the last lines stay up for up to 2 s for the next cue to scroll.
+  - **Mixed modes:** a caption only replaces one in its own mode without a clear, the next caption's pairs never start before the last one's end, and a carriage return is never sent while a pop-on caption loads (FFmpeg's decoder would take it as a roll-up).
+  - **Notice:** "No captions for this program" waits for a longer load when the appearance makes one (`captionLoadFrames`), never earlier than before.
+- **Test pattern** (`CaptionTestPattern.ts`): 34 numbered samples that loop for the program's length, one per feature, each saying what it should look like and carrying its whole appearance, so the settings don't change it. It replaces the captions of every program that would get some. Docs list the samples.
+- **Checked with jellyfin-ffmpeg 8.1.3** (`CaptionInsertion.local.test.ts`): FFmpeg's decoder shows the text and box colors (`\c`, `\3c`), rolls lines up keeping the chosen rows, and times paint-on and roll-up from the start frame. It ignores flash, see-through and transparent boxes, so those are the ones most likely to do nothing in Plex.
+- **Tests:**
+  - `Cea608Encoder.test.ts`: each option through a new frame-by-frame test decoder (`testing/captions/Cea608TestDecoder.ts`); paint-on, roll-up and mode changes; the notice loading in full under heavy appearances.
+  - `CaptionTestPattern.test.ts`: numbering, whole appearances, timing and looping; every sample shows, in order, whatever the settings.
+  - `HlsSession.test.ts` (the settings reach each program's captions), `FfmpegStreamFactory.test.ts` (the pattern replaces captions and the notice; the notice waits for a longer load), `ProgramCaptions.test.ts`.
+  - The web settings page passes the e2e sweep, and with captions on its controls save.
+- **Known limits:** italic words are white whatever the text color. A box or color makes each caption take longer to send, so fast dialogue can show captions a little late. What Plex does with each option is untested until the test pattern is watched on an Apple TV; a preview and "works in Plex" labels come after that.
+- **Upstream:** not sent.
+
 ### A session's first program shows its captions on time (2026-10-15)
 
 - **What you saw:** on the first program after tuning in, closed captions came one to two frames early, and a cue
