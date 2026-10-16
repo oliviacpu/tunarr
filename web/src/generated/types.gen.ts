@@ -3019,6 +3019,7 @@ export type GetChannelsResponses = {
             allowExternal: boolean;
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
+        audioTracks?: Array<string>;
     }>;
 };
 
@@ -3088,6 +3089,7 @@ export type CreateChannelV2Data = {
                 allowExternal: boolean;
                 filter?: 'none' | 'forced' | 'default' | 'any';
             }>;
+            audioTracks?: Array<string>;
         };
     } | {
         type: 'copy';
@@ -3229,6 +3231,7 @@ export type CreateChannelV2Responses = {
             allowExternal: boolean;
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
+        audioTracks?: Array<string>;
     };
 };
 
@@ -3391,6 +3394,7 @@ export type GetChannelsByNumberV2Responses = {
             allowExternal: boolean;
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
+        audioTracks?: Array<string>;
     };
 };
 
@@ -3458,6 +3462,7 @@ export type PutApiChannelsByIdData = {
             allowExternal: boolean;
             filter?: 'none' | 'forced' | 'default' | 'any';
         }>;
+        audioTracks?: Array<string>;
     };
     path: {
         id: string;
@@ -3601,6 +3606,7 @@ export type PutApiChannelsByIdResponses = {
             allowExternal: boolean;
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
+        audioTracks?: Array<string>;
     };
 };
 
@@ -7018,6 +7024,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         allowExternal: boolean;
                         filter: 'none' | 'forced' | 'default' | 'any';
                     }>;
+                    audioTracks?: Array<string>;
                 } | null;
                 isMissing: boolean;
             } | {
@@ -7431,6 +7438,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         allowExternal: boolean;
                         filter: 'none' | 'forced' | 'default' | 'any';
                     }>;
+                    audioTracks?: Array<string>;
                 } | null;
                 isMissing: boolean;
             } | {
@@ -13612,6 +13620,7 @@ export type PostApiTroubleshootResponses = {
                 allowExternal: boolean;
                 filter: 'none' | 'forced' | 'default' | 'any';
             }>;
+            audioTracks?: Array<string>;
         };
         streamSelection?: {
             profileName?: string;

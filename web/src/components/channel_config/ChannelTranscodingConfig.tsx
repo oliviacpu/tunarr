@@ -32,6 +32,7 @@ import {
   CheckboxFormController,
   NumericFormControllerText,
 } from '../util/TypedController.tsx';
+import { ChannelAudioTracksField } from './ChannelAudioTracksField.tsx';
 import { ChannelSubtitlePreferencesTable } from './ChannelSubtitlePreferencesTable.tsx';
 
 const watermarkPositionOptions: {
@@ -211,6 +212,9 @@ export default function ChannelTranscodingConfig() {
               </Trans>
             </Typography>
             <Divider sx={{ my: 2 }} />
+            <ChannelAudioTracksField
+              disabled={streamMode === 'hls_direct_v2'}
+            />
             <FormControlLabel
               label={t`Enable Subtitles`}
               sx={{
