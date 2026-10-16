@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { v4 } from 'uuid';
 import type { ChannelOrm } from '../db/schema/Channel.ts';
 import type { Lineup, LineupItem } from '../db/derived_types/Lineup.ts';
-import type { MaterializedChannelPrograms } from './XmlTvWriter.ts';
+import type {
+  MaterializedChannelPrograms,
+  XmlTvWriteOptions,
+} from './XmlTvWriter.ts';
 import type { ChannelPrograms } from './TvGuideService.ts';
 import dayjsBase from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime.js';
@@ -1199,5 +1202,134 @@ describe('TVGuideService', () => {
         expect([a.uuid, b.uuid]).toContain(redirect.channelId);
       }
     });
+  });
+});
+
+// Saving one channel rewrote the guide for every channel, refetching each
+// channel's programs with all their relations, and stalled the main thread
+// (and the Live TV it serves) for up to 1 s on a shared server (2026-10-16).
+describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
+  const HOUR = 60 * 60 * 1000;
+
+  function setup() {
+    const channelA = {
+      channel: makeChannelOrm({ number: 1, name: 'Channel A' }),
+      lineup: makeLineup([
+        { type: 'content', id: 'program-a', durationMs: 4 * HOUR },
+      ]),
+    };
+    const channelB = {
+      channel: makeChannelOrm({ number: 2, name: 'Channel B' }),
+      lineup: makeLineup([
+        { type: 'content', id: 'program-b', durationMs: 4 * HOUR },
+      ]),
+    };
+    let xmltvSettings = { programmingHours: 4, useShowPoster: false };
+
+    // Behaves like XmlTvWriter.write: renders every channel it isn't told to reuse
+    const mockWrite = vi.fn(
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (
+        channels: MaterializedChannelPrograms[],
+        options?: XmlTvWriteOptions,
+      ) => {
+        for (const { channel } of channels) {
+          if (!options?.reuse?.has(channel.uuid)) {
+            options?.onRendered?.(
+              channel.uuid,
+              `<programmes of ${channel.name}>`,
+            );
+          }
+        }
+      },
+    );
+    const mockGetProgramsByIds = vi.fn().mockResolvedValue([]);
+    const service = new TVGuideService(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { write: mockWrite } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { push: vi.fn() } as any,
+      {
+        loadAllLineups: vi.fn().mockResolvedValue({
+          [channelA.channel.uuid]: channelA,
+          [channelB.channel.uuid]: channelB,
+        }),
+        // A save reloads the channel: a new object with the same uuid
+        getChannelOrm: vi.fn((id: string) =>
+          Promise.resolve(
+            id === channelA.channel.uuid
+              ? { ...channelA.channel }
+              : { ...channelB.channel },
+          ),
+        ),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { getGuideProgramsByIds: mockGetProgramsByIds } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      {
+        featureFlags: () => ({ xmltvCreditImagesEnabled: false }),
+        xmlTvSettings: () => xmltvSettings,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any,
+    );
+    const fetchedIds = (call: number) =>
+      [...(mockGetProgramsByIds.mock.calls[call]?.[0] as string[])].sort();
+    const reused = (call: number) => [
+      ...(
+        (mockWrite.mock.calls[call]?.[1]?.reuse ?? new Map()) as Map<
+          string,
+          string
+        >
+      ).entries(),
+    ];
+    return {
+      service,
+      channelA,
+      channelB,
+      mockWrite,
+      fetchedIds,
+      reused,
+      changeSettings: () => {
+        xmltvSettings = { ...xmltvSettings, useShowPoster: true };
+      },
+    };
+  }
+
+  it('a channel save fetches and renders only that channel', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    expect(t.fetchedIds(0)).toEqual(['program-a', 'program-b']);
+    expect(t.reused(0)).toEqual([]);
+
+    await t.service.updateCachedChannel(t.channelA.channel.uuid);
+
+    expect(t.fetchedIds(1)).toEqual(['program-a']);
+    expect(t.reused(1)).toEqual([
+      [t.channelB.channel.uuid, '<programmes of Channel B>'],
+    ]);
+  });
+
+  it('a guide rebuild or a settings change renders every channel again', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+
+    // A rebuild replaces every channel's guide
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    expect(t.fetchedIds(1)).toEqual(['program-a', 'program-b']);
+    expect(t.reused(1)).toEqual([]);
+
+    // So does a change to a setting the programmes are rendered with
+    t.changeSettings();
+    await t.service.updateCachedChannel(t.channelA.channel.uuid);
+    expect(t.fetchedIds(2)).toEqual(['program-a', 'program-b']);
+    expect(t.reused(2)).toEqual([]);
   });
 });
