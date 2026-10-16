@@ -37,7 +37,11 @@ import {
   type EditChannelTabs,
 } from './EditChannelTabPanel.tsx';
 
-function getDefaultFormValues(channel: Channel): DeepRequired<SaveableChannel> {
+// captions stays sparse: a channel saves only the caption settings it sets
+function getDefaultFormValues(
+  channel: Channel,
+): DeepRequired<Omit<SaveableChannel, 'captions'>> &
+  Pick<SaveableChannel, 'captions'> {
   return {
     ...channel,
     streamMode: channel.streamMode ?? 'hls',
@@ -92,6 +96,7 @@ function getDefaultFormValues(channel: Channel): DeepRequired<SaveableChannel> {
     subtitlesEnabled: channel.subtitlesEnabled,
     subtitlePreferences: channel.subtitlePreferences ?? [],
     audioTracks: channel.audioTracks ?? [],
+    captions: channel.captions ?? null,
   };
 }
 
@@ -120,6 +125,7 @@ const EditChannelTabsProps: EditChannelTabProps[] = [
       'subtitlesEnabled',
       'subtitlePreferences',
       'audioTracks',
+      'captions',
     ],
   },
 ];
