@@ -801,13 +801,55 @@ function loadSequence(
   blocks: readonly CaptionLayout[],
   appearance: CaptionAppearance,
 ): CcPair[][] {
-  return [
-    [ResumeCaptionLoading],
-    [EraseNonDisplayedMemory],
-    ...captionLines(blocks, appearance).flatMap(({ units, row, column }) =>
-      lineAtoms(units, row, column),
-    ),
-  ];
+  return groupedLoadSequence(blocks, appearance).atoms;
+}
+
+// The load's atoms, and for each the line it draws when that line sets a box
+// colour (undefined otherwise). FFmpeg's decoder turns the box back to black
+// on Erase Displayed Memory (ccaption_dec.c handle_edm: bg_color =
+// CCCOL_BLACK) and colours each character with the box current when it
+// arrives, so such a line has to load wholly before or wholly after one; the
+// scheduler keeps each group on one side.
+function groupedLoadSequence(
+  blocks: readonly CaptionLayout[],
+  appearance: CaptionAppearance,
+): { atoms: CcPair[][]; groups: (number | undefined)[] } {
+  const box = backgroundUnit(appearance) !== undefined;
+  const atoms: CcPair[][] = [[ResumeCaptionLoading], [EraseNonDisplayedMemory]];
+  const groups: (number | undefined)[] = [undefined, undefined];
+  for (const [line, { units, row, column }] of captionLines(
+    blocks,
+    appearance,
+  ).entries()) {
+    for (const atom of lineAtoms(units, row, column)) {
+      atoms.push(atom);
+      groups.push(box ? line : undefined);
+    }
+  }
+  return { atoms, groups };
+}
+
+// Consecutive atoms in the same group form one segment, placed as a whole;
+// every other atom is a segment of its own
+type Segment = { atoms: CcPair[][]; grouped: boolean };
+
+function segmentsOf(
+  atoms: CcPair[][],
+  groups?: readonly (number | undefined)[],
+): Segment[] {
+  const segments: Segment[] = [];
+  let previous: number | undefined;
+  for (const [i, atom] of atoms.entries()) {
+    const group = groups?.[i];
+    const last = segments.at(-1);
+    if (group !== undefined && group === previous && last) {
+      last.atoms.push(atom);
+    } else {
+      segments.push({ atoms: [atom], grouped: group !== undefined });
+    }
+    previous = group;
+  }
+  return segments;
 }
 
 /**
@@ -1226,10 +1268,32 @@ export function buildCaptionSchedule(
   const captions = resolveOverlaps(parts, frameMs);
 
   const pairs = new Map<number, CcPair>();
+  // The slots of Erase Displayed Memory: a line with a box colour must not
+  // load across one (groupedLoadSequence)
+  const clears = new Set<number>();
   const take = (slot: number, p: CcPair) => {
     if (slot >= 0 && slot <= lastSlot) {
       pairs.set(slot, p);
+      if (p === EraseDisplayedMemory) {
+        clears.add(slot);
+      } else {
+        clears.delete(slot);
+      }
     }
+  };
+  // The last clear strictly between two slots, if any
+  const clearBetween = (first: number, last: number) => {
+    let found: number | undefined;
+    for (const slot of clears) {
+      if (
+        slot > first &&
+        slot < last &&
+        (found === undefined || slot > found)
+      ) {
+        found = slot;
+      }
+    }
+    return found;
   };
   const isFree = (slot: number) => !pairs.has(slot);
   const isFreeRun = (slot: number, length: number) => {
@@ -1243,24 +1307,45 @@ export function buildCaptionSchedule(
 
   // Loads the atoms so the last ends just before `endSlot`, no earlier than
   // `minSlot`, stepping around commands already placed. False if they don't fit.
+  // Atoms in one of `groups` stay on one side of every clear: a group that
+  // would load across one is moved before it.
   const placeBefore = (
     atoms: CcPair[][],
     endSlot: number,
     minSlot: number,
-    { dryRun = false } = {},
+    {
+      dryRun = false,
+      groups,
+    }: { dryRun?: boolean; groups?: readonly (number | undefined)[] } = {},
   ) => {
     const placed: [number, CcPair[]][] = [];
     let limit = endSlot - 1;
-    for (const atom of atoms.toReversed()) {
-      let slot = limit - atom.length + 1;
-      while (slot >= minSlot && !isFreeRun(slot, atom.length)) {
-        slot--;
+    for (const segment of segmentsOf(atoms, groups).toReversed()) {
+      let segmentLimit = limit;
+      for (;;) {
+        const tried: [number, CcPair[]][] = [];
+        let next = segmentLimit;
+        for (const atom of segment.atoms.toReversed()) {
+          let slot = next - atom.length + 1;
+          while (slot >= minSlot && !isFreeRun(slot, atom.length)) {
+            slot--;
+          }
+          if (slot < minSlot) {
+            return false;
+          }
+          tried.push([slot, atom]);
+          next = slot - 1;
+        }
+        const clear = segment.grouped
+          ? clearBetween(next + 1, segmentLimit)
+          : undefined;
+        if (clear === undefined) {
+          placed.push(...tried);
+          limit = next;
+          break;
+        }
+        segmentLimit = clear - 1;
       }
-      if (slot < minSlot) {
-        return false;
-      }
-      placed.push([slot, atom]);
-      limit = slot - 1;
     }
     if (!dryRun) {
       for (const [slot, atom] of placed) {
@@ -1271,25 +1356,55 @@ export function buildCaptionSchedule(
   };
   // Loads the atoms as early as possible from `startSlot`; returns the slot
   // after the last. With `dryRun`, only finds that slot. Atoms that would
-  // reach `until` are left out, with those after them.
+  // reach `until` are left out, with those after them. Atoms in one of
+  // `groups` stay on one side of every clear: a group that would load across
+  // one is moved after it.
   const placeFrom = (
     atoms: CcPair[][],
     startSlot: number,
-    { dryRun = false, until = Number.POSITIVE_INFINITY } = {},
+    {
+      dryRun = false,
+      until = Number.POSITIVE_INFINITY,
+      groups,
+    }: {
+      dryRun?: boolean;
+      until?: number;
+      groups?: readonly (number | undefined)[];
+    } = {},
   ) => {
     let slot = startSlot;
-    for (const atom of atoms) {
-      let at = slot;
-      while (!isFreeRun(at, atom.length)) {
-        at++;
+    for (const segment of segmentsOf(atoms, groups)) {
+      let from = slot;
+      let tried: [number, CcPair[]][] = [];
+      let end = from;
+      for (;;) {
+        tried = [];
+        let at = from;
+        for (const atom of segment.atoms) {
+          while (!isFreeRun(at, atom.length)) {
+            at++;
+          }
+          tried.push([at, atom]);
+          at += atom.length;
+        }
+        end = at;
+        const clear = segment.grouped
+          ? clearBetween(tried[0]?.[0] ?? from, end - 1)
+          : undefined;
+        if (clear === undefined) {
+          break;
+        }
+        from = clear + 1;
       }
-      if (at + atom.length > until) {
+      if (end > until) {
         break;
       }
       if (!dryRun) {
-        atom.forEach((p, k) => take(at + k, p));
+        for (const [at, atom] of tried) {
+          atom.forEach((p, k) => take(at + k, p));
+        }
       }
-      slot = at + atom.length;
+      slot = end;
     }
     return slot;
   };
@@ -1335,17 +1450,37 @@ export function buildCaptionSchedule(
     if (mode === 'popOn') {
       // Show it on its start frame, or as soon as loading finishes when there
       // isn't room before it (a short gap, or a cue already under way)
-      const load = loadSequence(caption.blocks, appearance);
+      // Lines with a box colour load clear of the previous caption's clear
+      // (groupedLoadSequence)
+      const { atoms: load, groups: lineGroups } = groupedLoadSequence(
+        caption.blocks,
+        appearance,
+      );
+      let groups: (number | undefined)[] | undefined = lineGroups;
       let showAt = wanted;
-      if (!placeBefore(load, wanted, loadAfter)) {
-        showAt = firstFreeFrom(
-          Math.max(wanted, placeFrom(load, loadAfter, { dryRun: true })),
-        );
+      if (!placeBefore(load, wanted, loadAfter, { groups })) {
+        const lateShow = () =>
+          firstFreeFrom(
+            Math.max(
+              wanted,
+              placeFrom(load, loadAfter, { dryRun: true, groups }),
+            ),
+          );
+        showAt = lateShow();
+        // A caption is never left out for its box: when keeping its lines
+        // clear of a clear would push it past its end, it loads as before
+        if (
+          showAt >= slotOf(caption.endMs) &&
+          lineGroups.some((g) => g !== undefined)
+        ) {
+          groups = undefined;
+          showAt = lateShow();
+        }
         if (showAt >= slotOf(caption.endMs)) {
           leaveOut();
           continue;
         }
-        placeFrom(load, loadAfter);
+        placeFrom(load, loadAfter, { groups });
       }
       showAt = firstFreeFrom(showAt);
       take(showAt, EndOfCaption);

@@ -159,7 +159,7 @@ the bottom row. Parts in the same region still stack in one block. This needs a 
   the e2e sweep of `/settings/ffmpeg`.
 - **Ship:**
   - The PR goes through CI, Codex 👍 and my review, then merge.
-  - Then a release and a deploy with `~/tests/tunarr-tools/deploy_guarded.sh` once nobody watches. It rolls back if
+  - Then a release and a deploy through the deployment's guarded deploy script once nobody watches. It rolls back if
     Tunarr isn't ready within 6 minutes.
   - On the Apple TV, the test pattern's samples 35-38 then show what Plex does with middle, right, stacked and two-block
     captions.

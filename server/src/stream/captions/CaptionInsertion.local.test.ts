@@ -270,6 +270,32 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
         });
     }
 
+    // ffmpeg's decoder turns the box black on Erase Displayed Memory. A
+    // caption that follows another closely loads while the first is cleared;
+    // its box has to hold through italics, a ♪ and the end of its lines.
+    test('keeps the box colour to the end of a caption that follows closely', async () => {
+      const shown = await events(
+        'box-after-clear',
+        [
+          { startMs: 1000, endMs: 3000, text: 'A first line' },
+          {
+            startMs: 3200,
+            endMs: 5500,
+            text: 'Then <i>Hey!</i> to\nthe very end ♪',
+          },
+        ],
+        { backgroundColor: 'magenta' },
+      );
+      const second = shown.find((e) => e.text.includes('Then'))?.text ?? '';
+      // ASS colours are blue-green-red; \3c is the box behind the text
+      const magentaAt = second.indexOf('{\\3c&HFF00FF&}');
+      expect(magentaAt).toBeGreaterThanOrEqual(0);
+      expect(second.slice(magentaAt)).not.toContain('{\\3c&H000000&}');
+      expect(second.replace(/\{[^}]*\}|\\h|\\N/g, '')).toContain(
+        'the very end ♪',
+      );
+    });
+
     test('colours the text and the box behind it', async () => {
       const [event] = await events(
         'colour',
