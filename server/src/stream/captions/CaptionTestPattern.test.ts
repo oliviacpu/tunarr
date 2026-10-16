@@ -46,10 +46,11 @@ describe('captionTestPattern', () => {
     const { cues } = captionTestPattern(base);
     expect(cues[0]?.startMs).toBe(noCaptionsNoticeStartMs(base.frameRate));
     expect(cues.length).toBeGreaterThan(CaptionTestSamples.length);
-    // One cue per sample, plus the overlapping samples' second subtitles
+    // One cue per sample, plus the overlapping and follow-up second subtitles
     const perLoop =
       CaptionTestSamples.length +
-      CaptionTestSamples.filter((sample) => sample.also !== undefined).length;
+      CaptionTestSamples.filter((sample) => sample.also !== undefined).length +
+      CaptionTestSamples.filter((sample) => sample.then !== undefined).length;
     expect(cues[perLoop]?.text).toBe('1 WHITE TEXT');
     const last = cues.at(-1);
     expect((last?.endMs ?? Infinity) + 1000).toBeLessThanOrEqual(
@@ -58,17 +59,40 @@ describe('captionTestPattern', () => {
   });
 
   test('leaves a gap after each sample, longer before a change of mode', () => {
-    // An overlapping sample's second subtitle starts inside the first
+    // A sample's second subtitle (overlapping, or a follow-up) belongs to it
     const { cues } = captionTestPattern(base);
-    const samples = cues.filter(
-      (cue, i) => i === 0 || cue.startMs >= (cues[i - 1]?.endMs ?? 0),
+    const seconds = new Set(
+      CaptionTestSamples.flatMap((sample) => [
+        ...(sample.also !== undefined ? [sample.also] : []),
+        ...(sample.then !== undefined ? [sample.then] : []),
+      ]),
     );
-    for (const [i, cue] of samples.slice(1).entries()) {
-      const before = samples[i];
-      const gap = cue.startMs - (before?.endMs ?? 0);
-      const modeChange = cue.appearance?.mode !== before?.appearance?.mode;
-      expect(gap).toBe(modeChange ? 2000 : 1500);
+    let previous: (typeof cues)[number] | undefined;
+    let previousEnd = 0;
+    for (const cue of cues) {
+      if (seconds.has(cue.text)) {
+        previousEnd = Math.max(previousEnd, cue.endMs);
+        continue;
+      }
+      if (previous) {
+        const modeChange = cue.appearance?.mode !== previous.appearance?.mode;
+        expect(cue.startMs - previousEnd).toBe(modeChange ? 2000 : 1500);
+      }
+      previous = cue;
+      previousEnd = cue.endMs;
     }
+  });
+
+  test('follows sample 39 with a magenta-boxed subtitle a moment after it ends', () => {
+    // Shorter than the second subtitle takes to load, so its load meets the
+    // first one's clear
+    const { cues } = captionTestPattern(base);
+    const at = cues.findIndex((cue) => cue.text.startsWith('39 '));
+    const [first, second] = [cues[at], cues[at + 1]];
+    expect(second?.text).toBe('MAGENTA TO THE <i>VERY</i> END ♪');
+    expect((second?.startMs ?? 0) - (first?.endMs ?? 0)).toBe(200);
+    expect(first?.appearance?.backgroundColor).toBe('magenta');
+    expect(second?.appearance?.backgroundColor).toBe('magenta');
   });
 
   test('adds the overlapping second subtitle to samples 37 and 38', () => {
@@ -96,11 +120,13 @@ describe('captionTestPattern', () => {
       // The user's own settings, which the samples override
       appearance: { backgroundColor: 'red', textColor: 'green' },
     });
-    const frames =
-      Math.ceil(
-        ((cues.find((c) => c.text.includes('38 '))?.endMs ?? 0) / 1000) *
-          frameRate,
-      ) + 30;
+    // Through the end of the last sample's subtitles
+    const lastSample = `${CaptionTestSamples.length} `;
+    const lastAt = cues.findIndex((c) => c.text.startsWith(lastSample));
+    const lastEndMs = Math.max(
+      ...cues.slice(lastAt, lastAt + 2).map((c) => c.endMs),
+    );
+    const frames = Math.ceil((lastEndMs / 1000) * frameRate) + 30;
     const screens = decodeScreens(
       Array.from({ length: frames }, (_, k) => [
         ...schedule.pairAt((k * 1000) / frameRate),

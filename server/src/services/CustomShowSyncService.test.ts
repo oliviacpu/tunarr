@@ -10,6 +10,7 @@ import type {
   Movie,
   TerminalProgram,
 } from '@tunarr/types';
+import { createExternalId } from '@tunarr/shared';
 import { tag } from '@tunarr/types';
 import { describe, expect, it, vi } from 'vitest';
 import { CustomShowSyncService } from './CustomShowSyncService.js';
@@ -90,6 +91,27 @@ function makeMovie(
   };
 }
 
+/** What programIdsByExternalIds returns for these programs: each one's id by its external id. */
+function idsFor(
+  rows: ({
+    uuid: string;
+    sourceType: string;
+    mediaSourceId: MediaSourceId;
+    externalKey: string;
+  } & Record<string, unknown>)[],
+) {
+  return Object.fromEntries(
+    rows.map((row) => [
+      createExternalId(
+        row.sourceType as Parameters<typeof createExternalId>[0],
+        row.mediaSourceId,
+        row.externalKey,
+      ),
+      row.uuid,
+    ]),
+  );
+}
+
 function makeMocks() {
   const mediaSourceId = tag<MediaSourceId>(faker.string.uuid());
   const libraryId = faker.string.uuid();
@@ -112,7 +134,12 @@ function makeMocks() {
   const scannerFactory = vi.fn().mockReturnValue(mockScanner);
 
   const programDB = {
-    lookupByExternalIds: vi.fn().mockResolvedValue([]),
+    // The sync needs only ids (programIdsByExternalIds); loading whole programs
+    // with all their relations for that is what this stub catches
+    lookupByExternalIds: vi.fn(() => {
+      throw new Error('the sync loaded whole programs just to get their ids');
+    }),
+    programIdsByExternalIds: vi.fn().mockResolvedValue({}),
   } as unknown as IProgramDB;
 
   const mediaSourceDB = {
@@ -208,24 +235,26 @@ describe('CustomShowSyncService', () => {
       // Simulate that they now exist (scanner persisted them)
       const dbUuid1 = faker.string.uuid();
       const dbUuid2 = faker.string.uuid();
-      vi.mocked(programDB.lookupByExternalIds).mockResolvedValue([
-        {
-          uuid: dbUuid1,
-          sourceType: 'plex',
-          externalSourceId: mediaSourceId,
-          mediaSourceId: mediaSourceId,
-          externalKey: movie1.externalId,
-          externalIds: [],
-        },
-        {
-          uuid: dbUuid2,
-          sourceType: 'plex',
-          externalSourceId: mediaSourceId,
-          mediaSourceId: mediaSourceId,
-          externalKey: movie2.externalId,
-          externalIds: [],
-        },
-      ] as never);
+      vi.mocked(programDB.programIdsByExternalIds).mockResolvedValue(
+        idsFor([
+          {
+            uuid: dbUuid1,
+            sourceType: 'plex',
+            externalSourceId: mediaSourceId,
+            mediaSourceId: mediaSourceId,
+            externalKey: movie1.externalId,
+            externalIds: [],
+          },
+          {
+            uuid: dbUuid2,
+            sourceType: 'plex',
+            externalSourceId: mediaSourceId,
+            mediaSourceId: mediaSourceId,
+            externalKey: movie2.externalId,
+            externalIds: [],
+          },
+        ]) as never,
+      );
 
       expect(await service.syncShow(customShowId)).toBe('completed');
 
@@ -247,8 +276,9 @@ describe('CustomShowSyncService', () => {
         }),
       );
 
-      // 3. lookupByExternalIds was called to resolve DB UUIDs
-      expect(programDB.lookupByExternalIds).toHaveBeenCalledTimes(1);
+      // 3. The DB UUIDs were resolved by external id, without loading whole programs
+      expect(programDB.programIdsByExternalIds).toHaveBeenCalledTimes(1);
+      expect(programDB.lookupByExternalIds).not.toHaveBeenCalled();
 
       // 4. Custom show content was upserted with the DB UUIDs (not the original ones)
       expect(customShowDB.upsertCustomShowContent).toHaveBeenCalledWith(
@@ -347,15 +377,17 @@ describe('CustomShowSyncService', () => {
         .mockResolvedValue([ep1, ep2, ep3] as never);
 
       // All episodes resolve to DB records
-      vi.mocked(programDB.lookupByExternalIds).mockResolvedValue(
-        [ep1, ep2, ep3].map((ep) => ({
-          uuid: ep.uuid,
-          sourceType: 'plex',
-          externalSourceId: mediaSourceId,
-          mediaSourceId: mediaSourceId,
-          externalKey: ep.externalId,
-          externalIds: [],
-        })) as never,
+      vi.mocked(programDB.programIdsByExternalIds).mockResolvedValue(
+        idsFor(
+          [ep1, ep2, ep3].map((ep) => ({
+            uuid: ep.uuid,
+            sourceType: 'plex',
+            externalSourceId: mediaSourceId,
+            mediaSourceId: mediaSourceId,
+            externalKey: ep.externalId,
+            externalIds: [],
+          })),
+        ) as never,
       );
 
       await service.syncShow(customShowId);
@@ -463,16 +495,18 @@ describe('CustomShowSyncService', () => {
         .mockResolvedValueOnce(Result.success(undefined));
 
       const dbUuid2 = faker.string.uuid();
-      vi.mocked(programDB.lookupByExternalIds).mockResolvedValue([
-        {
-          uuid: dbUuid2,
-          sourceType: 'plex',
-          externalSourceId: mediaSourceId,
-          mediaSourceId: mediaSourceId,
-          externalKey: movie2.externalId,
-          externalIds: [],
-        },
-      ] as never);
+      vi.mocked(programDB.programIdsByExternalIds).mockResolvedValue(
+        idsFor([
+          {
+            uuid: dbUuid2,
+            sourceType: 'plex',
+            externalSourceId: mediaSourceId,
+            mediaSourceId: mediaSourceId,
+            externalKey: movie2.externalId,
+            externalIds: [],
+          },
+        ]) as never,
+      );
 
       await service.syncShow(customShowId);
 
@@ -642,29 +676,31 @@ describe('CustomShowSyncService', () => {
       const dbUuid1 = faker.string.uuid();
       const dbUuid2 = faker.string.uuid();
       const dbUuid3 = faker.string.uuid();
-      vi.mocked(programDB.lookupByExternalIds).mockResolvedValue([
-        {
-          uuid: dbUuid1,
-          sourceType: 'plex',
-          mediaSourceId,
-          externalKey: movie1.externalId,
-          externalIds: [],
-        },
-        {
-          uuid: dbUuid2,
-          sourceType: 'plex',
-          mediaSourceId,
-          externalKey: movie2.externalId,
-          externalIds: [],
-        },
-        {
-          uuid: dbUuid3,
-          sourceType: 'plex',
-          mediaSourceId,
-          externalKey: movie3.externalId,
-          externalIds: [],
-        },
-      ] as never);
+      vi.mocked(programDB.programIdsByExternalIds).mockResolvedValue(
+        idsFor([
+          {
+            uuid: dbUuid1,
+            sourceType: 'plex',
+            mediaSourceId,
+            externalKey: movie1.externalId,
+            externalIds: [],
+          },
+          {
+            uuid: dbUuid2,
+            sourceType: 'plex',
+            mediaSourceId,
+            externalKey: movie2.externalId,
+            externalIds: [],
+          },
+          {
+            uuid: dbUuid3,
+            sourceType: 'plex',
+            mediaSourceId,
+            externalKey: movie3.externalId,
+            externalIds: [],
+          },
+        ]) as never,
+      );
 
       await service.syncShow(customShowId);
 
@@ -713,29 +749,31 @@ describe('CustomShowSyncService', () => {
         content: [],
       });
 
-      vi.mocked(programDB.lookupByExternalIds).mockResolvedValue([
-        {
-          uuid: dbUuid1,
-          sourceType: 'plex',
-          mediaSourceId,
-          externalKey: movie1.externalId,
-          externalIds: [],
-        },
-        {
-          uuid: dbUuid2,
-          sourceType: 'plex',
-          mediaSourceId,
-          externalKey: movie2.externalId,
-          externalIds: [],
-        },
-        {
-          uuid: dbUuid3,
-          sourceType: 'plex',
-          mediaSourceId,
-          externalKey: movie3.externalId,
-          externalIds: [],
-        },
-      ] as never);
+      vi.mocked(programDB.programIdsByExternalIds).mockResolvedValue(
+        idsFor([
+          {
+            uuid: dbUuid1,
+            sourceType: 'plex',
+            mediaSourceId,
+            externalKey: movie1.externalId,
+            externalIds: [],
+          },
+          {
+            uuid: dbUuid2,
+            sourceType: 'plex',
+            mediaSourceId,
+            externalKey: movie2.externalId,
+            externalIds: [],
+          },
+          {
+            uuid: dbUuid3,
+            sourceType: 'plex',
+            mediaSourceId,
+            externalKey: movie3.externalId,
+            externalIds: [],
+          },
+        ]) as never,
+      );
 
       const plexClient = {
         getItemChildren: vi.fn(),

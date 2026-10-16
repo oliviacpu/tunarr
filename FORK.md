@@ -48,6 +48,142 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   found. Used for the deployment's channel 99 (plan `plans/test-channel-99.md`).
 - **Tests:** none in the suite; it's an offline tool. Its own check is the ffprobe manifest: every clip's tracks,
   language tags, colour tags, HDR side data and interlacing, verified against the table in the README.
+
+### A caption's box colour holds to its end (2026-10-16)
+
+- **What you saw:** with a magenta box, Plex for Mac often turned the box back to black partway through a caption,
+  for its end or a closing ♪ (user: "almost like it was drawing the magenta over black or the timing of our codes is
+  off?").
+- **Cause:**
+  - **The decoder:** FFmpeg's 608 decoder, the family Plex's players come from, keeps one current box colour
+    (`libavcodec/ccaption_dec.c`). A background code sets it, each character is stamped with it as it's written
+    (`write_char`), and Erase Displayed Memory resets it to black (`handle_edm`: `bg_color = CCCOL_BLACK`; End of
+    Caption calls `handle_edm` too).
+  - **The encoder:** a pop-on caption loads while the one before it is on screen, and that one's clear (Erase
+    Displayed Memory) is placed first. The next caption's load is then fitted around it, so with a gap shorter than the
+    load (under about a second, common in dialogue and songs) the clear landed inside it. The box code goes once at the
+    start of each line, so the rest of the line was written on black.
+  - **Seen in jellyfin-ffmpeg 8.1.3**, before the fix: `{\3c&HFF00FF&}Then{\i1} Hey!{\i0} to\Nthe
+    ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and was never affected.
+- **Fix:** `server/src/stream/captions/Cea608Encoder.ts`.
+  - A pop-on line that sets a box colour loads wholly before or wholly after any Erase Displayed Memory in the schedule
+    (`groupedLoadSequence`; `placeBefore` and `placeFrom` keep each group on one side of a clear).
+  - Only where that doesn't move the frame the caption shows on. A later caption would hold up the next one's load,
+    which could then miss its own time and be left out (Codex, PR #28: three quick boxed cues showed only two). A
+    caption with no room to load before its start loads as before, so its timing never changes. A line the clear
+    falls in can still lose its box there; that only happens with very quick cues.
+  - Default output (no box) is byte-identical; the golden snapshot is unchanged.
+- **Test pattern:** sample 39 is a magenta box, then a second line 200 ms after it, keeping the box through italics, a ♪
+  and its end.
+- **Tests:**
+  - `Cea608Encoder.test.ts`: a model of FFmpeg's box handling (box set by the code, stamped per character, reset by
+    Erase Displayed Memory and End of Caption). Gaps of 2 to 30 frames keep every character magenta, and 6 of those 7
+    fail without the fix. Three quick boxed cues all show, and a caption that has to load late still shows, boxed from
+    its start.
+  - `CaptionInsertion.local.test.ts`: jellyfin-ffmpeg 8.1.3 decodes the second caption with no black box after the
+    magenta one; it fails without the fix.
+  - `CaptionTestPattern.test.ts`: sample 39's timing.
+
+### Saving a channel no longer rewrites every channel's guide entries (2026-10-16)
+
+- **What you saw:** Live TV paused while channels were saved. On the deployment, with the owner watching channel 1,
+  the latency probe saw 6 requests over 250 ms (worst 1.05 s), all while the Sci-Fi channel was being saved. The
+  save took 4 s there. Editing channels in the web UI did the same on 2026-10-14.
+- **Cause:**
+  - Every save (`PUT /api/channels/:id`) ends with an XMLTV write.
+  - That write fetched every guide program of every channel with all its relations, and rendered every channel's
+    programmes.
+  - On a copy of the deployment's database (6 channels, 72 h guide, 784 programs), the fetch was 133–382 ms of a
+    181–426 ms write. The rest of the save took under 10 ms.
+  - The fetch yields between chunks, but on the shared server a chunk can wait on a cold disk.
+- **Fix:**
+  - **`XmlTvWriter.write(channels, { reuse, onRendered })`:** a channel in `reuse` keeps the programmes an earlier
+    write rendered, with no render and no artwork publish.
+  - **`TvGuideService`:** remembers each channel's rendered programmes, keyed on the guide entry, channel object and
+    programs array they came from, and on the render settings (XMLTV settings, credit-images flag).
+  - **Redirects:** the key also holds each redirect target's presence, name and number. A redirect that wasn't
+    followed when the guide was built renders from its target at write time (Codex on PR #26).
+  - **Effect:** a save re-fetches and re-renders only the saved channel. A guide rebuild or a settings change renders
+    everything again.
+  - **Trade-off:** program details edited since (a scan) reach the other channels' entries at their next scheduled
+    rebuild, as when nothing was saved (`docs/configure/channels/epg.md`).
+  - The plan is in `plans/channel-save-guide-reuse.md`.
+- **Measured** with `guide-refresh-ab.ts --action save` (new, with `--template-dir` for a copy of a real database)
+  against the deployment's copy, medians of 3 trials, reuse off vs on:
+  - **saving an offline picture:** 199 → 46 ms, probe p99 17.6 → 4.3 ms;
+  - **saving a new start time** (the nightly grid build's save, which regenerates the lineup): 236 → 60 ms, probe
+    p99 31.1 → 4.2 ms; stalls of 25–63 ms with reuse off, none with it on.
+- **Tests:**
+  - `XmlTvWriter.test.ts`: a full write matches `serialize`; a reused channel isn't rendered and publishes nothing.
+  - `TvGuideService.test.ts`:
+    - after a build, a save fetches and renders only the saved channel;
+    - a rebuild or a settings change renders all;
+    - a channel with an unresolved redirect is rendered again when its target appears, is renumbered or leaves;
+    - a followed redirect stays reused when its target is renumbered.
+  - Fail without their change: the writer's two, the first guide test and the unresolved-redirect one. The other two
+    pass either way, by design.
+- **Upstream:** not sent.
+
+### Downloaded subtitles stay fresh, and a replaced subtitle heals at once (2026-10-16)
+
+- **What you saw:** 132 programs served an older subtitle than the file next to the video (Bazarr's re-syncs and
+  replacements), and a subtitle Plex had replaced answered 404 until two rescans later. Investigation:
+  `plans/plex-stale-subtitle-404-2026-10-16.md`.
+- **Cause:**
+  - Through its `plex.direct` address Plex leaves out a sidecar subtitle's file path, so Tunarr downloaded a copy of
+    every sidecar. The copy is named after the stream key and was never fetched again.
+  - Playback read the copy ahead of a readable live file.
+  - The hourly top-up skipped any copy that existed.
+  - A 404 waited for Plex's rescan and then Tunarr's.
+  - The deployment's fix was a local Plex address and a forced scan (done 2026-10-16). This makes Tunarr cope where
+    that isn't possible.
+- **Fix:**
+  - **Playback prefers the live file:** `ProgramStreamDetailsFetcher` uses a sidecar's resolvable source path ahead of
+    a downloaded copy.
+  - **Old copies refresh:** `ExternalSubtitleDownloader.fetchToCache` with `refresh` fetches again and swaps the copy
+    in only if it changed, through a temporary file and a rename. `SubtitleExtractorTask` does this hourly, for programs
+    airing within the hour, to copies more than 6 hours old whose live file it can't read.
+  - **A 404 heals at once:** the task reads the item again (`getMovie`/`getEpisode`), mints its subtitles and saves
+    them with `replaceProgramSubtitles`, the scan's own save split out per program (new on `IProgramDB`). Sidecars
+    that are still the same stream keep their file; replaced copies are deleted, and an item that lists no subtitles
+    any more has its rows cleared. If the item still lists the stream that 404'd (the server hasn't rescanned yet),
+    nothing is saved and the rows and copy stay until it does. An item that is gone is left to the next scan.
+  - **Each program once a run:** a program airing twice in the hour (a repeat, or on two channels) is handled once,
+    so a heal that can't succeed doesn't re-read the item each time.
+  - **The scan says so:** a Plex scan logs once when sidecar paths are hidden while the video's path came through.
+- **Tests:**
+  - `ExternalSubtitleDownloader.test.ts`: refresh replaces a changed copy, keeps an unchanged one and renews its age,
+    keeps the copy when a fetch fails, never fetches without refresh, and returns a 404 unlogged.
+  - `ProgramStreamDetailsFetcher.test.ts`: the live file ahead of a copy (fails without the change), and the copy
+    when the live file is out of reach.
+  - `SubtitleExtractorTask.test.ts`:
+    - a copy older than 6 hours is fetched again, a younger one isn't, nor one whose live file is readable;
+    - on a 404 the item is read once, re-minted and saved, the new stream downloaded, and a still-valid sidecar keeps
+      its file; films use the movie call; a gone item is left alone; a second 404 doesn't loop; an empty mint clears
+      the rows; a program on two channels is read again once; an item that still lists the 404'd stream is left
+      alone.
+  - `ProgramDB.test.ts`: replacing a program's subtitles with none clears its rows and cached copies.
+  - `MediaSourceScanner.test.ts`: the info line once a scan, again in the next scan, and not when the paths are
+    reported or the video has none.
+- **Upstream:** not sent.
+
+### A custom show sync looks up its program ids without loading whole programs (2026-10-16)
+
+- **What you saw:** nothing reported. A follow-up from the custom-show-sync work of 2026-10-15, where the lookup at the
+  end of every sync was the worst stall: 163–186 ms at 1,000 movies, 870 ms at 3,000.
+- **Cause:** `CustomShowSyncService` resolved the playlist's Tunarr ids with `lookupByExternalIds`. That loads every
+  program with its album, artist, season, show, tags, artwork, credits, genres, studios and versions, only to read its
+  id.
+- **Fix:**
+  - The sync uses `programIdsByExternalIds`, which reads only the external-id table, and matches the results with
+    `createExternalId` (`server/src/services/CustomShowSyncService.ts`).
+  - `IProgramDB` declared `programIdsByExternalIds` twice. The stale declaration claimed dot-separated keys, while the
+    method returns `source|mediaSourceId|key`. It's gone, and `ProgramDB` declares the real key type.
+- **Numbers:** `pnpm bench:custom-show-sync -- --movies 1000`, run back to back on the same machine. The in-process
+  arm's worst stall went from 177 to 104 ms on the first sync, and from 263 to 100 ms on a resync. Syncs run in a scan
+  worker by default; this is the in-process fallback, and the worker does less work too.
+- **Tests:** `CustomShowSyncService.test.ts`. The stubs return the id map, and the old lookup now fails the test if
+  it's called. Six tests fail against the previous service.
 - **Upstream:** not sent.
 
 ### Switchable audio in Plex Live TV: a fixed audio track layout per channel (2026-10-16)
@@ -58,7 +194,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - Plex picks each account's preferred audio language from them;
   - but Plex keeps the track list it sees at tune-in for the whole session, and ends the session if the stream
     restarts, so the tracks can't change from program to program.
-- **Change:** a channel setting, **Audio tracks**, under *Audio & Subtitles* on the Streaming tab:
+- **Change:** a channel setting, **Audio tracks**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.audioTracks`, up to four ISO 639-2 codes in order, stored in the new column
     `audio_tracks` (migration 0053).
   - **Effect:** every program, commercial, gap (offline picture, with gap music or silence) and error screen on the
@@ -80,15 +216,16 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Verified end to end** (stream-repro, jellyfin-ffmpeg 8.1.3, new `--channel-setting` option), with a 20 s flex gap
   and three clips (English stereo; English 5.1 at 44.1 kHz with subtitles; English + Japanese), layout `eng, jpn`:
 
-  | Mode | Result |
-  | --- | --- |
-  | HLS | 35/35 segments `[eng 2ch 48k, jpn 2ch 48k]` |
-  | HLS alt | 33/33 segments, the same |
-  | MPEG-TS | the whole capture has both tracks |
+  | Mode    | Result                                      |
+  | ------- | ------------------------------------------- |
+  | HLS     | 35/35 segments `[eng 2ch 48k, jpn 2ch 48k]` |
+  | HLS alt | 33/33 segments, the same                    |
+  | MPEG-TS | the whole capture has both tracks           |
 
   - **What Plex reads:** the channel's HDHomeRun `.ts` carried video + eng + jpn.
   - **English + Spanish layout:** 19/19 segments `[eng, spa]`.
   - **Without the setting:** one track, as before.
+
 - **Tests:**
   - `AudioTrackLayout.test.ts`: slot rules, commentary, B/T codes, selected/default.
   - `FfmpegStreamFactory.test.ts`: programs, a missing language, order, no audio, gap music, offline/error
@@ -137,6 +274,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `Episode 1` matched `Episode 10.en.srt`, and `Movie` matched `Movie.part2.en.srt`;
   - `Movie.srt` was read as the language `srt`.
 - **Fix:** `server/src/services/local/LocalSubtitlesService.ts`:
+
   - it passes both full paths;
   - a file must start with the video's name and a dot, and not with a longer video name in the same folder;
   - the language is the first part that is a language code, or looks like one and isn't an option (a private
@@ -146,6 +284,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - extensions match in any case.
 
   The ffmpeg docs list the naming rules. Folders that haven't changed since their last scan need one **Force Scan**.
+
 - **Tests:** `LocalSubtitlesService.test.ts`:
   - real files in a temporary folder: full paths, other files ignored, a dot in the video's name, a neighbouring
     episode's subtitles, a longer video name;

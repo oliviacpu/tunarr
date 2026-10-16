@@ -12,6 +12,12 @@ http://<tunarr-host>:<port>/api/xmltv.xml
 
 The full URL is also available in the Tunarr web UI under **Settings > HDHR / M3U**. Point your client's guide data source at this URL to populate the program guide.
 
+### When the guide is updated
+
+- **The whole guide** is rebuilt on the schedule in **Settings > XMLTV** (every few hours) and when you refresh it there.
+- **Saving a channel** updates that channel's entries straight away. The other channels keep the entries they already had, so a change to a program's details since then, from a library scan for example, appears at the next scheduled rebuild. Rebuilding every channel on each save made Live TV pause while channels were saved.
+- **Changing an XMLTV setting** updates every channel at the next write.
+
 ## Program Metadata
 
 Tunarr populates the XMLTV output with program metadata sourced from your media libraries, including:

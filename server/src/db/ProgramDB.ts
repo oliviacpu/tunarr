@@ -31,10 +31,10 @@ import type {
   ProgramExternalId,
 } from './schema/ProgramExternalId.js';
 import type { ProgramGroupingType } from './schema/ProgramGrouping.js';
+import type { NewProgramSubtitles } from './schema/ProgramSubtitles.js';
 import type {
   MediaSourceId,
   MediaSourceType,
-  ProgramExternalIdSourceType,
   ProgramState,
   RemoteSourceType,
 } from './schema/base.js';
@@ -103,6 +103,13 @@ export class ProgramDB implements IProgramDB {
 
   setSubtitlePath(uuid: string, path: string): Promise<void> {
     return this.metadataRepo.setSubtitlePath(uuid, path);
+  }
+
+  replaceProgramSubtitles(
+    programId: string,
+    subtitles: NewProgramSubtitles[],
+  ): Promise<void> {
+    return this.metadataRepo.replaceProgramSubtitles(programId, subtitles);
   }
 
   getProgramsByIds(
@@ -211,9 +218,7 @@ export class ProgramDB implements IProgramDB {
   programIdsByExternalIds(
     ids: Set<[string, string, string]>,
     chunkSize?: number,
-  ): Promise<
-    Record<`${ProgramExternalIdSourceType}.${string}.${string}`, string>
-  > {
+  ): Promise<Record<`${string}|${string}|${string}`, string>> {
     return this.externalIdRepo.programIdsByExternalIds(
       ids as Set<[string, MediaSourceId, string]>,
       chunkSize ?? 50,

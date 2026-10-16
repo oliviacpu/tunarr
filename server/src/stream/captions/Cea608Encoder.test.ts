@@ -1212,3 +1212,166 @@ describe('the no-captions notice', () => {
     ]);
   });
 });
+
+// FFmpeg's 608 decoder (libavcodec/ccaption_dec.c), as far as the box colour
+// goes: one current box colour, set by a background code (0x10 0x20-0x2f) and
+// stamped on each character as it is written (write_char), and reset to black
+// by Erase Displayed Memory and End of Caption (handle_edm, which handle_eoc
+// calls). Each caption shown (at End of Caption) as its characters, spaces
+// left out, each with the box it was written in.
+const FfmpegBoxColors = [
+  'white',
+  'green',
+  'blue',
+  'cyan',
+  'red',
+  'yellow',
+  'magenta',
+  'black',
+];
+
+function ffmpegBoxes(pairs: number[][]): { ch: string; box: string }[][] {
+  const captions: { ch: string; box: string }[][] = [];
+  let cells: { ch: string; box: string }[] = [];
+  let box = 'black';
+  let previous: number[] | undefined;
+  const write = (ch: string) => {
+    if (ch !== ' ') {
+      cells.push({ ch, box });
+    }
+  };
+  for (const [a = 0, b = 0] of pairs) {
+    if (a === 0 && b === 0) {
+      continue;
+    }
+    // A control code repeated straight after itself is skipped
+    if (a < 0x20 && previous?.[0] === a && previous[1] === b) {
+      continue;
+    }
+    previous = a < 0x20 ? [a, b] : undefined;
+    if (a === 0x10 && b >= 0x20 && b <= 0x2f) {
+      box = FfmpegBoxColors[(b & 0x0f) >> 1] ?? '?';
+    } else if (a === 0x14 && b === 0x2c) {
+      box = 'black';
+    } else if (a === 0x14 && b === 0x2f) {
+      captions.push(cells);
+      cells = [];
+      box = 'black';
+    } else if (a === 0x11 && b >= 0x30 && b <= 0x3f) {
+      write(b === 0x37 ? '♪' : '?');
+    } else if ((a === 0x12 || a === 0x13) && b >= 0x20 && b <= 0x3f) {
+      cells.pop();
+      write('?');
+    } else if (a >= 0x20) {
+      write(String.fromCharCode(a));
+      if (b >= 0x20) {
+        write(String.fromCharCode(b));
+      }
+    }
+  }
+  return captions;
+}
+
+describe('a box colour across the previous caption clearing', () => {
+  const magenta: Partial<CaptionAppearance> = { backgroundColor: 'magenta' };
+  const boxes = (caption: { box: string }[] | undefined) => [
+    ...new Set((caption ?? []).map((c) => c.box)),
+  ];
+
+  // FFmpeg turns the box black on Erase Displayed Memory. The previous
+  // caption's clear falls inside the next caption's load when the gap between
+  // them is shorter than the load, which used to leave the end of the next
+  // caption (here italics and a closing ♪) on black.
+  test.each([2, 3, 6, 10, 15, 20, 30])(
+    'keeps the box to the end with a gap of %i frames',
+    (gapFrames) => {
+      const secondStart = 3000 + gapFrames * frameMs;
+      const pairs = framePairs(
+        [
+          { startMs: 1000, endMs: 3000, text: 'A first line' },
+          {
+            startMs: secondStart,
+            endMs: secondStart + 2500,
+            text: 'Then <i>Hey!</i> to\nthe very end ♪',
+          },
+        ],
+        30 * 8,
+        0,
+        magenta,
+      );
+      const captions = ffmpegBoxes(pairs);
+
+      expect(captions).toHaveLength(2);
+      expect(captions[1]?.map((c) => c.ch).join('')).toBe(
+        'ThenHey!totheveryend♪',
+      );
+      expect(boxes(captions[1])).toEqual(['magenta']);
+      expect(boxes(captions[0])).toEqual(['magenta']);
+    },
+  );
+
+  // A caption with more to load than fits before its start loads late, from
+  // the previous caption's show frame on. Keeping a line clear of the clear
+  // would make it later still, so it loads as it always did: it shows, boxed
+  // from its start, though a line the clear falls in can lose the box.
+  test('shows a caption that has to load late, boxed from its start', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 1300, text: 'Hi' },
+        {
+          startMs: 1400,
+          endMs: 5000,
+          text: 'A much longer second caption\nthat takes a while to load ♪',
+        },
+      ],
+      30 * 8,
+      0,
+      magenta,
+    );
+    const captions = ffmpegBoxes(pairs);
+
+    expect(captions).toHaveLength(2);
+    expect(captions[1]?.[0]).toEqual({ ch: 'A', box: 'magenta' });
+  });
+
+  // Keeping a boxed line on one side of a clear must never make a caption
+  // late: a late caption holds up the next one's load, which can then miss
+  // its own time and be left out (Codex, PR #28)
+  test('never shows a caption later for its box, so quick cues all show', () => {
+    const cues = [0, 1, 2].map((k) => ({
+      startMs: 1000 + k * 600,
+      endMs: 1500 + k * 600,
+      text: `Caption ${k + 1} of three, quick`,
+    }));
+    const shownAt = (pairs: number[][]) =>
+      pairs.flatMap((p, frame) =>
+        p[0] === EndOfCaption[0] && p[1] === EndOfCaption[1] ? [frame] : [],
+      );
+    const boxed = framePairs(cues, 30 * 4, 0, magenta);
+    const plain = framePairs(cues, 30 * 4);
+
+    expect(ffmpegBoxes(boxed)).toHaveLength(3);
+    // Each caption shows on its own start frame or the frame its load allows,
+    // and no later than the same captions without a box need for their load
+    // plus the box codes (2 pairs per line)
+    expect(shownAt(boxed)).toHaveLength(3);
+    for (const [k, frame] of shownAt(boxed).entries()) {
+      expect(frame).toBeLessThanOrEqual((shownAt(plain)[k] ?? 0) + 4);
+    }
+  });
+
+  test('leaves the default box alone (no background codes, nothing moved)', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 3000, text: 'A first line' },
+        { startMs: 3200, endMs: 5000, text: 'Then <i>Hey!</i> to the end ♪' },
+      ],
+      30 * 8,
+    );
+
+    expect(pairs.some(([a, b]) => a === 0x10 && (b ?? 0) <= 0x2f)).toBe(false);
+    expect(
+      ffmpegBoxes(pairs).map((caption) => caption.map((c) => c.ch).join('')),
+    ).toEqual(['Afirstline', 'ThenHey!totheend♪']);
+  });
+});
