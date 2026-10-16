@@ -35,6 +35,48 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A channel's own caption settings, for a test channel (2026-10-16)
+
+- **What you saw:** caption appearance, alignment and the test pattern were global FFmpeg settings, so trying a
+  magenta box changed the captions on every channel, for the owner and friends alike. A test channel (99,
+  plans/test-channel-99.md) needs its own.
+- **Change:** a channel setting, **Captions for this channel**, under *Audio & Subtitles* on the Streaming tab:
+  - **What it is:** `Channel.captions`, `{ testPattern?, alignment?, appearance? }`, stored in the new column
+    `captions` (migration 0054). Only what the channel sets is saved; the rest follows the global settings, so a later
+    global change still reaches it. The appearance fields have no defaults (`CaptionAppearanceOverridesSchema`), or an
+    override would fill in every field.
+  - **Test pattern on this channel:** the numbered samples on this channel only. The global switch still shows them on
+    every channel, and the global closed-captions switch stays the master switch.
+  - **Use own caption look:** alignment and every appearance field, starting from the global look. **Copy to all
+    channels** writes this look to the FFmpeg settings; **Reset to global** drops it and keeps the test pattern.
+- **How:**
+  - `server/src/stream/captions/channelCaptions.ts`: the channel's look over the global one, whether it has one, and
+    whether its test pattern is on.
+  - `FfmpegStreamFactory`: attaches the channel's look to each program's captions (only when it has one), times the
+    "No captions for this program" notice by it, and runs the test pattern per channel. The channel is loaded per
+    program, so a change applies from the next program.
+  - `HlsSession.addCaptions`: a program's own look wins over the global one.
+  - Web: the caption controls moved out of the FFmpeg settings page into `CaptionAppearanceFields`, used by both
+    pages; the channel's section is `ChannelCaptionsField`.
+- **Verified end to end** (stream-repro, jellyfin-ffmpeg 8.1.3): one server, two HLS channels on the same two
+  captioned clips, both HDHomeRun `.ts` streams captured for 30 s at once and decoded with FFmpeg's 608 decoder.
+
+  | Channel 900's own setting | Channel 900 | Channel 901 (no setting) |
+  | --- | --- | --- |
+  | magenta text, blue box, left | 16 captions, `\c&HFF00FF&` `\3c&HFF0000&` at `\pos(57,243)` | the same 16, white, no box, `\pos(115,243)` |
+  | test pattern | "1 WHITE TEXT", "2 GREEN TEXT", "3 BLUE TEXT"… | the clips' own captions |
+
+- **Tests:**
+  - `channelCaptions.test.ts`: merge precedence, fields that fall back, the test pattern rules.
+  - `FfmpegStreamFactory.test.ts`: the channel's test pattern on that channel only and behind the global switch; its
+    look reaches the captions; none for a channel without one; the notice timed by the channel's look.
+  - `HlsSession.test.ts`: captions laid out in their channel's look. `Cea608Encoder.golden.test.ts` unchanged.
+  - `ChannelDB.test.ts`: save and read back, update without the field, reset, only what is set is stored, validation,
+    no defaults filled in, override fields in step with the global ones.
+  - Web: `channelCaptions.test.ts` and `ChannelCaptionsField.test.tsx` (seeded from global, edit, test pattern
+    alone, reset, copy to all channels).
+- **Upstream:** not sent.
+
 ### Test media for a test channel (2026-10-16)
 
 - **What you saw:** nothing; a tool. Caption, audio and video options could only be tried on real channels, with real
