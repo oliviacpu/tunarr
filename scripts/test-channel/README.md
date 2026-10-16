@@ -20,7 +20,7 @@ node scripts/test-channel/make-test-media.mjs --out ~/test-media \
 
 | Clip | Tests |
 | --- | --- |
-| 01-captions-srt (2:32) | SRT: plain lines, italics/underline, ♪, long wrapping lines, top/middle/right placement, overlapping lines, a sign over dialogue, fast dialogue, short gaps between lines (box colour), accents and symbols, a very short line, a quiet stretch |
+| 01-captions-srt (2:32) | SRT: a line on screen from the first frame (a caption under way at a program boundary), plain lines, italics/underline, ♪, long wrapping lines, top/middle/right placement, overlapping lines, a sign over dialogue, fast dialogue, short gaps between lines (box colour), accents and symbols, a very short line, a quiet stretch |
 | 02-captions-ass (1:18) | ASS: styles (bottom/top/left/right/middle), `\pos`, `\move`, `\an` override, italics/underline, a `\p1` drawing (dropped), a sign over dialogue, `\N`, ♪, a layered duplicate, `*Default` and an unknown style |
 | 03-captions-none | no subtitles: the "No captions for this program" note |
 | 04-audio-eng-jpn | AC3 5.1 English + AC3 5.1 Japanese, each saying its language |
@@ -34,7 +34,7 @@ node scripts/test-channel/make-test-media.mjs --out ~/test-media \
 | 12-video-interlaced-2997i | 720x480 29.97i, top field first |
 | 13-16 | 23.976, 25, 29.97 and 59.94 fps |
 | 17-video-anamorphic | 720x480, SAR 32:27 (16:9) |
-| 18-20 transitions | 30 s clips back to back: 720p30 AAC, 1080p23.976 AC3 5.1 eng+jpn with subtitles, 480p29.97 AAC 44.1 kHz |
+| 18-20 transitions | 30 s clips back to back: 720p30 AAC, 1080p23.976 AC3 5.1 eng+jpn with subtitles from its first frame, 480p29.97 AAC 44.1 kHz |
 
 **Interlacing:** Matroska's field-order flag reads back as `tb` for the interlaced clip (an ffmpeg muxer quirk), so the
 manifest reports the frames' own flags, which are interlaced and top field first.
