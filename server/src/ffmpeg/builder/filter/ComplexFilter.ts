@@ -151,24 +151,32 @@ export class ComplexFilter implements FilterOptionPipelineStep {
       watermarkOverlayFilterComplex += videoLabel;
     }
 
+    // One label per output audio track. Several streams (a channel's fixed
+    // audio track layout) each get their own filter chain and map, in order;
+    // ffmpeg feeds a source stream used twice from a single decode.
+    const audioLabels: string[] = [];
     ifDefined(this.audioInputSource, (audioInput) => {
       const audioInputIndex = distinctPaths.indexOf(audioInput.path);
       if (audioInputIndex === -1) {
         return;
       }
 
-      forEach(audioInput.streams, (stream) => {
+      const several = audioInput.streams.length > 1;
+      const chains: string[] = [];
+      forEach(audioInput.streams, (stream, i) => {
         const index = stream.index;
         audioLabel = `${audioInputIndex}:${index}`;
         if (
           some(audioInput.filterSteps, (step) => isNonEmptyString(step.filter))
         ) {
-          audioFilterComplex += `[${audioInputIndex}:${index}]`;
-          audioFilterComplex += collectAndJoinSteps(audioInput.filterSteps);
-          audioLabel = '[a]';
-          audioFilterComplex += audioLabel;
+          audioLabel = several ? `[a${i}]` : '[a]';
+          chains.push(
+            `[${audioInputIndex}:${index}]${collectAndJoinSteps(audioInput.filterSteps)}${audioLabel}`,
+          );
         }
+        audioLabels.push(audioLabel);
       });
+      audioFilterComplex = chains.join(';');
     });
 
     let pixelFormatFilterComplex = '';
@@ -196,7 +204,10 @@ export class ComplexFilter implements FilterOptionPipelineStep {
       result.push('-filter_complex', filterComplex);
     }
 
-    result.push('-map', videoLabel, '-map', audioLabel);
+    result.push('-map', videoLabel);
+    for (const label of audioLabels.length > 0 ? audioLabels : [audioLabel]) {
+      result.push('-map', label);
+    }
 
     return result;
   }
