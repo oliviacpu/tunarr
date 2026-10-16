@@ -43,18 +43,18 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   its extension or folder (`Movie.en`), so the extension check saw `.en` and dropped every file. Three smaller faults
   sat behind it:
   - the video's name was stripped of an extension twice, so `Movie.2010` became `Movie`;
-  - `Episode 1` matched `Episode 10.en.srt`;
+  - `Episode 1` matched `Episode 10.en.srt`, and `Movie` matched `Movie.part2.en.srt`;
   - `Movie.srt` was read as the language `srt`.
 - **Fix:** `server/src/services/local/LocalSubtitlesService.ts`:
   - it passes both full paths;
-  - a file must start with the video's name and a dot;
+  - a file must start with the video's name and a dot, and not with a longer video name in the same folder;
   - the language is the first part that isn't `hi`, `cc`, `sdh` or `forced`, and `unknown` when there is none;
   - extensions match in any case.
 
   The ffmpeg docs list the naming rules. Folders that haven't changed since their last scan need one **Force Scan**.
 - **Tests:** `LocalSubtitlesService.test.ts`:
   - real files in a temporary folder: full paths, other files ignored, a dot in the video's name, a neighbouring
-    episode's subtitles;
+    episode's subtitles, a longer video name;
   - no language, flags first, upper-case extensions.
 - **Upstream:** not sent.
 

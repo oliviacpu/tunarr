@@ -8,6 +8,7 @@ import type { Nullable } from '../../types/util.ts';
 import type { Logger } from '../../util/logging/LoggerFactory.ts';
 import { LoggerFactory } from '../../util/logging/LoggerFactory.ts';
 import { LanguageService } from '../LanguageService.ts';
+import { KnownVideoFileExtensions } from '../scanner/constants.ts';
 
 // Parts of a subtitle file name that describe the subtitles rather than their language
 const SubtitleFileFlags = new Set(['hi', 'cc', 'sdh', 'forced']);
@@ -26,15 +27,23 @@ export class LocalSubtitlesService {
     const subtitles: MediaSubtitles[] = [];
     const directory = dirname(fullItemPath);
     const itemName = basename(fullItemPath, extname(fullItemPath));
-    for (const dirent of await fs.readdir(directory, {
-      withFileTypes: true,
-    })) {
-      if (!dirent.isFile()) {
+    const files = (await fs.readdir(directory, { withFileTypes: true })).filter(
+      (dirent) => dirent.isFile(),
+    );
+    // Other videos whose names extend this one's ("Movie.part2" beside "Movie"):
+    // a subtitle that starts with one of those names is that video's.
+    const longerVideoNames = files
+      .filter((dirent) => KnownVideoFileExtensions.has(extname(dirent.name)))
+      .map((dirent) => basename(dirent.name, extname(dirent.name)))
+      .filter((name) => name.startsWith(`${itemName}.`));
+
+    for (const dirent of files) {
+      // "Episode 1." so that "Episode 10.en.srt" isn't taken for episode 1's
+      if (!dirent.name.startsWith(`${itemName}.`)) {
         continue;
       }
 
-      // "Episode 1." so that "Episode 10.en.srt" isn't taken for episode 1's
-      if (!dirent.name.startsWith(`${itemName}.`)) {
+      if (longerVideoNames.some((name) => dirent.name.startsWith(`${name}.`))) {
         continue;
       }
 

@@ -153,5 +153,29 @@ describe('LocalSubtitlesService', () => {
         path.join(dir, 'Episode 1.en.srt'),
       ]);
     });
+
+    test('a subtitle named after a longer video name belongs to that video', async () => {
+      await touch(
+        'Movie.mkv',
+        'Movie.en.srt',
+        'Movie.part2.mkv',
+        'Movie.part2.en.srt',
+      );
+
+      const service = new LocalSubtitlesService();
+      const first = await service.findExternalSubtitles(
+        path.join(dir, 'Movie.mkv'),
+      );
+      const second = await service.findExternalSubtitles(
+        path.join(dir, 'Movie.part2.mkv'),
+      );
+
+      expect(first.map((s) => s.path)).toEqual([
+        path.join(dir, 'Movie.en.srt'),
+      ]);
+      expect(second.map((s) => [s.path, s.language])).toEqual([
+        [path.join(dir, 'Movie.part2.en.srt'), 'eng'],
+      ]);
+    });
   });
 });
