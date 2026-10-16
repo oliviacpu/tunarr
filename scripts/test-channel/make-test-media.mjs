@@ -64,6 +64,8 @@ function assTime(s) {
 // what `say` should read: no markup, no music notes, ASS line breaks as pauses
 function spoken(text) {
   return text
+    // an ASS vector drawing ({\p1}m 0 0 l ...{\p0}) is shapes, not words
+    .replace(/\{[^}]*\\p[1-9][^}]*\}.*?(\{[^}]*\\p0[^}]*\}|$)/g, '')
     .replace(/\{[^}]*\}/g, '')
     .replace(/<[^>]+>/g, '')
     .replace(/\\N/g, ' ')
