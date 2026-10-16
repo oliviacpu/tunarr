@@ -155,18 +155,22 @@ export class ProgramStreamDetailsFetcher {
           // External subtitles are always handed to ffmpeg as a local file:
           // either a sidecar from a local library, a copy downloaded during
           // scanning, or a file on storage Tunarr shares with the media source.
-          if (pathOnDisk) {
-            return { subtitle, path: pathOnDisk };
-          }
-
-          // Re-checked here rather than trusting the scan, so a mount that
-          // appeared later is picked up without a rescan.
+          //
+          // The shared file comes first: it is what the media server reads
+          // now, while a downloaded copy keeps the subtitle as it was when it
+          // was fetched (a re-sync or a better download replaces the file, not
+          // the copy). Re-checked here rather than trusting the scan, so a
+          // mount that appeared later is picked up without a rescan.
           const sharedPath = await PathCalculator.findLocalPath(
             subtitle.sourcePath,
             server.replacePaths,
           );
           if (sharedPath) {
             return { subtitle, path: sharedPath };
+          }
+
+          if (pathOnDisk) {
+            return { subtitle, path: pathOnDisk };
           }
 
           this.logger.debug(
