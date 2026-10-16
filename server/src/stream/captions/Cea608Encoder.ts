@@ -2,6 +2,7 @@ import type {
   CaptionAlignment,
   CaptionAppearanceSettings,
   CaptionBackgroundColor,
+  CaptionMode,
   CaptionTextColor,
 } from '@tunarr/types/schemas';
 import { CaptionAppearanceSchema } from '@tunarr/types/schemas';
@@ -45,9 +46,26 @@ export const PaddingPair: CcPair = pair(0, 0);
 
 // Miscellaneous control codes, data channel 1
 const ResumeCaptionLoading = pair(0x14, 0x20);
+const ResumeDirectCaptioning = pair(0x14, 0x29);
+const CarriageReturn = pair(0x14, 0x2d);
 const EraseDisplayedMemory = pair(0x14, 0x2c);
 const EraseNonDisplayedMemory = pair(0x14, 0x2e);
 const EndOfCaption = pair(0x14, 0x2f);
+
+type RollUpMode = 'rollUp2' | 'rollUp3' | 'rollUp4';
+
+// Roll-up with 2, 3 or 4 rows on screen
+const RollUp: Record<RollUpMode, { command: CcPair; rows: number }> = {
+  rollUp2: { command: pair(0x14, 0x25), rows: 2 },
+  rollUp3: { command: pair(0x14, 0x26), rows: 3 },
+  rollUp4: { command: pair(0x14, 0x27), rows: 4 },
+};
+
+const isRollUp = (mode: CaptionMode): mode is RollUpMode => mode in RollUp;
+
+// How long roll-up text stays up waiting for the next cue to scroll it, as a
+// live captioner's does, before the screen is cleared
+const RollUpHoldMs = 2000;
 
 // Preamble address codes: [first byte, second byte for column 0] per row (1-15)
 const PacRows: Record<number, readonly [number, number]> = {
@@ -543,70 +561,103 @@ function lineColumns(widths: number[], alignment: CaptionAlignment): number[] {
   }
 }
 
-// The pairs that load one caption into hidden memory, in atoms: runs of pairs
-// that must reach the decoder back to back (a fallback character and the
-// extended character that replaces it). Other commands may go between atoms.
+// The pairs that draw one line, in atoms: runs of pairs that must reach the
+// decoder back to back (a fallback character and the extended character that
+// replaces it). Other commands may go between atoms.
 //
 // Control codes are sent once. Broadcasters send each twice so one survives a
 // transmission error; this stream is never damaged in transit, and the second
 // copy costs a frame each, which made captions late in fast dialogue.
-function loadSequence(
-  caption: CaptionLayout,
-  appearance: CaptionAppearance,
-): CcPair[][] {
+function lineAtoms(units: CharUnit[], row: number, column: number): CcPair[][] {
   const atoms: CcPair[][] = [];
   const pushCode = (code: CcPair) => atoms.push([code]);
 
-  pushCode(ResumeCaptionLoading);
-  pushCode(EraseNonDisplayedMemory);
+  // A preamble reaches columns in steps of 4; a Tab Offset (TO1-TO3) the rest
+  const indent = Math.floor(column / 4) * 4;
+  pushCode(preambleAddress(row, indent));
+  if (column > indent) {
+    pushCode(pair(0x17, 0x20 + (column - indent)));
+  }
 
+  // Basic characters go two to a pair
+  let pending: number | undefined;
+  for (const unit of units) {
+    if (unit.kind === 'basic') {
+      if (pending === undefined) {
+        pending = unit.byte;
+      } else {
+        atoms.push([pair(pending, unit.byte)]);
+        pending = undefined;
+      }
+      continue;
+    }
+    if (unit.fallback !== undefined) {
+      const charPair =
+        pending === undefined
+          ? pair(unit.fallback, 0)
+          : pair(pending, unit.fallback);
+      atoms.push([charPair, unit.code]);
+    } else {
+      if (pending !== undefined) {
+        atoms.push([pair(pending, 0)]);
+      }
+      pushCode(unit.code);
+    }
+    pending = undefined;
+  }
+  if (pending !== undefined) {
+    atoms.push([pair(pending, 0)]);
+  }
+  return atoms;
+}
+
+// The caption's lines on their rows and columns
+function captionLines(caption: CaptionLayout, appearance: CaptionAppearance) {
   const lineUnitList = caption.lines.map((line) => lineUnits(line, appearance));
   const columns = lineColumns(
     lineUnitList.map((units) => units.length),
     appearance.alignment,
   );
-
   const row = firstRow(caption, appearance);
-  for (const [i, units] of lineUnitList.entries()) {
-    // A preamble reaches columns in steps of 4; a Tab Offset (TO1-TO3) the rest
-    const column = columns[i] ?? 0;
-    const indent = Math.floor(column / 4) * 4;
-    pushCode(preambleAddress(row + i, indent));
-    if (column > indent) {
-      pushCode(pair(0x17, 0x20 + (column - indent)));
-    }
+  return lineUnitList.map((units, i) => ({
+    units,
+    row: row + i,
+    column: columns[i] ?? 0,
+  }));
+}
 
-    // Basic characters go two to a pair
-    let pending: number | undefined;
-    for (const unit of units) {
-      if (unit.kind === 'basic') {
-        if (pending === undefined) {
-          pending = unit.byte;
-        } else {
-          atoms.push([pair(pending, unit.byte)]);
-          pending = undefined;
-        }
-        continue;
-      }
-      if (unit.fallback !== undefined) {
-        const charPair =
-          pending === undefined
-            ? pair(unit.fallback, 0)
-            : pair(pending, unit.fallback);
-        atoms.push([charPair, unit.code]);
-      } else {
-        if (pending !== undefined) {
-          atoms.push([pair(pending, 0)]);
-        }
-        pushCode(unit.code);
-      }
-      pending = undefined;
-    }
-    if (pending !== undefined) {
-      atoms.push([pair(pending, 0)]);
-    }
-  }
-  return atoms;
+// Pop-on: the pairs that load one caption into hidden memory
+function loadSequence(
+  caption: CaptionLayout,
+  appearance: CaptionAppearance,
+): CcPair[][] {
+  return [
+    [ResumeCaptionLoading],
+    [EraseNonDisplayedMemory],
+    ...captionLines(caption, appearance).flatMap(({ units, row, column }) =>
+      lineAtoms(units, row, column),
+    ),
+  ];
+}
+
+// Roll-up: each line is drawn on the base row after a carriage return, which
+// moves the lines above it up one row
+function rollUpLines(
+  caption: CaptionLayout,
+  appearance: CaptionAppearance,
+  rows: number,
+): CcPair[][][] {
+  const baseRow = Math.min(Math.max(appearance.bottomRow, rows), Rows);
+  // Aligned as a block, as a pop-on caption's lines are
+  const lineUnitList = caption.lines.map((line) => lineUnits(line, appearance));
+  const columns = lineColumns(
+    lineUnitList.map((units) => units.length),
+    appearance.alignment,
+  );
+  return lineUnitList.map((units, i) => [
+    [CarriageReturn],
+    ...lineAtoms(units, baseRow, columns[i] ?? 0),
+  ]);
 }
 
 // Decoders skip a code identical to the one just before it, and null padding
@@ -682,8 +733,15 @@ export function buildCaptionSchedule(
         ...cue.appearance,
       };
       // A cue too long for one caption is shown in parts, each for a share of
-      // the cue's time in proportion to its text
-      const parts = layoutCaption(cue.text, appearance);
+      // the cue's time in proportion to its text. Roll-up scrolls a cue's
+      // lines up one by one at the bottom, so its cue stays whole.
+      const parts = isRollUp(appearance.mode)
+        ? layoutCaption(cue.text, {
+            ...appearance,
+            maxLines: Number.MAX_SAFE_INTEGER,
+            keepTopPlacement: false,
+          })
+        : layoutCaption(cue.text, appearance);
       const lengths = parts.map(
         ({ lines }) =>
           lines.reduce((n, line) => n + line.length, 0) + lines.length - 1,
@@ -720,7 +778,12 @@ export function buildCaptionSchedule(
 
   // Loads the atoms so the last ends just before `endSlot`, no earlier than
   // `minSlot`, stepping around commands already placed. False if they don't fit.
-  const placeBefore = (atoms: CcPair[][], endSlot: number, minSlot: number) => {
+  const placeBefore = (
+    atoms: CcPair[][],
+    endSlot: number,
+    minSlot: number,
+    { dryRun = false } = {},
+  ) => {
     const placed: [number, CcPair[]][] = [];
     let limit = endSlot - 1;
     for (const atom of atoms.toReversed()) {
@@ -734,8 +797,10 @@ export function buildCaptionSchedule(
       placed.push([slot, atom]);
       limit = slot - 1;
     }
-    for (const [slot, atom] of placed) {
-      atom.forEach((p, k) => take(slot + k, p));
+    if (!dryRun) {
+      for (const [slot, atom] of placed) {
+        atom.forEach((p, k) => take(slot + k, p));
+      }
     }
     return true;
   };
@@ -768,46 +833,124 @@ export function buildCaptionSchedule(
   const clearFrom = (slot: number) =>
     take(firstFreeFrom(slot), EraseDisplayedMemory);
 
-  // Hidden memory can only be reloaded once the previous caption is on screen
+  // The next caption's pairs go after this slot: pop-on's hidden memory can
+  // only be reloaded once the previous caption is on screen, and paint-on and
+  // roll-up text must all arrive before the mode changes
   let loadAfter = 0;
   // Where the caption on screen ends, when it was left up for the next one to
   // replace
   let replacedAt: number | undefined;
-  for (const [i, caption] of captions.entries()) {
-    const load = loadSequence(caption.caption, caption.appearance);
-    const wanted = Math.max(slotOf(caption.startMs), 0);
+  // The mode this schedule last put the decoder in
+  let screenMode: CaptionMode | undefined;
+  const rollUpHoldSlots = Math.round(RollUpHoldMs / frameMs);
 
-    // Show it on its start frame, or as soon as loading finishes when there
-    // isn't room before it (a short gap, or a cue already under way)
-    let showAt = wanted;
-    if (!placeBefore(load, wanted, loadAfter)) {
-      showAt = firstFreeFrom(
-        Math.max(wanted, placeFrom(load, loadAfter, { dryRun: true })),
-      );
-      // A caption that can't be loaded before it ends is left out, rather
-      // than flashed for a frame. A cue nearly over when a viewer tunes in is
-      // one: its load would also hold up the next caption.
-      if (showAt >= slotOf(caption.endMs)) {
-        if (replacedAt !== undefined) {
-          clearFrom(replacedAt);
-          replacedAt = undefined;
+  // A caption that can't be shown before it ends is left out, rather than
+  // flashed for a frame. A cue nearly over when a viewer tunes in is one: its
+  // pairs would also hold up the next caption. The caption on screen, left up
+  // for it to replace, is cleared at its own end instead.
+  const leaveOut = () => {
+    if (replacedAt !== undefined) {
+      clearFrom(replacedAt);
+      replacedAt = undefined;
+    }
+  };
+
+  for (const [i, caption] of captions.entries()) {
+    const { appearance } = caption;
+    const mode = appearance.mode;
+    const wanted = Math.max(slotOf(caption.startMs), 0);
+    // The slot after the caption's last pair
+    let doneAt: number;
+
+    if (mode === 'popOn') {
+      // Show it on its start frame, or as soon as loading finishes when there
+      // isn't room before it (a short gap, or a cue already under way)
+      const load = loadSequence(caption.caption, appearance);
+      let showAt = wanted;
+      if (!placeBefore(load, wanted, loadAfter)) {
+        showAt = firstFreeFrom(
+          Math.max(wanted, placeFrom(load, loadAfter, { dryRun: true })),
+        );
+        if (showAt >= slotOf(caption.endMs)) {
+          leaveOut();
+          continue;
         }
+        placeFrom(load, loadAfter);
+      }
+      showAt = firstFreeFrom(showAt);
+      take(showAt, EndOfCaption);
+      doneAt = showAt + 1;
+    } else {
+      // Paint-on and roll-up draw on screen as the text arrives, from the
+      // cue's start frame. The mode is set beforehand. On the start frame,
+      // paint-on erases the screen and roll-up sends its first carriage
+      // return; FFmpeg's decoder times the caption from that command.
+      const entry: CcPair[][] =
+        mode === 'paintOn'
+          ? [[ResumeDirectCaptioning]]
+          : screenMode === mode
+            ? []
+            : // A roll-up command keeps what is on screen, so clear it first
+              [[EraseDisplayedMemory], [RollUp[mode].command]];
+      const entryFits = placeBefore(entry, wanted, loadAfter, {
+        dryRun: true,
+      });
+      const startAt = firstFreeFrom(
+        entryFits
+          ? wanted
+          : Math.max(wanted, placeFrom(entry, loadAfter, { dryRun: true })),
+      );
+      if (startAt >= slotOf(caption.endMs)) {
+        leaveOut();
         continue;
       }
-      placeFrom(load, loadAfter);
-    }
-    showAt = firstFreeFrom(showAt);
-    take(showAt, EndOfCaption);
-    loadAfter = showAt + 1;
+      if (entryFits) {
+        placeBefore(entry, wanted, loadAfter);
+      } else {
+        placeFrom(entry, loadAfter);
+      }
 
-    // Clear the screen at the end, unless the next caption replaces it right away
+      if (mode === 'paintOn') {
+        take(startAt, EraseDisplayedMemory);
+        doneAt = placeFrom(
+          captionLines(caption.caption, appearance).flatMap(
+            ({ units, row, column }) => lineAtoms(units, row, column),
+          ),
+          startAt + 1,
+        );
+      } else {
+        const [first = [], ...rest] = rollUpLines(
+          caption.caption,
+          appearance,
+          RollUp[mode].rows,
+        );
+        // The first line's carriage return on the start frame, the rest after
+        take(startAt, CarriageReturn);
+        doneAt = placeFrom([...first.slice(1), ...rest.flat()], startAt + 1);
+      }
+    }
+    screenMode = mode;
+    loadAfter = doneAt;
+
+    // Clear the screen at the end, unless the next caption, in the same mode,
+    // replaces it right away (roll-up: scrolls it up within the hold)
     const next = captions[i + 1];
-    const endSlot = Math.max(slotOf(caption.endMs), showAt + 1);
-    if (!next || slotOf(next.startMs) > endSlot + 1) {
-      clearFrom(endSlot);
-      replacedAt = undefined;
-    } else {
+    const endSlot = Math.max(slotOf(caption.endMs), doneAt);
+    const nextSlot = next ? slotOf(next.startMs) : undefined;
+    const replacedBy =
+      next?.appearance.mode === mode &&
+      nextSlot !== undefined &&
+      nextSlot <= endSlot + (isRollUp(mode) ? rollUpHoldSlots : 1);
+    if (replacedBy) {
       replacedAt = endSlot;
+    } else {
+      // Before a caption in another mode starts, if it starts first
+      clearFrom(
+        nextSlot !== undefined && next?.appearance.mode !== mode
+          ? Math.min(endSlot, nextSlot)
+          : endSlot,
+      );
+      replacedAt = undefined;
     }
   }
 

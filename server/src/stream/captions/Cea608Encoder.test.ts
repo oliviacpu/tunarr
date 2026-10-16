@@ -14,7 +14,10 @@ import {
   NoCaptionsNoticeText,
   noCaptionsNoticeStartMs,
 } from './ProgramCaptions.ts';
-import { decodeScreens } from '../../testing/captions/Cea608TestDecoder.ts';
+import {
+  decodeScreens,
+  screenAt,
+} from '../../testing/captions/Cea608TestDecoder.ts';
 
 const FrameRate = 30;
 const frameMs = 1000 / FrameRate;
@@ -619,6 +622,171 @@ describe('caption appearance', () => {
       [' [bg red]Plain'],
       [' [bg red][cyan]Mine'],
     ]);
+  });
+});
+
+const ResumeDirectCaptioning = [0x14, 0x29];
+const CarriageReturn = [0x14, 0x2d];
+const RollUp2 = [0x14, 0x25];
+const RollUp3 = [0x14, 0x26];
+
+// Each row's text on `frame`
+const textsAt = (pairs: number[][], frame: number) =>
+  screenAt(decodeScreens(pairs), frame).map((r) => [r.row, r.text]);
+
+describe('paint-on captions', () => {
+  test('draws each caption as it arrives, from its start frame', () => {
+    const pairs = framePairs(
+      [{ startMs: 2000, endMs: 4000, text: 'Hello there' }],
+      150,
+      0,
+      { mode: 'paintOn' },
+    );
+
+    expect(indexOfPair(pairs, ResumeDirectCaptioning)).toBeLessThan(60);
+    // Erased on its start frame, which is where FFmpeg's decoder times it from
+    expect(pairs[60]).toEqual(EraseDisplayedMemory);
+    const screens = decodeScreens(pairs).filter((s) => s.rows.length > 0);
+    expect(screens[0]?.fromFrame).toBe(62);
+    expect(textsAt(pairs, 100)).toEqual([[15, 'Hello there']]);
+    expect(textsAt(pairs, 120)).toEqual([]);
+    expect(indexOfPair(pairs, EndOfCaption)).toBe(-1);
+  });
+
+  test('replaces one caption with the next, which erases on its start', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 2000, text: 'First' },
+        { startMs: 2000, endMs: 3000, text: 'Second' },
+      ],
+      120,
+      0,
+      { mode: 'paintOn' },
+    );
+
+    expect(textsAt(pairs, 55)).toEqual([[15, 'First']]);
+    expect(pairs[60]).toEqual(EraseDisplayedMemory);
+    expect(textsAt(pairs, 85)).toEqual([[15, 'Second']]);
+    expect(indexOfPair(pairs, EraseDisplayedMemory, 61)).toBe(90);
+  });
+
+  test('leaves out a cue already under way that ends before it can start', () => {
+    const pairs = framePairs(
+      [{ startMs: 0, endMs: 1010, text: 'Gone' }],
+      60,
+      1000,
+      { mode: 'paintOn' },
+    );
+    expect(decodeScreens(pairs).filter((s) => s.rows.length > 0)).toEqual([]);
+  });
+});
+
+describe('roll-up captions', () => {
+  test("scrolls a cue's lines up from the bottom, keeping the chosen number of rows", () => {
+    const pairs = framePairs(
+      [{ startMs: 2000, endMs: 5000, text: 'One\nTwo\nThree' }],
+      180,
+      0,
+      { mode: 'rollUp2' },
+    );
+
+    // The mode is set before the cue, with the screen cleared
+    expect(indexOfPair(pairs, EraseDisplayedMemory)).toBeLessThan(60);
+    expect(indexOfPair(pairs, RollUp2)).toBeLessThan(60);
+    // The first carriage return on its start frame
+    expect(pairs[60]).toEqual(CarriageReturn);
+    expect(textsAt(pairs, 140)).toEqual([
+      [14, 'Two'],
+      [15, 'Three'],
+    ]);
+    expect(textsAt(pairs, 151)).toEqual([]);
+  });
+
+  test('keeps the last lines up for the next cue to scroll, within 2 s', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 2000, text: 'One' },
+        { startMs: 3500, endMs: 4500, text: 'Two' },
+        // More than 2 s later: the screen is cleared before it
+        { startMs: 7000, endMs: 8000, text: 'Three' },
+      ],
+      270,
+      0,
+      { mode: 'rollUp3' },
+    );
+
+    expect(textsAt(pairs, 90)).toEqual([[15, 'One']]);
+    expect(textsAt(pairs, 130)).toEqual([
+      [14, 'One'],
+      [15, 'Two'],
+    ]);
+    expect(textsAt(pairs, 200)).toEqual([]);
+    expect(textsAt(pairs, 230)).toEqual([[15, 'Three']]);
+    // The mode is set once
+    expect(pairs.filter((p) => p[0] === 0x14 && p[1] === 0x26)).toHaveLength(1);
+    expect(indexOfPair(pairs, RollUp3)).toBeLessThan(30);
+  });
+
+  test('rolls up to the chosen bottom row', () => {
+    const pairs = framePairs(
+      [{ startMs: 1000, endMs: 4000, text: 'One\nTwo\nThree' }],
+      150,
+      0,
+      { mode: 'rollUp3', bottomRow: 11 },
+    );
+    expect(textsAt(pairs, 110)).toEqual([
+      [9, 'One'],
+      [10, 'Two'],
+      [11, 'Three'],
+    ]);
+  });
+});
+
+describe('switching modes', () => {
+  // pop-on, roll-up, paint-on, pop-on, each cue in its own mode
+  const cues = [
+    { startMs: 1000, endMs: 2000, text: 'Pop', appearance: {} },
+    {
+      startMs: 3000,
+      endMs: 4000,
+      text: 'Roll',
+      appearance: { mode: 'rollUp2' as const },
+    },
+    {
+      startMs: 5000,
+      endMs: 6000,
+      text: 'Paint',
+      appearance: { mode: 'paintOn' as const },
+    },
+    { startMs: 7000, endMs: 8000, text: 'Pop again', appearance: {} },
+  ];
+
+  test('shows each cue in its own mode, for its own time', () => {
+    const pairs = framePairs(cues, 270);
+
+    expect(textsAt(pairs, 50)).toEqual([[15, 'Pop']]);
+    expect(textsAt(pairs, 70)).toEqual([]);
+    expect(textsAt(pairs, 110)).toEqual([[15, 'Roll']]);
+    expect(textsAt(pairs, 130)).toEqual([]);
+    expect(textsAt(pairs, 170)).toEqual([[15, 'Paint']]);
+    expect(textsAt(pairs, 190)).toEqual([]);
+    expect(textsAt(pairs, 230)).toEqual([[15, 'Pop again']]);
+  });
+
+  // FFmpeg's decoder takes a carriage return in pop-on mode as a roll-up,
+  // wiping rows and showing the hidden caption early
+  test('never sends a carriage return while loading a pop-on caption', () => {
+    const pairs = framePairs(cues, 270);
+    let mode = '';
+    for (const [a, b] of pairs) {
+      if (a === 0x14 && b === 0x20) {
+        mode = 'popOn';
+      } else if (a === 0x14 && (b === 0x29 || (b >= 0x25 && b <= 0x27))) {
+        mode = 'other';
+      } else if (a === 0x14 && b === 0x2d) {
+        expect(mode).toBe('other');
+      }
+    }
   });
 });
 

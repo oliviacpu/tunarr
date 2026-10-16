@@ -193,6 +193,124 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
   // The HDHomeRun .ts stream is ffmpeg's remux of the captioned segments, as
   // ConcatStream runs it. ffmpeg writes a PMT of its own, so readers of the
   // same lineage as Plex's saw no language until CaptionLanguageStream.
+  // What ffmpeg's decoder, of the family Plex's player comes from, makes of
+  // the appearance options: ASS events with their start time and text
+  describe('appearance', () => {
+    let input: string;
+    let firstMs: number;
+
+    beforeAll(() => {
+      if (!binaries) {
+        return;
+      }
+      input = path.join(workdir, 'appearance-in.ts');
+      execFileSync(binaries.ffmpeg, [
+        ...['-hide_banner', '-loglevel', 'error', '-y'],
+        ...['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30'],
+        ...['-t', '10', '-c:v', 'libx264', '-preset', 'veryfast'],
+        ...['-muxdelay', '0', '-muxpreload', '0', '-f', 'mpegts', input],
+      ]);
+      firstMs =
+        Number(
+          execFileSync(binaries.ffprobe, [
+            ...['-v', 'error', '-select_streams', 'v'],
+            ...['-read_intervals', '%+#1', '-show_entries', 'packet=pts'],
+            ...['-of', 'csv=p=0', input],
+          ])
+            .toString()
+            .split('\n')[0]
+            ?.replace(',', ''),
+        ) / 90;
+    });
+
+    async function events(
+      name: string,
+      cues: CaptionCue[],
+      appearance: Partial<CaptionAppearance>,
+      { realTime = false } = {},
+    ) {
+      if (!binaries) {
+        return [];
+      }
+      const schedule = buildCaptionSchedule(
+        cues.map((cue) => ({
+          ...cue,
+          startMs: firstMs + cue.startMs,
+          endMs: firstMs + cue.endMs,
+        })),
+        { firstFrameMs: firstMs, frameRate: 30, appearance },
+      );
+      const result = insertCaptions(await fs.readFile(input), {
+        pairForPts: (pts) => schedule.pairAt(pts / 90),
+        language: 'eng',
+      });
+      if (!result.ok) {
+        throw new Error(result.reason);
+      }
+      const output = path.join(workdir, `appearance-${name}.ts`);
+      await fs.writeFile(output, result.segment);
+      return execFileSync(binaries.ffmpeg, [
+        ...['-hide_banner', '-loglevel', 'error'],
+        ...(realTime ? ['-real_time', '1'] : []),
+        ...['-f', 'lavfi', '-i', `movie=${output}[out0+subcc]`],
+        ...['-map', '0:s', '-f', 'ass', '-'],
+      ])
+        .toString()
+        .split('\n')
+        .filter((line) => line.startsWith('Dialogue:'))
+        .map((line) => {
+          const [, start = '', text = ''] =
+            /^Dialogue: \d+,(\d+:\d+:[\d.]+),[^,]*,(?:[^,]*,){6}(.*)$/.exec(
+              line,
+            ) ?? [];
+          return {
+            start,
+            text: text.replace(/\{\\an7\}\{\\pos\([^)]*\)\}/g, ''),
+          };
+        });
+    }
+
+    test('colours the text and the box behind it', async () => {
+      const [event] = await events(
+        'colour',
+        [{ startMs: 1000, endMs: 3000, text: 'Red on blue' }],
+        { textColor: 'red', backgroundColor: 'blue' },
+      );
+      // ASS colours are blue-green-red
+      expect(event?.text).toContain('{\\c&H0000FF&}');
+      expect(event?.text).toContain('{\\3c&HFF0000&}');
+      expect(event?.text).toContain('Red on blue');
+    });
+
+    test('rolls lines up, keeping the chosen number of rows', async () => {
+      const shown = await events(
+        'rollup',
+        [{ startMs: 1000, endMs: 5000, text: 'One\nTwo\nThree' }],
+        { mode: 'rollUp2' },
+      );
+      expect(shown.map((e) => [e.start, e.text])).toEqual([
+        ['0:00:01.00', 'One'],
+        // Each line follows the one before as soon as it has been sent
+        [expect.any(String), 'One\\NTwo'],
+        [expect.any(String), 'Two\\NThree'],
+      ]);
+    });
+
+    test('paints text on from the start frame', async () => {
+      const shown = await events(
+        'painton',
+        [{ startMs: 1000, endMs: 3000, text: 'Painted' }],
+        { mode: 'paintOn' },
+        { realTime: true },
+      );
+      const painted = shown.filter((e) => e.text === 'Painted');
+      expect(painted).toHaveLength(1);
+      // Its first characters appear a frame or two after the start
+      const first = shown.find((e) => e.text.length > 0);
+      expect(first?.start).toMatch(/^0:00:01\.0\d$/);
+    });
+  });
+
   test("the remuxed stream names the captions' language", async () => {
     if (!binaries) {
       return;
