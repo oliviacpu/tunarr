@@ -67,6 +67,25 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `CaptionTestPattern.test.ts`: sample 39's timing.
 - **Upstream:** not sent.
 
+### A custom show sync looks up its program ids without loading whole programs (2026-10-16)
+
+- **What you saw:** nothing reported. A follow-up from the custom-show-sync work of 2026-10-15, where the lookup at the
+  end of every sync was the worst stall: 163–186 ms at 1,000 movies, 870 ms at 3,000.
+- **Cause:** `CustomShowSyncService` resolved the playlist's Tunarr ids with `lookupByExternalIds`. That loads every
+  program with its album, artist, season, show, tags, artwork, credits, genres, studios and versions, only to read its
+  id.
+- **Fix:**
+  - The sync uses `programIdsByExternalIds`, which reads only the external-id table, and matches the results with
+    `createExternalId` (`server/src/services/CustomShowSyncService.ts`).
+  - `IProgramDB` declared `programIdsByExternalIds` twice. The stale declaration claimed dot-separated keys, while the
+    method returns `source|mediaSourceId|key`. It's gone, and `ProgramDB` declares the real key type.
+- **Numbers:** `pnpm bench:custom-show-sync -- --movies 1000`, run back to back on the same machine. The in-process
+  arm's worst stall went from 177 to 104 ms on the first sync, and from 263 to 100 ms on a resync. Syncs run in a scan
+  worker by default; this is the in-process fallback, and the worker does less work too.
+- **Tests:** `CustomShowSyncService.test.ts`. The stubs return the id map, and the old lookup now fails the test if
+  it's called. Six tests fail against the previous service.
+- **Upstream:** not sent.
+
 ### Switchable audio in Plex Live TV: a fixed audio track layout per channel (2026-10-16)
 
 - **What you saw:** Plex Live TV offered one audio track, whichever the program's selection picked, so a dual-audio

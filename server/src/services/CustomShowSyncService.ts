@@ -11,6 +11,7 @@ import { KEYS } from '@/types/inject.js';
 import type { ScanOutcome } from '@/types/worker_schemas.js';
 import { InjectLogger } from '@/util/inject.js';
 import type { Logger } from '@/util/logging/LoggerFactory.js';
+import { createExternalId } from '@tunarr/shared';
 import { seq } from '@tunarr/shared/util';
 import type { CondensedContentProgram } from '@tunarr/types';
 import {
@@ -260,28 +261,31 @@ export class CustomShowSyncService {
       }
     }
 
-    // After scanning, look up the Tunarr DB UUIDs for all programs
+    // After scanning, look up the Tunarr DB UUIDs for all programs. Only the
+    // ids are needed: loading whole programs with all their relations here
+    // stalled a 3,000-movie sync for 870 ms (2026-10-15).
     const lookupIds = new Set(
       programs.map(
         (p) =>
-          [
-            p.sourceType as RemoteSourceType,
-            mediaSourceId,
-            p.externalId,
-          ] as const,
+          [p.sourceType as RemoteSourceType, mediaSourceId, p.externalId] as [
+            RemoteSourceType,
+            MediaSourceId,
+            string,
+          ],
       ),
     );
-    const dbPrograms = await this.programDB.lookupByExternalIds(lookupIds);
-    const keyToUuid = new Map(
-      dbPrograms.map((p) => [
-        `${p.sourceType}:${p.mediaSourceId}:${p.externalKey}`,
-        p.uuid,
-      ]),
-    );
+    const uuidByExternalId =
+      await this.programDB.programIdsByExternalIds(lookupIds);
 
     for (const program of programs) {
-      const key = `${program.sourceType}:${program.mediaSourceId}:${program.externalId}`;
-      const dbUuid = keyToUuid.get(key);
+      const dbUuid =
+        uuidByExternalId[
+          createExternalId(
+            program.sourceType as RemoteSourceType,
+            mediaSourceId,
+            program.externalId,
+          )
+        ];
       if (dbUuid !== undefined) {
         program.uuid = dbUuid;
       }
