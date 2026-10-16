@@ -70,6 +70,14 @@ type CaptionTimelineEntry = {
 
 // MPEG-TS timestamps are 33 bits and wrap after about 26.5 hours
 const PtsWrap = 2 ** 33;
+// Where a session's output clock starts (90 kHz): its first program's
+// -output_ts_offset. At 0, the encoder's B-frame delay makes the first
+// decoding timestamps negative, and the muxer shifts the whole program later
+// to keep them positive: its first frame came out at PTS 6000 (two frames at
+// 30 fps) while its captions and subtitles were timed from 0, two frames
+// early. From 1 s nothing goes negative, so the first program starts exactly
+// at its offset, as every later program does.
+export const SessionStartPts = 90_000;
 // Captions of this many recent programs are kept, for segments still being served
 const CaptionTimelineLength = 10;
 // A live subtitle playlist with no segments yet (see ensureSubtitlePlaylist)
@@ -327,11 +335,13 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   }
 
   private async transcode(realtime: boolean) {
+    // hls_direct_v2 keeps the source's timestamps (-copyts)
     const ptsOffset =
-      this.#isFirstTranscode ||
       this.sessionOptions.streamMode === 'hls_direct_v2'
         ? 0
-        : await this.getPtsOffset();
+        : this.#isFirstTranscode
+          ? SessionStartPts
+          : await this.getPtsOffset();
     // Unlike ptsOffset, this applies regardless of isFirstTranscode/
     // streamMode: scanning a fresh/empty working directory already
     // naturally yields 0, and hls_direct_v2's subs.m3u8 has the same
@@ -668,9 +678,12 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
 
     if (!lastSegment) {
       if (!this.#isFirstTranscode) {
-        this.logger.debug('No last segment found. Starting with PTS offset 0.');
+        this.logger.debug(
+          'No last segment found. Starting with PTS offset %d.',
+          SessionStartPts,
+        );
       }
-      return 0;
+      return SessionStartPts;
     }
 
     const result = await new GetLastPtsDurationTask(this.settingsDB).run(
@@ -679,7 +692,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
 
     if (result.isFailure()) {
       this.logger.error(result.error);
-      return 0;
+      return SessionStartPts;
     }
 
     const { pts, duration } = result.get();

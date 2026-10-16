@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import tmp from 'tmp';
 import type {
   ContentBackedStreamLineupItem,
   StreamLineupItem,
@@ -7,6 +10,8 @@ import type { ProgramType } from '../../db/schema/Program.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
 import {
   exactFrameRate,
+  firstFrameMs,
+  loadProgramCaptions,
   markSegmentsForCaptions,
   noCaptionsNotice,
   noCaptionsNoticeStartMs,
@@ -34,6 +39,66 @@ describe('exactFrameRate', () => {
     expect(exactFrameRate(undefined)).toBeUndefined();
     expect(exactFrameRate('0/0')).toBeUndefined();
     expect(exactFrameRate(1000)).toBeUndefined();
+  });
+});
+
+// ffmpeg drops the frames before the seek, so the program's first frame is
+// the first one at or after it
+describe('firstFrameMs', () => {
+  test('is the first frame at or after the seek', () => {
+    expect(firstFrameMs(1348, 30)).toBeCloseTo(41000 / 30);
+    expect(firstFrameMs(1, 24000 / 1001)).toBeCloseTo(1001 / 24);
+  });
+
+  test('keeps a seek that lands on a frame', () => {
+    expect(firstFrameMs(1000, 30)).toBeCloseTo(1000);
+    expect(firstFrameMs((5 * 1001) / 24, 24000 / 1001)).toBeCloseTo(
+      (5 * 1001) / 24,
+    );
+  });
+
+  test('is 0 without a seek', () => {
+    expect(firstFrameMs(0, 30)).toBe(0);
+  });
+});
+
+describe('loadProgramCaptions', () => {
+  let dir: tmp.DirResult;
+
+  beforeEach(() => {
+    dir = tmp.dirSync({ unsafeCleanup: true });
+  });
+
+  afterEach(() => {
+    dir.removeCallback();
+  });
+
+  // A tune-in 1.348 s into the program: the stream's first frame is the one at
+  // 1.3667 s, so a cue at 2 s is 19 frames in. From the seek it was 19.56,
+  // which rounds to frame 20, one late.
+  test("times cues from the program's first frame", async () => {
+    const file = path.join(dir.name, 'a.srt');
+    await fs.writeFile(
+      file,
+      '1\n00:00:02,000 --> 00:00:03,500\nHello\n\n2\n00:00:00,500 --> 00:00:01,000\nGone\n',
+    );
+
+    const captions = await loadProgramCaptions(
+      {
+        type: 'external',
+        codec: 'subrip',
+        default: false,
+        forced: false,
+        sdh: false,
+        languageCodeISO6392: 'eng',
+        path: file,
+      },
+      { seekMs: 1348, durationMs: 60_000, frameRate: 30 },
+    );
+
+    expect(captions?.cues).toHaveLength(1);
+    expect(captions?.cues[0]?.text).toBe('Hello');
+    expect((captions?.cues[0]?.startMs ?? 0) / (1000 / 30)).toBeCloseTo(19);
   });
 });
 
@@ -149,7 +214,7 @@ describe('noCaptionsNoticeStartMs', () => {
     expect(noCaptionsNoticeStartMs(30000 / 1001)).toBe(1000);
   });
 
-  // Loading needs up to 18 frames after the 2 a first program loses
+  // Loading needs up to 18 frames, after 2 of margin for a late video start
   test('starts later at low frame rates, so loading fits', () => {
     expect(noCaptionsNoticeStartMs(15)).toBe(1534);
     expect(noCaptionsNoticeStartMs(10)).toBe(2300);
