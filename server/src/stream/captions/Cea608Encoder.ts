@@ -269,8 +269,41 @@ const FlashOn: CharUnit = { kind: 'code', code: pair(0x14, 0x28) };
 // One character of a cue, with the style it is shown in
 export type StyledChar = CaptionStyle & { ch: string };
 
-// A caption as it goes on screen: up to two lines, at the top or the bottom
-export type CaptionLayout = { top: boolean; lines: StyledChar[][] };
+// Where a block of caption lines goes: a band of the screen, and a side or
+// the middle across it ('center' follows the alignment setting)
+export type CaptionPlacement = {
+  vertical: 'top' | 'middle' | 'bottom';
+  horizontal: 'left' | 'center' | 'right';
+};
+
+const DefaultPlacement: CaptionPlacement = {
+  vertical: 'bottom',
+  horizontal: 'center',
+};
+
+// A block of caption lines as it goes on screen. A caption is one or more
+// blocks shown together.
+export type CaptionLayout = {
+  placement: CaptionPlacement;
+  lines: StyledChar[][];
+};
+
+// A cue's text as read: its lines, and the first alignment override in it as
+// a numpad position (7-9 top, 4-6 middle, 1-3 bottom)
+type ParsedCue = { lines: StyledChar[][]; alignment?: number };
+
+// SSA's {\aN}: 1-3 at the bottom, +4 at the top, +8 in the middle
+const LegacyAlignment: Record<number, number> = {
+  1: 1,
+  2: 2,
+  3: 3,
+  5: 7,
+  6: 8,
+  7: 9,
+  9: 4,
+  10: 5,
+  11: 6,
+};
 
 // How captions look: the appearance settings, the alignment setting, and
 // flashing text, which only the test pattern sends
@@ -305,9 +338,9 @@ function resolveAppearance(
 // come from SRT/WebVTT tags (<i>, <u>) and ASS overrides ({\i1}, {\u1}, {\r});
 // an alignment override at the top ({\an7}-{\an9}, or SSA's {\a5}-{\a7}) puts
 // the cue at the top of the screen. Other formatting is dropped.
-function parseCueText(text: string): CaptionLayout {
+function parseCueText(text: string): ParsedCue {
   let style = PlainStyle;
-  let top: boolean | undefined;
+  let alignment: number | undefined;
   const lines: StyledChar[][] = [[]];
   const current = () => lines.at(-1) ?? [];
   for (const [token] of text.matchAll(
@@ -324,7 +357,7 @@ function parseCueText(text: string): CaptionLayout {
           style = { ...style, underline: n !== 0 };
         } else {
           // As in ASS, the first alignment override of a cue is the one used
-          top ??= tag === 'an' ? n >= 7 && n <= 9 : n >= 5 && n <= 7;
+          alignment ??= tag === 'an' ? n : LegacyAlignment[n];
         }
       }
     } else if (token.length > 1 && token.startsWith('<')) {
@@ -342,9 +375,23 @@ function parseCueText(text: string): CaptionLayout {
     }
   }
   return {
-    top: top ?? false,
+    alignment,
     lines: lines.map(collapseSpaces).filter((line) => line.length > 0),
   };
+}
+
+// Where a cue goes: at the top when the subtitle file puts it there, else at
+// the bottom, centred by the alignment setting
+function resolvePlacement(
+  cue: ParsedCue,
+  appearance: CaptionAppearance,
+): CaptionPlacement {
+  if (!appearance.keepTopPlacement || cue.alignment === undefined) {
+    return DefaultPlacement;
+  }
+  return cue.alignment >= 7 && cue.alignment <= 9
+    ? { vertical: 'top', horizontal: 'center' }
+    : DefaultPlacement;
 }
 
 // Whitespace runs become one space, and none at either end
@@ -465,13 +512,13 @@ function words(line: StyledChar[]): StyledChar[][] {
   return out.filter((word) => word.length > 0);
 }
 
-// The cue's text as the appearance has it shown: without the file's styles or
-// top placement when those are turned off, and in capitals when asked
+// The cue's text as the appearance has it shown: without the file's styles
+// when those are turned off, and in capitals when asked
 function applyTextOptions(
-  cue: CaptionLayout,
+  lines: StyledChar[][],
   appearance: CaptionAppearance,
-): CaptionLayout {
-  const lines = cue.lines.map((line) =>
+): StyledChar[][] {
+  return lines.map((line) =>
     line.flatMap((c) => {
       const style = appearance.keepStyles ? c : PlainStyle;
       // Some letters become two in capitals ('ß' is 'SS')
@@ -483,7 +530,6 @@ function applyTextOptions(
       }));
     }),
   );
-  return { top: appearance.keepTopPlacement && cue.top, lines };
 }
 
 // Splits the cue into captions of at most `maxLines` lines of `lineWidth`
@@ -493,7 +539,9 @@ export function layoutCaption(
   text: string,
   appearance: CaptionAppearance = DefaultCaptionAppearance,
 ): CaptionLayout[] {
-  const cue = applyTextOptions(parseCueText(text), appearance);
+  const parsed = parseCueText(text);
+  const placement = resolvePlacement(parsed, appearance);
+  const cueLines = applyTextOptions(parsed.lines, appearance);
   const maxWidth = appearance.lineWidth;
 
   // Width in 608 columns: style and background codes take columns, and
@@ -502,10 +550,10 @@ export function layoutCaption(
   // The cue's own line breaks are kept when every line fits. Otherwise the
   // whole cue is rewrapped, so a 2-line cue with one long line usually stays
   // one caption instead of becoming 3 lines split over two captions.
-  const sourceLines = cue.lines.every((line) => width(line) <= maxWidth)
-    ? cue.lines
+  const sourceLines = cueLines.every((line) => width(line) <= maxWidth)
+    ? cueLines
     : [
-        cue.lines.reduce<StyledChar[]>(
+        cueLines.reduce<StyledChar[]>(
           (joined, line) =>
             joined.length === 0
               ? line
@@ -537,29 +585,39 @@ export function layoutCaption(
   const captions: CaptionLayout[] = [];
   for (let i = 0; i < lines.length; i += appearance.maxLines) {
     captions.push({
-      top: cue.top,
+      placement,
       lines: lines.slice(i, i + appearance.maxLines),
     });
   }
   return captions;
 }
 
-// The row a caption's first line goes on: ending on the bottom row, or for a
-// caption placed at the top, starting on the top row. Always on screen.
-function firstRow(
-  caption: CaptionLayout,
-  appearance: CaptionAppearance,
-): number {
-  const lines = caption.lines.length;
-  const wanted = caption.top
-    ? appearance.topRow
-    : appearance.bottomRow - lines + 1;
+// The row a block's first line goes on: ending on the bottom row, starting on
+// the top row for a block placed at the top, or centred between the two for
+// one in the middle. Always on screen.
+function firstRow(block: CaptionLayout, appearance: CaptionAppearance): number {
+  const lines = block.lines.length;
+  const wanted = {
+    top: appearance.topRow,
+    middle: Math.floor(
+      (appearance.topRow + appearance.bottomRow + 1 - lines) / 2,
+    ),
+    bottom: appearance.bottomRow - lines + 1,
+  }[block.placement.vertical];
   return Math.min(Math.max(wanted, 1), Rows + 1 - lines);
 }
 
-// The column each line starts at
-function lineColumns(widths: number[], alignment: CaptionAlignment): number[] {
-  switch (alignment) {
+// The column each line starts at: at the left edge or ending at the right one
+// for a block placed at a side, otherwise by the alignment setting
+function lineColumns(
+  widths: number[],
+  alignment: CaptionAlignment,
+  horizontal: CaptionPlacement['horizontal'] = 'center',
+): number[] {
+  if (horizontal === 'right') {
+    return widths.map((w) => Math.max(0, Columns - w));
+  }
+  switch (horizontal === 'left' ? 'left' : alignment) {
     case 'left':
       return widths.map(() => 0);
     case 'centeredLines':
@@ -627,30 +685,36 @@ function lineAtoms(units: CharUnit[], row: number, column: number): CcPair[][] {
   return atoms;
 }
 
-// The caption's lines on their rows and columns
-function captionLines(caption: CaptionLayout, appearance: CaptionAppearance) {
-  const lineUnitList = caption.lines.map((line) => lineUnits(line, appearance));
-  const columns = lineColumns(
-    lineUnitList.map((units) => units.length),
-    appearance.alignment,
-  );
-  const row = firstRow(caption, appearance);
-  return lineUnitList.map((units, i) => ({
-    units,
-    row: row + i,
-    column: columns[i] ?? 0,
-  }));
+// A caption's lines on their rows and columns, block by block
+function captionLines(
+  blocks: readonly CaptionLayout[],
+  appearance: CaptionAppearance,
+) {
+  return blocks.flatMap((block) => {
+    const lineUnitList = block.lines.map((line) => lineUnits(line, appearance));
+    const columns = lineColumns(
+      lineUnitList.map((units) => units.length),
+      appearance.alignment,
+      block.placement.horizontal,
+    );
+    const row = firstRow(block, appearance);
+    return lineUnitList.map((units, i) => ({
+      units,
+      row: row + i,
+      column: columns[i] ?? 0,
+    }));
+  });
 }
 
 // Pop-on: the pairs that load one caption into hidden memory
 function loadSequence(
-  caption: CaptionLayout,
+  blocks: readonly CaptionLayout[],
   appearance: CaptionAppearance,
 ): CcPair[][] {
   return [
     [ResumeCaptionLoading],
     [EraseNonDisplayedMemory],
-    ...captionLines(caption, appearance).flatMap(({ units, row, column }) =>
+    ...captionLines(blocks, appearance).flatMap(({ units, row, column }) =>
       lineAtoms(units, row, column),
     ),
   ];
@@ -670,19 +734,19 @@ export function captionLoadFrames(
     return 2;
   }
   const [first] = layoutCaption(text, resolved);
-  return first ? loadSequence(first, resolved).flat().length : 0;
+  return first ? loadSequence([first], resolved).flat().length : 0;
 }
 
 // Roll-up: each line is drawn on the base row after a carriage return, which
 // moves the lines above it up one row
 function rollUpLines(
-  caption: CaptionLayout,
+  block: CaptionLayout,
   appearance: CaptionAppearance,
   rows: number,
 ): CcPair[][][] {
   const baseRow = Math.min(Math.max(appearance.bottomRow, rows), Rows);
   // Aligned as a block, as a pop-on caption's lines are
-  const lineUnitList = caption.lines.map((line) => lineUnits(line, appearance));
+  const lineUnitList = block.lines.map((line) => lineUnits(line, appearance));
   const columns = lineColumns(
     lineUnitList.map((units) => units.length),
     appearance.alignment,
@@ -783,7 +847,7 @@ export function buildCaptionSchedule(
       return parts.map((caption, i) => {
         const startMs = at;
         at += ((cue.endMs - cue.startMs) * (lengths[i] ?? 0)) / total;
-        return { startMs, endMs: at, caption, appearance };
+        return { startMs, endMs: at, blocks: [caption], appearance };
       });
     })
     .filter((c) => c.endMs > options.firstFrameMs && c.startMs < endMs)
@@ -899,7 +963,7 @@ export function buildCaptionSchedule(
     if (mode === 'popOn') {
       // Show it on its start frame, or as soon as loading finishes when there
       // isn't room before it (a short gap, or a cue already under way)
-      const load = loadSequence(caption.caption, appearance);
+      const load = loadSequence(caption.blocks, appearance);
       let showAt = wanted;
       if (!placeBefore(load, wanted, loadAfter)) {
         showAt = firstFreeFrom(
@@ -951,7 +1015,7 @@ export function buildCaptionSchedule(
       if (mode === 'paintOn') {
         take(startAt, EraseDisplayedMemory);
         doneAt = placeFrom(
-          captionLines(caption.caption, appearance).flatMap(
+          captionLines(caption.blocks, appearance).flatMap(
             ({ units, row, column }) => lineAtoms(units, row, column),
           ),
           startAt + 1,
@@ -959,7 +1023,7 @@ export function buildCaptionSchedule(
         );
       } else {
         const [first = [], ...rest] = rollUpLines(
-          caption.caption,
+          caption.blocks[0] ?? { placement: DefaultPlacement, lines: [] },
           appearance,
           RollUp[mode].rows,
         );

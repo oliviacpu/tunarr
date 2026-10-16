@@ -188,7 +188,7 @@ describe('layoutCaption', () => {
     const [caption] = layoutCaption('{\\an8}<i>Hello</i>\\Nthere  <b>you</b>');
 
     expect(texts(caption ? [caption] : [])).toEqual([['Hello', 'there you']]);
-    expect(caption?.top).toBe(true);
+    expect(caption?.placement.vertical).toBe('top');
     expect(caption?.lines[0]?.every((c) => c.italic)).toBe(true);
     expect(caption?.lines[1]?.some((c) => c.italic)).toBe(false);
   });
@@ -199,7 +199,7 @@ describe('layoutCaption', () => {
     );
 
     expect(captions.length).toBeGreaterThan(1);
-    expect(captions.every((c) => c.top)).toBe(true);
+    expect(captions.every((c) => c.placement.vertical === 'top')).toBe(true);
   });
 
   test("keeps the cue's own line breaks", () => {
