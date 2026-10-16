@@ -28,7 +28,7 @@ const globalSettings: FfmpegSettings = {
 // change made elsewhere after the page loaded
 const { server, mockPutFfmpegSettings } = vi.hoisted(() => ({
   server: { settings: null as FfmpegSettings | null },
-  mockPutFfmpegSettings: vi.fn((_options: unknown) =>
+  mockPutFfmpegSettings: vi.fn((_options: { body: FfmpegSettings }) =>
     Promise.resolve({ data: {} }),
   ),
 }));
@@ -46,7 +46,8 @@ vi.mock(
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiFfmpegSettings: (options: unknown) => mockPutFfmpegSettings(options),
+  putApiFfmpegSettings: (options: { body: FfmpegSettings }) =>
+    mockPutFfmpegSettings(options),
 }));
 
 function Harness({
@@ -185,11 +186,16 @@ describe('ChannelCaptionsField', () => {
       appearance: { textColor: 'magenta' },
     });
     // Changed elsewhere (the FFmpeg settings page in another tab) after this
-    // page loaded the settings
+    // page loaded the settings: another setting, and caption settings the
+    // channel doesn't set itself
     server.settings = {
       ...globalSettings,
       enableSubtitleExtraction: true,
-      hdhrCaptionTestPattern: true,
+      hdhrCaptionAlignment: 'left',
+      hdhrCaptionAppearance: {
+        ...globalSettings.hdhrCaptionAppearance,
+        maxLines: 4,
+      },
     };
 
     await user.click(
@@ -199,14 +205,14 @@ describe('ChannelCaptionsField', () => {
 
     await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
     expect(mockPutFfmpegSettings.mock.calls[0]?.[0]).toMatchObject({
-      body: {
-        enableSubtitleExtraction: true,
-        hdhrCaptionTestPattern: true,
-        hdhrCaptionAppearance: {
-          ...globalSettings.hdhrCaptionAppearance,
-          textColor: 'magenta',
-        },
-      },
+      body: { enableSubtitleExtraction: true, hdhrCaptionAlignment: 'left' },
+    });
+    expect(
+      mockPutFfmpegSettings.mock.calls[0]?.[0]?.body.hdhrCaptionAppearance,
+    ).toEqual({
+      ...globalSettings.hdhrCaptionAppearance,
+      maxLines: 4,
+      textColor: 'magenta',
     });
   });
 });
