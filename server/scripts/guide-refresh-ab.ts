@@ -1,10 +1,17 @@
 /**
- * A/B harness for changes to the guide refresh path.
+ * A/B harness for changes to the guide refresh path, and to channel saves.
  *
  * Runs a real `POST /api/xmltv/refresh` — which is synchronous, so its
  * wall-clock is the build time — while a probe hits a trivial endpoint on a
  * fixed cadence. The probe is the check that a change which makes the build
  * faster does not do it by starving I/O.
+ *
+ * `--action save` times a real `PUT /api/channels/:id` instead: the full
+ * channel as `GET` returns it, with a new offline picture (what the deployment's
+ * interstitials.py sends), or also a new start time with
+ * `--save-change startTime` (what its nightly grid build sends, which
+ * regenerates the lineup). A save that stalls the main thread pauses every
+ * Live TV stream the server is serving (2026-10-16: up to 1.05 s).
  *
  * The two arms are selected by an environment variable read by the code under
  * test, named with `--arm-env` and valued with `--arm-a` / `--arm-b`. The
@@ -50,8 +57,28 @@ const { values } = parseArgs({
     'arm-a': { type: 'string', default: 'timeout' },
     'arm-b': { type: 'string', default: 'immediate' },
     'keep-logs': { type: 'boolean', default: false },
+    action: { type: 'string', default: 'refresh' },
+    'save-change': { type: 'string', default: 'offline' },
+    // An existing Tunarr data directory to copy per run instead of the seeded
+    // one (e.g. a copy of a real server's database, channel-lineups and
+    // settings.json with its paths pointed at the copy). Never the live one.
+    'template-dir': { type: 'string' },
+    'save-channel': { type: 'string', default: '9800' },
   },
 });
+
+const ACTION = values.action;
+const SAVE_CHANGE = values['save-change'];
+const TEMPLATE_DIR = values['template-dir'];
+const SAVE_CHANNEL = Number.parseInt(values['save-channel'], 10);
+if (ACTION !== 'refresh' && ACTION !== 'save') {
+  throw new Error(`--action must be refresh or save, not ${ACTION}`);
+}
+if (SAVE_CHANGE !== 'offline' && SAVE_CHANGE !== 'startTime') {
+  throw new Error(
+    `--save-change must be offline or startTime, not ${SAVE_CHANGE}`,
+  );
+}
 
 const CHANNEL_COUNT = Number.parseInt(values.channels, 10);
 const PROGRAM_COUNT = Number.parseInt(values.programs, 10);
@@ -426,13 +453,18 @@ async function runArm(arm: Arm, templateDir: string): Promise<RunResult> {
     await delay(2_000);
     probe.mark();
 
+    // The body is built before the timed window, so only the server's work is in it
+    const saveBody = ACTION === 'save' ? await channelSaveBody() : undefined;
     const startedAt = performance.now();
-    const res = await api(
-      'POST',
-      '/xmltv/refresh',
-      undefined,
-      REFRESH_TIMEOUT_MS,
-    );
+    const res =
+      saveBody === undefined
+        ? await api('POST', '/xmltv/refresh', undefined, REFRESH_TIMEOUT_MS)
+        : await api(
+            'PUT',
+            `/channels/${saveBody.id}`,
+            saveBody.body,
+            REFRESH_TIMEOUT_MS,
+          );
     const refreshMs = performance.now() - startedAt;
 
     await delay(SETTLE_MS);
@@ -440,7 +472,7 @@ async function runArm(arm: Arm, templateDir: string): Promise<RunResult> {
 
     if (res.status !== 200) {
       throw new Error(
-        `[${arm}] refresh failed: ${res.status} ${res.text.slice(0, 300)}`,
+        `[${arm}] ${ACTION} failed: ${res.status} ${res.text.slice(0, 300)}`,
       );
     }
 
@@ -459,7 +491,7 @@ async function runArm(arm: Arm, templateDir: string): Promise<RunResult> {
     }
 
     log(
-      `[${arm}] refresh ${refreshMs.toFixed(0)}ms over ${guideChannels} channels, ${spanHours.toFixed(1)}h span`,
+      `[${arm}] ${ACTION} ${refreshMs.toFixed(0)}ms over ${guideChannels} channels, ${spanHours.toFixed(1)}h span`,
     );
 
     return { arm, refreshMs, probe: loaded, baseline, guideChannels };
@@ -472,6 +504,42 @@ async function runArm(arm: Arm, templateDir: string): Promise<RunResult> {
     }
     await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * The first bench channel as `GET /channels/:id` returns it, ready to `PUT`
+ * back with the change named by `--save-change`.
+ */
+async function channelSaveBody(): Promise<{
+  id: string;
+  body: Record<string, unknown>;
+}> {
+  const channels = JSON.parse((await api('GET', '/channels')).text) as {
+    id: string;
+    number: number;
+  }[];
+  const first = channels.find((c) => c.number === SAVE_CHANNEL);
+  if (first === undefined) {
+    throw new Error(`channel ${SAVE_CHANNEL} not found`);
+  }
+  const channel = JSON.parse(
+    (await api('GET', `/channels/${first.id}`)).text,
+  ) as Record<string, unknown> & {
+    offline?: Record<string, unknown>;
+    startTime: number;
+  };
+  const body: Record<string, unknown> = { ...channel };
+  delete body['programs'];
+  delete body['programCount'];
+  delete body['sessions'];
+  body['offline'] = {
+    ...(channel.offline ?? { mode: 'pic' }),
+    picture: `http://localhost/bench-${randomUUID()}.png`,
+  };
+  if (SAVE_CHANGE === 'startTime') {
+    body['startTime'] = channel.startTime - 60_000;
+  }
+  return { id: first.id, body };
 }
 
 async function prepareTemplate(): Promise<string> {
@@ -627,7 +695,11 @@ function report(aRuns: RunResult[], bRuns: RunResult[]) {
   const fails = stat((r) => r.probe.failures);
 
   console.log(`\n${'='.repeat(58)}`);
-  console.log('Guide refresh A/B (real POST /api/xmltv/refresh)');
+  console.log(
+    ACTION === 'save'
+      ? `Channel save A/B (real PUT /api/channels/:id, new ${SAVE_CHANGE === 'startTime' ? 'offline picture and start time' : 'offline picture'})`
+      : 'Guide refresh A/B (real POST /api/xmltv/refresh)',
+  );
   console.log(`arms: ${ARM_ENV}=${ARM_A} vs ${ARM_ENV}=${ARM_B}`);
   console.log(
     `${CHANNEL_COUNT} channels, ${PROGRAM_COUNT} programs, ${MAX_DAYS} days, ` +
@@ -648,7 +720,7 @@ function report(aRuns: RunResult[], bRuns: RunResult[]) {
   );
   console.log(
     row(
-      'guide build wall-clock',
+      ACTION === 'save' ? 'save wall-clock' : 'guide build wall-clock',
       `${refresh.t.toFixed(0)}ms`,
       `${refresh.i.toFixed(0)}ms`,
     ),
@@ -712,7 +784,7 @@ function report(aRuns: RunResult[], bRuns: RunResult[]) {
 }
 
 async function main() {
-  const templateDir = await prepareTemplate();
+  const templateDir = TEMPLATE_DIR ?? (await prepareTemplate());
   try {
     const aRuns: RunResult[] = [];
     const bRuns: RunResult[] = [];
@@ -727,7 +799,11 @@ async function main() {
 
     report(aRuns, bRuns);
   } finally {
-    await fs.rm(templateDir, { recursive: true, force: true }).catch(() => {});
+    if (TEMPLATE_DIR === undefined) {
+      await fs
+        .rm(templateDir, { recursive: true, force: true })
+        .catch(() => {});
+    }
   }
 }
 
