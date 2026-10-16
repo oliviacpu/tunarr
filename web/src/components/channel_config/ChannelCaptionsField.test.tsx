@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Generated from '../../generated/@tanstack/react-query.gen.ts';
+import type * as Sdk from '../../generated/sdk.gen.ts';
 import { ChannelCaptionsField } from './ChannelCaptionsField.tsx';
 
 // The global settings: a look that differs from the defaults, so a channel
@@ -23,8 +24,13 @@ const globalSettings: FfmpegSettings = {
   },
 };
 
-const { mockPutFfmpegSettings } = vi.hoisted(() => ({
-  mockPutFfmpegSettings: vi.fn((_options: unknown) => Promise.resolve({})),
+// What the server has: the global settings, changed by a test to stand for a
+// change made elsewhere after the page loaded
+const { server, mockPutFfmpegSettings } = vi.hoisted(() => ({
+  server: { settings: null as FfmpegSettings | null },
+  mockPutFfmpegSettings: vi.fn((_options: unknown) =>
+    Promise.resolve({ data: {} }),
+  ),
 }));
 
 vi.mock(
@@ -33,13 +39,15 @@ vi.mock(
     ...(await importOriginal<typeof Generated>()),
     getApiFfmpegSettingsOptions: () => ({
       queryKey: ['test-ffmpeg-settings'],
-      queryFn: () => Promise.resolve(globalSettings),
-    }),
-    putApiFfmpegSettingsMutation: () => ({
-      mutationFn: (options: unknown) => mockPutFfmpegSettings(options),
+      queryFn: () => Promise.resolve(server.settings),
     }),
   }),
 );
+
+vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof Sdk>()),
+  putApiFfmpegSettings: (options: unknown) => mockPutFfmpegSettings(options),
+}));
 
 function Harness({
   captions,
@@ -79,6 +87,7 @@ async function renderField(captions: ChannelCaptions | null) {
 
 describe('ChannelCaptionsField', () => {
   beforeEach(() => {
+    server.settings = globalSettings;
     mockPutFfmpegSettings.mockClear();
   });
 
@@ -159,10 +168,40 @@ describe('ChannelCaptionsField', () => {
     await user.click(screen.getByRole('button', { name: 'Copy' }));
 
     await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
-    expect(mockPutFfmpegSettings.mock.calls[0]?.[0]).toEqual({
+    expect(mockPutFfmpegSettings.mock.calls[0]?.[0]).toMatchObject({
       body: {
         ...globalSettings,
         hdhrCaptionAlignment: 'left',
+        hdhrCaptionAppearance: {
+          ...globalSettings.hdhrCaptionAppearance,
+          textColor: 'magenta',
+        },
+      },
+    });
+  });
+
+  test('copy to all channels keeps settings changed since the page loaded', async () => {
+    const { user } = await renderField({
+      appearance: { textColor: 'magenta' },
+    });
+    // Changed elsewhere (the FFmpeg settings page in another tab) after this
+    // page loaded the settings
+    server.settings = {
+      ...globalSettings,
+      enableSubtitleExtraction: true,
+      hdhrCaptionTestPattern: true,
+    };
+
+    await user.click(
+      screen.getByRole('button', { name: 'Copy to all channels' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+
+    await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
+    expect(mockPutFfmpegSettings.mock.calls[0]?.[0]).toMatchObject({
+      body: {
+        enableSubtitleExtraction: true,
+        hdhrCaptionTestPattern: true,
         hdhrCaptionAppearance: {
           ...globalSettings.hdhrCaptionAppearance,
           textColor: 'magenta',
