@@ -145,3 +145,87 @@ describe('MediaSourceScanner.downloadExternalSubtitleStreams', () => {
     expect(fakeLogger.info).not.toHaveBeenCalled();
   });
 });
+
+describe('MediaSourceScanner says when Plex hides sidecar file paths', () => {
+  const HIDDEN = "Plex didn't report subtitle file paths";
+
+  // A Plex item whose video path came through, with sidecars as given
+  function programWithVideo(sourcePath: string | null) {
+    const program = makeProgram();
+    for (const sub of program.subtitles) {
+      sub.sourcePath = sourcePath;
+    }
+    return {
+      ...program,
+      versions: [{ mediaFiles: [{ path: '/media/movies/The Movie.mkv' }] }],
+    } as unknown as NewProgramWithRelations;
+  }
+
+  const ok = () => Promise.resolve(Result.success<string, QueryError>('1\n'));
+
+  function hiddenLines() {
+    return fakeLogger.info.mock.calls.filter(([msg]) =>
+      String(msg).startsWith(HIDDEN),
+    );
+  }
+
+  test('once a scan, when the video has a path and its sidecars have none', async () => {
+    await scanner.exposeDownloadExternalSubtitleStreams(
+      programWithVideo(null),
+      ok,
+    );
+    await scanner.exposeDownloadExternalSubtitleStreams(
+      programWithVideo(null),
+      ok,
+    );
+
+    expect(hiddenLines()).toHaveLength(1);
+  });
+
+  test('again in the next scan', async () => {
+    await scanner.exposeDownloadExternalSubtitleStreams(
+      programWithVideo(null),
+      ok,
+    );
+    const library = {
+      uuid: 'library-1',
+      mediaSourceId: 'ms-1',
+      name: 'Movies',
+    };
+    const rescanning = new TestScanner(
+      {
+        getById: () => Promise.resolve({ type: 'plex' }),
+        setLibraryLastScannedTime: () => Promise.resolve(),
+      } as unknown as MediaSourceDB,
+      new ExternalSubtitleDownloader({
+        getSubtitleCacheFolder: () => cacheFolder,
+      } as FileSystemService),
+    );
+    await rescanning.exposeDownloadExternalSubtitleStreams(
+      programWithVideo(null),
+      ok,
+    );
+    await rescanning.scan({ library } as never);
+    await rescanning.exposeDownloadExternalSubtitleStreams(
+      programWithVideo(null),
+      ok,
+    );
+
+    expect(hiddenLines()).toHaveLength(3);
+  });
+
+  test('not when Plex reports the sidecar paths', async () => {
+    await scanner.exposeDownloadExternalSubtitleStreams(
+      programWithVideo('/media/movies/The Movie.en.srt'),
+      ok,
+    );
+
+    expect(hiddenLines()).toHaveLength(0);
+  });
+
+  test('not when the video has no path either', async () => {
+    await scanner.exposeDownloadExternalSubtitleStreams(makeProgram(), ok);
+
+    expect(hiddenLines()).toHaveLength(0);
+  });
+});

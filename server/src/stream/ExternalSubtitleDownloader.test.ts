@@ -120,6 +120,102 @@ describe('ExternalSubtitleDownloader.downloadSubtitlesIfNecessary', () => {
   });
 });
 
+describe('ExternalSubtitleDownloader.fetchToCache', () => {
+  const ok = (text: string) => () =>
+    Promise.resolve(Result.success<string, QueryError>(text));
+
+  async function cachedCopy(text: string) {
+    const first = await downloader.fetchToCache(ITEM, STREAM, ok(text));
+    expect(first.type).toBe('written');
+    if (first.type !== 'written') {
+      throw new Error('no copy written');
+    }
+    // An old copy: a day ago
+    const old = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await fs.utimes(first.path, old, old);
+    return first.path;
+  }
+
+  test('without refresh an existing copy is used as it is, without a fetch', async () => {
+    const copy = await cachedCopy('1\nOld\n');
+    const fetch = vi.fn(ok('1\nNew\n'));
+
+    const result = await downloader.fetchToCache(ITEM, STREAM, fetch);
+
+    expect(result).toEqual({ type: 'cached', path: copy });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('refresh replaces a copy whose subtitle changed on the media server', async () => {
+    const copy = await cachedCopy('1\nOld\n');
+
+    const result = await downloader.fetchToCache(ITEM, STREAM, ok('1\nNew\n'), {
+      refresh: true,
+    });
+
+    expect(result).toEqual({ type: 'replaced', path: copy });
+    await expect(fs.readFile(copy, 'utf-8')).resolves.toBe('1\nNew\n');
+    // Written through a temporary file that is gone afterwards
+    expect(await fs.readdir(path.dirname(copy))).toEqual([
+      path.basename(copy),
+    ]);
+  });
+
+  test('refresh leaves an unchanged copy alone and restarts its age', async () => {
+    const copy = await cachedCopy('1\nSame\n');
+    const before = (await fs.stat(copy)).mtimeMs;
+
+    const result = await downloader.fetchToCache(
+      ITEM,
+      STREAM,
+      ok('1\nSame\n'),
+      { refresh: true },
+    );
+
+    expect(result).toEqual({ type: 'unchanged', path: copy });
+    await expect(fs.readFile(copy, 'utf-8')).resolves.toBe('1\nSame\n');
+    expect((await fs.stat(copy)).mtimeMs).toBeGreaterThan(
+      before + 60 * 60 * 1000,
+    );
+  });
+
+  test('a failed refresh keeps the old copy', async () => {
+    const copy = await cachedCopy('1\nOld\n');
+
+    const result = await downloader.fetchToCache(
+      ITEM,
+      STREAM,
+      () =>
+        Promise.resolve(
+          Result.failure<string, QueryError>(
+            QueryError.create('generic_request_error', 'status code 500'),
+          ),
+        ),
+      { refresh: true },
+    );
+
+    expect(result).toEqual({ type: 'failed', path: copy });
+    await expect(fs.readFile(copy, 'utf-8')).resolves.toBe('1\nOld\n');
+  });
+
+  test('a 404 is returned to the caller, not logged', async () => {
+    const result = await downloader.fetchToCache(
+      ITEM,
+      STREAM,
+      () =>
+        Promise.resolve(
+          Result.failure<string, QueryError>(
+            QueryError.create('not_found', 'status code 404'),
+          ),
+        ),
+    );
+
+    expect(result).toEqual({ type: 'not_found' });
+    expect(fakeLogger.info).not.toHaveBeenCalled();
+    expect(fakeLogger.warn).not.toHaveBeenCalled();
+  });
+});
+
 describe('missingSubtitleMessage', () => {
   test('names a Jellyfin or Emby stream by its index, never the query string', () => {
     expect(

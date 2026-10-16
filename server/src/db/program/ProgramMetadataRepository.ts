@@ -286,141 +286,155 @@ export class ProgramMetadataRepository {
 
     const grouped = groupBy(subtitles, (sub) => sub.programId);
     for (const [programId, programSubtitles] of Object.entries(grouped)) {
-      const existingSubsForProgram =
-        await this.drizzleDB.query.programSubtitles.findMany({
-          where: (fields, { eq }) => eq(fields.programId, programId),
-        });
+      await this.replaceProgramSubtitles(programId, programSubtitles);
+    }
+  }
 
-      const [existingEmbedded, existingExternal] = partition(
-        existingSubsForProgram,
-        (sub) => !isNil(sub.streamIndex),
+  /**
+   * Makes one program's subtitle rows match `programSubtitles`: embedded rows
+   * are matched by stream index (an extracted copy is kept while the stream is
+   * unchanged), sidecar rows are replaced, and cached copies the new rows no
+   * longer use are deleted. An empty list removes them all, which
+   * upsertSubtitles can't express, since it groups rows by their program.
+   */
+  async replaceProgramSubtitles(
+    programId: string,
+    programSubtitles: NewProgramSubtitles[],
+  ) {
+    const existingSubsForProgram =
+      await this.drizzleDB.query.programSubtitles.findMany({
+        where: (fields, { eq }) => eq(fields.programId, programId),
+      });
+
+    const [existingEmbedded, existingExternal] = partition(
+      existingSubsForProgram,
+      (sub) => !isNil(sub.streamIndex),
+    );
+    const [incomingEmbedded, incomingExternal] = partition(
+      programSubtitles,
+      (sub) => !isNil(sub.streamIndex),
+    );
+
+    const existingIndexes = new Set(
+      seq.collect(existingEmbedded, (sub) => sub.streamIndex),
+    );
+    const incomingIndexes = new Set(
+      seq.collect(incomingEmbedded, (sub) => sub.streamIndex),
+    );
+
+    const newIndexes = incomingIndexes.difference(existingIndexes);
+    const removedIndexes = existingIndexes.difference(incomingIndexes);
+    const updatedIndexes = incomingIndexes.intersection(existingIndexes);
+
+    const inserts = incomingEmbedded.filter((s) =>
+      newIndexes.has(s.streamIndex!),
+    );
+    const removes = existingEmbedded.filter((s) =>
+      removedIndexes.has(s.streamIndex!),
+    );
+
+    const updates: ProgramSubtitles[] = [];
+    for (const updatedIndex of updatedIndexes.values()) {
+      const incoming = incomingEmbedded.find(
+        (s) => s.streamIndex === updatedIndex,
       );
-      const [incomingEmbedded, incomingExternal] = partition(
-        programSubtitles,
-        (sub) => !isNil(sub.streamIndex),
+      const existing = existingEmbedded.find(
+        (s) => s.streamIndex === updatedIndex,
       );
-
-      const existingIndexes = new Set(
-        seq.collect(existingEmbedded, (sub) => sub.streamIndex),
-      );
-      const incomingIndexes = new Set(
-        seq.collect(incomingEmbedded, (sub) => sub.streamIndex),
-      );
-
-      const newIndexes = incomingIndexes.difference(existingIndexes);
-      const removedIndexes = existingIndexes.difference(incomingIndexes);
-      const updatedIndexes = incomingIndexes.intersection(existingIndexes);
-
-      const inserts = incomingEmbedded.filter((s) =>
-        newIndexes.has(s.streamIndex!),
-      );
-      const removes = existingEmbedded.filter((s) =>
-        removedIndexes.has(s.streamIndex!),
-      );
-
-      const updates: ProgramSubtitles[] = [];
-      for (const updatedIndex of updatedIndexes.values()) {
-        const incoming = incomingEmbedded.find(
-          (s) => s.streamIndex === updatedIndex,
-        );
-        const existing = existingEmbedded.find(
-          (s) => s.streamIndex === updatedIndex,
-        );
-        if (!existing || !incoming) {
-          continue;
-        }
-
-        if (existing.isExtracted) {
-          const needsExtraction =
-            existing.subtitleType !== incoming.subtitleType ||
-            existing.codec !== incoming.codec ||
-            existing.language !== incoming.language ||
-            existing.forced !== incoming.forced ||
-            existing.sdh !== incoming.sdh ||
-            existing.default !== incoming.default;
-          if (needsExtraction) {
-            existing.isExtracted = false;
-            existing.path = incoming.path ?? null;
-          } else if (
-            isNonEmptyString(incoming.path) &&
-            existing.path !== incoming.path
-          ) {
-            existing.isExtracted = false;
-            existing.path = incoming.path;
-          }
-        }
-
-        existing.codec = incoming.codec;
-        existing.language = incoming.language;
-        existing.subtitleType = incoming.subtitleType;
-        existing.updatedAt = incoming.updatedAt;
-        if (isDefined(incoming.default)) {
-          existing.default = incoming.default;
-        }
-
-        if (isDefined(incoming.sdh)) {
-          existing.sdh = incoming.sdh;
-        }
-
-        if (isDefined(incoming.forced)) {
-          existing.forced = incoming.forced;
-        }
-
-        updates.push(existing);
+      if (!existing || !incoming) {
+        continue;
       }
 
-      this.drizzleDB.transaction((tx) => {
-        if (inserts.length > 0) {
-          tx.insert(ProgramSubtitles).values(inserts).run();
+      if (existing.isExtracted) {
+        const needsExtraction =
+          existing.subtitleType !== incoming.subtitleType ||
+          existing.codec !== incoming.codec ||
+          existing.language !== incoming.language ||
+          existing.forced !== incoming.forced ||
+          existing.sdh !== incoming.sdh ||
+          existing.default !== incoming.default;
+        if (needsExtraction) {
+          existing.isExtracted = false;
+          existing.path = incoming.path ?? null;
+        } else if (
+          isNonEmptyString(incoming.path) &&
+          existing.path !== incoming.path
+        ) {
+          existing.isExtracted = false;
+          existing.path = incoming.path;
         }
-        if (removes.length > 0) {
-          tx.delete(ProgramSubtitles)
-            .where(
-              inArray(
-                ProgramSubtitles.uuid,
-                removes.map((s) => s.uuid),
-              ),
-            )
-            .run();
-        }
+      }
 
-        if (updates.length > 0) {
-          for (const update of updates) {
-            tx.update(ProgramSubtitles)
-              .set(update)
-              .where(eq(ProgramSubtitles.uuid, update.uuid))
-              .run();
-          }
-        }
+      existing.codec = incoming.codec;
+      existing.language = incoming.language;
+      existing.subtitleType = incoming.subtitleType;
+      existing.updatedAt = incoming.updatedAt;
+      if (isDefined(incoming.default)) {
+        existing.default = incoming.default;
+      }
 
+      if (isDefined(incoming.sdh)) {
+        existing.sdh = incoming.sdh;
+      }
+
+      if (isDefined(incoming.forced)) {
+        existing.forced = incoming.forced;
+      }
+
+      updates.push(existing);
+    }
+
+    this.drizzleDB.transaction((tx) => {
+      if (inserts.length > 0) {
+        tx.insert(ProgramSubtitles).values(inserts).run();
+      }
+      if (removes.length > 0) {
         tx.delete(ProgramSubtitles)
           .where(
-            and(
-              eq(ProgramSubtitles.subtitleType, 'sidecar'),
-              eq(ProgramSubtitles.programId, programId),
+            inArray(
+              ProgramSubtitles.uuid,
+              removes.map((s) => s.uuid),
             ),
           )
           .run();
+      }
 
-        if (incomingExternal.length > 0) {
-          tx.insert(ProgramSubtitles).values(incomingExternal).run();
+      if (updates.length > 0) {
+        for (const update of updates) {
+          tx.update(ProgramSubtitles)
+            .set(update)
+            .where(eq(ProgramSubtitles.uuid, update.uuid))
+            .run();
         }
-      });
+      }
 
-      // A rescan downloads each sidecar again under a new cache name, so the
-      // copy the replaced row pointed at is now unreferenced.
-      const incomingPaths = new Set(
-        seq.collect(incomingExternal, (sub) => sub.path),
-      );
-      const replacedPaths = seq.collect(existingExternal, (sub) =>
-        sub.subtitleType === 'sidecar' &&
-        isNonEmptyString(sub.path) &&
-        !incomingPaths.has(sub.path)
-          ? sub.path
-          : undefined,
-      );
-      await this.fileSystemService.removeSubtitleCacheFiles(replacedPaths);
-    }
+      tx.delete(ProgramSubtitles)
+        .where(
+          and(
+            eq(ProgramSubtitles.subtitleType, 'sidecar'),
+            eq(ProgramSubtitles.programId, programId),
+          ),
+        )
+        .run();
+
+      if (incomingExternal.length > 0) {
+        tx.insert(ProgramSubtitles).values(incomingExternal).run();
+      }
+    });
+
+    // A rescan downloads each sidecar again under a new cache name, so the
+    // copy the replaced row pointed at is now unreferenced.
+    const incomingPaths = new Set(
+      seq.collect(incomingExternal, (sub) => sub.path),
+    );
+    const replacedPaths = seq.collect(existingExternal, (sub) =>
+      sub.subtitleType === 'sidecar' &&
+      isNonEmptyString(sub.path) &&
+      !incomingPaths.has(sub.path)
+        ? sub.path
+        : undefined,
+    );
+    await this.fileSystemService.removeSubtitleCacheFiles(replacedPaths);
   }
 
   /**

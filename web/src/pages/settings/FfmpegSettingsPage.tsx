@@ -873,7 +873,7 @@ export default function FfmpegSettingsPage() {
                   />
                   <FormHelperText>
                     <Trans>
-                      Replaces every program's captions with 38 numbered
+                      Replaces every program's captions with 39 numbered
                       samples, one per feature above, each saying what it should
                       look like. Turn captions on in your player, note the
                       numbers that look wrong, then turn this off. Your settings

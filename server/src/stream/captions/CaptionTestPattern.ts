@@ -8,6 +8,9 @@ type Sample = {
   appearance?: Partial<CaptionAppearance>;
   // A second subtitle overlapping it, from a second in to the same end
   also?: string;
+  // A second subtitle straight after it, a moment after it ends, as close
+  // dialogue lines come: it loads while the first is being cleared
+  then?: string;
 };
 
 /**
@@ -107,6 +110,14 @@ export const CaptionTestSamples: readonly Sample[] = [
     also: 'AND A LINE AT THE BOTTOM',
     appearance: { overlappingCues: 'apart' },
   },
+  // A box colour on a caption that loads while the one before it is being
+  // cleared. FFmpeg-family players used to drop the second caption's box to
+  // black partway through (2026-10-16).
+  {
+    text: '39 MAGENTA BOX',
+    then: 'MAGENTA TO THE <i>VERY</i> END ♪',
+    appearance: { backgroundColor: 'magenta' },
+  },
 ];
 
 // How long each sample shows, and the gap after it: longer around the modes
@@ -117,6 +128,10 @@ const GapMs = 1500;
 const ModeChangeGapMs = 2000;
 // When an overlapping sample's second subtitle starts
 const AlsoAfterMs = 1000;
+// A follow-up sample's first subtitle ends here, and the second starts this
+// long after: less than its load takes, so the load meets the clear
+const ThenAfterMs = 1800;
+const ThenGapMs = 200;
 
 /**
  * The test pattern in place of a program's captions: the samples one after
@@ -142,10 +157,18 @@ export function captionTestPattern(base: ProgramCaptions): ProgramCaptions {
     }
     cues.push({
       startMs: at,
-      endMs: at + shown,
+      endMs: at + (sample.then !== undefined ? ThenAfterMs : shown),
       text: sample.text,
       appearance,
     });
+    if (sample.then !== undefined) {
+      cues.push({
+        startMs: at + ThenAfterMs + ThenGapMs,
+        endMs: at + shown,
+        text: sample.then,
+        appearance,
+      });
+    }
     if (sample.also !== undefined) {
       cues.push({
         startMs: at + AlsoAfterMs,

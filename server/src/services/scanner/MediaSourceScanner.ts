@@ -83,6 +83,8 @@ export abstract class MediaSourceScanner<
   ApiClientTypeT,
 > extends BaseMediaSourceScanner<ApiClientTypeT, ScanRequest> {
   #state: Map<string, RunState> = new Map();
+  // Whether this scan has said that Plex hides sidecar file paths (once a scan)
+  #hiddenSidecarPathsReported = false;
   abstract readonly type: MediaLibraryTypeT;
   abstract readonly mediaSourceType: MediaSourceTypeT;
 
@@ -97,6 +99,7 @@ export abstract class MediaSourceScanner<
 
   async scan({ library, force, pathFilter }: ScanRequest) {
     this.#state.set(library.uuid, 'starting');
+    this.#hiddenSidecarPathsReported = false;
 
     this.#state.set(library.uuid, 'running');
 
@@ -170,14 +173,17 @@ export abstract class MediaSourceScanner<
   ): Promise<QueryResult<string>>;
 
   protected async downloadExternalSubtitleStreams(
-    { program, subtitles }: NewProgramWithRelations,
+    withRelations: NewProgramWithRelations,
     replacePaths: MediaSourceLibraryReplacePath[],
     getSubtitlesCallback: (
       args: GetSubtitlesRequest,
     ) => Promise<QueryResult<string>>,
   ) {
+    const { program, subtitles } = withRelations;
     const externalSubtitleStreams =
       subtitles.filter((stream) => stream.subtitleType === 'sidecar') ?? [];
+
+    this.reportHiddenSidecarPaths(withRelations, externalSubtitleStreams);
 
     for (const stream of externalSubtitleStreams) {
       if (isNonEmptyString(stream.path)) {
@@ -250,6 +256,40 @@ export abstract class MediaSourceScanner<
         );
         stream.path = fullPath;
       }
+    }
+  }
+
+  /**
+   * Plex leaves out a sidecar subtitle's file path when Tunarr reaches it
+   * through a remote address (its plex.direct name), while the video's path
+   * still comes through (2026-10-16: none of 3,805 sidecars had one; through
+   * 127.0.0.1 all did). Tunarr then downloads copies of files it may well be
+   * able to read. Said once a scan, at info level, since the fix is a setting.
+   */
+  private reportHiddenSidecarPaths(
+    withRelations: NewProgramWithRelations,
+    sidecars: NewProgramWithRelations['subtitles'],
+  ) {
+    if (this.mediaSourceType !== 'plex' || this.#hiddenSidecarPathsReported) {
+      return;
+    }
+    const videoHasPath =
+      (withRelations.versions ?? []).some((version) =>
+        (version.mediaFiles ?? []).some((file) => isNonEmptyString(file.path)),
+      ) ||
+      (withRelations.externalIds ?? []).some((id) =>
+        isNonEmptyString(id.directFilePath),
+      );
+    const pathHidden = sidecars.some(
+      (sidecar) =>
+        isNonEmptyString(sidecar.sourceKey) &&
+        !isNonEmptyString(sidecar.sourcePath),
+    );
+    if (videoHasPath && pathHidden) {
+      this.#hiddenSidecarPathsReported = true;
+      this.logger.info(
+        "Plex didn't report subtitle file paths (Tunarr connects to it through a remote address), so subtitles are downloaded instead of read from shared storage. Use a local address for the Plex server to read them directly.",
+      );
     }
   }
 }

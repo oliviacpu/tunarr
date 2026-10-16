@@ -10,6 +10,7 @@ import type {
   ArtworkService,
 } from '../services/ArtworkService.ts';
 import { fileExists } from '../util/fsUtil.ts';
+import { PathCalculator } from './PathCalculator.ts';
 import { ProgramStreamDetailsFetcher } from './ProgramStreamDetailsFetcher.ts';
 import { FileStreamSource, HttpStreamSource } from './types.ts';
 
@@ -46,6 +47,7 @@ vi.mock('axios', () => ({
 vi.mock('./PathCalculator.ts', () => ({
   PathCalculator: {
     findFirstValidPath: vi.fn().mockResolvedValue(undefined),
+    findLocalPath: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -577,6 +579,70 @@ describe('ProgramStreamDetailsFetcher', () => {
 
       expect(result.get().streamDetails.placeholderImage).toBeUndefined();
       expect(artworkService.resolveArtwork).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getStream picks the file for a sidecar subtitle', () => {
+    const CACHED_COPY = '/config/cache/subtitles/ab/cd/abcd.srt';
+    const LIVE_FILE = '/media/tv/Show/Season 1/Show - S01E01.en.srt';
+
+    function programWithSidecar() {
+      const program = makeProgram('plex', '/library/parts/1/2/file.mkv');
+      (program as unknown as { subtitles: unknown[] }).subtitles = [
+        {
+          uuid: 'sub-1',
+          programId: program.uuid,
+          subtitleType: 'sidecar',
+          codec: 'subrip',
+          language: 'eng',
+          path: CACHED_COPY,
+          sourcePath: LIVE_FILE,
+          sourceKey: '/library/streams/1',
+          streamIndex: null,
+          isExtracted: false,
+          default: false,
+          forced: false,
+          sdh: false,
+        },
+      ];
+      return program;
+    }
+
+    async function subtitlePaths(program: ProgramWithRelationsOrm) {
+      const fetcher = new ProgramStreamDetailsFetcher(
+        makeProgramDB(program),
+        makeArtworkService(),
+      );
+      const result = await fetcher.getStream({
+        server: makeServer({ type: 'plex', uri: 'http://10.0.0.110:32400' }),
+        lineupItem: program.externalIds?.[0] as never,
+      });
+      return (result.get().streamDetails.subtitleDetails ?? [])
+        .filter((s) => s.type === 'external')
+        .map((s) => s.path);
+    }
+
+    afterEach(() => {
+      vi.mocked(fileExists).mockResolvedValue(false);
+      vi.mocked(PathCalculator.findLocalPath).mockResolvedValue(undefined);
+    });
+
+    it('uses the live file on shared storage ahead of a downloaded copy', async () => {
+      // Both exist: the copy may be older than the file the server reads now
+      vi.mocked(fileExists).mockImplementation((p) =>
+        Promise.resolve(p === CACHED_COPY),
+      );
+      vi.mocked(PathCalculator.findLocalPath).mockResolvedValue(LIVE_FILE);
+
+      expect(await subtitlePaths(programWithSidecar())).toEqual([LIVE_FILE]);
+    });
+
+    it('uses the downloaded copy when the live file is out of reach', async () => {
+      vi.mocked(fileExists).mockImplementation((p) =>
+        Promise.resolve(p === CACHED_COPY),
+      );
+
+      expect(await subtitlePaths(programWithSidecar())).toEqual([CACHED_COPY]);
     });
   });
 });

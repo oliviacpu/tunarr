@@ -89,12 +89,19 @@ Language codes can be two or three letters (`en`, `eng`), with a region (`en-us`
 
 For Plex, Jellyfin, and Emby sources, external subtitles are always resolved to a local file during scanning, so that starting a stream never waits on the media server:
 
-1. **Shared storage.** If the subtitle file the media server reported is visible to Tunarr — directly, or through the source's [path replacements](../media_sources/jellyfin.md#configuring-path-replacements) — it is used as-is. Nothing is copied.
+1. **Shared storage.** If the subtitle file the media server reported is visible to Tunarr — directly, or through the source's [path replacements](../media_sources/jellyfin.md#configuring-path-replacements) — it is used as-is. Nothing is copied. When a program starts, this file is preferred over any downloaded copy, so a subtitle that was re-synced or replaced on the server is used straight away.
 2. **Downloaded during scanning.** Otherwise Tunarr fetches the subtitle from the media server and caches it locally.
 
 Setting up path replacements for a media source therefore benefits subtitles as well as video, and is the only way image-based external subtitles can be used, since those cannot be downloaded as text.
 
-A subtitle that could not be resolved during a scan — because the media server was unreachable, for example — is retried hourly for programs airing in the next hour on channels that have subtitles enabled, so it becomes available without waiting for a rescan of the whole library. The same pass restores a cached subtitle file that has since been deleted.
+!!! note
+    Plex reports where a subtitle file is only when Tunarr connects to it through a **local address** (for example `http://127.0.0.1:32400` when both run on the same machine). Through a remote address, such as its `plex.direct` name, Plex leaves the path out, so Tunarr downloads every subtitle even when it could read the file. A Plex library scan says so in the log once: *Plex didn't report subtitle file paths…*. Change the Plex server's address under **Settings > Media Sources**, then run **Force Scan** on its libraries once.
+
+Every hour, for programs airing in the next hour on channels that have subtitles enabled, Tunarr checks their external subtitles:
+
+- **Missing:** a subtitle that could not be resolved during a scan (because the media server was unreachable, for example), or whose cached copy has since been deleted, is fetched, without waiting for a rescan of the whole library.
+- **Old copies:** a downloaded copy more than 6 hours old is fetched again and replaced only if it changed. The media server can rewrite a subtitle's file under the same stream (a re-sync, a better download). The copy is swapped in whole, so a program that is playing never reads half a file.
+- **Gone from the media server:** if the media server answers "not found" for a subtitle (its file was replaced or removed), Tunarr reads the program from the media server again at once, saves its subtitles as they are now, and downloads the replacement. It does this once per program per hour. If the media server still lists the subtitle (it hasn't rescanned the item yet), Tunarr keeps what it has until it does. A program the media server no longer has at all is left to the next library scan, which marks it missing.
 
 !!! note
     External subtitles from Jellyfin and Emby libraries scanned by an older version of Tunarr are picked up by that hourly pass once the program is scheduled, or immediately on the next rescan of the library.
@@ -133,7 +140,7 @@ Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. T
 Everything CEA-608 captions can ask for, under **Caption appearance (experimental)** below Caption Alignment. A player may ignore any of it: Plex draws captions with its own decoder. Turn on the **Test pattern** to see what yours shows. Changes take effect from the next program.
 
 - **Text color:** white, green, blue, cyan, red, yellow or magenta. Italic words are always white, which is how CEA-608 defines italics.
-- **Box behind the text:** the player's own (the default: Tunarr sends nothing), or black, white, green, blue, cyan, red, yellow or magenta. **Box opacity** makes a chosen box solid, see-through, or none at all (the text alone).
+- **Box behind the text:** the player's own (the default: Tunarr sends nothing), or black, white, green, blue, cyan, red, yellow or magenta. **Box opacity** makes a chosen box solid, see-through, or none at all (the text alone). The box holds to the end of every line: Plex's family of caption decoders turns the box back to black when the previous caption is cleared, so Tunarr loads each boxed line wholly before or after that clear (test pattern sample 39). In very quick dialogue, where a caption only just loads in time, Tunarr keeps the caption on time instead, and the end of a line can still lose its box.
 - **How captions appear:** **Pop-on** (the default) shows each caption whole, on its start frame. **Roll-up** scrolls lines up from the bottom row with 2, 3 or 4 rows on screen, as live TV captions do; a cue's lines stay together, and the last lines stay up for up to 2 seconds for the next subtitle to scroll. **Paint-on** draws each caption's letters as they arrive.
 - **Lines per caption:** 2 (the default), 3 or 4. More lines split long subtitles less often. Roll-up uses its own number of rows.
 - **Line width:** 20 to 32 columns. A narrower line wraps sooner.
@@ -143,7 +150,7 @@ Everything CEA-608 captions can ask for, under **Caption appearance (experimenta
 
 A box, a color or narrower lines make each caption take longer to send, so in fast dialogue a caption can come a little late. Roll-up and paint-on send a caption's text while it is on screen, at two characters a frame, so a long caption with a short time is cut off at its end.
 
-**Test pattern:** replaces every program's captions with 38 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples.
+**Test pattern:** replaces every program's captions with 39 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples.
 
 | # | Sample |
 | --- | --- |
@@ -163,6 +170,7 @@ A box, a color or narrower lines make each caption take longer to send, so in fa
 | 36 | Right-aligned |
 | 37 | Two overlapping lines, stacked |
 | 38 | A sign at the top and a line at the bottom at once, each in its place |
+| 39 | A magenta box, then a second line straight after it that keeps the magenta box to its last character (italics and ♪ included) |
 
 The setting takes effect from the next program, and the HDHomeRun stream picks it up the next time it is started.
 
