@@ -213,6 +213,7 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       duration,
       outputFormat: this.outputFormat,
       ptsOffset: this.opts?.ptsOffset,
+      isFirstTranscode: this.opts?.isFirstTranscode,
       realtime: this.opts?.realtime,
       backgroundMusic,
     });
@@ -306,6 +307,7 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       outputFormat: this.outputFormat,
       realtime: this.opts?.realtime,
       ptsOffset: this.opts?.ptsOffset,
+      isFirstTranscode: this.opts?.isFirstTranscode,
     });
 
     if (isUndefined(result)) {

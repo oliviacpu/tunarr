@@ -6,7 +6,7 @@ import type { CaptionCue } from './Cea608Encoder.ts';
 
 /**
  * A program's captions, on its own clock: time 0 is the program's first output
- * frame (the source position Tunarr seeked to).
+ * frame (see {@link firstFrameMs}).
  */
 export type ProgramCaptions = {
   cues: CaptionCue[];
@@ -164,8 +164,24 @@ export function captionTrackCandidates(
 }
 
 /**
+ * Where a program's first output frame is in its source: the first frame at
+ * or after the seek, since ffmpeg drops the frames before it. Timing cues from
+ * the seek itself put them up to a frame late. Assumes the source's frames
+ * sit on its frame rate's grid from the start, as constant-rate video does.
+ */
+export function firstFrameMs(seekMs: number, frameRate: number): number {
+  if (seekMs <= 0) {
+    return 0;
+  }
+  const frameMs = 1000 / frameRate;
+  // A seek onto a frame keeps that frame; allow for floating-point error
+  return Math.ceil(seekMs / frameMs - 1e-6) * frameMs;
+}
+
+/**
  * Reads a subtitle track's cues and puts them on the program's clock: the cue
- * times minus the seek, keeping only those that overlap the program.
+ * times minus the first frame's time, keeping only those that overlap the
+ * program.
  */
 export async function loadProgramCaptions(
   track: SubtitleStreamDetails,
@@ -181,12 +197,13 @@ export async function loadProgramCaptions(
   if (!cues) {
     return;
   }
+  const startMs = firstFrameMs(program.seekMs, program.frameRate);
   return {
     cues: cues
       .map((cue) => ({
         ...cue,
-        startMs: cue.startMs - program.seekMs,
-        endMs: cue.endMs - program.seekMs,
+        startMs: cue.startMs - startMs,
+        endMs: cue.endMs - startMs,
       }))
       .filter((cue) => cue.endMs > 0 && cue.startMs < program.durationMs),
     frameRate: program.frameRate,
@@ -206,16 +223,17 @@ export const NoCaptionsNoticeText = 'No captions for this program';
 //   it as well as read it, and it is gone before the program is under way.
 // - 1 s in: a pop-on caption is loaded in the frames before it appears (17
 //   frames here, 0.7 s at 23.976 fps), and those have to come after the
-//   stream's first frames. A session's first program has no frames for the
-//   first couple of slots of its schedule (its video starts after the
-//   encoder's B-frame delay), so caption data placed there is never sent.
+//   stream's first frame. The rest is margin for a program whose video starts
+//   a couple of frames late, as a session's first program did before it
+//   started at SessionStartPts (the encoder's B-frame delay): caption data
+//   placed before its first frame is never sent.
 export const NoCaptionsNoticeStartMs = 1000;
 export const NoCaptionsNoticeMs = 4000;
 
 // At a low frame rate 1 s is too few frames for that: loading takes up to 18
-// frames (17 with block-centred lines, 18 with each line centred), after the
-// 2 a first program loses. So the notice starts no earlier than this many
-// frames in, 3 to spare: 1 s from 23.976 fps up, about 1.5 s at 15 fps.
+// frames (17 with block-centred lines, 18 with each line centred), plus 2 for
+// a late start. So the notice starts no earlier than this many frames in, 3
+// to spare: 1 s from 23.976 fps up, about 1.5 s at 15 fps.
 export const NoCaptionsNoticeLeadFrames = 23;
 
 // When the notice appears, for a stream at `frameRate`

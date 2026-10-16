@@ -35,6 +35,60 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A session's first program shows its captions on time (2026-10-15)
+
+- **What you saw:** on the first program after tuning in, closed captions came one to two frames early, and a cue
+  already under way at tune-in never showed. Later programs were on time.
+- **Cause:** a session's first program was encoded with no `-output_ts_offset`. libx264's B-frames make its first
+  decoding timestamps negative, so the MPEG-TS muxer shifted the whole program later to keep them positive. Its first
+  frame came out at PTS 6000, two frames at 30 fps, while its captions were laid out from 0.
+  - Every caption landed two frames before the frame its schedule meant.
+  - The first two frame slots were never sent. They held the start of the load for a cue already under way.
+  - Later programs start at a positive offset, so nothing is shifted.
+  - By the same arithmetic, the WebVTT subtitles in Tunarr's own players were two frames early on the first program
+    too (not measured).
+- **Fix:**
+  - **Session start** (`SessionStartPts`, `server/src/stream/hls/HlsSession.ts`): a session's output clock starts at
+    1 s (90,000 at 90 kHz), so the first program is muxed at an exact offset like every later one. hls_direct_v2 keeps
+    0, since it copies the source's timestamps. The fallbacks for an unreadable last segment start there too.
+  - **Seek** (`firstFrameMs`, `ProgramCaptions.ts`): cues on a tuned-in program are timed from the first frame at or
+    after the seek, the frame ffmpeg starts the stream with. Timing them from the seek itself put them up to a frame
+    late. This assumes the source's frames sit on its frame rate's grid, as constant-rate video does.
+  - **Late captions** (`buildCaptionSchedule`, `Cea608Encoder.ts`): a caption that can't be loaded before it ends is
+    left out, instead of flashing for one frame. The caption it would have replaced is cleared at its own end. A cue
+    nearly over at tune-in is the usual case, and its load also held up the next caption by a few frames.
+  - **Offline and error streams** (`createPlaceholderSession`): they now pass `isFirstTranscode`, as program streams
+    do. Without it the pipeline guessed a first transcode from an offset of 0, so a session that began on an offline
+    gap would have opened its HLS output with a discontinuity (`discont_start`, `+initial_discontinuity`).
+- **Checked** on a stream-repro test server: three 40 s clips with a subtitle cue every 2 s, captions on,
+  jellyfin-ffmpeg 8.1.3. The captioned HLS segments were read for 50 s and decoded with ffmpeg's 608 decoder. Each
+  caption's frame was compared with its cue on absolute timestamps.
+
+  |                                              | Before                       | After                            |
+  | -------------------------------------------- | ---------------------------- | -------------------------------- |
+  | First program's first frame                  | PTS 6000                     | PTS 90,000, exactly the offset   |
+  | First program's captions against their cues  | 1 to 2 frames early, by seek | on the frame                     |
+  | A cue under way at tune-in, about 0.9 s left | not shown                    | shown once loaded, until its end |
+  | A cue 2 ms from its end at tune-in           | not shown                    | left out, the next one on time   |
+  | Later programs                               | on the frame                 | on the frame                     |
+
+  - **Offline start:** a session that began on a 12 s offline gap started at offset 1 s with no discontinuity flags.
+    The programs after it had them as before, and the capture had no findings.
+  - **Tune-in:** the `.ts` stream's first byte came 3.4–4.3 s after the request, against 3.3–4.6 s before, at the same
+    data rate. Its reader paces from its input's first timestamp, so starting at 1 s adds no wait.
+
+- **Tests:**
+  - `HlsSession.test.ts`: the first program starts at `SessionStartPts`, its captions land on their frames, and
+    hls_direct_v2 stays at 0. Two fail without the fix.
+  - `Cea608Encoder.test.ts`: a cue under way that can't load in time is left out and the next one shows on its frame;
+    a caption whose replacement is left out is cleared at its end. Both fail without the fix.
+  - `ProgramCaptions.test.ts`: `firstFrameMs`, and cues timed from the first frame (fails without the fix).
+  - `SessionStartPts.local.test.ts` (with ffmpeg): at 0 the first frame comes whole frames late, and at
+    `SessionStartPts` exactly there.
+  - `FfmpegStreamFactory.test.ts`: offline and error placeholders hand `isFirstTranscode` and the offset to the
+    pipeline. Both fail without the change.
+- **Upstream:** not sent.
+
 ### Custom show syncs run in a scan worker (2026-10-15)
 
 - **What you saw:** nothing reported. It was the last sync work on the main thread.
@@ -371,9 +425,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     frames before it appears. Below 23.976 fps, 1 s is too few frames for the load after the two lost slots, so the
     notice starts at least 23 frames in (`noCaptionsNoticeStartMs`; about 1.5 s at 15 fps). Found by the Codex review.
   - **Docs:** `docs/configure/ffmpeg/index.md`.
-- **Known limit, not changed here:** the same two-frame delay makes a session's first program show its own captions
-  two frames early, and a cue already under way at tune-in can be lost on it. Later programs start exactly at their
-  offset.
+- **Known limit, fixed since:** the same two-frame delay made a session's first program show its own captions two
+  frames early, and a cue already under way at tune-in could be lost on it. See "A session's first program shows its
+  captions on time".
 - **Tests:** `ProgramCaptions.test.ts` (which programs get the notice, its cue), `Cea608Encoder.test.ts` (bottom row,
   block-centred, shown on frame 30 and erased on frame 150 at 30 fps), `FfmpegStreamFactory.test.ts` (no subtitles,
   image-based subtitles, filler, fallback, captions off, an offline gap), `HlsSession.test.ts` (served whole on a first

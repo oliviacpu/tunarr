@@ -257,6 +257,49 @@ describe('buildCaptionSchedule', () => {
     expect(shown).toBeLessThan(30);
   });
 
+  // A viewer who tunes in near the end of a cue: it can't be loaded before
+  // it ends, so showing it would flash it for a frame and hold up the next
+  test('leaves out a cue already under way that ends before it can be loaded', () => {
+    // The program starts at 1 s, 100 ms before the cue ends
+    const pairs = framePairs(
+      [
+        { startMs: 0, endMs: 1100, text: 'Already talking' },
+        { startMs: 1500, endMs: 3000, text: 'Next' },
+      ],
+      90,
+      1000,
+    );
+
+    expect(decodeCaptions(pairs).map((c) => c.map((r) => r.text))).toEqual([
+      ['Next'],
+    ]);
+    // On its own start frame, 0.5 s in
+    expect(indexOfPair(pairs, EndOfCaption)).toBe(15);
+  });
+
+  test('clears the caption on screen at its end when the one meant to replace it is left out', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 2000, text: 'First' },
+        // Starts as the first ends, but its two full lines take longer to
+        // load than the second the first is on screen
+        {
+          startMs: 2000,
+          endMs: 2050,
+          text: 'A line of thirty-two characters\nand another one just as long ok',
+        },
+      ],
+      120,
+    );
+
+    expect(decodeCaptions(pairs).map((c) => c.map((r) => r.text))).toEqual([
+      ['First'],
+    ]);
+    expect(pairs[30]).toEqual(EndOfCaption);
+    expect(indexOfPair(pairs, EraseDisplayedMemory)).toBe(60);
+    expect(indexOfPair(pairs, EndOfCaption, 31)).toBe(-1);
+  });
+
   test('replaces one caption with the next without clearing the screen between them', () => {
     const pairs = framePairs(
       [
@@ -466,8 +509,8 @@ describe('the no-captions notice', () => {
     expect(indexOfPair(pairs, EraseDisplayedMemory)).toBe(150);
   });
 
-  // A session's first program loses its first 2 frame slots, so the notice
-  // has to load after them, even where 1 s is only 15 frames
+  // The notice loads clear of the first 2 frame slots, which a program whose
+  // video starts late never sends, even where 1 s is only 15 frames
   test('loads after the first 2 frames at 15 fps', () => {
     const frameRate = 15;
     const startMs = noCaptionsNoticeStartMs(frameRate);

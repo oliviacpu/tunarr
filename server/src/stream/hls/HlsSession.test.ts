@@ -27,7 +27,7 @@ import type { ProgramCaptions } from '../captions/ProgramCaptions.ts';
 import { noCaptionsNotice } from '../captions/ProgramCaptions.ts';
 import { ProgramStream } from '../ProgramStream.ts';
 import type { HlsSessionOptions } from './HlsSession.js';
-import { HlsSession } from './HlsSession.js';
+import { HlsSession, SessionStartPts } from './HlsSession.js';
 import type { TranscodeSpeedEvent } from './TranscodeSpeedMonitor.ts';
 
 dayjs.extend(duration);
@@ -116,6 +116,14 @@ function makeSession(
     ) => ProgramStream,
   );
 }
+// The caption pair each video frame of a served segment carries
+function framePairs(segment: Buffer) {
+  return parseTsSegment(segment).videoPes.map((pes) => {
+    const sei = pes.indexOf(Buffer.from([0x06, 0x04, 17, 0xb5]));
+    return [pes.readUInt8(sei + 14), pes.readUInt8(sei + 15)];
+  });
+}
+
 describe('HlsSession', () => {
   describe('captionedSegment', () => {
     let dir: tmp.DirResult;
@@ -131,14 +139,6 @@ describe('HlsSession', () => {
     const ntscFrame = 1001 / 30; // ms per frame at 29.97 fps
     // End of Caption on channel 1, with parity bits
     const EndOfCaption = [0x94, 0x2f];
-
-    // The caption pair each video frame of a served segment carries
-    function framePairs(segment: Buffer) {
-      return parseTsSegment(segment).videoPes.map((pes) => {
-        const sei = pes.indexOf(Buffer.from([0x06, 0x04, 17, 0xb5]));
-        return [pes.readUInt8(sei + 14), pes.readUInt8(sei + 15)];
-      });
-    }
 
     async function serve(
       captions: ProgramCaptions,
@@ -204,8 +204,8 @@ describe('HlsSession', () => {
       if (!notice) {
         throw new Error('no notice');
       }
-      // A session's first program is laid out from PTS 0, but its first frame
-      // comes two frames later (the encoder's B-frame delay)
+      // Its first frame comes two frames after the offset, as a session's first
+      // program's did when it started at 0 (the encoder's B-frame delay)
       const served = await serve(notice, 0, {
         firstPts: 2 * 3003,
         frames: 160,
@@ -286,6 +286,116 @@ describe('HlsSession', () => {
       ).addCaptions(0, captions(30));
 
       expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
+    });
+  });
+
+  describe('output clock', () => {
+    let dir: tmp.DirResult;
+
+    beforeEach(() => {
+      dir = tmp.dirSync({ unsafeCleanup: true });
+      speedWatchers.length = 0;
+      speedWatcherCalls.current = [];
+      speedWatcherStart.gate = undefined;
+    });
+
+    afterEach(() => {
+      dir.removeCallback();
+    });
+
+    // Runs a session's first program, with these captions, against a fake
+    // ffmpeg that exits at once. Returns the session and the PTS offset the
+    // program's stream was built with.
+    async function runFirstProgram(
+      streamMode: HlsSessionOptions['streamMode'],
+      captions?: ProgramCaptions,
+    ) {
+      const offsets: (number | undefined)[] = [];
+      const channel = {
+        uuid: channelUuid,
+        transcodeConfig: {},
+      } as unknown as ChannelOrmWithTranscodeConfig;
+      const transcodeSession = {
+        streamDuration: dayjs.duration(60, 'seconds'),
+        wait: () => Promise.resolve(),
+      };
+      const session = new HlsSession(
+        channel,
+        { streamMode, initialSegmentCount: 2, transcodeDirectory: dir.name },
+        {
+          getCurrentLineupItem: () =>
+            Promise.resolve(
+              Result.success({
+                lineupItem: { type: 'program', duration: 60_000 },
+                channelContext: channel,
+                sourceChannel: channel,
+              }),
+            ),
+        } as unknown as StreamProgramCalculator,
+        {
+          ffmpegSettings: () => defaultFfmpegSettings,
+        } as unknown as ISettingsDB,
+        {
+          getLiveTimestamp: () => Promise.resolve(Date.now()),
+        } as unknown as OnDemandChannelService,
+        (context, _outputFormat, opts) => {
+          offsets.push(opts?.ptsOffset);
+          return {
+            context,
+            on: vi.fn(),
+            renditions: { audio: [], captions },
+            transcodeSession,
+            setup: () => Promise.resolve(Result.success(transcodeSession)),
+            start: () => Promise.resolve(),
+          } as unknown as ProgramStream;
+        },
+      );
+      await fs.mkdir(session.workingDirectory, { recursive: true });
+      const internals = session as unknown as {
+        state: string;
+        transcode(realtime: boolean): Promise<void>;
+      };
+      internals.state = 'started';
+      await internals.transcode(true);
+      return { session, offsets };
+    }
+
+    // At 0, the encoder's B-frame delay put the first program's video two
+    // frames late, and its captions two frames early
+    test("starts a session's first program at SessionStartPts", async () => {
+      const { offsets } = await runFirstProgram('hls');
+
+      expect(offsets).toEqual([SessionStartPts]);
+    });
+
+    test("lays the first program's captions out from where its video starts", async () => {
+      const frameMs = 1001 / 30; // 29.97 fps
+      const { session } = await runFirstProgram('hls', {
+        // Starts on the program's 40th frame
+        cues: [{ startMs: 40 * frameMs, endMs: 50 * frameMs, text: 'Hi' }],
+        frameRate: 30000 / 1001,
+        durationMs: 60_000,
+        language: 'eng',
+      });
+      // Its video starts exactly at the offset
+      await fs.writeFile(
+        path.join(session.workingDirectory, 'data000000.ts'),
+        makeTsSegment({ firstPts: SessionStartPts, frames: 60 }),
+      );
+
+      const served = await session.captionedSegment('data000000.ts');
+      if (!served) {
+        throw new Error('not captioned');
+      }
+
+      const pairs = framePairs(served);
+      expect(pairs.findIndex((p) => p[0] === 0x94 && p[1] === 0x2f)).toBe(40);
+    });
+
+    test('keeps the source timestamps in hls_direct_v2', async () => {
+      const { offsets } = await runFirstProgram('hls_direct_v2');
+
+      expect(offsets).toEqual([0]);
     });
   });
 
