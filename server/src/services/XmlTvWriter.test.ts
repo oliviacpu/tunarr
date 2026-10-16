@@ -1513,3 +1513,108 @@ describe('published guide pictures', () => {
     }
   });
 });
+
+// A channel save rewrote every channel's programmes, refetching each with its
+// relations, and stalled the main thread for up to 1 s on a shared server
+// (2026-10-16). The guide service now passes each unchanged channel's last
+// rendered programmes back; the writer reuses them as they are.
+describe('XmlTvWriter reused programmes', () => {
+  function channelGuide(
+    number: number,
+    programs: ProgramWithRelationsOrm[],
+  ): MaterializedChannelPrograms {
+    return {
+      channel: createChannelOrm({ number, name: `Channel ${number}` }),
+      programs: programs.map((program, i) => ({
+        programming: { type: 'program' as const, program },
+        title: program.title,
+        start: i * 1_800_000,
+        stop: (i + 1) * 1_800_000,
+        durationMs: 1_800_000,
+      })),
+    };
+  }
+
+  async function withOutput(
+    fn: (outputPath: string) => Promise<void>,
+  ): Promise<void> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-xmltv-'));
+    try {
+      await fn(path.join(dir, 'xmltv.xml'));
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  test('a full write reports every channel and matches the serialized guide', async () => {
+    await withOutput(async (outputPath) => {
+      const channels = [
+        channelGuide(1, [makeProgram({}), makeProgram({})]),
+        channelGuide(2, [makeProgram({})]),
+      ];
+      const writer = new XmlTvWriter(
+        inMemorySettingsDB({ settings: { xmltv: { outputPath } } }),
+      );
+      const rendered = new Map<string, string>();
+
+      await writer.write(channels, {
+        onRendered: (id, xml) => rendered.set(id, xml),
+      });
+
+      expect([...rendered.keys()]).toEqual(channels.map((c) => c.channel.uuid));
+      const written = await fs.readFile(outputPath, 'utf-8');
+      const serialized = await writer.serialize(channels);
+      // The header carries the write time; everything from the channels on
+      // must match
+      const body = (xml: string) => xml.slice(xml.indexOf('<channel '));
+      expect(body(written)).toBe(body(serialized));
+    });
+  });
+
+  test('a reused channel keeps its programmes, is not rendered, and publishes nothing', async () => {
+    await withOutput(async (outputPath) => {
+      const kept = makeProgram({ artwork: [makeArtwork('poster')] });
+      const changed = makeProgram({ artwork: [makeArtwork('poster')] });
+      const first = channelGuide(1, [kept]);
+      const second = channelGuide(2, [changed]);
+
+      const publicMedia = mock(PublicMediaService);
+      const requested: PublicArtworkRef[][] = [];
+      when(publicMedia.publish(anything())).thenCall(
+        (refs: PublicArtworkRef[]) => {
+          requested.push(refs);
+          return Promise.resolve(new Map());
+        },
+      );
+      const writer = new XmlTvWriter(
+        inMemorySettingsDB({ settings: { xmltv: { outputPath } } }),
+        instance(publicMedia),
+      );
+
+      // The first write renders both; keep channel 1's programmes
+      const rendered = new Map<string, string>();
+      await writer.write([first, second], {
+        onRendered: (id, xml) => rendered.set(id, xml),
+      });
+      const firstXml = rendered.get(first.channel.uuid);
+      expect(firstXml).toContain(kept.title);
+
+      // The second reuses channel 1, passed with no programs, and renders 2
+      requested.length = 0;
+      const renderedAgain: string[] = [];
+      await writer.write([{ ...first, programs: [] }, second], {
+        reuse: new Map([[first.channel.uuid, firstXml ?? '']]),
+        onRendered: (id) => renderedAgain.push(id),
+      });
+
+      expect(renderedAgain).toEqual([second.channel.uuid]);
+      expect(requested.flat().map((r) => r.id)).toEqual([changed.uuid]);
+      const programmes =
+        parseXmltv(await fs.readFile(outputPath, 'utf-8')).programmes ?? [];
+      expect(programmes.map((p) => p.title?.[0]?._value)).toEqual([
+        kept.title,
+        changed.title,
+      ]);
+    });
+  });
+});

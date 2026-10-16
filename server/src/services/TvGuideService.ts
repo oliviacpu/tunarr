@@ -128,6 +128,17 @@ type ChannelWithLineup = {
 
 type ChannelId = string;
 
+// A channel's programmes as an XMLTV write rendered them. They are reused while
+// the guide entry, its channel and its programs are the same objects, and the
+// render settings the same string: a rebuild or a channel save replaces them.
+type RenderedProgrammes = {
+  guide: ChannelPrograms;
+  channel: ChannelOrm;
+  programs: GuideItem[];
+  settings: string;
+  xml: string;
+};
+
 const PlaceholderChannelId = v4();
 
 // How close a lookup must be to the end of a program to be treated as landing
@@ -155,6 +166,9 @@ export class TVGuideService {
   private cachedGuide: Record<ChannelId, ChannelPrograms>;
   private runningXmlTvWrite?: Promise<void>;
   private queuedXmlTvWrite?: Promise<void>;
+  // Each channel's programmes as the last XMLTV write rendered them, and what
+  // they were rendered from. See writeXmlTvInternal.
+  private renderedProgrammes = new Map<string, RenderedProgrammes>();
 
   private lastUpdateTime: Record<string, number>;
   private lastEndTime: Record<string, number>;
@@ -1144,22 +1158,72 @@ export class TVGuideService {
     return write;
   }
 
+  /**
+   * The settings a channel's rendered programmes depend on (the guide's
+   * pictures, credit images). A change renders every channel again.
+   */
+  private programmeRenderSettings(): string {
+    return JSON.stringify({
+      xmltv: this.settingsDB.xmlTvSettings(),
+      creditImages: this.settingsDB.featureFlags().xmltvCreditImagesEnabled,
+    });
+  }
+
   private async writeXmlTvInternal() {
-    // Every channel's programs are fetched in one pass rather than one query
-    // per channel. The results were being merged into a single flat map
+    // What this write renders from, captured now: a channel saved or rebuilt
+    // while it runs gets a new guide or channel object, so the next write
+    // renders it again.
+    const guides = Object.values(this.cachedGuide).map((guide) => ({
+      guide,
+      channel: guide.channel,
+      programs: guide.programs,
+    }));
+    // Read once, when first needed: to compare with a channel's last render, or
+    // to remember one
+    let settings: string | undefined;
+    const renderSettings = () => (settings ??= this.programmeRenderSettings());
+
+    // A channel whose guide, channel and render settings are what its last
+    // write rendered keeps those programmes; only the rest are fetched and
+    // rendered. Saving one channel used to refetch every guide program of
+    // every channel with all its relations (most of a write), which stalled
+    // the main thread, and the Live TV it serves, for up to 1 s per save on a
+    // shared server (2026-10-16). Programs edited since (a scan) reach an
+    // unchanged channel's guide at its next guide refresh, as they did before
+    // when nothing was saved.
+    const reuse = new Map<string, string>();
+    for (const { guide, channel, programs } of guides) {
+      const rendered = this.renderedProgrammes.get(channel.uuid);
+      if (
+        rendered !== undefined &&
+        rendered.guide === guide &&
+        rendered.channel === channel &&
+        rendered.programs === programs &&
+        rendered.settings === renderSettings()
+      ) {
+        reuse.set(channel.uuid, rendered.xml);
+      }
+    }
+    const toRender = guides.filter(({ channel }) => !reuse.has(channel.uuid));
+
+    // Every rendered channel's programs are fetched in one pass rather than one
+    // query per channel. The results were being merged into a single flat map
     // regardless, so the per-channel split bought nothing and cost plenty:
     // deduplication was scoped to a channel, so a program scheduled on several
     // channels had its whole relation graph fetched and rebuilt once per
     // channel. getGuideProgramsByIds dedupes and chunks internally.
-    const guides = Object.values(this.cachedGuide);
     const allProgramsById = await this.getAllCurrentGuidePrograms(
-      guides.flatMap(({ programs }) => programs),
+      toRender.flatMap(({ programs }) => programs),
     );
 
     // Yield per channel: every channel's guide items together are tens of
     // milliseconds of synchronous work on a large guide.
     const materializedGuide: MaterializedChannelPrograms[] = [];
     for (const { channel, programs } of guides) {
+      if (reuse.has(channel.uuid)) {
+        materializedGuide.push({ channel, programs: [] });
+        continue;
+      }
       await throttle();
       materializedGuide.push({
         channel,
@@ -1169,7 +1233,26 @@ export class TVGuideService {
       });
     }
 
-    await this.xmltv.write(materializedGuide);
+    const byId = new Map(guides.map((g) => [g.channel.uuid, g]));
+    await this.xmltv.write(materializedGuide, {
+      reuse,
+      onRendered: (channelId, xml) => {
+        const source = byId.get(channelId);
+        if (source !== undefined) {
+          this.renderedProgrammes.set(channelId, {
+            ...source,
+            settings: renderSettings(),
+            xml,
+          });
+        }
+      },
+    });
+    // Forget channels that have left the guide
+    for (const channelId of [...this.renderedProgrammes.keys()]) {
+      if (!byId.has(channelId)) {
+        this.renderedProgrammes.delete(channelId);
+      }
+    }
 
     const now = dayjs();
     this.eventService.push({
