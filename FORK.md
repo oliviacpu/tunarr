@@ -163,7 +163,15 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     (`ProgramSearchRepository.getMediaSourceLibraryProgramsPage`). Building and compiling its nested query for every
     page had cost about as much as reading the page.
   - **Response:** each page is encoded with the route's own schema, so the items and fields are the same as before.
-    The route sends the finished JSON as is (`sendJsonText`). Items now come in uuid order.
+    Items now come in uuid order.
+  - **Streaming:** each page's JSON goes to the client as soon as it is built (`sendJsonChunks`), with
+    `Transfer-Encoding: chunked` and no `Content-Length`. At first the pages were joined and sent at the end. On
+    production that made one 185 MB string, and joining and sending it froze Tunarr once more, for 0.93 s, at the end
+    of the 20 s request.
+    - A slow client holds the next page back, so Tunarr holds about one page instead of the whole body.
+    - A failure in the first page is still an error response. After that the status is already sent, so Tunarr
+      closes the connection: the client sees a broken download, never a shorter list.
+    - A client that disconnects stops the page reads.
 - **Numbers** (perf test, MacBook):
 
   | Episodes | Worst stall of a concurrent request | The request itself |
@@ -171,14 +179,23 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   | 1,500    | 678 ms → 28 ms                      | 0.7 s → 1.3 s      |
   | 5,400    | 2.6 s → 39 ms                       | 2.6 s → 5.6 s      |
 
-  On the production server the same request had frozen it for 17 s.
+  On the production server the same request had frozen it for 17 s. Paged but joined at the end, it still froze it
+  for 0.93 s.
+
+  With a 185 MB body like production's (`TUNARR_PERF_CAST=160`) and the client in another process, 3 runs each,
+  joined at the end → streamed: worst stall 74–76 ms → 49–59 ms, p99 about 23 ms either way, and peak memory during
+  the request about 1.0 GB → 0.6 GB. The MacBook joins and sends 185 MB about 12 times faster than production did.
 
 - **Tests:**
   - `api/libraryProgramsJson.test.ts`: paging across boundaries, an empty library, the yields, and page-size
-    adaptation.
-  - `tests/libraryProgramsResponse.test.ts`: the body matches the one-shot response for episodes and movies.
+    adaptation. Each page is its own chunk; a first-page failure comes before any chunk; a stalled client holds the
+    pages back; a closed stream reads no more pages.
+  - `tests/libraryProgramsResponse.test.ts`: the body matches the one-shot response for episodes and movies. Over a
+    real connection: the body is chunked, a first-page failure is a 500, a later failure cuts the download off, and
+    the first page arrives while the second is still held.
   - `tests/perf/libraryProgramsLag.test.ts`: worst concurrent request under 250 ms. It fails before the fix. Scale
-    it with `TUNARR_PERF_SHOWS` / `_SEASONS` / `_EPISODES`.
+    it with `TUNARR_PERF_SHOWS` / `_SEASONS` / `_EPISODES` / `_CAST`. It fetches with `curl`, so the client's reading
+    isn't counted against the server's event loop.
 - **Upstream:** not sent.
 
 ### Uploaded images are saved with the public address, not `http://` (2026-10-15)
