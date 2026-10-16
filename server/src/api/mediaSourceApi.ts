@@ -36,7 +36,7 @@ import { match, P } from 'ts-pattern';
 import { v4 } from 'uuid';
 import z from 'zod/v4';
 import { MaterializeProgramsCommand } from '../commands/MaterializeProgramsCommand.ts';
-import { libraryProgramsJson, sendJsonText } from './libraryProgramsJson.ts';
+import { libraryProgramsJson, sendJsonChunks } from './libraryProgramsJson.ts';
 import { DeleteMediaSourceCommand } from '../commands/media_source/DeleteMediaSourceCommand.ts';
 import { container } from '../container.ts';
 import type { MediaSourceWithRelations } from '../db/schema/derivedTypes.js';
@@ -328,14 +328,14 @@ export const mediaSourceRouter: RouterPluginAsyncCallback = async (
         return res.status(404).send();
       }
 
-      // Built a page at a time with yields in between: in one go, a large
-      // library froze the server (and its streams) for many seconds. The
-      // response schema stays for the API docs; the body is already JSON, and
-      // Fastify sends a string with a JSON content type as is.
+      // Built and sent a page at a time with yields in between: in one go, a
+      // large library froze the server (and its streams) for many seconds.
+      // The response schema stays for the API docs; the body is streamed JSON
+      // text, which skips the serializer.
       const materializer = container.get<MaterializeProgramsCommand>(
         MaterializeProgramsCommand,
       );
-      const body = await libraryProgramsJson({
+      const chunks = libraryProgramsJson({
         readPage: (afterUuid, limit) =>
           req.serverCtx.programDB.getMediaSourceLibraryProgramsPage(
             req.params.libraryId,
@@ -349,7 +349,7 @@ export const mediaSourceRouter: RouterPluginAsyncCallback = async (
           ),
       });
 
-      return sendJsonText(res, body);
+      return sendJsonChunks(res, chunks);
     },
   );
 

@@ -2,6 +2,7 @@ import type { ContentProgram, TerminalProgram } from '@tunarr/types';
 import { ContentProgramSchema } from '@tunarr/types/schemas';
 import type { FastifyReply } from 'fastify';
 import { last } from 'lodash-es';
+import { Readable } from 'node:stream';
 import z from 'zod/v4';
 import throttle from '../util/throttle.ts';
 
@@ -55,22 +56,32 @@ export type PagedJsonArrayOptions = Partial<PageSizeLimits> & {
 };
 
 /**
- * A JSON array built a page at a time, yielding to the event loop between
+ * A JSON array as text, a page at a time, yielding to the event loop between
  * pages and between the stages of each page.
  *
  * better-sqlite3 is synchronous, and converting, encoding and stringifying are
  * CPU work on the main thread, which also serves the streams. For a large
  * result in one go that adds up to a long freeze: a 5,000-episode library
  * froze Tunarr for about 17 s and paused Live TV (2026-10-15). Paging bounds
- * each piece of work. The text is the same as stringifying the whole encoded
- * array at once, since `JSON.stringify` of an array is its items' JSON joined
- * by commas, inside brackets.
+ * each piece of work.
+ *
+ * Each page's text is its own chunk, so the caller can send it and drop it.
+ * Joining them first made one 185 MB string on production, and building and
+ * sending it still froze the server for about 0.9 s. The chunks together are
+ * the same text as stringifying the whole encoded array at once, since
+ * `JSON.stringify` of an array is its items' JSON joined by commas, inside
+ * brackets.
+ *
+ * The first chunk comes once the first page is built, so a failure there
+ * rejects before anything has been sent and can still be an error response.
+ * A consumer that stops early (`return()`, such as a closed connection)
+ * stops the reads.
  *
  * `readPage` returns the rows after `afterUuid` in uuid order; `toItems` may
  * drop rows; `encode` turns a page of items into the value to stringify (an
  * array).
  */
-export async function pagedJsonArray<Row extends { uuid: string }, Item>(
+export async function* pagedJsonArray<Row extends { uuid: string }, Item>(
   readPage: (afterUuid: string | undefined, limit: number) => Promise<Row[]>,
   toItems: (rows: Row[]) => Promise<Item[]>,
   encode: (items: Item[]) => unknown,
@@ -82,9 +93,9 @@ export async function pagedJsonArray<Row extends { uuid: string }, Item>(
     yieldToEventLoop = throttle,
     now = () => performance.now(),
   }: PagedJsonArrayOptions = {},
-): Promise<string> {
+): AsyncGenerator<string, void, undefined> {
   const limits = { minPageSize, maxPageSize, targetBlockMs };
-  const parts: string[] = [];
+  let opened = false;
   let afterUuid: string | undefined;
   let pageSize = firstPageSize;
   for (;;) {
@@ -104,7 +115,8 @@ export async function pagedJsonArray<Row extends { uuid: string }, Item>(
 
     const json = JSON.stringify(encode(items));
     if (json.length > 2) {
-      parts.push(json.slice(1, -1));
+      yield `${opened ? ',' : '['}${json.slice(1, -1)}`;
+      opened = true;
     }
 
     if (rows.length < pageSize) {
@@ -113,7 +125,7 @@ export async function pagedJsonArray<Row extends { uuid: string }, Item>(
     pageSize = nextPageSize(pageSize, readMs, limits);
     await yieldToEventLoop();
   }
-  return `[${parts.join(',')}]`;
+  yield opened ? ']' : '[]';
 }
 
 export type LibraryProgramsSource<Row extends { uuid: string }> = {
@@ -132,7 +144,7 @@ export type LibraryProgramsSource<Row extends { uuid: string }> = {
 export function libraryProgramsJson<Row extends { uuid: string }>(
   source: LibraryProgramsSource<Row>,
   options?: PagedJsonArrayOptions,
-): Promise<string> {
+): AsyncGenerator<string, void, undefined> {
   return pagedJsonArray(
     (afterUuid, limit) => source.readPage(afterUuid, limit),
     async (rows) =>
@@ -145,10 +157,30 @@ export function libraryProgramsJson<Row extends { uuid: string }>(
 }
 
 /**
- * Sends a body that is already JSON text. Fastify sends a string with a JSON
- * content type as is, so the route's response serializer (which would encode
- * and stringify the whole body again, in one go) doesn't run.
+ * Chunks of text as a stream that asks for the next chunk only once the last
+ * one is on its way: `Readable.from` buffers one chunk ahead.
  */
-export function sendJsonText(reply: FastifyReply, json: string): FastifyReply {
-  return reply.type('application/json; charset=utf-8').send(json);
+export function jsonChunkStream(chunks: AsyncIterable<string>): Readable {
+  return Readable.from(chunks);
+}
+
+/**
+ * Sends a body that arrives as chunks of JSON text, writing each one as it
+ * comes. A stream skips the route's response serializer, which would encode
+ * and stringify the whole body again, in one go.
+ *
+ * A slow client holds the next pages back rather than piling them up in
+ * memory (see {@link jsonChunkStream}). If the chunks fail before the first
+ * one, Fastify sends an error response. After it, the status is already sent,
+ * so Fastify logs the error and closes the connection: the client sees a
+ * cut-off download, not a shorter list. A client that disconnects stops the
+ * chunks.
+ */
+export function sendJsonChunks(
+  reply: FastifyReply,
+  chunks: AsyncIterable<string>,
+): FastifyReply {
+  return reply
+    .type('application/json; charset=utf-8')
+    .send(jsonChunkStream(chunks));
 }

@@ -1,31 +1,43 @@
 import { ContentProgramSchema } from '@tunarr/types/schemas';
 import type { FastifyInstance } from 'fastify';
 import { sortBy } from 'lodash-es';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import http from 'node:http';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import z from 'zod/v4';
 import { MaterializeProgramsCommand } from '../src/commands/MaterializeProgramsCommand.ts';
 import { container } from '../src/container.ts';
 import { ProgramConverter } from '../src/db/converters/ProgramConverter.ts';
 import type { IProgramDB } from '../src/db/interfaces/IProgramDB.ts';
+import { ProgramDB } from '../src/db/ProgramDB.ts';
 import { KEYS } from '../src/types/inject.ts';
 import { getAvailablePort } from '../src/util/net.ts';
 import { seedPrograms, seedShows } from './support/seed.ts';
 import { initTestApp } from './testServer.js';
 
 /**
- * `GET /api/media-libraries/:libraryId/programs` builds its body a page at a
- * time so a large library doesn't freeze the server. These pin that body to
- * what the route returned when it loaded, encoded and stringified the whole
- * library in one go: the same items with the same fields. Item order is uuid
- * order now (before, whatever order SQLite returned).
+ * `GET /api/media-libraries/:libraryId/programs` builds and sends its body a
+ * page at a time so a large library doesn't freeze the server. These pin that
+ * body to what the route returned when it loaded, encoded and stringified the
+ * whole library in one go: the same items with the same fields. Item order is
+ * uuid order now (before, whatever order SQLite returned).
  */
 describe('library programs response', () => {
   let app: FastifyInstance;
+  let port: number;
   let showsLibraryId: string;
   let moviesLibraryId: string;
 
   beforeAll(async () => {
-    app = await initTestApp(await getAvailablePort());
+    port = await getAvailablePort();
+    app = await initTestApp(port);
     // More episodes than one page, so the body spans page boundaries.
     showsLibraryId = (
       await seedShows({ showCount: 6, seasonsPerShow: 3, episodesPerSeason: 9 })
@@ -42,6 +54,36 @@ describe('library programs response', () => {
   afterAll(async () => {
     await app?.close();
   });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const libraryUrl = (libraryId: string) =>
+    `http://127.0.0.1:${port}/api/media-libraries/${libraryId}/programs`;
+
+  /** The page query, failing or waiting from its `n`th call on. */
+  function pageQueryFrom(n: number, page: () => Promise<never> | 'wait') {
+    const realRead = ProgramDB.prototype.getMediaSourceLibraryProgramsPage;
+    let calls = 0;
+    let release = () => {};
+    const spy = vi
+      .spyOn(ProgramDB.prototype, 'getMediaSourceLibraryProgramsPage')
+      .mockImplementation(function (this: ProgramDB, ...args) {
+        calls++;
+        if (calls < n) {
+          return realRead.apply(this, args);
+        }
+        const replacement = page();
+        if (replacement !== 'wait') {
+          return replacement;
+        }
+        return new Promise((resolve) => {
+          release = () => resolve(realRead.apply(this, args));
+        });
+      });
+    return { spy, release: () => release() };
+  }
 
   /** The response as the route built it before: everything in one go. */
   async function oneShotBody(libraryId: string): Promise<unknown> {
@@ -84,6 +126,66 @@ describe('library programs response', () => {
       expect(body.map((p) => p.id)).toEqual(body.map((p) => p.id).sort());
     },
   );
+
+  test('is sent in chunks, without a length up front', async () => {
+    const res = await fetch(libraryUrl(showsLibraryId));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('transfer-encoding')).toBe('chunked');
+    expect(res.headers.get('content-length')).toBeNull();
+    const body = (await res.json()) as { id: string }[];
+    expect(sortBy(body, 'id')).toEqual(
+      sortBy((await oneShotBody(showsLibraryId)) as { id: string }[], 'id'),
+    );
+  });
+
+  test('a failure before the first page is an error response', async () => {
+    pageQueryFrom(1, () => Promise.reject(new Error('database is locked')));
+
+    const res = await fetch(libraryUrl(showsLibraryId));
+
+    expect(res.status).toBe(500);
+  });
+
+  // The status is already sent: the client must see a broken download, never
+  // a shorter list that parses.
+  test('a failure after the first page cuts the response off', async () => {
+    pageQueryFrom(2, () => Promise.reject(new Error('database is locked')));
+
+    const res = await fetch(libraryUrl(showsLibraryId));
+
+    expect(res.status).toBe(200);
+    await expect(res.text()).rejects.toThrow();
+  });
+
+  test('a client that disconnects stops the page reads', async () => {
+    const { spy, release } = pageQueryFrom(2, () => 'wait');
+
+    // node:http rather than fetch: an aborted fetch opens a new connection,
+    // which then holds the server open.
+    const firstChunk = await new Promise<string>((resolve, reject) => {
+      const req = http.get(libraryUrl(showsLibraryId), (res) => {
+        res.on('error', () => {});
+        res.once('data', (chunk: Buffer) => {
+          req.destroy();
+          resolve(chunk.toString());
+        });
+      });
+      req.on('error', reject);
+    });
+
+    // The first page arrived without waiting for the second, which is held
+    expect(firstChunk.startsWith('[{')).toBe(true);
+
+    // Give the server time to see the closed connection, then let the second
+    // page finish (if it started). A server still building the body would go
+    // on to read a third.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+  });
 
   test('an unknown library is a 404', async () => {
     const res = await app.inject({
