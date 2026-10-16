@@ -2,12 +2,15 @@ import { isNonEmptyString } from '@tunarr/shared/util';
 import type { MediaSubtitles } from '@tunarr/types';
 import { injectable } from 'inversify';
 import fs from 'node:fs/promises';
-import { basename, dirname, extname } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import { match, P } from 'ts-pattern';
 import type { Nullable } from '../../types/util.ts';
 import type { Logger } from '../../util/logging/LoggerFactory.ts';
 import { LoggerFactory } from '../../util/logging/LoggerFactory.ts';
 import { LanguageService } from '../LanguageService.ts';
+
+// Parts of a subtitle file name that describe the subtitles rather than their language
+const SubtitleFileFlags = new Set(['hi', 'cc', 'sdh', 'forced']);
 
 @injectable()
 export class LocalSubtitlesService {
@@ -21,22 +24,23 @@ export class LocalSubtitlesService {
 
   async findExternalSubtitles(fullItemPath: string) {
     const subtitles: MediaSubtitles[] = [];
+    const directory = dirname(fullItemPath);
     const itemName = basename(fullItemPath, extname(fullItemPath));
-    for (const dirent of await fs.readdir(dirname(fullItemPath), {
+    for (const dirent of await fs.readdir(directory, {
       withFileTypes: true,
     })) {
       if (!dirent.isFile()) {
         continue;
       }
 
-      if (!dirent.name.startsWith(itemName)) {
+      // "Episode 1." so that "Episode 10.en.srt" isn't taken for episode 1's
+      if (!dirent.name.startsWith(`${itemName}.`)) {
         continue;
       }
 
-      const filename = basename(dirent.name, extname(dirent.name));
       const parsedSubtitles = LocalSubtitlesService.parseSubtitleFilePath(
-        itemName,
-        filename,
+        fullItemPath,
+        join(directory, dirent.name),
       );
 
       if (!parsedSubtitles) {
@@ -55,7 +59,8 @@ export class LocalSubtitlesService {
   ): Nullable<MediaSubtitles> {
     const itemName = basename(originalItemPath, extname(originalItemPath));
     const fileName = basename(fullPath);
-    const codec = match(extname(fileName))
+    const codecExt = extname(fileName);
+    const codec = match(codecExt.toLowerCase())
       .with(P.union('.ssa', '.ass'), () => 'ass')
       .with('.srt', () => 'subrip')
       .with('.vtt', () => 'webvtt')
@@ -65,18 +70,20 @@ export class LocalSubtitlesService {
       return null;
     }
 
-    // Subtitles generally are meant to be in the form {media_name}.{lang}(.{opts})*.{codec_ext}
-    // At this point we've removed the codec_ext and we want to read out the options in the filename
-    // and then derive the language.
-    const [lang = '', ...opts] = fileName
+    // Subtitles generally are meant to be in the form {media_name}(.{lang})?(.{opts})*.{codec_ext}
+    // Remove the media name and the codec_ext, read out the options, and take the first
+    // other part as the language. A file with no language part is "unknown".
+    const parts = basename(fileName, codecExt)
       .replace(itemName, '')
       .toLowerCase()
       .split('.')
       .filter((s) => s.length > 0);
+    const lang =
+      parts.find((part) => !SubtitleFileFlags.has(part)) ?? 'unknown';
 
     const sdh =
-      opts.includes('hi') || opts.includes('cc') || opts.includes('sdh');
-    const forced = opts.includes('forced');
+      parts.includes('hi') || parts.includes('cc') || parts.includes('sdh');
+    const forced = parts.includes('forced');
 
     const maybeLang3T = LanguageService.getAlpha3TCode(
       lang.split(/[-_]/)?.[0] ?? lang,
