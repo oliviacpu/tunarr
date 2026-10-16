@@ -382,7 +382,9 @@ function parseCueText(text: string): ParsedCue {
         if (tag === 'p') {
           drawing = n > 0;
         } else if (tag === undefined) {
+          // \r resets every override, drawing mode included
           style = PlainStyle;
+          drawing = false;
         } else if (tag === 'i') {
           style = { ...style, italic: n !== 0 };
         } else if (tag === 'u') {
@@ -920,7 +922,9 @@ function resolveOverlaps(
         !next ||
         next.appearance.mode !== 'popOn' ||
         next.appearance.overlappingCues !== policy ||
-        !(clusterEnd - next.startMs > minOverlap)
+        // How long it overlaps what is already in the cluster: to the
+        // earlier of its own end and the cluster's
+        !(Math.min(clusterEnd, next.endMs) - next.startMs > minOverlap)
       ) {
         break;
       }
@@ -964,22 +968,28 @@ function activeIntervals(cluster: ScheduleItem[]) {
 }
 
 function stackedOf(cluster: ScheduleItem[], apart: boolean): ScheduleItem[] {
-  // Stretches too short to load a caption for go with the one before (or,
-  // at the start, the one after); then neighbours that show the same merge
-  const intervals = activeIntervals(cluster);
+  // A stretch too short to load a caption for goes with a neighbour that
+  // shows everything it shows (the one before, else the one after), so a
+  // subtitle is shown a little longer or sooner, never left out. Then
+  // neighbours that show the same merge.
+  const intervals = activeIntervals(cluster).map((i) => ({ ...i }));
+  const shows = (
+    outer: (typeof intervals)[number] | undefined,
+    inner: (typeof intervals)[number],
+  ) =>
+    outer !== undefined &&
+    inner.active.every((item) => outer.active.includes(item));
   const folded: typeof intervals = [];
-  for (const interval of intervals) {
+  for (const [k, interval] of intervals.entries()) {
     const previous = folded.at(-1);
-    if (previous && interval.endMs - interval.startMs < MinIntervalMs) {
+    const next = intervals[k + 1];
+    const short = interval.endMs - interval.startMs < MinIntervalMs;
+    if (short && previous && shows(previous, interval)) {
       previous.endMs = interval.endMs;
-    } else if (
-      previous &&
-      previous.endMs - previous.startMs < MinIntervalMs &&
-      folded.length === 1
-    ) {
-      folded[0] = { ...interval, startMs: previous.startMs };
+    } else if (short && next && shows(next, interval)) {
+      next.startMs = interval.startMs;
     } else {
-      folded.push({ ...interval });
+      folded.push(interval);
     }
   }
   const merged: typeof intervals = [];

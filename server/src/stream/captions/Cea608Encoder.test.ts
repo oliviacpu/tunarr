@@ -809,6 +809,33 @@ describe('overlapping subtitles', () => {
     expect(rowsAt(pairs, 86)).toEqual([[15, 'Second']]);
   });
 
+  // A short subtitle inside a long one overlaps only for its own length
+  test('keeps a short subtitle inside a long one sequential', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 10000, text: 'Long' },
+        { startMs: 5000, endMs: 5300, text: 'Blip' },
+      ],
+      330,
+    );
+    expect(rowsAt(pairs, 152)).toEqual([[15, 'Blip']]);
+  });
+
+  test('never folds away a subtitle shorter than a second', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 10000, text: 'Long' },
+        { startMs: 5000, endMs: 5700, text: 'Middle' },
+      ],
+      330,
+    );
+    expect(rowsAt(pairs, 160)).toEqual([
+      [14, 'Long'],
+      [15, 'Middle'],
+    ]);
+    expect(rowsAt(pairs, 200)).toEqual([[15, 'Long']]);
+  });
+
   test('stacks a sign over dialogue at the bottom', () => {
     const pairs = framePairs(
       [
@@ -1037,6 +1064,12 @@ describe('caption placement', () => {
         [15, 16],
       ]);
     });
+  });
+
+  test('ends a drawing at a reset', () => {
+    expect(
+      decode('{\\p1}m 0 0 l 10 10{\\r}Label')[0]?.map((r) => r.text),
+    ).toEqual(['Label']);
   });
 
   test('leaves out vector drawings', () => {
