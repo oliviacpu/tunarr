@@ -152,9 +152,9 @@ function makeHarness(opts: {
     getMovie: vi.fn(itemResult),
   };
   const mintSubtitles = vi.fn(() => (opts.minted ?? []).map((r) => ({ ...r })));
-  const upsertSubtitles = vi.fn<(rows: unknown[]) => Promise<void>>(() =>
-    Promise.resolve(),
-  );
+  const replaceProgramSubtitles = vi.fn<
+    (programId: string, rows: unknown[]) => Promise<void>
+  >(() => Promise.resolve());
 
   const getChannelGuides = vi.fn((_range: unknown, channelIds: string[]) =>
     Promise.resolve(
@@ -210,7 +210,7 @@ function makeHarness(opts: {
     {
       getProgramById: () => Promise.resolve(dbProgram),
       setSubtitlePath,
-      upsertSubtitles,
+      replaceProgramSubtitles,
     } as never,
     { fetchToCache } as never,
     {
@@ -231,7 +231,7 @@ function makeHarness(opts: {
     getSubtitlesByKey,
     apiClient,
     mintSubtitles,
-    upsertSubtitles,
+    replaceProgramSubtitles,
   };
 }
 
@@ -615,8 +615,8 @@ describe('SubtitleExtractorTask heals a sidecar the media server answers 404 for
       'jf-item-1',
     );
     expect(harness.mintSubtitles).toHaveBeenCalledTimes(1);
-    expect(harness.upsertSubtitles).toHaveBeenCalledTimes(1);
-    expect(harness.upsertSubtitles.mock.calls[0]?.[0]).toEqual([
+    expect(harness.replaceProgramSubtitles).toHaveBeenCalledTimes(1);
+    expect(harness.replaceProgramSubtitles.mock.calls[0]?.[1]).toEqual([
       expect.objectContaining({ sourceKey: NEW_KEY, path: NEW_COPY }),
     ]);
     // The old key once, the new key once
@@ -647,7 +647,7 @@ describe('SubtitleExtractorTask heals a sidecar the media server answers 404 for
 
     await run(harness);
 
-    expect(harness.upsertSubtitles.mock.calls[0]?.[0]).toEqual([
+    expect(harness.replaceProgramSubtitles.mock.calls[0]?.[1]).toEqual([
       expect.objectContaining({ sourceKey: NEW_KEY, path: NEW_COPY }),
       expect.objectContaining({ sourceKey: OTHER_KEY, path: OTHER_COPY }),
     ]);
@@ -685,7 +685,23 @@ describe('SubtitleExtractorTask heals a sidecar the media server answers 404 for
     await run(harness);
 
     expect(harness.mintSubtitles).not.toHaveBeenCalled();
-    expect(harness.upsertSubtitles).not.toHaveBeenCalled();
+    expect(harness.replaceProgramSubtitles).not.toHaveBeenCalled();
+  });
+
+  it('clears the rows when the item lists no subtitles any more', async () => {
+    const harness = makeHarness({
+      sourceType: 'plex',
+      fetchResults: { [OLD_KEY]: { type: 'not_found' } },
+      minted: [],
+      subtitles: [missingRow()],
+    });
+
+    await run(harness);
+
+    expect(harness.replaceProgramSubtitles).toHaveBeenCalledExactlyOnceWith(
+      PROGRAM_ID,
+      [],
+    );
   });
 
   it('does not loop when the new stream answers 404 too', async () => {
@@ -702,8 +718,8 @@ describe('SubtitleExtractorTask heals a sidecar the media server answers 404 for
     await run(harness);
 
     expect(harness.apiClient.getEpisode).toHaveBeenCalledTimes(1);
-    expect(harness.upsertSubtitles).toHaveBeenCalledTimes(1);
-    expect(harness.upsertSubtitles.mock.calls[0]?.[0]).toEqual([
+    expect(harness.replaceProgramSubtitles).toHaveBeenCalledTimes(1);
+    expect(harness.replaceProgramSubtitles.mock.calls[0]?.[1]).toEqual([
       expect.objectContaining({ sourceKey: NEW_KEY, path: null }),
     ]);
     expect(harness.fetchToCache).toHaveBeenCalledTimes(2);

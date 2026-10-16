@@ -106,8 +106,11 @@ export class ProgramDB implements IProgramDB {
     return this.metadataRepo.setSubtitlePath(uuid, path);
   }
 
-  upsertSubtitles(subtitles: NewProgramSubtitles[]): Promise<void> {
-    return this.metadataRepo.upsertSubtitles(subtitles);
+  replaceProgramSubtitles(
+    programId: string,
+    subtitles: NewProgramSubtitles[],
+  ): Promise<void> {
+    return this.metadataRepo.replaceProgramSubtitles(programId, subtitles);
   }
 
   getProgramsByIds(

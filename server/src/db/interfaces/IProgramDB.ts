@@ -65,11 +65,15 @@ export interface IProgramDB {
   setSubtitlePath(uuid: string, path: string): Promise<void>;
 
   /**
-   * Replaces programs' subtitle rows with freshly minted ones, as a scan does:
-   * sidecar rows are replaced, embedded ones matched by stream index, and
-   * cached copies the new rows no longer use are deleted.
+   * Replaces a program's subtitle rows with freshly minted ones, as a scan
+   * does: sidecar rows are replaced, embedded ones matched by stream index,
+   * and cached copies the new rows no longer use are deleted. An empty list
+   * removes them all.
    */
-  upsertSubtitles(subtitles: NewProgramSubtitles[]): Promise<void>;
+  replaceProgramSubtitles(
+    programId: string,
+    subtitles: NewProgramSubtitles[],
+  ): Promise<void>;
 
   getProgramsByIds(
     ids: string[] | readonly string[],

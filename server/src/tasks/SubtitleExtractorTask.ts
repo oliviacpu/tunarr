@@ -450,7 +450,8 @@ export class SubtitleExtractorTask extends Task2<
       }
     }
 
-    await this.programDB.upsertSubtitles(minted);
+    // By program, so an item that lists no subtitles any more clears its rows
+    await this.programDB.replaceProgramSubtitles(dbProgram.uuid, minted);
 
     const replacement = minted.find(
       (row) =>
