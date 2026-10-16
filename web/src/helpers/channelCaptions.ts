@@ -33,6 +33,11 @@ export function hasOwnCaptionLook(
   );
 }
 
+export type CaptionLook = {
+  appearance: CaptionAppearanceSettings;
+  alignment: CaptionAlignment;
+};
+
 // The look a channel's captions have: its own settings over the global ones
 export function channelCaptionLook(
   global: Pick<
@@ -40,7 +45,7 @@ export function channelCaptionLook(
     'hdhrCaptionAppearance' | 'hdhrCaptionAlignment'
   >,
   captions: ChannelCaptions | null | undefined,
-): { appearance: CaptionAppearanceSettings; alignment: CaptionAlignment } {
+): CaptionLook {
   return {
     appearance: {
       ...global.hdhrCaptionAppearance,

@@ -29,8 +29,9 @@ import { Controller } from 'react-hook-form';
 import {
   getApiFfmpegSettingsOptions,
   getApiFfmpegSettingsQueryKey,
-  putApiFfmpegSettingsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
+import { putApiFfmpegSettings } from '../../generated/sdk.gen.ts';
+import type { CaptionLook } from '../../helpers/channelCaptions.ts';
 import {
   channelCaptionLook,
   hasOwnCaptionLook,
@@ -56,7 +57,28 @@ export function ChannelCaptionsField() {
   const [confirmCopy, setConfirmCopy] = useState(false);
 
   const copyToAll = useMutation({
-    ...putApiFfmpegSettingsMutation(),
+    // Over the latest settings, not the ones this page loaded, so a change made
+    // elsewhere since then isn't undone
+    mutationFn: async (look: CaptionLook) => {
+      const latest = await queryClient.fetchQuery({
+        ...getApiFfmpegSettingsOptions(),
+        staleTime: 0,
+      });
+      const { data } = await putApiFfmpegSettings({
+        body: {
+          ...latest,
+          hdhrCaptionAppearance: look.appearance,
+          hdhrCaptionAlignment: look.alignment,
+        },
+        throwOnError: true,
+      });
+      return data;
+    },
+    onError: () => {
+      snackbar.enqueueSnackbar(t`Couldn't copy the caption look`, {
+        variant: 'error',
+      });
+    },
     onSuccess: () => {
       snackbar.enqueueSnackbar(
         t`Every channel without its own caption look now uses this one`,
@@ -218,13 +240,7 @@ export function ChannelCaptionsField() {
                   variant="contained"
                   onClick={() => {
                     setConfirmCopy(false);
-                    copyToAll.mutate({
-                      body: {
-                        ...global,
-                        hdhrCaptionAppearance: look.appearance,
-                        hdhrCaptionAlignment: look.alignment,
-                      },
-                    });
+                    copyToAll.mutate(look);
                   }}
                 >
                   <Trans>Copy</Trans>
