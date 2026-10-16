@@ -413,6 +413,27 @@ export class SubtitleExtractorTask extends Task2<
       mediaSource.type,
     );
 
+    // The media server still lists the stream it just answered 404 for: it
+    // hasn't rescanned the item since the file changed, so there is nothing
+    // new to save. The rows and whatever copy there is stay as they are (the
+    // best subtitle available now) until it does; this is checked again at
+    // most once an hour, for a program about to air.
+    if (
+      minted.some(
+        (row) =>
+          row.subtitleType === 'sidecar' && row.sourceKey === missing.sourceKey,
+      )
+    ) {
+      this.logger.info(
+        '%s still lists subtitle stream %s for "%s" but no longer serves it; waiting for %s to rescan the item.',
+        server,
+        missingId,
+        dbProgram.title,
+        server,
+      );
+      return;
+    }
+
     // Sidecars that are still the same stream keep the file they have; the
     // others are resolved on shared storage or downloaded, as a scan does.
     const kept = new Map(
