@@ -31,7 +31,6 @@ import {
   getApiFfmpegSettingsQueryKey,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { putApiFfmpegSettings } from '../../generated/sdk.gen.ts';
-import type { CaptionLook } from '../../helpers/channelCaptions.ts';
 import {
   channelCaptionLook,
   hasOwnCaptionLook,
@@ -57,13 +56,15 @@ export function ChannelCaptionsField() {
   const [confirmCopy, setConfirmCopy] = useState(false);
 
   const copyToAll = useMutation({
-    // Over the latest settings, not the ones this page loaded, so a change made
-    // elsewhere since then isn't undone
-    mutationFn: async (look: CaptionLook) => {
+    // From the latest settings, not the ones this page loaded, so a change made
+    // elsewhere since then isn't undone: neither another setting nor a caption
+    // field the channel doesn't set itself
+    mutationFn: async (captions: ChannelCaptions | null) => {
       const latest = await queryClient.fetchQuery({
         ...getApiFfmpegSettingsOptions(),
         staleTime: 0,
       });
+      const look = channelCaptionLook(latest, captions);
       const { data } = await putApiFfmpegSettings({
         body: {
           ...latest,
@@ -240,7 +241,7 @@ export function ChannelCaptionsField() {
                   variant="contained"
                   onClick={() => {
                     setConfirmCopy(false);
-                    copyToAll.mutate(look);
+                    copyToAll.mutate(captions);
                   }}
                 >
                   <Trans>Copy</Trans>
