@@ -96,3 +96,23 @@ Leave the field empty for one audio track, the program's own, as before.
 
     HLS Direct v2 copies each program's own tracks unchanged, so it can't offer a fixed set; the field is disabled for
     that mode. HLS, HLS alt and MPEG-TS support it.
+
+## Captions for this channel
+
+**Captions for this channel** (under *Audio & Subtitles* on the channel's Streaming tab) tries
+[closed-caption options](../ffmpeg/index.md#closed-captions-for-hdhomerun-clients) on one channel, a test channel for
+example, without changing them for every channel. Closed captions for HDHomeRun clients must be turned on in the
+FFmpeg settings; that switch stays the one for every channel. Changes take effect from the channel's next program.
+
+- **Test pattern on this channel:** replaces this channel's captions with the numbered
+  [test pattern](../ffmpeg/index.md#caption-appearance-experimental). Other channels keep their captions. When the
+  FFmpeg settings' test pattern is on, every channel shows it, whatever this switch says.
+- **Use own caption look:** gives the channel its own caption alignment and
+  [caption appearance](../ffmpeg/index.md#caption-appearance-experimental). The fields start from the global look, and
+  only this channel's captions change. Turned off, the channel follows the global look again.
+- **Copy to all channels:** makes this channel's look the global one, for every channel without a look of its own.
+  Use it once a look works in your player.
+- **Reset to global:** drops the channel's own look and keeps its test pattern switch.
+
+A setting the channel doesn't change follows the global one, so a later change on the FFmpeg settings page still
+reaches it.
