@@ -9829,6 +9829,20 @@ export type GetApiFfmpegSettingsResponses = {
         hlsTsInitialBurstSeconds: number;
         hdhrClosedCaptions: boolean;
         hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionAppearance: {
+            textColor: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundColor: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundOpacity: 'opaque' | 'semiTransparent' | 'transparent';
+            bottomRow: number;
+            topRow: number;
+            maxLines: number;
+            lineWidth: number;
+            upperCase: boolean;
+            mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+            keepStyles: boolean;
+            keepTopPlacement: boolean;
+        };
+        hdhrCaptionTestPattern: boolean;
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9881,6 +9895,20 @@ export type PostApiFfmpegSettingsResponses = {
         hlsTsInitialBurstSeconds: number;
         hdhrClosedCaptions: boolean;
         hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionAppearance: {
+            textColor: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundColor: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundOpacity: 'opaque' | 'semiTransparent' | 'transparent';
+            bottomRow: number;
+            topRow: number;
+            maxLines: number;
+            lineWidth: number;
+            upperCase: boolean;
+            mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+            keepStyles: boolean;
+            keepTopPlacement: boolean;
+        };
+        hdhrCaptionTestPattern: boolean;
         enableSubtitleExtraction: boolean;
     };
 };
@@ -9912,6 +9940,20 @@ export type PutApiFfmpegSettingsData = {
         hlsTsInitialBurstSeconds?: number;
         hdhrClosedCaptions?: boolean;
         hdhrCaptionAlignment?: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionAppearance?: {
+            textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+            bottomRow?: number;
+            topRow?: number;
+            maxLines?: number;
+            lineWidth?: number;
+            upperCase?: boolean;
+            mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+            keepStyles?: boolean;
+            keepTopPlacement?: boolean;
+        };
+        hdhrCaptionTestPattern?: boolean;
         enableSubtitleExtraction?: boolean;
     };
     path?: never;
@@ -9960,6 +10002,20 @@ export type PutApiFfmpegSettingsResponses = {
         hlsTsInitialBurstSeconds: number;
         hdhrClosedCaptions: boolean;
         hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionAppearance: {
+            textColor: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundColor: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundOpacity: 'opaque' | 'semiTransparent' | 'transparent';
+            bottomRow: number;
+            topRow: number;
+            maxLines: number;
+            lineWidth: number;
+            upperCase: boolean;
+            mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+            keepStyles: boolean;
+            keepTopPlacement: boolean;
+        };
+        hdhrCaptionTestPattern: boolean;
         enableSubtitleExtraction: boolean;
     };
 };

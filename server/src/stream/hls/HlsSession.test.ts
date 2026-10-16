@@ -91,6 +91,7 @@ const channelUuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 function makeSession(
   transcodeDirectory: string,
   overrides: Partial<HlsSessionOptions> = {},
+  ffmpegSettings: typeof defaultFfmpegSettings = defaultFfmpegSettings,
 ): HlsSession {
   const channel = {
     uuid: channelUuid,
@@ -108,7 +109,7 @@ function makeSession(
     channel,
     options,
     {} as StreamProgramCalculator,
-    { ffmpegSettings: () => defaultFfmpegSettings } as unknown as ISettingsDB,
+    { ffmpegSettings: () => ffmpegSettings } as unknown as ISettingsDB,
     {} as OnDemandChannelService,
     (() => ({}) as unknown as ProgramStream) as (
       ctx: PlayerContext,
@@ -144,8 +145,9 @@ describe('HlsSession', () => {
       captions: ProgramCaptions,
       ptsOffset: number,
       segmentOptions: Parameters<typeof makeTsSegment>[0],
+      ffmpegSettings = defaultFfmpegSettings,
     ) {
-      const session = makeSession(dir.name);
+      const session = makeSession(dir.name, {}, ffmpegSettings);
       await fs.mkdir(session.workingDirectory, { recursive: true });
       await fs.writeFile(
         path.join(session.workingDirectory, 'data000001.ts'),
@@ -182,6 +184,29 @@ describe('HlsSession', () => {
       expect(pairs[0]).toEqual([0x80, 0x80]);
       expect(pairs[40]).toEqual(EndOfCaption);
       expect(pairs.findIndex((p) => p[0] === 0x94 && p[1] === 0x2f)).toBe(40);
+    });
+
+    // Read for each program, so a change applies from the next one
+    test('lays the captions out in the appearance the settings have', async () => {
+      const ptsOffset = 900_000;
+      const served = await serve(
+        captions(30000 / 1001),
+        ptsOffset,
+        { firstPts: ptsOffset, frames: 60 },
+        {
+          ...defaultFfmpegSettings,
+          hdhrCaptionAppearance: {
+            ...defaultFfmpegSettings.hdhrCaptionAppearance,
+            textColor: 'red',
+          },
+        },
+      );
+      if (!served) {
+        throw new Error('not captioned');
+      }
+
+      // Red's mid-row code, 0x11 0x28, with parity
+      expect(framePairs(served)).toContainEqual([0x91, 0xa8]);
     });
 
     test('serves the whole notice although a first program starts late', async () => {

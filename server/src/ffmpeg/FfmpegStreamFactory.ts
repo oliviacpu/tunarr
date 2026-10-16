@@ -36,6 +36,7 @@ import { match, P } from 'ts-pattern';
 import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLineup.ts';
 import type { IChannelDB } from '../db/interfaces/IChannelDB.ts';
 import { FeatureFlagService } from '../services/FeatureFlagService.ts';
+import { captionTestPattern } from '../stream/captions/CaptionTestPattern.ts';
 import type { ProgramCaptions } from '../stream/captions/ProgramCaptions.ts';
 import {
   exactFrameRate,
@@ -700,7 +701,17 @@ export class FfmpegStreamFactory {
         language:
           this.ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ??
           'eng',
+        appearance: {
+          ...this.ffmpegSettings.hdhrCaptionAppearance,
+          alignment: this.ffmpegSettings.hdhrCaptionAlignment,
+        },
       });
+    }
+
+    // The caption test pattern replaces what the program would show, to see
+    // which appearance features a player honours. Burn-in is left as it is.
+    if (captionsOn && captions && this.ffmpegSettings.hdhrCaptionTestPattern) {
+      captions = captionTestPattern(captions);
     }
 
     let watermarkSource: Nullable<WatermarkInputSource> = null;

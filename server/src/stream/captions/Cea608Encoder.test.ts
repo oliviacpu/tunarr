@@ -1,6 +1,6 @@
 import type {
+  CaptionAppearance,
   CaptionLayout,
-  CaptionLayoutOptions,
   CcPair,
 } from './Cea608Encoder.ts';
 import {
@@ -14,6 +14,10 @@ import {
   NoCaptionsNoticeText,
   noCaptionsNoticeStartMs,
 } from './ProgramCaptions.ts';
+import {
+  decodeScreens,
+  screenAt,
+} from '../../testing/captions/Cea608TestDecoder.ts';
 
 const FrameRate = 30;
 const frameMs = 1000 / FrameRate;
@@ -38,12 +42,12 @@ function framePairs(
   cues: Parameters<typeof buildCaptionSchedule>[0],
   frames: number,
   firstFrameMs = 0,
-  layout?: CaptionLayoutOptions,
+  appearance?: Partial<CaptionAppearance>,
 ) {
   const schedule = buildCaptionSchedule(cues, {
     firstFrameMs,
     frameRate: FrameRate,
-    layout,
+    appearance,
   });
   return Array.from({ length: frames }, (_, k) =>
     withoutParity(schedule.pairAt(firstFrameMs + k * frameMs)),
@@ -146,7 +150,7 @@ function decodeCaptions(pairs: number[][]): DecodedRow[][] {
 
 const decode = (
   text: string,
-  layout?: CaptionLayoutOptions,
+  layout?: Partial<CaptionAppearance>,
   endMs = 6000,
 ): DecodedRow[][] =>
   decodeCaptions(
@@ -448,6 +452,378 @@ describe('caption styles', () => {
   });
 });
 
+// The rows of each caption shown, as the test decoder reads them
+function shownCaptions(
+  cues: Parameters<typeof buildCaptionSchedule>[0],
+  appearance?: Partial<CaptionAppearance>,
+) {
+  return decodeScreens(framePairs(cues, 30 * 20, 0, appearance))
+    .filter((screen) => screen.rows.length > 0)
+    .map((screen) => screen.rows);
+}
+
+const cue = (text: string) => [{ startMs: 3000, endMs: 6000, text }];
+const rowTexts = (captions: ReturnType<typeof shownCaptions>) =>
+  captions.map((rows) => rows.map((r) => r.text));
+
+describe('caption appearance', () => {
+  test('draws text in the chosen colour, from the start of each line', () => {
+    expect(
+      rowTexts(shownCaptions(cue('Hello\nthere'), { textColor: 'red' })),
+    ).toEqual([['[red]Hello', '[red]there']]);
+  });
+
+  // 608's italics are white, so italic words lose the colour
+  test('shows italics white and goes back to the colour after them', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('<i>Psst,</i> said <u>he</u>'), {
+          textColor: 'green',
+        }),
+      ),
+    ).toEqual([['[i]Psst,[green]said[green u]he']]);
+  });
+
+  test('puts a box of the chosen colour behind each line', () => {
+    expect(
+      rowTexts(shownCaptions(cue('Hi\nthere'), { backgroundColor: 'blue' })),
+    ).toEqual([[' [bg blue]Hi', ' [bg blue]there']]);
+  });
+
+  test('sends semi-transparent and transparent boxes', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'black',
+          backgroundOpacity: 'semiTransparent',
+        }),
+      ),
+    ).toEqual([[' [bg black semi]Hi']]);
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'red',
+          backgroundOpacity: 'transparent',
+        }),
+      ),
+    ).toEqual([[' [bg transparent]Hi']]);
+  });
+
+  test("sends no box code for the player's own box, whatever the opacity", () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'player',
+          backgroundOpacity: 'semiTransparent',
+        }),
+      ),
+    ).toEqual([['Hi']]);
+  });
+
+  // A colour code ends flashing, so it has to come first
+  test('sends the box, then the colour, then flash', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'blue',
+          textColor: 'yellow',
+          flash: true,
+        }),
+      ),
+    ).toEqual([[' [bg blue][yellow][flash]Hi']]);
+  });
+
+  test('counts the codes in the line width', () => {
+    // 32 columns: one line plain, two with a box
+    const line = 'Thirty-two characters, exactly.!';
+    expect(line).toHaveLength(32);
+    expect(shownCaptions(cue(line))[0]).toHaveLength(1);
+    expect(
+      shownCaptions(cue(line), { backgroundColor: 'blue' })[0],
+    ).toHaveLength(2);
+  });
+
+  test('ends bottom captions on the chosen row', () => {
+    const [rows] = shownCaptions(cue('One\nTwo'), { bottomRow: 11 });
+    expect(rows?.map((r) => r.row)).toEqual([10, 11]);
+  });
+
+  test('starts top captions on the chosen row', () => {
+    const [rows] = shownCaptions(cue('{\\an8}One\nTwo'), { topRow: 5 });
+    expect(rows?.map((r) => r.row)).toEqual([5, 6]);
+  });
+
+  test('keeps every line on screen whatever the rows', () => {
+    expect(
+      shownCaptions(cue('One\nTwo'), { bottomRow: 1 })[0]?.map((r) => r.row),
+    ).toEqual([1, 2]);
+    expect(
+      shownCaptions(cue('{\\an8}One\nTwo'), { topRow: 15 })[0]?.map(
+        (r) => r.row,
+      ),
+    ).toEqual([14, 15]);
+  });
+
+  test('puts up to the chosen number of lines in a caption', () => {
+    const text = 'One\nTwo\nThree\nFour';
+    expect(rowTexts(shownCaptions(cue(text)))).toEqual([
+      ['One', 'Two'],
+      ['Three', 'Four'],
+    ]);
+    const [four] = shownCaptions(cue(text), { maxLines: 4 });
+    expect(four?.map((r) => [r.row, r.text])).toEqual([
+      [12, 'One'],
+      [13, 'Two'],
+      [14, 'Three'],
+      [15, 'Four'],
+    ]);
+  });
+
+  test('wraps lines at the chosen width', () => {
+    const captions = shownCaptions(
+      cue('A sentence long enough to need wrapping at twenty columns.'),
+      { lineWidth: 20, maxLines: 4 },
+    );
+    const widths = captions.flat().map((r) => r.width);
+    expect(Math.max(...widths)).toBeLessThanOrEqual(20);
+    expect(widths.length).toBeGreaterThan(2);
+  });
+
+  test('shows the text in capitals', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Die Straße, <i>jetzt</i>'), { upperCase: true }),
+      ),
+    ).toEqual([['DIE STRASSE,[i]JETZT']]);
+  });
+
+  test("leaves out the file's styles and top placement when asked", () => {
+    const [rows] = shownCaptions(cue('{\\an8}<i>Hi</i> there'), {
+      keepStyles: false,
+      keepTopPlacement: false,
+    });
+    expect(rows?.map((r) => [r.row, r.text])).toEqual([[15, 'Hi there']]);
+  });
+
+  test("gives a cue its own appearance over the schedule's", () => {
+    const captions = shownCaptions(
+      [
+        { startMs: 1000, endMs: 3000, text: 'Plain' },
+        {
+          startMs: 4000,
+          endMs: 6000,
+          text: 'Mine',
+          appearance: { textColor: 'cyan' },
+        },
+      ],
+      { backgroundColor: 'red' },
+    );
+    expect(rowTexts(captions)).toEqual([
+      [' [bg red]Plain'],
+      [' [bg red][cyan]Mine'],
+    ]);
+  });
+});
+
+const ResumeDirectCaptioning = [0x14, 0x29];
+const CarriageReturn = [0x14, 0x2d];
+const RollUp2 = [0x14, 0x25];
+const RollUp3 = [0x14, 0x26];
+
+// Each row's text on `frame`
+const textsAt = (pairs: number[][], frame: number) =>
+  screenAt(decodeScreens(pairs), frame).map((r) => [r.row, r.text]);
+
+describe('paint-on captions', () => {
+  test('draws each caption as it arrives, from its start frame', () => {
+    const pairs = framePairs(
+      [{ startMs: 2000, endMs: 4000, text: 'Hello there' }],
+      150,
+      0,
+      { mode: 'paintOn' },
+    );
+
+    expect(indexOfPair(pairs, ResumeDirectCaptioning)).toBeLessThan(60);
+    // Erased on its start frame, which is where FFmpeg's decoder times it from
+    expect(pairs[60]).toEqual(EraseDisplayedMemory);
+    const screens = decodeScreens(pairs).filter((s) => s.rows.length > 0);
+    expect(screens[0]?.fromFrame).toBe(62);
+    expect(textsAt(pairs, 100)).toEqual([[15, 'Hello there']]);
+    expect(textsAt(pairs, 120)).toEqual([]);
+    expect(indexOfPair(pairs, EndOfCaption)).toBe(-1);
+  });
+
+  test('replaces one caption with the next, which erases on its start', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 2000, text: 'First' },
+        { startMs: 2000, endMs: 3000, text: 'Second' },
+      ],
+      120,
+      0,
+      { mode: 'paintOn' },
+    );
+
+    expect(textsAt(pairs, 55)).toEqual([[15, 'First']]);
+    expect(pairs[60]).toEqual(EraseDisplayedMemory);
+    expect(textsAt(pairs, 85)).toEqual([[15, 'Second']]);
+    expect(indexOfPair(pairs, EraseDisplayedMemory, 61)).toBe(90);
+  });
+
+  test('leaves out a cue already under way that ends before it can start', () => {
+    const pairs = framePairs(
+      [{ startMs: 0, endMs: 1010, text: 'Gone' }],
+      60,
+      1000,
+      { mode: 'paintOn' },
+    );
+    expect(decodeScreens(pairs).filter((s) => s.rows.length > 0)).toEqual([]);
+  });
+});
+
+describe('roll-up captions', () => {
+  test("scrolls a cue's lines up from the bottom, keeping the chosen number of rows", () => {
+    const pairs = framePairs(
+      [{ startMs: 2000, endMs: 5000, text: 'One\nTwo\nThree' }],
+      180,
+      0,
+      { mode: 'rollUp2' },
+    );
+
+    // The mode is set before the cue, with the screen cleared
+    expect(indexOfPair(pairs, EraseDisplayedMemory)).toBeLessThan(60);
+    expect(indexOfPair(pairs, RollUp2)).toBeLessThan(60);
+    // The first carriage return on its start frame
+    expect(pairs[60]).toEqual(CarriageReturn);
+    expect(textsAt(pairs, 140)).toEqual([
+      [14, 'Two'],
+      [15, 'Three'],
+    ]);
+    expect(textsAt(pairs, 151)).toEqual([]);
+  });
+
+  test('keeps the last lines up for the next cue to scroll, within 2 s', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 2000, text: 'One' },
+        { startMs: 3500, endMs: 4500, text: 'Two' },
+        // More than 2 s later: the screen is cleared before it
+        { startMs: 7000, endMs: 8000, text: 'Three' },
+      ],
+      270,
+      0,
+      { mode: 'rollUp3' },
+    );
+
+    expect(textsAt(pairs, 90)).toEqual([[15, 'One']]);
+    expect(textsAt(pairs, 130)).toEqual([
+      [14, 'One'],
+      [15, 'Two'],
+    ]);
+    expect(textsAt(pairs, 200)).toEqual([]);
+    expect(textsAt(pairs, 230)).toEqual([[15, 'Three']]);
+    // The mode is set once
+    expect(pairs.filter((p) => p[0] === 0x14 && p[1] === 0x26)).toHaveLength(1);
+    expect(indexOfPair(pairs, RollUp3)).toBeLessThan(30);
+  });
+
+  test('rolls up to the chosen bottom row', () => {
+    const pairs = framePairs(
+      [{ startMs: 1000, endMs: 4000, text: 'One\nTwo\nThree' }],
+      150,
+      0,
+      { mode: 'rollUp3', bottomRow: 11 },
+    );
+    expect(textsAt(pairs, 110)).toEqual([
+      [9, 'One'],
+      [10, 'Two'],
+      [11, 'Three'],
+    ]);
+  });
+});
+
+// Paint-on and roll-up send their text while the cue is up
+describe('drawn captions that take longer to send than they last', () => {
+  const long =
+    'A line long enough to take a while\nAnd a second one just as long\nA third line of text to send\nAnd a fourth line to finish';
+  const cues = [
+    { startMs: 1000, endMs: 2000, text: long },
+    { startMs: 2100, endMs: 3500, text: 'Next' },
+  ];
+
+  test('paint-on: cuts the text off at the end, and the next cue starts on time', () => {
+    const pairs = framePairs(cues, 150, 0, { mode: 'paintOn' });
+
+    // Cleared on its end frame, not later
+    expect(pairs[60]).toEqual(EraseDisplayedMemory);
+    expect(textsAt(pairs, 61)).toEqual([]);
+    // The next cue erases on its start frame and its text follows
+    expect(pairs[63]).toEqual(EraseDisplayedMemory);
+    expect(textsAt(pairs, 70)).toEqual([[15, 'Next']]);
+  });
+
+  test('roll-up: sends nothing of the cue after its end, and the next cue starts on time', () => {
+    const pairs = framePairs(cues, 150, 0, { mode: 'rollUp4' });
+
+    // The frames between the two cues carry nothing
+    expect(pairs.slice(60, 63)).toEqual([
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ]);
+    expect(pairs[63]).toEqual(CarriageReturn);
+    expect(textsAt(pairs, 70).at(-1)).toEqual([15, 'Next']);
+  });
+});
+
+describe('switching modes', () => {
+  // pop-on, roll-up, paint-on, pop-on, each cue in its own mode
+  const cues = [
+    { startMs: 1000, endMs: 2000, text: 'Pop', appearance: {} },
+    {
+      startMs: 3000,
+      endMs: 4000,
+      text: 'Roll',
+      appearance: { mode: 'rollUp2' as const },
+    },
+    {
+      startMs: 5000,
+      endMs: 6000,
+      text: 'Paint',
+      appearance: { mode: 'paintOn' as const },
+    },
+    { startMs: 7000, endMs: 8000, text: 'Pop again', appearance: {} },
+  ];
+
+  test('shows each cue in its own mode, for its own time', () => {
+    const pairs = framePairs(cues, 270);
+
+    expect(textsAt(pairs, 50)).toEqual([[15, 'Pop']]);
+    expect(textsAt(pairs, 70)).toEqual([]);
+    expect(textsAt(pairs, 110)).toEqual([[15, 'Roll']]);
+    expect(textsAt(pairs, 130)).toEqual([]);
+    expect(textsAt(pairs, 170)).toEqual([[15, 'Paint']]);
+    expect(textsAt(pairs, 190)).toEqual([]);
+    expect(textsAt(pairs, 230)).toEqual([[15, 'Pop again']]);
+  });
+
+  // FFmpeg's decoder takes a carriage return in pop-on mode as a roll-up,
+  // wiping rows and showing the hidden caption early
+  test('never sends a carriage return while loading a pop-on caption', () => {
+    const pairs = framePairs(cues, 270);
+    let mode = '';
+    for (const [a, b] of pairs) {
+      if (a === 0x14 && b === 0x20) {
+        mode = 'popOn';
+      } else if (a === 0x14 && (b === 0x29 || (b >= 0x25 && b <= 0x27))) {
+        mode = 'other';
+      } else if (a === 0x14 && b === 0x2d) {
+        expect(mode).toBe('other');
+      }
+    }
+  });
+});
+
 describe('caption placement', () => {
   test('puts a cue with a top alignment override at the top', () => {
     expect(decode('{\\an8}Top of the screen')[0]?.map((r) => r.row)).toEqual([
@@ -507,6 +883,34 @@ describe('the no-captions notice', () => {
     expect(indexOfPair(pairs, ResumeCaptionLoading)).toBe(13);
     expect(indexOfPair(pairs, EndOfCaption)).toBe(30);
     expect(indexOfPair(pairs, EraseDisplayedMemory)).toBe(150);
+  });
+
+  test('loads in full before it shows, whatever the appearance', () => {
+    for (const appearance of [
+      { backgroundColor: 'blue', textColor: 'red', flash: true },
+      { lineWidth: 20, alignment: 'centeredLines', backgroundColor: 'white' },
+      { maxLines: 4, lineWidth: 20, textColor: 'magenta' },
+    ] as const) {
+      const startMs = noCaptionsNoticeStartMs(FrameRate, appearance);
+      const pairs = framePairs(
+        [
+          {
+            startMs,
+            endMs: startMs + NoCaptionsNoticeMs,
+            text: NoCaptionsNoticeText,
+          },
+        ],
+        30 * 7,
+        0,
+        appearance,
+      );
+      expect(indexOfPair(pairs, EndOfCaption)).toBe(
+        Math.round((startMs * FrameRate) / 1000),
+      );
+      expect(indexOfPair(pairs, ResumeCaptionLoading)).toBeGreaterThanOrEqual(
+        2,
+      );
+    }
   });
 
   // The notice loads clear of the first 2 frame slots, which a program whose

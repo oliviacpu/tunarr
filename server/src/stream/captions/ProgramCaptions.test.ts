@@ -8,6 +8,7 @@ import type {
 import { createOfflineStreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import type { ProgramType } from '../../db/schema/Program.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
+import { captionLoadFrames } from './Cea608Encoder.ts';
 import {
   exactFrameRate,
   firstFrameMs,
@@ -212,6 +213,19 @@ describe('noCaptionsNoticeStartMs', () => {
     expect(noCaptionsNoticeStartMs(24000 / 1001)).toBe(1000);
     expect(noCaptionsNoticeStartMs(25)).toBe(1000);
     expect(noCaptionsNoticeStartMs(30000 / 1001)).toBe(1000);
+  });
+
+  test('waits for a longer load, with 5 frames to spare', () => {
+    const heavy = {
+      backgroundColor: 'blue',
+      textColor: 'red',
+      lineWidth: 20,
+    } as const;
+    const load = captionLoadFrames('No captions for this program', heavy);
+    expect(load).toBeGreaterThan(18);
+    expect(noCaptionsNoticeStartMs(24000 / 1001, heavy)).toBe(
+      Math.ceil(((load + 5) / (24000 / 1001)) * 1000),
+    );
   });
 
   // Loading needs up to 18 frames, after 2 of margin for a late video start
