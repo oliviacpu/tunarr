@@ -1647,6 +1647,7 @@ export class TVGuideService {
       ).uuid,
       subtitlesEnabled: false,
       audioTracks: null,
+      captions: null,
       streamSelectionProfileId: null,
     };
 

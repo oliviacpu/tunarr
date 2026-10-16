@@ -171,6 +171,30 @@ export const CaptionAppearanceSchema = z.object({
 
 export type CaptionAppearanceSettings = z.infer<typeof CaptionAppearanceSchema>;
 
+// Some of the appearance settings, each one optional and without a default: a
+// channel's own caption look sets only what it changes, and the rest comes
+// from the global settings. (A default inside an optional field would fill in
+// every field, overriding the global look with the defaults.) Keep the fields
+// in step with CaptionAppearanceSchema.
+export const CaptionAppearanceOverridesSchema = z.object({
+  textColor: z.enum(CaptionTextColors).optional(),
+  backgroundColor: z.enum(CaptionBackgroundColors).optional(),
+  backgroundOpacity: z.enum(CaptionBackgroundOpacities).optional(),
+  bottomRow: z.number().int().min(1).max(15).optional(),
+  topRow: z.number().int().min(1).max(15).optional(),
+  maxLines: z.number().int().min(2).max(4).optional(),
+  lineWidth: z.number().int().min(20).max(32).optional(),
+  upperCase: z.boolean().optional(),
+  mode: z.enum(CaptionModes).optional(),
+  keepStyles: z.boolean().optional(),
+  keepTopPlacement: z.boolean().optional(),
+  overlappingCues: z.enum(CaptionOverlaps).optional(),
+});
+
+export type CaptionAppearanceOverrides = z.infer<
+  typeof CaptionAppearanceOverridesSchema
+>;
+
 export const FfmpegNumericLogLevels: Record<
   TupleToUnion<typeof FfmpegLogLevels>,
   number

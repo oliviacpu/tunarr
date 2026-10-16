@@ -209,6 +209,32 @@ describe('HlsSession', () => {
       expect(framePairs(served)).toContainEqual([0x91, 0xa8]);
     });
 
+    // A channel's own look (Channel.captions), resolved when its program
+    // started, wins over the global settings
+    test('lays the captions out in the look their channel has', async () => {
+      const ptsOffset = 900_000;
+      const served = await serve(
+        {
+          ...captions(30000 / 1001),
+          appearance: {
+            ...defaultFfmpegSettings.hdhrCaptionAppearance,
+            alignment: 'centeredBlock',
+            textColor: 'red',
+          },
+        },
+        ptsOffset,
+        { firstPts: ptsOffset, frames: 60 },
+        // The global look stays white
+        defaultFfmpegSettings,
+      );
+      if (!served) {
+        throw new Error('not captioned');
+      }
+
+      // Red's mid-row code, 0x11 0x28, with parity
+      expect(framePairs(served)).toContainEqual([0x91, 0xa8]);
+    });
+
     test('serves the whole notice although a first program starts late', async () => {
       const notice = noCaptionsNotice(
         {

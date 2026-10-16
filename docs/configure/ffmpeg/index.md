@@ -139,6 +139,8 @@ Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. T
 
 Everything CEA-608 captions can ask for, under **Caption appearance (experimental)** below Caption Alignment. A player may ignore any of it: Plex draws captions with its own decoder. Turn on the **Test pattern** to see what yours shows. Changes take effect from the next program.
 
+To try a look or the test pattern on one channel without changing every channel, use the channel's own [caption settings](../channels/transcoding.md#captions-for-this-channel), then **Copy to all channels** once the look works.
+
 - **Text color:** white, green, blue, cyan, red, yellow or magenta. Italic words are always white, which is how CEA-608 defines italics.
 - **Box behind the text:** the player's own (the default: Tunarr sends nothing), or black, white, green, blue, cyan, red, yellow or magenta. **Box opacity** makes a chosen box solid, see-through, or none at all (the text alone). The box holds to the end of every line: Plex's family of caption decoders turns the box back to black when the previous caption is cleared, so Tunarr loads each boxed line wholly before or after that clear (test pattern sample 39). In very quick dialogue, where a caption only just loads in time, Tunarr keeps the caption on time instead, and the end of a line can still lose its box.
 - **How captions appear:** **Pop-on** (the default) shows each caption whole, on its start frame. **Roll-up** scrolls lines up from the bottom row with 2, 3 or 4 rows on screen, as live TV captions do; a cue's lines stay together, and the last lines stay up for up to 2 seconds for the next subtitle to scroll. **Paint-on** draws each caption's letters as they arrive.
@@ -150,7 +152,7 @@ Everything CEA-608 captions can ask for, under **Caption appearance (experimenta
 
 A box, a color or narrower lines make each caption take longer to send, so in fast dialogue a caption can come a little late. Roll-up and paint-on send a caption's text while it is on screen, at two characters a frame, so a long caption with a short time is cut off at its end.
 
-**Test pattern:** replaces every program's captions with 39 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples.
+**Test pattern:** replaces every program's captions with 39 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples. A channel's own [**Test pattern on this channel**](../channels/transcoding.md#captions-for-this-channel) switch shows it on that channel only.
 
 | # | Sample |
 | --- | --- |

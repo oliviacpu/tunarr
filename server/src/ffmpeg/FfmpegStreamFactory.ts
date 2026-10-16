@@ -37,6 +37,11 @@ import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLi
 import type { IChannelDB } from '../db/interfaces/IChannelDB.ts';
 import { FeatureFlagService } from '../services/FeatureFlagService.ts';
 import { captionTestPattern } from '../stream/captions/CaptionTestPattern.ts';
+import {
+  channelCaptionAppearance,
+  channelCaptionTestPattern,
+  channelHasOwnCaptionLook,
+} from '../stream/captions/channelCaptions.ts';
 import type { ProgramCaptions } from '../stream/captions/ProgramCaptions.ts';
 import {
   exactFrameRate,
@@ -737,17 +742,34 @@ export class FfmpegStreamFactory {
         language:
           this.ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ??
           'eng',
-        appearance: {
-          ...this.ffmpegSettings.hdhrCaptionAppearance,
-          alignment: this.ffmpegSettings.hdhrCaptionAlignment,
-        },
+        appearance: channelCaptionAppearance(
+          this.ffmpegSettings,
+          this.channel.captions,
+        ),
       });
     }
 
     // The caption test pattern replaces what the program would show, to see
     // which appearance features a player honours. Burn-in is left as it is.
-    if (captionsOn && captions && this.ffmpegSettings.hdhrCaptionTestPattern) {
+    if (
+      captionsOn &&
+      captions &&
+      channelCaptionTestPattern(this.ffmpegSettings, this.channel.captions)
+    ) {
       captions = captionTestPattern(captions);
+    }
+
+    // A channel with its own caption look: the look this program's captions
+    // are laid out in, the global settings with the channel's over them.
+    // Without one they use the global settings, as before.
+    if (captions && channelHasOwnCaptionLook(this.channel.captions)) {
+      captions = {
+        ...captions,
+        appearance: channelCaptionAppearance(
+          this.ffmpegSettings,
+          this.channel.captions,
+        ),
+      };
     }
 
     let watermarkSource: Nullable<WatermarkInputSource> = null;

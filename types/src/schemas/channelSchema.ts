@@ -2,6 +2,10 @@ import languages from '@cospired/i18n-iso-languages';
 import z from 'zod/v4';
 import type { TupleToUnion } from '../util.js';
 import { ResolutionSchema } from './miscSchemas.js';
+import {
+  CaptionAlignments,
+  CaptionAppearanceOverridesSchema,
+} from './settingsSchemas.js';
 import { ProgramSchema } from './programmingSchema.js';
 import { SubtitlePreference } from './subtitleSchema.js';
 import {
@@ -217,6 +221,20 @@ export const StrictChannelAudioTracksSchema = z
     });
   });
 
+/**
+ * A channel's own closed-caption settings, for trying caption options on one
+ * channel (a test channel) without changing them for every channel. What it
+ * sets overrides the global closed-caption settings on this channel; what it
+ * leaves out comes from them. The global closed-captions switch still turns
+ * captions on. Null or empty = the global settings.
+ */
+export const ChannelCaptionsSchema = z.object({
+  // The numbered caption samples on this channel only
+  testPattern: z.boolean().optional(),
+  alignment: z.enum(CaptionAlignments).optional(),
+  appearance: CaptionAppearanceOverridesSchema.optional(),
+});
+
 export const ChannelSchema = z.object({
   disableFillerOverlay: z.boolean(),
   duration: z.number(),
@@ -245,6 +263,7 @@ export const ChannelSchema = z.object({
   subtitlesEnabled: z.boolean(),
   subtitlePreferences: z.array(SubtitlePreference).nonempty().optional(),
   audioTracks: z.array(z.string()).optional(),
+  captions: ChannelCaptionsSchema.nullable().optional(),
 });
 
 // The write path validates strictly: a bad icon or watermark value is a 400,
