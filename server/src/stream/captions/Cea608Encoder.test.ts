@@ -902,6 +902,26 @@ describe('overlapping subtitles', () => {
     ]);
   });
 
+  test.each(['together', 'apart'] as const)(
+    '%s: keeps each line on its own side',
+    (overlappingCues) => {
+      const pairs = framePairs(
+        [
+          { startMs: 1000, endMs: 5000, text: '{\\an1}Left' },
+          { startMs: 2000, endMs: 4000, text: '{\\an3}Right' },
+        ],
+        180,
+        0,
+        { overlappingCues },
+      );
+      const rows = screenAt(decodeScreens(pairs), 90);
+      expect(rows.map((r) => [r.row, r.column, r.text])).toEqual([
+        [14, 0, 'Left'],
+        [15, 32 - 5, 'Right'],
+      ]);
+    },
+  );
+
   test('newest: the later replaces the earlier, which comes back after it', () => {
     const pairs = framePairs(
       [

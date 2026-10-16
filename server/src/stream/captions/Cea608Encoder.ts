@@ -295,6 +295,9 @@ const DefaultPlacement: CaptionPlacement = {
 export type CaptionLayout = {
   placement: CaptionPlacement;
   lines: StyledChar[][];
+  // A side for each line, where stacked subtitles keep their own; otherwise
+  // every line takes the placement's
+  lineSides?: CaptionPlacement['horizontal'][];
 };
 
 // A cue's text as read: its lines, the first alignment override in it as a
@@ -769,11 +772,21 @@ function captionLines(
 ) {
   return blocks.flatMap((block) => {
     const lineUnitList = block.lines.map((line) => lineUnits(line, appearance));
-    const columns = lineColumns(
-      lineUnitList.map((units) => units.length),
-      appearance.alignment,
-      block.placement.horizontal,
-    );
+    // Lines on each side are aligned among themselves
+    const widths = lineUnitList.map((units) => units.length);
+    const sides = sidesOf(block);
+    const columns: number[] = [];
+    for (const side of new Set(sides)) {
+      const indices = sides.flatMap((s, i) => (s === side ? [i] : []));
+      const sideColumns = lineColumns(
+        indices.map((i) => widths[i] ?? 0),
+        appearance.alignment,
+        side,
+      );
+      indices.forEach((lineIndex, k) => {
+        columns[lineIndex] = sideColumns[k] ?? 0;
+      });
+    }
     const row = firstRow(block, appearance);
     return lineUnitList.map((units, i) => ({
       units,
@@ -1055,13 +1068,28 @@ function stackBlock(blocks: readonly CaptionLayout[]): CaptionLayout {
     const first = blocks[0]?.placement[key];
     return blocks.every((b) => b.placement[key] === first) ? first : undefined;
   };
+  const horizontal = agreed('horizontal');
+  const lines = blocks.flatMap((b) => b.lines);
+  // Where their sides differ, each line keeps its own: decoders of FFmpeg's
+  // family keep each row's indent even within one caption
+  const lineSides = blocks.flatMap((b) => sidesOf(b));
   return {
     placement: {
       vertical: agreed('vertical') ?? 'bottom',
-      horizontal: agreed('horizontal') ?? 'center',
+      horizontal: horizontal ?? 'center',
     },
-    lines: blocks.flatMap((b) => b.lines).slice(-MaxStackedLines),
+    lines: lines.slice(-MaxStackedLines),
+    ...(horizontal === undefined
+      ? { lineSides: lineSides.slice(-MaxStackedLines) }
+      : {}),
   };
+}
+
+// The side each of a block's lines goes on
+function sidesOf(block: CaptionLayout): CaptionPlacement['horizontal'][] {
+  return block.lines.map(
+    (_, i) => block.lineSides?.[i] ?? block.placement.horizontal,
+  );
 }
 
 function newestOf(
