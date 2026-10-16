@@ -392,6 +392,11 @@ describe('ChannelDB', () => {
         [['ENG'], false],
         [['eng', 'eng'], false],
         [['eng', 'jpn', 'deu', 'fra', 'spa'], false],
+        // a well-formed code that isn't a language
+        [['zzz'], false],
+        // one language under its bibliographic and terminological codes
+        [['ger', 'deu'], false],
+        [['ger', 'eng'], true],
       ])('a save validates %j: %s', (audioTracks, valid) => {
         expect(
           StrictChannelAudioTracksSchema.safeParse(audioTracks).success,

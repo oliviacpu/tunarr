@@ -1,3 +1,4 @@
+import languages from '@cospired/i18n-iso-languages';
 import z from 'zod/v4';
 import type { TupleToUnion } from '../util.js';
 import { ResolutionSchema } from './miscSchemas.js';
@@ -169,6 +170,22 @@ export const ChannelSessionSchema = z.object({
  */
 export const MaxChannelAudioTracks = 4;
 
+/**
+ * A known ISO 639-2 code in its terminological form: "deu" for "deu" and for
+ * "ger" (20 languages have a bibliographic and a terminological code), or null
+ * for a code that isn't a known language.
+ */
+export function canonicalAudioTrackLanguage(code: string): string | null {
+  if (!/^[a-z]{3}$/.test(code)) {
+    return null;
+  }
+  if (languages.getAlpha3TCodes()[code] !== undefined) {
+    return code;
+  }
+  const alpha2 = languages.alpha3BToAlpha2(code);
+  return (alpha2 && languages.alpha2ToAlpha3T(alpha2)) ?? null;
+}
+
 export const StrictChannelAudioTracksSchema = z
   .array(
     z
@@ -176,8 +193,28 @@ export const StrictChannelAudioTracksSchema = z
       .regex(/^[a-z]{3}$/, 'Use three-letter ISO 639-2 codes, such as eng'),
   )
   .max(MaxChannelAudioTracks)
-  .refine((codes) => new Set(codes).size === codes.length, {
-    message: 'Each language can only be listed once',
+  .superRefine((codes, ctx) => {
+    // Compared in canonical form, so "ger" and "deu" are one language
+    const seen = new Set<string>();
+    codes.forEach((code, i) => {
+      const canonical = canonicalAudioTrackLanguage(code);
+      if (canonical === null) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Unknown language code: ${code}`,
+          path: [i],
+        });
+        return;
+      }
+      if (seen.has(canonical)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Each language can only be listed once',
+          path: [i],
+        });
+      }
+      seen.add(canonical);
+    });
   });
 
 export const ChannelSchema = z.object({
