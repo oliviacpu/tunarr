@@ -615,7 +615,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       );
       const result = await fetcher.getStream({
         server: makeServer({ type: 'plex', uri: 'http://10.0.0.110:32400' }),
-        lineupItem: program.externalIds[0] as any,
+        lineupItem: program.externalIds?.[0] as never,
       });
       return (result.get().streamDetails.subtitleDetails ?? [])
         .filter((s) => s.type === 'external')
