@@ -160,13 +160,6 @@ export interface IProgramDB {
     chunkSize?: number,
   ): Promise<ProgramOrmWithExternalIds[]>;
 
-  programIdsByExternalIds(
-    ids: Set<[string, string, string]>,
-    chunkSize: number,
-  ): Promise<
-    Record<`${ProgramExternalIdSourceType}.${string}.${string}`, string>
-  >;
-
   updateProgramPlexRatingKey(
     programId: string,
     plexServerName: string,
