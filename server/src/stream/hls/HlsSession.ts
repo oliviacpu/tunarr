@@ -537,8 +537,9 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         firstFrameMs: startMs,
         frameRate: captions.frameRate,
         endMs: startMs + captions.durationMs,
-        // Read per program, so a settings change applies from the next one
-        appearance: {
+        // Resolved per program (with the channel's own settings over the
+        // global ones), so a settings change applies from the next one
+        appearance: captions.appearance ?? {
           ...this.settingsDB.ffmpegSettings().hdhrCaptionAppearance,
           alignment: this.settingsDB.ffmpegSettings().hdhrCaptionAlignment,
         },

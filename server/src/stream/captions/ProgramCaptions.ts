@@ -19,6 +19,10 @@ export type ProgramCaptions = {
   durationMs: number;
   // ISO 639-2
   language: string;
+  // How they look: the global caption settings with the program's channel's
+  // own over them, resolved when the program starts (channelCaptions.ts).
+  // Unset = the global settings at the time the captions are laid out.
+  appearance?: Partial<CaptionAppearance>;
 };
 
 // A frame rate as frames per second, exact for the NTSC rates (24000/1001...)

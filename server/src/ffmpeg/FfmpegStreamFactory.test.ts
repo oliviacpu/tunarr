@@ -1712,6 +1712,7 @@ describe('FfmpegStreamFactory', () => {
         subtitles?: NonEmptyArray<SubtitleStreamDetails> | null;
         lineupItem?: ContentBackedStreamLineupItem;
         settings?: Partial<ReturnType<typeof makeFfmpegSettings>>;
+        channel?: Partial<ChannelOrm>;
       }) {
         const capturing = createCapturingPipelineBuilderFactory();
         const details = makeStreamDetails();
@@ -1731,7 +1732,7 @@ describe('FfmpegStreamFactory', () => {
           makeMockFeatureFlagService({ webvttSidecarEnabled: false }),
           makeMockStreamSelector(opts.selected),
           makeTranscodeConfig(),
-          makeChannel({ subtitlesEnabled: true }),
+          makeChannel({ subtitlesEnabled: true, ...opts.channel }),
         );
         const result = await sut.createStreamSession({
           stream: {
@@ -1893,6 +1894,83 @@ describe('FfmpegStreamFactory', () => {
             settings: { hdhrCaptionTestPattern: true },
           });
           expect(captions).toBeUndefined();
+        });
+
+        // A test channel shows the samples while every other channel keeps
+        // its programs' captions
+        test("replaces a program's captions on a channel that turns it on for itself", async () => {
+          const { captions } = await run({
+            selected: null,
+            channel: { captions: { testPattern: true } },
+          });
+          expect(captions?.cues[0]?.text).toBe('1 WHITE TEXT');
+        });
+
+        test('leaves other channels as they are', async () => {
+          const { captions } = await run({ selected: null });
+          expect(captions?.cues[0]?.text).toBe('Hello there');
+        });
+
+        test('needs the global closed-captions switch, like the global test pattern', async () => {
+          const { captions } = await run({
+            selected: null,
+            hdhrClosedCaptions: false,
+            channel: { captions: { testPattern: true } },
+          });
+          expect(captions).toBeUndefined();
+        });
+      });
+
+      describe("a channel's own caption look", () => {
+        test("comes with the program's captions, over the global look", async () => {
+          const { captions } = await run({
+            selected: fullTrack(),
+            settings: {
+              hdhrCaptionAppearance: {
+                ...makeFfmpegSettings().hdhrCaptionAppearance,
+                textColor: 'yellow',
+              },
+            },
+            channel: {
+              captions: {
+                alignment: 'left',
+                appearance: { backgroundColor: 'magenta' },
+              },
+            },
+          });
+
+          // The channel's fields win; the rest is the global look
+          expect(captions?.appearance).toMatchObject({
+            backgroundColor: 'magenta',
+            textColor: 'yellow',
+            alignment: 'left',
+          });
+        });
+
+        test('is absent for a channel without one, which uses the global look', async () => {
+          const { captions } = await run({
+            selected: fullTrack(),
+            channel: { captions: { testPattern: false } },
+          });
+          expect(captions?.cues).toHaveLength(1);
+          expect(captions?.appearance).toBeUndefined();
+        });
+
+        test('times the notice for a program without subtitles', async () => {
+          // A box takes longer to load, so the notice waits for it
+          const plain = await run({ selected: null, subtitles: null });
+          const boxed = await run({
+            selected: null,
+            subtitles: null,
+            channel: {
+              captions: {
+                appearance: { backgroundColor: 'blue', textColor: 'red' },
+              },
+            },
+          });
+
+          expect(plain.captions?.cues[0]?.startMs).toBe(1000);
+          expect(boxed.captions?.cues[0]?.startMs).toBeGreaterThan(1000);
         });
       });
 
