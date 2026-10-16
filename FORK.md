@@ -52,6 +52,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     write rendered, with no render and no artwork publish.
   - **`TvGuideService`:** remembers each channel's rendered programmes, keyed on the guide entry, channel object and
     programs array they came from, and on the render settings (XMLTV settings, credit-images flag).
+  - **Redirects:** the key also holds each redirect target's presence, name and number. A redirect that wasn't
+    followed when the guide was built renders from its target at write time (Codex on PR #26).
   - **Effect:** a save re-fetches and re-renders only the saved channel. A guide rebuild or a settings change renders
     everything again.
   - **Trade-off:** program details edited since (a scan) reach the other channels' entries at their next scheduled
@@ -60,13 +62,17 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Measured** with `guide-refresh-ab.ts --action save` (new, with `--template-dir` for a copy of a real database)
   against the deployment's copy, medians of 3 trials, reuse off vs on:
   - **saving an offline picture:** 199 → 46 ms, probe p99 17.6 → 4.3 ms;
-  - **saving a new start time** (the nightly grid build's save, which regenerates the lineup): 236 → 60 ms, probe p99 31.1 → 4.2 ms; stalls of 25–63 ms with reuse off, none with
-    it on.
+  - **saving a new start time** (the nightly grid build's save, which regenerates the lineup): 236 → 60 ms, probe
+    p99 31.1 → 4.2 ms; stalls of 25–63 ms with reuse off, none with it on.
 - **Tests:**
   - `XmlTvWriter.test.ts`: a full write matches `serialize`; a reused channel isn't rendered and publishes nothing.
-  - `TvGuideService.test.ts`: after a build, a save fetches and renders only the saved channel; a rebuild or a
-    settings change renders all.
-  - Fail without the change: the writer's two and the guide's first. The rebuild case passes either way, by design.
+  - `TvGuideService.test.ts`:
+    - after a build, a save fetches and renders only the saved channel;
+    - a rebuild or a settings change renders all;
+    - a channel with an unresolved redirect is rendered again when its target appears, is renumbered or leaves;
+    - a followed redirect stays reused when its target is renumbered.
+  - Fail without their change: the writer's two, the first guide test and the unresolved-redirect one. The other two
+    pass either way, by design.
 - **Upstream:** not sent.
 
 ### Downloaded subtitles stay fresh, and a replaced subtitle heals at once (2026-10-16)
