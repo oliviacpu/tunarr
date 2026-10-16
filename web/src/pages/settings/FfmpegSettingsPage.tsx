@@ -33,6 +33,7 @@ import type {
   CaptionBackgroundColor,
   CaptionBackgroundOpacity,
   CaptionMode,
+  CaptionOverlap,
   CaptionTextColor,
   TonemapAlgorithm,
 } from '@tunarr/types/schemas';
@@ -41,6 +42,7 @@ import {
   CaptionBackgroundColors,
   CaptionBackgroundOpacities,
   CaptionModes,
+  CaptionOverlaps,
   CaptionTextColors,
   FfmpegLogLevels,
   TonemapAlgorithms,
@@ -150,6 +152,11 @@ export default function FfmpegSettingsPage() {
     rollUp3: t`Roll-up, 3 rows`,
     rollUp4: t`Roll-up, 4 rows`,
     paintOn: t`Paint-on (letters appear as they arrive)`,
+  };
+  const captionOverlapNames: Record<CaptionOverlap, string> = {
+    together: t`Show both, stacked`,
+    apart: t`Show each where the subtitle file puts it`,
+    newest: t`Show the newest`,
   };
   const captionRows = Array.from({ length: 15 }, (_, i) => i + 1);
 
@@ -689,6 +696,38 @@ export default function FfmpegSettingsPage() {
                     </Trans>
                   </FormHelperText>
                 </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel id="caption-overlap-label">
+                    <Trans>When subtitles overlap</Trans>
+                  </InputLabel>
+                  <Controller
+                    control={control}
+                    name="hdhrCaptionAppearance.overlappingCues"
+                    render={({ field }) => (
+                      <Select
+                        label={t`When subtitles overlap`}
+                        labelId="caption-overlap-label"
+                        {...field}
+                      >
+                        {map(CaptionOverlaps, (overlap) => (
+                          <MenuItem key={overlap} value={overlap}>
+                            {captionOverlapNames[overlap]}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    )}
+                  />
+                  <FormHelperText>
+                    <Trans>
+                      Stacked shows both in one block, older above newer, at the
+                      bottom when the file places them apart. Each where the
+                      file puts it needs a player that places every line; test
+                      pattern sample 38 shows whether yours does. Newest shows
+                      one at a time, bringing the earlier back when the newer
+                      ends. Roll-up and paint-on show them one at a time.
+                    </Trans>
+                  </FormHelperText>
+                </FormControl>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <FormControl fullWidth>
                     <InputLabel id="caption-max-lines-label">
@@ -785,7 +824,8 @@ export default function FfmpegSettingsPage() {
                   <Trans>
                     The screen has 15 caption rows. Captions end on the bottom
                     row; ones the subtitle file places at the top start on the
-                    top row. A narrower line wraps sooner.
+                    top row, and ones it places in the middle sit between the
+                    two. A narrower line wraps sooner.
                   </Trans>
                 </FormHelperText>
                 <Box>
@@ -815,7 +855,7 @@ export default function FfmpegSettingsPage() {
                     render={({ field }) => (
                       <FormControlLabel
                         control={<Switch {...field} checked={field.value} />}
-                        label={t`Top placement from the subtitle file`}
+                        label={t`Placement from the subtitle file (top, middle, sides)`}
                       />
                     )}
                   />
@@ -833,7 +873,7 @@ export default function FfmpegSettingsPage() {
                   />
                   <FormHelperText>
                     <Trans>
-                      Replaces every program's captions with 34 numbered
+                      Replaces every program's captions with 38 numbered
                       samples, one per feature above, each saying what it should
                       look like. Turn captions on in your player, note the
                       numbers that look wrong, then turn this off. Your settings

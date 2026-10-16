@@ -21,6 +21,15 @@ export type CaptionCue = {
   text: string;
   // This cue's own look, over the schedule's (the test pattern sets these)
   appearance?: Partial<CaptionAppearance>;
+  // For a cue from an ASS/SSA file: the script's size, which \pos and \move
+  // coordinates are in, and its style's alignment as a numpad position
+  ass?: AssContext;
+};
+
+export type AssContext = {
+  playResX: number;
+  playResY: number;
+  styleAlignment?: number;
 };
 
 export type CcPair = readonly [number, number];
@@ -269,8 +278,55 @@ const FlashOn: CharUnit = { kind: 'code', code: pair(0x14, 0x28) };
 // One character of a cue, with the style it is shown in
 export type StyledChar = CaptionStyle & { ch: string };
 
-// A caption as it goes on screen: up to two lines, at the top or the bottom
-export type CaptionLayout = { top: boolean; lines: StyledChar[][] };
+// Where a block of caption lines goes: a band of the screen, and a side or
+// the middle across it ('center' follows the alignment setting)
+export type CaptionPlacement = {
+  vertical: 'top' | 'middle' | 'bottom';
+  horizontal: 'left' | 'center' | 'right';
+};
+
+const DefaultPlacement: CaptionPlacement = {
+  vertical: 'bottom',
+  horizontal: 'center',
+};
+
+// A block of caption lines as it goes on screen. A caption is one or more
+// blocks shown together.
+export type CaptionLayout = {
+  placement: CaptionPlacement;
+  lines: StyledChar[][];
+  // A side for each line, where stacked subtitles keep their own; otherwise
+  // every line takes the placement's
+  lineSides?: CaptionPlacement['horizontal'][];
+};
+
+// A cue's text as read: its lines, the first alignment override in it as a
+// numpad position (7-9 top, 4-6 middle, 1-3 bottom), and the first \pos (or
+// \move's starting point)
+type ParsedCue = {
+  lines: StyledChar[][];
+  alignment?: number;
+  position?: { x: number; y: number };
+};
+
+// SSA's alignments ({\aN}, and [V4 Styles]): 1-3 at the bottom, +4 at the
+// top, +8 in the middle
+const LegacyAlignment: Record<number, number> = {
+  1: 1,
+  2: 2,
+  3: 3,
+  5: 7,
+  6: 8,
+  7: 9,
+  9: 4,
+  10: 5,
+  11: 6,
+};
+
+// An SSA alignment as a numpad position
+export function numpadFromLegacyAlignment(n: number): number | undefined {
+  return LegacyAlignment[n];
+}
 
 // How captions look: the appearance settings, the alignment setting, and
 // flashing text, which only the test pattern sends
@@ -305,26 +361,40 @@ function resolveAppearance(
 // come from SRT/WebVTT tags (<i>, <u>) and ASS overrides ({\i1}, {\u1}, {\r});
 // an alignment override at the top ({\an7}-{\an9}, or SSA's {\a5}-{\a7}) puts
 // the cue at the top of the screen. Other formatting is dropped.
-function parseCueText(text: string): CaptionLayout {
+function parseCueText(text: string): ParsedCue {
   let style = PlainStyle;
-  let top: boolean | undefined;
+  let alignment: number | undefined;
+  let position: ParsedCue['position'];
+  // ASS vector drawings ({\p1}...{\p0}) are shapes, not text
+  let drawing = false;
   const lines: StyledChar[][] = [[]];
   const current = () => lines.at(-1) ?? [];
   for (const [token] of text.matchAll(
     /\{[^}]*\}|<[^>]*>|\\[Nnh]|\n|[\s\S]/gu,
   )) {
     if (token.length > 1 && token.startsWith('{')) {
-      for (const [, tag, value] of token.matchAll(/\\(an|a|i|u)(\d+)|\\r/g)) {
+      // The first \pos, or where the first \move starts
+      const moveOrPos = /\\(?:pos|move)\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)/.exec(
+        token,
+      );
+      if (moveOrPos && position === undefined) {
+        position = { x: Number(moveOrPos[1]), y: Number(moveOrPos[2]) };
+      }
+      for (const [, tag, value] of token.matchAll(/\\(an|a|i|u|p)(\d+)|\\r/g)) {
         const n = Number(value);
-        if (tag === undefined) {
+        if (tag === 'p') {
+          drawing = n > 0;
+        } else if (tag === undefined) {
+          // \r resets every override, drawing mode included
           style = PlainStyle;
+          drawing = false;
         } else if (tag === 'i') {
           style = { ...style, italic: n !== 0 };
         } else if (tag === 'u') {
           style = { ...style, underline: n !== 0 };
         } else {
           // As in ASS, the first alignment override of a cue is the one used
-          top ??= tag === 'an' ? n >= 7 && n <= 9 : n >= 5 && n <= 7;
+          alignment ??= tag === 'an' ? n : LegacyAlignment[n];
         }
       }
     } else if (token.length > 1 && token.startsWith('<')) {
@@ -335,6 +405,8 @@ function parseCueText(text: string): CaptionLayout {
       } else if (name === 'u') {
         style = { ...style, underline: tag?.[1] !== '/' };
       }
+    } else if (drawing) {
+      continue;
     } else if (token === '\n' || token === '\\N' || token === '\\n') {
       lines.push([]);
     } else {
@@ -342,9 +414,63 @@ function parseCueText(text: string): CaptionLayout {
     }
   }
   return {
-    top: top ?? false,
+    alignment,
+    position,
     lines: lines.map(collapseSpaces).filter((line) => line.length > 0),
   };
+}
+
+// The third of the screen a point is in, as a placement
+function positionPlacement(
+  { x, y }: { x: number; y: number },
+  ass: AssContext,
+): CaptionPlacement {
+  const third = (v: number, size: number) =>
+    v < size / 3 ? 0 : v > (2 * size) / 3 ? 2 : 1;
+  return {
+    vertical:
+      (['top', 'middle', 'bottom'] as const)[third(y, ass.playResY)] ??
+      'bottom',
+    horizontal:
+      (['left', 'center', 'right'] as const)[third(x, ass.playResX)] ??
+      'center',
+  };
+}
+
+// A numpad position (7-9 top, 4-6 middle, 1-3 bottom; left, centre, right)
+function numpadPlacement(n: number): CaptionPlacement | undefined {
+  if (!Number.isInteger(n) || n < 1 || n > 9) {
+    return;
+  }
+  const horizontal = (['left', 'center', 'right'] as const)[(n - 1) % 3];
+  return {
+    vertical: n >= 7 ? 'top' : n >= 4 ? 'middle' : 'bottom',
+    horizontal: horizontal ?? 'center',
+  };
+}
+
+// Where a cue goes, as the subtitle file puts it, first match:
+// 1. an ASS \pos or \move: the third of the script's screen its point is in
+// 2. its alignment override ({\anN}, {\aN})
+// 3. its ASS style's alignment
+// 4. the bottom, centred by the alignment setting
+// With placement from the file turned off, always the last.
+function resolvePlacement(
+  cue: ParsedCue,
+  appearance: CaptionAppearance,
+  ass?: AssContext,
+): CaptionPlacement {
+  if (!appearance.keepTopPlacement) {
+    return DefaultPlacement;
+  }
+  if (ass && cue.position) {
+    return positionPlacement(cue.position, ass);
+  }
+  const alignment = cue.alignment ?? ass?.styleAlignment;
+  return (
+    (alignment !== undefined ? numpadPlacement(alignment) : undefined) ??
+    DefaultPlacement
+  );
 }
 
 // Whitespace runs become one space, and none at either end
@@ -465,13 +591,13 @@ function words(line: StyledChar[]): StyledChar[][] {
   return out.filter((word) => word.length > 0);
 }
 
-// The cue's text as the appearance has it shown: without the file's styles or
-// top placement when those are turned off, and in capitals when asked
+// The cue's text as the appearance has it shown: without the file's styles
+// when those are turned off, and in capitals when asked
 function applyTextOptions(
-  cue: CaptionLayout,
+  lines: StyledChar[][],
   appearance: CaptionAppearance,
-): CaptionLayout {
-  const lines = cue.lines.map((line) =>
+): StyledChar[][] {
+  return lines.map((line) =>
     line.flatMap((c) => {
       const style = appearance.keepStyles ? c : PlainStyle;
       // Some letters become two in capitals ('ß' is 'SS')
@@ -483,7 +609,6 @@ function applyTextOptions(
       }));
     }),
   );
-  return { top: appearance.keepTopPlacement && cue.top, lines };
 }
 
 // Splits the cue into captions of at most `maxLines` lines of `lineWidth`
@@ -492,8 +617,11 @@ function applyTextOptions(
 export function layoutCaption(
   text: string,
   appearance: CaptionAppearance = DefaultCaptionAppearance,
+  ass?: AssContext,
 ): CaptionLayout[] {
-  const cue = applyTextOptions(parseCueText(text), appearance);
+  const parsed = parseCueText(text);
+  const placement = resolvePlacement(parsed, appearance, ass);
+  const cueLines = applyTextOptions(parsed.lines, appearance);
   const maxWidth = appearance.lineWidth;
 
   // Width in 608 columns: style and background codes take columns, and
@@ -502,10 +630,10 @@ export function layoutCaption(
   // The cue's own line breaks are kept when every line fits. Otherwise the
   // whole cue is rewrapped, so a 2-line cue with one long line usually stays
   // one caption instead of becoming 3 lines split over two captions.
-  const sourceLines = cue.lines.every((line) => width(line) <= maxWidth)
-    ? cue.lines
+  const sourceLines = cueLines.every((line) => width(line) <= maxWidth)
+    ? cueLines
     : [
-        cue.lines.reduce<StyledChar[]>(
+        cueLines.reduce<StyledChar[]>(
           (joined, line) =>
             joined.length === 0
               ? line
@@ -537,29 +665,39 @@ export function layoutCaption(
   const captions: CaptionLayout[] = [];
   for (let i = 0; i < lines.length; i += appearance.maxLines) {
     captions.push({
-      top: cue.top,
+      placement,
       lines: lines.slice(i, i + appearance.maxLines),
     });
   }
   return captions;
 }
 
-// The row a caption's first line goes on: ending on the bottom row, or for a
-// caption placed at the top, starting on the top row. Always on screen.
-function firstRow(
-  caption: CaptionLayout,
-  appearance: CaptionAppearance,
-): number {
-  const lines = caption.lines.length;
-  const wanted = caption.top
-    ? appearance.topRow
-    : appearance.bottomRow - lines + 1;
+// The row a block's first line goes on: ending on the bottom row, starting on
+// the top row for a block placed at the top, or centred between the two for
+// one in the middle. Always on screen.
+function firstRow(block: CaptionLayout, appearance: CaptionAppearance): number {
+  const lines = block.lines.length;
+  const wanted = {
+    top: appearance.topRow,
+    middle: Math.floor(
+      (appearance.topRow + appearance.bottomRow + 1 - lines) / 2,
+    ),
+    bottom: appearance.bottomRow - lines + 1,
+  }[block.placement.vertical];
   return Math.min(Math.max(wanted, 1), Rows + 1 - lines);
 }
 
-// The column each line starts at
-function lineColumns(widths: number[], alignment: CaptionAlignment): number[] {
-  switch (alignment) {
+// The column each line starts at: at the left edge or ending at the right one
+// for a block placed at a side, otherwise by the alignment setting
+function lineColumns(
+  widths: number[],
+  alignment: CaptionAlignment,
+  horizontal: CaptionPlacement['horizontal'] = 'center',
+): number[] {
+  if (horizontal === 'right') {
+    return widths.map((w) => Math.max(0, Columns - w));
+  }
+  switch (horizontal === 'left' ? 'left' : alignment) {
     case 'left':
       return widths.map(() => 0);
     case 'centeredLines':
@@ -627,30 +765,46 @@ function lineAtoms(units: CharUnit[], row: number, column: number): CcPair[][] {
   return atoms;
 }
 
-// The caption's lines on their rows and columns
-function captionLines(caption: CaptionLayout, appearance: CaptionAppearance) {
-  const lineUnitList = caption.lines.map((line) => lineUnits(line, appearance));
-  const columns = lineColumns(
-    lineUnitList.map((units) => units.length),
-    appearance.alignment,
-  );
-  const row = firstRow(caption, appearance);
-  return lineUnitList.map((units, i) => ({
-    units,
-    row: row + i,
-    column: columns[i] ?? 0,
-  }));
+// A caption's lines on their rows and columns, block by block
+function captionLines(
+  blocks: readonly CaptionLayout[],
+  appearance: CaptionAppearance,
+) {
+  return blocks.flatMap((block) => {
+    const lineUnitList = block.lines.map((line) => lineUnits(line, appearance));
+    // Lines on each side are aligned among themselves
+    const widths = lineUnitList.map((units) => units.length);
+    const sides = sidesOf(block);
+    const columns: number[] = [];
+    for (const side of new Set(sides)) {
+      const indices = sides.flatMap((s, i) => (s === side ? [i] : []));
+      const sideColumns = lineColumns(
+        indices.map((i) => widths[i] ?? 0),
+        appearance.alignment,
+        side,
+      );
+      indices.forEach((lineIndex, k) => {
+        columns[lineIndex] = sideColumns[k] ?? 0;
+      });
+    }
+    const row = firstRow(block, appearance);
+    return lineUnitList.map((units, i) => ({
+      units,
+      row: row + i,
+      column: columns[i] ?? 0,
+    }));
+  });
 }
 
 // Pop-on: the pairs that load one caption into hidden memory
 function loadSequence(
-  caption: CaptionLayout,
+  blocks: readonly CaptionLayout[],
   appearance: CaptionAppearance,
 ): CcPair[][] {
   return [
     [ResumeCaptionLoading],
     [EraseNonDisplayedMemory],
-    ...captionLines(caption, appearance).flatMap(({ units, row, column }) =>
+    ...captionLines(blocks, appearance).flatMap(({ units, row, column }) =>
       lineAtoms(units, row, column),
     ),
   ];
@@ -670,19 +824,19 @@ export function captionLoadFrames(
     return 2;
   }
   const [first] = layoutCaption(text, resolved);
-  return first ? loadSequence(first, resolved).flat().length : 0;
+  return first ? loadSequence([first], resolved).flat().length : 0;
 }
 
 // Roll-up: each line is drawn on the base row after a carriage return, which
 // moves the lines above it up one row
 function rollUpLines(
-  caption: CaptionLayout,
+  block: CaptionLayout,
   appearance: CaptionAppearance,
   rows: number,
 ): CcPair[][][] {
   const baseRow = Math.min(Math.max(appearance.bottomRow, rows), Rows);
   // Aligned as a block, as a pop-on caption's lines are
-  const lineUnitList = caption.lines.map((line) => lineUnits(line, appearance));
+  const lineUnitList = block.lines.map((line) => lineUnits(line, appearance));
   const columns = lineColumns(
     lineUnitList.map((units) => units.length),
     appearance.alignment,
@@ -714,6 +868,287 @@ function separateRepeatedCodes(units: CharUnit[]): CharUnit[] {
     out.push(unit);
   }
   return out;
+}
+
+// One caption of a schedule: its blocks, shown from startMs to endMs
+type ScheduleItem = {
+  startMs: number;
+  endMs: number;
+  blocks: CaptionLayout[];
+  appearance: CaptionAppearance;
+};
+
+// Overlapping subtitles: each change to what is on screen is a new pop-on
+// caption, which takes up to a few seconds to load (two characters a frame),
+// so changes are kept at least this far apart
+const MinOverlapMs = 500;
+const MinIntervalMs = 1000;
+const MinResumeMs = 1000;
+// Lines of overlapping subtitles stacked in one block, the newest kept
+const MaxStackedLines = 4;
+
+// How many frames a pop-on caption takes to load
+function loadFrames(
+  blocks: readonly CaptionLayout[],
+  appearance: CaptionAppearance,
+): number {
+  return loadSequence(blocks, appearance).flat().length;
+}
+
+/**
+ * Pop-on captions of subtitles that overlap in time, as the overlap setting
+ * has them. Pop-on shows one caption at a time, so without this the later
+ * subtitle replaced the earlier, which never came back.
+ *
+ * - together: while they overlap by more than MinOverlapMs, they share one
+ *   block, older lines above newer. Where their places differ (a sign at the
+ *   top over dialogue), the block goes at the bottom: decoders of FFmpeg's
+ *   family position only a caption's first row.
+ * - apart: as together, but each band of the screen (top, middle, bottom)
+ *   gets its own block, for decoders that position every row.
+ * - newest: the latest-started subtitle shows; one that outlasts a newer one
+ *   comes back for the rest of its time, when that is at least MinResumeMs
+ *   and leaves the next caption time to load.
+ *
+ * Paint-on and roll-up draw as text arrives, and are left as they are. Input
+ * with no overlaps comes back as the same array.
+ */
+function resolveOverlaps(
+  items: ScheduleItem[],
+  frameMs: number,
+): ScheduleItem[] {
+  const out: ScheduleItem[] = [];
+  let changed = false;
+  const taken = new Set<ScheduleItem>();
+  for (const [i, first] of items.entries()) {
+    if (taken.has(first)) {
+      continue;
+    }
+    taken.add(first);
+    const policy = first.appearance.overlappingCues;
+    const minOverlap = policy === 'newest' ? 0 : MinOverlapMs;
+    const cluster = [first];
+    let clusterEnd = first.endMs;
+    let after: ScheduleItem | undefined;
+    // Later subtitles that start while the cluster is up join it when they
+    // overlap it long enough. One that doesn't (a short overlap) stays on its
+    // own, and the scan goes on past it.
+    for (const next of items.slice(i + 1)) {
+      if (next.startMs >= clusterEnd) {
+        after ??= next;
+        break;
+      }
+      // How long it overlaps the cluster: to the earlier of its own end and
+      // the cluster's
+      const overlap = Math.min(clusterEnd, next.endMs) - next.startMs;
+      if (
+        first.appearance.mode === 'popOn' &&
+        !taken.has(next) &&
+        next.appearance.mode === 'popOn' &&
+        next.appearance.overlappingCues === policy &&
+        overlap > minOverlap
+      ) {
+        cluster.push(next);
+        taken.add(next);
+        clusterEnd = Math.max(clusterEnd, next.endMs);
+      } else {
+        after ??= next;
+      }
+    }
+    const resolved =
+      cluster.length === 1
+        ? cluster
+        : policy === 'newest'
+          ? newestOf(cluster, frameMs, after)
+          : stackedOf(cluster, policy === 'apart');
+    changed ||= resolved !== cluster;
+    out.push(...resolved);
+  }
+  // Subtitles left out of a cluster can start inside it, so back in order
+  return changed ? out.sort((a, b) => a.startMs - b.startMs) : items;
+}
+
+// The stretches of a cluster with the same subtitles on screen, in order;
+// each subtitle in its order of start (ties: file order)
+function activeIntervals(cluster: ScheduleItem[]) {
+  const times = [
+    ...new Set(cluster.flatMap((item) => [item.startMs, item.endMs])),
+  ].sort((a, b) => a - b);
+  const intervals: {
+    startMs: number;
+    endMs: number;
+    active: ScheduleItem[];
+  }[] = [];
+  for (const [k, startMs] of times.slice(0, -1).entries()) {
+    const endMs = times[k + 1] ?? startMs;
+    const active = cluster.filter(
+      (item) => item.startMs <= startMs && startMs < item.endMs,
+    );
+    if (active.length > 0) {
+      intervals.push({ startMs, endMs, active });
+    }
+  }
+  return intervals;
+}
+
+function stackedOf(cluster: ScheduleItem[], apart: boolean): ScheduleItem[] {
+  // A stretch too short to load a caption for goes with a neighbour that
+  // shows everything it shows (the one before, else the one after), so a
+  // subtitle is shown a little longer or sooner, never left out. Then
+  // neighbours that show the same merge.
+  const intervals = activeIntervals(cluster).map((i) => ({ ...i }));
+  const shows = (
+    outer: (typeof intervals)[number] | undefined,
+    inner: (typeof intervals)[number],
+  ) =>
+    outer !== undefined &&
+    inner.active.every((item) => outer.active.includes(item));
+  const folded: typeof intervals = [];
+  for (const [k, interval] of intervals.entries()) {
+    const previous = folded.at(-1);
+    const next = intervals[k + 1];
+    const short = interval.endMs - interval.startMs < MinIntervalMs;
+    if (short && previous && shows(previous, interval)) {
+      previous.endMs = interval.endMs;
+    } else if (short && next && shows(next, interval)) {
+      next.startMs = interval.startMs;
+    } else {
+      folded.push(interval);
+    }
+  }
+  const merged: typeof intervals = [];
+  for (const interval of folded) {
+    const previous = merged.at(-1);
+    if (
+      previous &&
+      previous.active.length === interval.active.length &&
+      previous.active.every((item, k) => item === interval.active[k])
+    ) {
+      previous.endMs = interval.endMs;
+    } else {
+      merged.push(interval);
+    }
+  }
+
+  return merged.map(({ startMs, endMs, active }) => {
+    const newest = active.at(-1) ?? cluster[0];
+    const appearance = newest?.appearance ?? DefaultCaptionAppearance;
+    const together = stackBlock(active.flatMap((item) => item.blocks));
+    let blocks = [together];
+    if (apart) {
+      const bands = (['top', 'middle', 'bottom'] as const)
+        .map((vertical) =>
+          active
+            .flatMap((item) => item.blocks)
+            .filter((b) => b.placement.vertical === vertical),
+        )
+        .filter((band) => band.length > 0)
+        .map(stackBlock);
+      // Bands that would share rows go together after all
+      const rows = bands.map((block) => {
+        const row = firstRow(block, appearance);
+        return [row, row + block.lines.length - 1] as const;
+      });
+      const clear = rows.every(([, last], k) => {
+        const next = rows[k + 1];
+        return !next || last < next[0];
+      });
+      if (clear) {
+        blocks = bands;
+      }
+    }
+    return { startMs, endMs, blocks, appearance };
+  });
+}
+
+// Blocks stacked into one: their lines in order (the newest kept when there
+// are too many), placed where they all agree, else at the bottom and centred
+function stackBlock(blocks: readonly CaptionLayout[]): CaptionLayout {
+  const agreed = <K extends keyof CaptionPlacement>(key: K) => {
+    const first = blocks[0]?.placement[key];
+    return blocks.every((b) => b.placement[key] === first) ? first : undefined;
+  };
+  const horizontal = agreed('horizontal');
+  const lines = blocks.flatMap((b) => b.lines);
+  // Where their sides differ, each line keeps its own: decoders of FFmpeg's
+  // family keep each row's indent even within one caption
+  const lineSides = blocks.flatMap((b) => sidesOf(b));
+  return {
+    placement: {
+      vertical: agreed('vertical') ?? 'bottom',
+      horizontal: horizontal ?? 'center',
+    },
+    lines: lines.slice(-MaxStackedLines),
+    ...(horizontal === undefined
+      ? { lineSides: lineSides.slice(-MaxStackedLines) }
+      : {}),
+  };
+}
+
+// The side each of a block's lines goes on
+function sidesOf(block: CaptionLayout): CaptionPlacement['horizontal'][] {
+  return block.lines.map(
+    (_, i) => block.lineSides?.[i] ?? block.placement.horizontal,
+  );
+}
+
+function newestOf(
+  cluster: ScheduleItem[],
+  frameMs: number,
+  after: ScheduleItem | undefined,
+): ScheduleItem[] {
+  // The newest subtitle on screen in each stretch, joined into segments
+  const segments: { startMs: number; endMs: number; item: ScheduleItem }[] = [];
+  for (const { startMs, endMs, active } of activeIntervals(cluster)) {
+    const item = active.at(-1);
+    if (!item) {
+      continue;
+    }
+    const last = segments.at(-1);
+    if (last && last.item === item && last.endMs === startMs) {
+      last.endMs = endMs;
+    } else {
+      segments.push({ startMs, endMs, item });
+    }
+  }
+
+  const shown = new Set<ScheduleItem>();
+  const out: ScheduleItem[] = [];
+  for (const [k, segment] of segments.entries()) {
+    if (!shown.has(segment.item)) {
+      // Its first showing: the subtitle itself, with its own end, so it is
+      // still cleared then if the one replacing it is left out. One that
+      // starts with a newer one shows only once that one ends.
+      shown.add(segment.item);
+      out.push(
+        segment.startMs === segment.item.startMs
+          ? segment.item
+          : { ...segment.item, startMs: segment.startMs },
+      );
+      continue;
+    }
+    // A comeback, when long enough, and when the next caption can still load
+    // while it shows
+    const next = segments[k + 1]?.item ?? after;
+    const nextStart = segments[k + 1]?.startMs ?? after?.startMs;
+    const roomForNext =
+      next === undefined ||
+      nextStart === undefined ||
+      nextStart - segment.startMs >=
+        (loadFrames(next.blocks, next.appearance) + 2) * frameMs;
+    if (segment.endMs - segment.startMs >= MinResumeMs && roomForNext) {
+      out.push({
+        ...segment.item,
+        startMs: segment.startMs,
+        endMs: segment.endMs,
+      });
+    }
+  }
+  // Unchanged when every subtitle showed once and nothing came back
+  return out.length === cluster.length &&
+    out.every((item, k) => item === cluster[k])
+    ? cluster
+    : out;
 }
 
 export type CaptionScheduleOptions = {
@@ -758,7 +1193,7 @@ export function buildCaptionSchedule(
   const lastSlot = slotOf(endMs) - 1;
 
   // Each cue becomes one or more captions, sharing its time
-  const captions = cues
+  const parts: ScheduleItem[] = cues
     .flatMap((cue) => {
       const appearance = resolveAppearance(options.appearance, cue.appearance);
       // A cue too long for one caption is shown in parts, each for a share of
@@ -770,7 +1205,7 @@ export function buildCaptionSchedule(
             maxLines: Number.MAX_SAFE_INTEGER,
             keepTopPlacement: false,
           })
-        : layoutCaption(cue.text, appearance);
+        : layoutCaption(cue.text, appearance, cue.ass);
       const lengths = parts.map(
         ({ lines }) =>
           lines.reduce((n, line) => n + line.length, 0) + lines.length - 1,
@@ -783,11 +1218,12 @@ export function buildCaptionSchedule(
       return parts.map((caption, i) => {
         const startMs = at;
         at += ((cue.endMs - cue.startMs) * (lengths[i] ?? 0)) / total;
-        return { startMs, endMs: at, caption, appearance };
+        return { startMs, endMs: at, blocks: [caption], appearance };
       });
     })
     .filter((c) => c.endMs > options.firstFrameMs && c.startMs < endMs)
     .sort((a, b) => a.startMs - b.startMs);
+  const captions = resolveOverlaps(parts, frameMs);
 
   const pairs = new Map<number, CcPair>();
   const take = (slot: number, p: CcPair) => {
@@ -899,7 +1335,7 @@ export function buildCaptionSchedule(
     if (mode === 'popOn') {
       // Show it on its start frame, or as soon as loading finishes when there
       // isn't room before it (a short gap, or a cue already under way)
-      const load = loadSequence(caption.caption, appearance);
+      const load = loadSequence(caption.blocks, appearance);
       let showAt = wanted;
       if (!placeBefore(load, wanted, loadAfter)) {
         showAt = firstFreeFrom(
@@ -951,7 +1387,7 @@ export function buildCaptionSchedule(
       if (mode === 'paintOn') {
         take(startAt, EraseDisplayedMemory);
         doneAt = placeFrom(
-          captionLines(caption.caption, appearance).flatMap(
+          captionLines(caption.blocks, appearance).flatMap(
             ({ units, row, column }) => lineAtoms(units, row, column),
           ),
           startAt + 1,
@@ -959,7 +1395,7 @@ export function buildCaptionSchedule(
         );
       } else {
         const [first = [], ...rest] = rollUpLines(
-          caption.caption,
+          caption.blocks[0] ?? { placement: DefaultPlacement, lines: [] },
           appearance,
           RollUp[mode].rows,
         );

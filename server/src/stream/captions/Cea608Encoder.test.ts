@@ -188,7 +188,7 @@ describe('layoutCaption', () => {
     const [caption] = layoutCaption('{\\an8}<i>Hello</i>\\Nthere  <b>you</b>');
 
     expect(texts(caption ? [caption] : [])).toEqual([['Hello', 'there you']]);
-    expect(caption?.top).toBe(true);
+    expect(caption?.placement.vertical).toBe('top');
     expect(caption?.lines[0]?.every((c) => c.italic)).toBe(true);
     expect(caption?.lines[1]?.some((c) => c.italic)).toBe(false);
   });
@@ -199,7 +199,7 @@ describe('layoutCaption', () => {
     );
 
     expect(captions.length).toBeGreaterThan(1);
-    expect(captions.every((c) => c.top)).toBe(true);
+    expect(captions.every((c) => c.placement.vertical === 'top')).toBe(true);
   });
 
   test("keeps the cue's own line breaks", () => {
@@ -776,6 +776,192 @@ describe('drawn captions that take longer to send than they last', () => {
   });
 });
 
+describe('overlapping subtitles', () => {
+  const rowsAt = (pairs: number[][], frame: number) => textsAt(pairs, frame);
+
+  test('stacks them in one block while they overlap, older above newer', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 5000, text: 'First line' },
+        { startMs: 2500, endMs: 4000, text: 'Second line' },
+      ],
+      180,
+    );
+
+    expect(rowsAt(pairs, 60)).toEqual([[15, 'First line']]);
+    expect(rowsAt(pairs, 100)).toEqual([
+      [14, 'First line'],
+      [15, 'Second line'],
+    ]);
+    // The first comes back alone when the second ends
+    expect(rowsAt(pairs, 135)).toEqual([[15, 'First line']]);
+    expect(rowsAt(pairs, 155)).toEqual([]);
+  });
+
+  test('keeps a short overlap sequential, the later replacing the earlier', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 3000, text: 'First' },
+        { startMs: 2800, endMs: 4000, text: 'Second' },
+      ],
+      150,
+    );
+    expect(rowsAt(pairs, 86)).toEqual([[15, 'Second']]);
+  });
+
+  // A short subtitle inside a long one overlaps only for its own length
+  test('keeps a short subtitle inside a long one sequential', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 10000, text: 'Long' },
+        { startMs: 5000, endMs: 5300, text: 'Blip' },
+      ],
+      330,
+    );
+    expect(rowsAt(pairs, 152)).toEqual([[15, 'Blip']]);
+  });
+
+  // A short overlap stays sequential, but doesn't end the stacking of what
+  // overlaps the long subtitle after it
+  test('stacks a later overlap after a short one', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 10000, text: 'Long' },
+        { startMs: 5000, endMs: 5300, text: 'Blip' },
+        { startMs: 6000, endMs: 8000, text: 'Next' },
+      ],
+      330,
+    );
+    expect(rowsAt(pairs, 152)).toEqual([[15, 'Blip']]);
+    expect(rowsAt(pairs, 210)).toEqual([
+      [14, 'Long'],
+      [15, 'Next'],
+    ]);
+    expect(rowsAt(pairs, 270)).toEqual([[15, 'Long']]);
+  });
+
+  test('never folds away a subtitle shorter than a second', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 10000, text: 'Long' },
+        { startMs: 5000, endMs: 5700, text: 'Middle' },
+      ],
+      330,
+    );
+    expect(rowsAt(pairs, 160)).toEqual([
+      [14, 'Long'],
+      [15, 'Middle'],
+    ]);
+    expect(rowsAt(pairs, 200)).toEqual([[15, 'Long']]);
+  });
+
+  test('stacks a sign over dialogue at the bottom', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 5000, text: '{\\an8}Sign' },
+        { startMs: 2000, endMs: 4000, text: 'Talk' },
+      ],
+      180,
+    );
+    expect(rowsAt(pairs, 90)).toEqual([
+      [14, 'Sign'],
+      [15, 'Talk'],
+    ]);
+  });
+
+  test('keeps the newest 4 lines', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 6000, text: 'One\nTwo' },
+        { startMs: 2000, endMs: 6000, text: 'Three\nFour' },
+        { startMs: 3000, endMs: 6000, text: 'Five\nSix' },
+      ],
+      200,
+    );
+    expect(rowsAt(pairs, 150).map(([, text]) => text)).toEqual([
+      'Three',
+      'Four',
+      'Five',
+      'Six',
+    ]);
+  });
+
+  test('apart: puts each where the file places it', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 5000, text: '{\\an8}Sign' },
+        { startMs: 2000, endMs: 4000, text: 'Talk' },
+      ],
+      180,
+      0,
+      { overlappingCues: 'apart' },
+    );
+    expect(rowsAt(pairs, 90)).toEqual([
+      [1, 'Sign'],
+      [15, 'Talk'],
+    ]);
+  });
+
+  test.each(['together', 'apart'] as const)(
+    '%s: keeps each line on its own side',
+    (overlappingCues) => {
+      const pairs = framePairs(
+        [
+          { startMs: 1000, endMs: 5000, text: '{\\an1}Left' },
+          { startMs: 2000, endMs: 4000, text: '{\\an3}Right' },
+        ],
+        180,
+        0,
+        { overlappingCues },
+      );
+      const rows = screenAt(decodeScreens(pairs), 90);
+      expect(rows.map((r) => [r.row, r.column, r.text])).toEqual([
+        [14, 0, 'Left'],
+        [15, 32 - 5, 'Right'],
+      ]);
+    },
+  );
+
+  test('newest: the later replaces the earlier, which comes back after it', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 6000, text: 'Long' },
+        { startMs: 2000, endMs: 3500, text: 'Short' },
+      ],
+      200,
+      0,
+      { overlappingCues: 'newest' },
+    );
+    expect(rowsAt(pairs, 50)).toEqual([[15, 'Long']]);
+    expect(rowsAt(pairs, 75)).toEqual([[15, 'Short']]);
+    expect(rowsAt(pairs, 130)).toEqual([[15, 'Long']]);
+    expect(rowsAt(pairs, 181)).toEqual([]);
+  });
+
+  test('newest: no comeback shorter than a second', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 4000, text: 'Long' },
+        { startMs: 2000, endMs: 3500, text: 'Short' },
+      ],
+      150,
+      0,
+      { overlappingCues: 'newest' },
+    );
+    expect(rowsAt(pairs, 112)).toEqual([]);
+  });
+
+  test('leaves overlapping paint-on captions as they are', () => {
+    const cues = [
+      { startMs: 1000, endMs: 5000, text: 'First' },
+      { startMs: 2000, endMs: 4000, text: 'Second' },
+    ];
+    expect(rowsAt(framePairs(cues, 180, 0, { mode: 'paintOn' }), 90)).toEqual([
+      [15, 'Second'],
+    ]);
+  });
+});
+
 describe('switching modes', () => {
   // pop-on, roll-up, paint-on, pop-on, each cue in its own mode
   const cues = [
@@ -840,9 +1026,97 @@ describe('caption placement', () => {
     });
   });
 
-  test('keeps other alignments at the bottom', () => {
+  test('keeps bottom alignments at the bottom', () => {
     expect(decode('{\\an2}Bottom')[0]?.map((r) => r.row)).toEqual([15]);
-    expect(decode('{\\an5}Middle')[0]?.map((r) => r.row)).toEqual([15]);
+    expect(decode('{\\a2}Old SSA bottom')[0]?.map((r) => r.row)).toEqual([15]);
+  });
+
+  test('puts a cue with a middle alignment in the middle of the screen', () => {
+    expect(decode('{\\an5}Middle')[0]?.map((r) => r.row)).toEqual([8]);
+    expect(decode('{\\an5}Two\nlines')[0]?.map((r) => r.row)).toEqual([7, 8]);
+    expect(decode('{\\a10}Old SSA middle')[0]?.map((r) => r.row)).toEqual([8]);
+  });
+
+  test('puts a cue at the side the file aligns it to', () => {
+    // Left: column 0, whatever the alignment setting
+    expect(decode('{\\an1}Left')[0]?.[0]).toMatchObject({ row: 15, column: 0 });
+    // Right: each line ends at the right edge
+    const right = decode('{\\an9}Right\nside')[0];
+    expect(right?.map((r) => [r.row, r.column + r.width])).toEqual([
+      [1, 32],
+      [2, 32],
+    ]);
+    // Centre follows the alignment setting
+    expect(
+      decode('{\\an2}Centred', { alignment: 'left' })[0]?.[0]?.column,
+    ).toBe(0);
+  });
+
+  test("ignores the file's placement when asked", () => {
+    expect(
+      decode('{\\an9}Right top', { keepTopPlacement: false })[0]?.map((r) => [
+        r.row,
+        r.column,
+      ]),
+    ).toEqual([[15, 12]]);
+  });
+
+  // An ASS line's place: its \\pos or \\move point's third of the screen,
+  // then its alignment override, then its style's alignment
+  describe('from an ASS file', () => {
+    const ass = { playResX: 1920, playResY: 1080, styleAlignment: 8 };
+    const placed = (text: string, { fromAss = true } = {}) =>
+      decodeCaptions(
+        framePairs(
+          [
+            {
+              startMs: 3000,
+              endMs: 6000,
+              text,
+              ass: fromAss ? ass : undefined,
+            },
+          ],
+          30 * 12,
+        ),
+      )[0]?.map((r) => [r.row, r.column]);
+
+    test("uses the style's alignment", () => {
+      // Four columns wide, block-centred at column 16
+      expect(placed('Sign')).toEqual([[1, 16]]);
+    });
+
+    test("puts an alignment override over the style's", () => {
+      expect(placed('{\\an2}Talk')).toEqual([[15, 16]]);
+    });
+
+    test('puts a position over both, by the third of the screen it is in', () => {
+      // Bottom right, though the line says top and the style says top
+      expect(placed('{\\an8\\pos(1800,1000)}Corner')).toEqual([[15, 26]]);
+      // Middle left
+      expect(placed('{\\pos(100,540)}Side')).toEqual([[8, 0]]);
+      // \\move: where it starts
+      expect(placed('{\\move(960,900,960,100)}Rising')).toEqual([[15, 12]]);
+    });
+
+    test('ignores a position outside an ASS file, with no screen to place it on', () => {
+      expect(placed('{\\pos(100,100)}SRT', { fromAss: false })).toEqual([
+        [15, 16],
+      ]);
+    });
+  });
+
+  test('ends a drawing at a reset', () => {
+    expect(
+      decode('{\\p1}m 0 0 l 10 10{\\r}Label')[0]?.map((r) => r.text),
+    ).toEqual(['Label']);
+  });
+
+  test('leaves out vector drawings', () => {
+    expect(
+      decode('{\\p1}m 0 0 l 100 0 100 100{\\p0}Sign text')[0]?.map(
+        (r) => r.text,
+      ),
+    ).toEqual(['Sign text']);
   });
 
   test('centres each line on its own with tab offsets', () => {

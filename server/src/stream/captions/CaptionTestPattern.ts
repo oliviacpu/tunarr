@@ -3,7 +3,12 @@ import { DefaultCaptionAppearance } from './Cea608Encoder.ts';
 import type { ProgramCaptions } from './ProgramCaptions.ts';
 import { noCaptionsNoticeStartMs } from './ProgramCaptions.ts';
 
-type Sample = { text: string; appearance?: Partial<CaptionAppearance> };
+type Sample = {
+  text: string;
+  appearance?: Partial<CaptionAppearance>;
+  // A second subtitle overlapping it, from a second in to the same end
+  also?: string;
+};
 
 /**
  * One caption per appearance feature, each saying what it should look like.
@@ -92,6 +97,16 @@ export const CaptionTestSamples: readonly Sample[] = [
     text: '34 ROLL-UP, 4 ROWS\nLINE TWO\nLINE THREE\nLINE FOUR\nLINE FIVE',
     appearance: { mode: 'rollUp4' },
   },
+  { text: '{\\an5}35 MIDDLE OF THE SCREEN' },
+  { text: '{\\an3}36 RIGHT-ALIGNED\nTWO LINES WIDE' },
+  // Overlapping subtitles: stacked in one block, then as two blocks in their
+  // own places, which needs a player that positions every row
+  { text: '37 A LINE STILL UP', also: 'WHEN A SECOND STARTS' },
+  {
+    text: '{\\an8}38 A SIGN AT THE TOP',
+    also: 'AND A LINE AT THE BOTTOM',
+    appearance: { overlappingCues: 'apart' },
+  },
 ];
 
 // How long each sample shows, and the gap after it: longer around the modes
@@ -100,6 +115,8 @@ const ShownMs = 4000;
 const DrawnShownMs = 6000;
 const GapMs = 1500;
 const ModeChangeGapMs = 2000;
+// When an overlapping sample's second subtitle starts
+const AlsoAfterMs = 1000;
 
 /**
  * The test pattern in place of a program's captions: the samples one after
@@ -129,6 +146,14 @@ export function captionTestPattern(base: ProgramCaptions): ProgramCaptions {
       text: sample.text,
       appearance,
     });
+    if (sample.also !== undefined) {
+      cues.push({
+        startMs: at + AlsoAfterMs,
+        endMs: at + shown,
+        text: sample.also,
+        appearance,
+      });
+    }
 
     const next = CaptionTestSamples[(i + 1) % CaptionTestSamples.length];
     const nextMode = next?.appearance?.mode ?? DefaultCaptionAppearance.mode;

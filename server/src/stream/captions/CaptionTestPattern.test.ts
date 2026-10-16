@@ -46,7 +46,11 @@ describe('captionTestPattern', () => {
     const { cues } = captionTestPattern(base);
     expect(cues[0]?.startMs).toBe(noCaptionsNoticeStartMs(base.frameRate));
     expect(cues.length).toBeGreaterThan(CaptionTestSamples.length);
-    expect(cues[CaptionTestSamples.length]?.text).toBe('1 WHITE TEXT');
+    // One cue per sample, plus the overlapping samples' second subtitles
+    const perLoop =
+      CaptionTestSamples.length +
+      CaptionTestSamples.filter((sample) => sample.also !== undefined).length;
+    expect(cues[perLoop]?.text).toBe('1 WHITE TEXT');
     const last = cues.at(-1);
     expect((last?.endMs ?? Infinity) + 1000).toBeLessThanOrEqual(
       base.durationMs,
@@ -54,13 +58,29 @@ describe('captionTestPattern', () => {
   });
 
   test('leaves a gap after each sample, longer before a change of mode', () => {
+    // An overlapping sample's second subtitle starts inside the first
     const { cues } = captionTestPattern(base);
-    for (const [i, cue] of cues.slice(1).entries()) {
-      const before = cues[i];
+    const samples = cues.filter(
+      (cue, i) => i === 0 || cue.startMs >= (cues[i - 1]?.endMs ?? 0),
+    );
+    for (const [i, cue] of samples.slice(1).entries()) {
+      const before = samples[i];
       const gap = cue.startMs - (before?.endMs ?? 0);
       const modeChange = cue.appearance?.mode !== before?.appearance?.mode;
       expect(gap).toBe(modeChange ? 2000 : 1500);
     }
+  });
+
+  test('adds the overlapping second subtitle to samples 37 and 38', () => {
+    const { cues } = captionTestPattern(base);
+    const overlapping = cues.filter(
+      (cue, i) => i > 0 && cue.startMs < (cues[i - 1]?.endMs ?? 0),
+    );
+    expect(overlapping.slice(0, 2).map((c) => c.text)).toEqual([
+      'WHEN A SECOND STARTS',
+      'AND A LINE AT THE BOTTOM',
+    ]);
+    expect(overlapping[1]?.appearance?.overlappingCues).toBe('apart');
   });
 
   test('is empty for a program too short for one sample', () => {
@@ -76,7 +96,11 @@ describe('captionTestPattern', () => {
       // The user's own settings, which the samples override
       appearance: { backgroundColor: 'red', textColor: 'green' },
     });
-    const frames = Math.ceil(((cues[33]?.endMs ?? 0) / 1000) * frameRate) + 30;
+    const frames =
+      Math.ceil(
+        ((cues.find((c) => c.text.includes('38 '))?.endMs ?? 0) / 1000) *
+          frameRate,
+      ) + 30;
     const screens = decodeScreens(
       Array.from({ length: frames }, (_, k) => [
         ...schedule.pairAt((k * 1000) / frameRate),

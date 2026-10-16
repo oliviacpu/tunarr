@@ -138,9 +138,127 @@ describe('parseSubtitleCues', () => {
       'Dialogue: 0,0:00:01.25,0:00:02.00,Default,,0,0,0,,{\\i1}First{\\i0}',
     ].join('\n');
 
+    // No PlayRes and no styles: libass's default script size
+    const ctx = { playResX: 384, playResY: 288 };
     expect(parseSubtitleCues(ass, 'ass')).toEqual([
-      { startMs: 1250, endMs: 2000, text: '{\\i1}First{\\i0}' },
-      { startMs: 5000, endMs: 6500, text: 'Second, with commas' },
+      { startMs: 1250, endMs: 2000, text: '{\\i1}First{\\i0}', ass: ctx },
+      { startMs: 5000, endMs: 6500, text: 'Second, with commas', ass: ctx },
+    ]);
+  });
+
+  const assWith = (head: string[], events: string[]) =>
+    [
+      ...head,
+      '',
+      '[Events]',
+      'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+      ...events,
+    ].join('\n');
+
+  test("gives each ASS line its style's alignment and the script's size", () => {
+    const ass = assWith(
+      [
+        '[Script Info]',
+        'PlayResX: 1920',
+        'PlayResY: 1080',
+        '',
+        '[V4+ Styles]',
+        // Columns in another order than usual
+        'Format: Alignment, Name, Fontname, Fontsize',
+        'Style: 2,Default,Arial,20',
+        'Style: 8,Sign,Arial,20',
+        'Style: 3,*Note,Arial,20',
+      ],
+      [
+        'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Talking',
+        'Dialogue: 0,0:00:03.00,0:00:04.00,Sign,,0,0,0,,A sign',
+        'Dialogue: 0,0:00:05.00,0:00:06.00,Note,,0,0,0,,A note',
+        // An unknown style is drawn in Default
+        'Dialogue: 0,0:00:07.00,0:00:08.00,Missing,,0,0,0,,Lost',
+      ],
+    );
+
+    expect(
+      parseSubtitleCues(ass, 'ass')?.map((c) => [
+        c.text,
+        c.ass?.styleAlignment,
+        c.ass?.playResX,
+        c.ass?.playResY,
+      ]),
+    ).toEqual([
+      ['Talking', 2, 1920, 1080],
+      ['A sign', 8, 1920, 1080],
+      ['A note', 3, 1920, 1080],
+      ['Lost', 2, 1920, 1080],
+    ]);
+  });
+
+  test("reads SSA's [V4 Styles] alignments in their own numbering", () => {
+    const ssa = assWith(
+      [
+        '[V4 Styles]',
+        'Format: Name, Fontname, Alignment',
+        'Style: Top,Arial,6',
+      ],
+      ['Dialogue: 0,0:00:01.00,0:00:02.00,Top,,0,0,0,,Up'],
+    );
+    expect(parseSubtitleCues(ssa, 'ssa')?.[0]?.ass?.styleAlignment).toBe(8);
+  });
+
+  test('works out a missing PlayRes the way libass does', () => {
+    const sizeOf = (info: string[]) =>
+      parseSubtitleCues(
+        assWith(
+          ['[Script Info]', ...info],
+          ['Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,x'],
+        ),
+        'ass',
+      )?.[0]?.ass;
+    expect(sizeOf(['PlayResX: 1280'])).toMatchObject({
+      playResX: 1280,
+      playResY: 1024,
+    });
+    expect(sizeOf(['PlayResX: 640'])).toMatchObject({
+      playResX: 640,
+      playResY: 480,
+    });
+    expect(sizeOf(['PlayResY: 720'])).toMatchObject({
+      playResX: 960,
+      playResY: 720,
+    });
+  });
+
+  test('keeps the same line in two places', () => {
+    const ass = assWith(
+      [
+        '[V4+ Styles]',
+        'Format: Name, Alignment',
+        'Style: Default,2',
+        'Style: Sign,8',
+      ],
+      [
+        'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Twice',
+        'Dialogue: 0,0:00:01.00,0:00:02.00,Sign,,0,0,0,,Twice',
+      ],
+    );
+    expect(
+      parseSubtitleCues(ass, 'ass')?.map((c) => c.ass?.styleAlignment),
+    ).toEqual([2, 8]);
+  });
+
+  // Typesetting stacks copies of a line (outline, glow) on several layers
+  test('keeps a layered line once', () => {
+    const ass = assWith(
+      [],
+      [
+        'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Glow',
+        'Dialogue: 1,0:00:01.00,0:00:02.00,Default,,0,0,0,,Glow',
+        'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Other',
+      ],
+    );
+    expect(parseSubtitleCues(ass, 'ass')?.map((c) => c.text)).toEqual([
+      'Glow',
+      'Other',
     ]);
   });
 

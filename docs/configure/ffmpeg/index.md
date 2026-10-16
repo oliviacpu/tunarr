@@ -101,7 +101,15 @@ Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. T
 - **No longer burned in:** full text subtitles that would have been burned in for the whole program are sent as captions instead, so viewers who want them must turn captions on. Tunarr's own players get them as selectable WebVTT subtitles.
 - **Always burned in:** image-based subtitles (PGS, VobSub) can't become captions and are still burned in.
 - **Requirements:** text subtitles on disk, either sidecar files or [extracted](#subtitle-extraction) ones. The channel must use the **HLS** stream mode and have subtitles enabled.
-- **Formatting:** italics and underline from the subtitle file (`<i>`, `<u>`, and ASS `{\i1}`, `{\u1}`) are kept. A cue the file places at the top of the screen (`{\an7}`, `{\an8}` or `{\an9}`) is shown at the top; all others go at the bottom. Other formatting (bold, colors, exact positions) is dropped. Both can be turned off under [Caption appearance](#caption-appearance-experimental).
+- **Formatting:** italics and underline from the subtitle file (`<i>`, `<u>`, and ASS `{\i1}`, `{\u1}`) are kept. Other formatting (bold, colors, fonts) is dropped, and so is the text of ASS vector drawings.
+- **Placement:** captions go where the subtitle file puts them, in a third of the screen: at the top, in the middle or at the bottom, and at the left, centered or at the right. The first of these that a cue has decides:
+  1. In an ASS file, an exact position (`\pos`, or where a `\move` starts): the third of the script's screen it is in.
+  2. An alignment override in the cue (`{\an1}` to `{\an9}`, the numpad layout; or SSA's `{\a1}` to `{\a11}`).
+  3. In an ASS file, the alignment of the cue's style.
+  4. Otherwise the bottom, centered by **Caption Alignment**.
+
+  Placement and the styles can each be turned off under [Caption appearance](#caption-appearance-experimental).
+- **Overlapping subtitles:** while two subtitles overlap by more than half a second, both are shown in one block, older above newer (up to 4 lines), at the bottom when the file places them apart. **When subtitles overlap** under Caption appearance can show each where the file puts it, or only the newest.
 - **Caption Alignment:** where lines sit across the screen. **Centered block** (the default) starts every line in the same column, with the block centered. **Each line centered** centers each line on its own. **Left** starts every line at the left edge.
 - **Look:** text size and font are the player's, not Tunarr's, and so is the box behind the text unless you choose one under [Caption appearance](#caption-appearance-experimental). Plex Live TV (on Apple TV, for example) burns captions into the picture in its own style, a solid dark box behind the text. The text size follows the Plex app's subtitle size setting. In a test, Plex ignored CEA-608's see-through and transparent box codes.
 - **Format limits:** lines hold up to 32 characters, two lines at a time (both adjustable under [Caption appearance](#caption-appearance-experimental)), and long cues are split over time. A style change in the middle of a word takes a column of its own, and so do a text color and a box. Characters outside the caption character set (most non-Latin scripts) are dropped.
@@ -118,12 +126,13 @@ Everything CEA-608 captions can ask for, under **Caption appearance (experimenta
 - **How captions appear:** **Pop-on** (the default) shows each caption whole, on its start frame. **Roll-up** scrolls lines up from the bottom row with 2, 3 or 4 rows on screen, as live TV captions do; a cue's lines stay together, and the last lines stay up for up to 2 seconds for the next subtitle to scroll. **Paint-on** draws each caption's letters as they arrive.
 - **Lines per caption:** 2 (the default), 3 or 4. More lines split long subtitles less often. Roll-up uses its own number of rows.
 - **Line width:** 20 to 32 columns. A narrower line wraps sooner.
-- **Bottom row and Top row:** the screen has 15 caption rows. Captions end on the bottom row (15, the default); captions the subtitle file places at the top start on the top row (1).
-- **All capitals**, and whether to keep the subtitle file's **italics and underline** and its **top placement**.
+- **Bottom row and Top row:** the screen has 15 caption rows. Captions end on the bottom row (15, the default); captions the subtitle file places at the top start on the top row (1), and ones it places in the middle sit between the two.
+- **When subtitles overlap:** **Show both, stacked** (the default) puts both in one block, older above newer; when the file places them apart (a sign at the top over dialogue), the block goes at the bottom, because Plex's family of caption decoders positions only a caption's first line. **Show each where the subtitle file puts it** keeps them apart, for players that place every line (test pattern sample 38 shows whether yours does). **Show the newest** shows one at a time, bringing the earlier back when the newer ends if it lasts at least another second. Roll-up and paint-on always show one at a time.
+- **All capitals**, and whether to keep the subtitle file's **italics and underline** and its **placement** (top, middle and sides).
 
 A box, a color or narrower lines make each caption take longer to send, so in fast dialogue a caption can come a little late. Roll-up and paint-on send a caption's text while it is on screen, at two characters a frame, so a long caption with a short time is cut off at its end.
 
-**Test pattern:** replaces every program's captions with 34 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples.
+**Test pattern:** replaces every program's captions with 38 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples.
 
 | # | Sample |
 | --- | --- |
@@ -139,6 +148,10 @@ A box, a color or narrower lines make each caption take longer to send, so in fa
 | 30 | Flashing text |
 | 31 | Paint-on |
 | 32–34 | Roll-up with 2, 3 and 4 rows |
+| 35 | Middle of the screen |
+| 36 | Right-aligned |
+| 37 | Two overlapping lines, stacked |
+| 38 | A sign at the top and a line at the bottom at once, each in its place |
 
 The setting takes effect from the next program, and the HDHomeRun stream picks it up the next time it is started.
 
