@@ -35,6 +35,21 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Test media for a test channel (2026-10-16)
+
+- **What you saw:** nothing; a tool. Caption, audio and video options could only be tried on real channels, with real
+  programs that hit some cases and not others.
+- **Fix:** `scripts/test-channel/make-test-media.mjs` (README beside it) makes 20 labelled clips:
+  - caption suites as sidecar SRT and ASS, spoken line by line so timing can be judged by ear;
+  - English + Japanese and 5.1 speaker-check audio, stereo, English-only, AC3/E-AC3/AAC, 44.1 kHz;
+  - HDR10 (with mastering metadata), HLG, 10-bit SDR, interlaced 29.97i, four frame rates, anamorphic 720x480;
+  - three short clips with differing layouts for program boundaries.
+  Every clip shows what it tests, a clock and a frame counter, and the script writes `manifest.json` with what ffprobe
+  found. Used for the deployment's channel 99 (plan `plans/test-channel-99.md`).
+- **Tests:** none in the suite; it's an offline tool. Its own check is the ffprobe manifest: every clip's tracks,
+  language tags, colour tags, HDR side data and interlacing, verified against the table in the README.
+- **Upstream:** not sent.
+
 ### Switchable audio in Plex Live TV: a fixed audio track layout per channel (2026-10-16)
 
 - **What you saw:** Plex Live TV offered one audio track, whichever the program's selection picked, so a dual-audio
