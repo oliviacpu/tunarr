@@ -279,6 +279,9 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
     }
 
     pipelineSteps.push(NoSceneDetectOutputOption(0), new CopyAllEncoder());
+    if (state.mapAllStreams) {
+      pipelineSteps.push(MapAllStreamsOutputOption());
+    }
     if (state.metadataServiceName) {
       pipelineSteps.push(
         MetadataServiceNameOutputOption(state.metadataServiceName),
@@ -676,22 +679,39 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
     );
     this.pipelineSteps.push(encoder);
 
-    // Only a real ISO 639-2 code; anything else would make a misleading tag
-    const language = this.context.audioStream.language;
-    if (language !== undefined && /^[a-z]{3}$/.test(language)) {
-      this.pipelineSteps.push(AudioLanguageOutputOption(language));
-    }
+    // Only a real ISO 639-2 code; anything else would make a misleading tag.
+    // Several output tracks (a channel's fixed audio track layout) are tagged
+    // one by one, in output order.
+    const outputStreams = this.audioInputSource?.streams ?? [];
+    const tagged =
+      outputStreams.length > 1 ? outputStreams : [this.context.audioStream];
+    tagged.forEach((stream, outputIndex) => {
+      const language = stream.language;
+      if (language !== undefined && /^[a-z]{3}$/.test(language)) {
+        this.pipelineSteps.push(
+          AudioLanguageOutputOption(language, outputIndex),
+        );
+      }
+    });
 
     if (this.context.desiredAudioState.audioEncoder === AudioFormats.Copy) {
       return;
     }
 
     if (!isNull(this.context.desiredAudioState.audioChannels)) {
+      const desiredChannels = this.context.desiredAudioState.audioChannels;
+      // With several tracks, every one must come out at the configured
+      // channel count, so -ac goes in when any source differs
+      const sourceChannels =
+        outputStreams.length > 1 &&
+        outputStreams.some((stream) => stream.channels !== desiredChannels)
+          ? -1
+          : this.context.audioStream.channels;
       this.pipelineSteps.push(
         AudioChannelsOutputOption(
           this.context.desiredAudioState.audioEncoder,
-          this.context.audioStream.channels,
-          this.context.desiredAudioState.audioChannels,
+          sourceChannels,
+          desiredChannels,
         ),
       );
     }

@@ -35,6 +35,54 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Switchable audio in Plex Live TV: a fixed audio track layout per channel (2026-10-16)
+
+- **What you saw:** Plex Live TV offered one audio track, whichever the program's selection picked, so a dual-audio
+  anime episode played in one language with no way to switch. Tested on 2026-10-14:
+  - the Apple TV's audio menu does switch when the stream has several tracks;
+  - Plex picks each account's preferred audio language from them;
+  - but Plex keeps the track list it sees at tune-in for the whole session, and ends the session if the stream
+    restarts, so the tracks can't change from program to program.
+- **Change:** a channel setting, **Audio tracks**, under *Audio & Subtitles* on the Streaming tab:
+  - **What it is:** `Channel.audioTracks`, up to four ISO 639-2 codes in order, stored in the new column
+    `audio_tracks` (migration 0053).
+  - **Effect:** every program, commercial, gap (offline picture, with gap music or silence) and error screen on the
+    channel outputs exactly those tracks, in that order, tagged with their languages.
+  - **Filling a slot:**
+    1. the program's main track, if it is already in that language;
+    2. otherwise its track in that language: commentary skipped, then selected, default, first;
+    3. otherwise the main track again, so the list never changes.
+  - **Recommended Anime setting:** `eng, jpn`, English first, as the user chose.
+- **How** (plans/switchable-audio.md):
+  - **Builder:** several streams on an audio input each get their own filter chain, label and `-map`
+    (`ComplexFilter`), language tag (`-metadata:s:a:<i>`), and `-ac` whenever any source differs. One stream keeps
+    exactly today's arguments.
+  - **Stream factory:** builds the slots (`AudioTrackLayout.ts`) for programs and placeholders.
+  - **HLS alt:** its concat re-encodes audio streams 1..N.
+  - **MPEG-TS:** its concat maps every stream (`-map 0`) instead of ffmpeg's pick of one audio track.
+  - **HLS's `.ts` wrapper** already copies every stream.
+  - **Not covered:** HLS Direct v2 and remux copy the source, so the UI disables the field there.
+- **Verified end to end** (stream-repro, jellyfin-ffmpeg 8.1.3, new `--channel-setting` option), with a 20 s flex gap
+  and three clips (English stereo; English 5.1 at 44.1 kHz with subtitles; English + Japanese), layout `eng, jpn`:
+
+  | Mode | Result |
+  | --- | --- |
+  | HLS | 35/35 segments `[eng 2ch 48k, jpn 2ch 48k]` |
+  | HLS alt | 33/33 segments, the same |
+  | MPEG-TS | the whole capture has both tracks |
+
+  - **What Plex reads:** the channel's HDHomeRun `.ts` carried video + eng + jpn.
+  - **English + Spanish layout:** 19/19 segments `[eng, spa]`.
+  - **Without the setting:** one track, as before.
+- **Tests:**
+  - `AudioTrackLayout.test.ts`: slot rules, commentary, B/T codes, selected/default.
+  - `FfmpegStreamFactory.test.ts`: programs, a missing language, order, no audio, gap music, offline/error
+    placeholders, both concats, no layout.
+  - `BasePipelineBuilder.test.ts`: chains, maps, tags, `-ac`, the concat's `-map 0`.
+  - `ChannelDB.test.ts`: save, read, update without the field, clear, validation.
+  - The web parser.
+- **Upstream:** not sent.
+
 ### Tunarr no longer sits for minutes at startup on a cold disk (2026-10-16)
 
 - **What you saw:** a release's first start hung after the `/dev/dri` log line: 7 minutes at 03:09 UTC (rolled back by

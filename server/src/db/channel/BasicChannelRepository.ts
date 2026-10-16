@@ -70,6 +70,11 @@ function updateRequestToChannel(
     transcodeConfigId: updateReq.transcodeConfigId,
     streamMode: updateReq.streamMode,
     subtitlesEnabled: updateReq.subtitlesEnabled,
+    // Left out = unchanged (a client from before the field existed); [] = off
+    audioTracks:
+      updateReq.audioTracks === undefined
+        ? undefined
+        : audioTracksToColumn(updateReq.audioTracks),
   } satisfies Partial<NewChannelOrm>;
 }
 
@@ -96,7 +101,15 @@ function createRequestToChannel(saveReq: SaveableChannel): NewChannelOrm {
     streamMode: saveReq.streamMode,
     transcodeConfigId: saveReq.transcodeConfigId,
     subtitlesEnabled: saveReq.subtitlesEnabled,
+    audioTracks: audioTracksToColumn(saveReq.audioTracks),
   } satisfies NewChannelOrm;
+}
+
+// A channel's fixed audio track layout as stored: null when off
+export function audioTracksToColumn(
+  audioTracks: readonly string[] | undefined,
+): string[] | null {
+  return audioTracks && audioTracks.length > 0 ? [...audioTracks] : null;
 }
 
 @injectable()

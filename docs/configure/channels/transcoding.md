@@ -65,3 +65,34 @@ It consists of two FFMPEG processes, one which performs the per-program transcod
 #### Things to consider
 
 If this mode was "good enough" we probably wouldn't have spent time implementing the other modes! There are a lot of potential issues with this mode; too many to list here.
+
+## Audio tracks (switchable audio in Plex Live TV)
+
+**Audio tracks** (under *Audio & Subtitles* on the channel's Streaming tab) gives a channel a fixed set of audio
+tracks: up to four language codes (ISO 639-2, such as `eng`, `jpn`), in order. Every program, gap (the offline picture,
+with or without gap music), error screen and commercial on the channel then carries exactly these tracks, in this
+order, each tagged with its language.
+
+Plex Live TV keeps the audio tracks it sees when you tune in for the whole session, and ends the session if the stream
+restarts. So a channel only gets a working audio menu when the tracks never change. With the setting:
+
+- **Plex picks each viewer's preferred audio language.** It uses the account's preferred audio language from the list.
+  Viewers can still switch tracks in the player's audio menu.
+- **A program with that language** uses its own track for the slot. Among several tracks in that language, commentary
+  tracks are skipped; then the selected, the default, or the first track wins.
+- **A program without that language** repeats its main audio in that slot, so the menu still has the same entries.
+- **Every track is encoded** with the channel's transcode configuration (codec, bitrate, channels, sample rate). Each
+  extra track costs one more audio encode.
+
+Leave the field empty for one audio track, the program's own, as before.
+
+!!! example "An anime channel"
+
+    `eng, jpn` gives every program an English and a Japanese track. English comes first, so it's the default for
+    players that don't pick a language. Dual-audio episodes offer both; English-only and Japanese-only episodes repeat
+    their one language in the other slot.
+
+!!! info
+
+    HLS Direct v2 copies each program's own tracks unchanged, so it can't offer a fixed set; the field is disabled for
+    that mode. HLS, HLS alt and MPEG-TS support it.

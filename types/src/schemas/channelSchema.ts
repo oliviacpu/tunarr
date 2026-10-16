@@ -1,3 +1,4 @@
+import languages from '@cospired/i18n-iso-languages';
 import z from 'zod/v4';
 import type { TupleToUnion } from '../util.js';
 import { ResolutionSchema } from './miscSchemas.js';
@@ -162,6 +163,60 @@ export const ChannelSessionSchema = z.object({
   connections: z.array(StreamConnectionDetailsSchema),
 });
 
+/**
+ * A channel's fixed audio track layout, for switchable audio in Plex Live TV: ISO 639-2 codes in output order. Every
+ * program, gap and commercial on the channel then outputs exactly these tracks, so Plex, which keeps the track list it
+ * saw at tune-in, offers the same audio menu all session. Empty = off (one track, as before).
+ */
+export const MaxChannelAudioTracks = 4;
+
+/**
+ * A known ISO 639-2 code in its terminological form: "deu" for "deu" and for
+ * "ger" (20 languages have a bibliographic and a terminological code), or null
+ * for a code that isn't a known language.
+ */
+export function canonicalAudioTrackLanguage(code: string): string | null {
+  if (!/^[a-z]{3}$/.test(code)) {
+    return null;
+  }
+  if (languages.getAlpha3TCodes()[code] !== undefined) {
+    return code;
+  }
+  const alpha2 = languages.alpha3BToAlpha2(code);
+  return (alpha2 && languages.alpha2ToAlpha3T(alpha2)) ?? null;
+}
+
+export const StrictChannelAudioTracksSchema = z
+  .array(
+    z
+      .string()
+      .regex(/^[a-z]{3}$/, 'Use three-letter ISO 639-2 codes, such as eng'),
+  )
+  .max(MaxChannelAudioTracks)
+  .superRefine((codes, ctx) => {
+    // Compared in canonical form, so "ger" and "deu" are one language
+    const seen = new Set<string>();
+    codes.forEach((code, i) => {
+      const canonical = canonicalAudioTrackLanguage(code);
+      if (canonical === null) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Unknown language code: ${code}`,
+          path: [i],
+        });
+        return;
+      }
+      if (seen.has(canonical)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Each language can only be listed once',
+          path: [i],
+        });
+      }
+      seen.add(canonical);
+    });
+  });
+
 export const ChannelSchema = z.object({
   disableFillerOverlay: z.boolean(),
   duration: z.number(),
@@ -189,6 +244,7 @@ export const ChannelSchema = z.object({
   sessions: z.array(ChannelSessionSchema).optional(),
   subtitlesEnabled: z.boolean(),
   subtitlePreferences: z.array(SubtitlePreference).nonempty().optional(),
+  audioTracks: z.array(z.string()).optional(),
 });
 
 // The write path validates strictly: a bad icon or watermark value is a 400,
@@ -206,6 +262,7 @@ export const SaveableChannelSchema = ChannelSchema.omit({
   .extend({
     icon: StrictChannelIconSchema,
     watermark: StrictWatermarkSchema.optional(),
+    audioTracks: StrictChannelAudioTracksSchema.optional(),
   });
 
 export const NewChannelSaveRequestSchema = z.object({

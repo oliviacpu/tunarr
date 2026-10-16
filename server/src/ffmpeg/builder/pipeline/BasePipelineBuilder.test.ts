@@ -495,6 +495,92 @@ describe('BasePipelineBuilder', () => {
     );
   });
 
+  describe('several output audio tracks (a fixed audio track layout)', () => {
+    function argsForTracks(
+      streams: { index: number; channels: number; language: string }[],
+      audioVolume = 100,
+    ) {
+      const audio = new AudioInputSource(
+        new FileStreamSource('/path/to/movie.mkv'),
+        streams.map((s) => AudioStream.create({ codec: 'ac3', ...s })),
+        AudioState.create({
+          audioEncoder: 'aac',
+          audioBitrate: 192,
+          audioBufferSize: 384,
+          audioChannels: 2,
+          audioVolume,
+        }),
+      );
+
+      return new NoopPipelineBuilder(
+        video,
+        audio,
+        null,
+        null,
+        null,
+        EmptyFfmpegCapabilities,
+      )
+        .build(state, frameState, DefaultPipelineOptions)
+        .getCommandArgs();
+    }
+
+    function maps(args: string[]) {
+      return args.flatMap((a, i) => (a === '-map' ? [args[i + 1]] : []));
+    }
+
+    test('maps one filtered chain per track, in order', () => {
+      const args = argsForTracks([
+        { index: 1, channels: 2, language: 'eng' },
+        { index: 2, channels: 2, language: 'jpn' },
+      ]);
+      const graph = args[args.indexOf('-filter_complex') + 1] ?? '';
+
+      expect(maps(args)).toEqual(['0:0', '[a0]', '[a1]']);
+      // the audio file is the second input
+      expect(graph).toMatch(/\[1:1\]aresample=async=1[^;]*\[a0\]/);
+      expect(graph).toMatch(/\[1:2\]aresample=async=1[^;]*\[a1\]/);
+    });
+
+    test('a source track repeated into a second slot gets its own chain', () => {
+      // A program without the second language repeats its main track there
+      const args = argsForTracks([
+        { index: 1, channels: 2, language: 'eng' },
+        { index: 1, channels: 2, language: 'jpn' },
+      ]);
+      const graph = args[args.indexOf('-filter_complex') + 1] ?? '';
+
+      expect(maps(args)).toEqual(['0:0', '[a0]', '[a1]']);
+      expect(graph.match(/\[1:1\]/g)).toHaveLength(2);
+    });
+
+    test('tags each track with its own language', () => {
+      const args = argsForTracks([
+        { index: 1, channels: 2, language: 'eng' },
+        { index: 2, channels: 2, language: 'jpn' },
+      ]);
+
+      expect(args[args.indexOf('-metadata:s:a:0') + 1]).toBe('language=eng');
+      expect(args[args.indexOf('-metadata:s:a:1') + 1]).toBe('language=jpn');
+    });
+
+    test('sets the channel count when any track differs from it', () => {
+      const args = argsForTracks([
+        { index: 1, channels: 2, language: 'eng' },
+        { index: 2, channels: 6, language: 'jpn' },
+      ]);
+
+      expect(args[args.indexOf('-ac') + 1]).toBe('2');
+    });
+
+    test('one track keeps the single-track labels', () => {
+      const args = argsForTracks([{ index: 1, channels: 2, language: 'eng' }]);
+
+      expect(maps(args)).toEqual(['0:0', '[a]']);
+      expect(args).not.toContain('-metadata:s:a:1');
+      expect(args).not.toContain('-ac');
+    });
+  });
+
   test('always add channel count for Opus', () => {
     const audio = AudioInputSource.withStream(
       new FileStreamSource('/path/to/movie.mkv'),
@@ -716,6 +802,36 @@ describe('BasePipelineBuilder HLS stream timing', () => {
         .hlsWrap(input, wrapState)
         .getCommandArgs();
     }
+
+    test.each([
+      [true, ['-map', '0']],
+      [false, []],
+    ])(
+      'the MPEG-TS concat maps every stream only when asked (%s)',
+      (mapAllStreams, expected) => {
+        const input = new ConcatInputSource(
+          new HttpStreamSource('http://localhost:8000/stream/channels/x.ts'),
+          FrameSize.FHD,
+        );
+        const concatState = FfmpegState.forConcat(version, 'Test');
+        concatState.mapAllStreams = mapAllStreams;
+        const args = new NoopPipelineBuilder(
+          null,
+          null,
+          null,
+          null,
+          input,
+          withBurstOption,
+        )
+          .concat(input, concatState)
+          .getCommandArgs();
+
+        // without it ffmpeg keeps one audio track of a fixed layout
+        expect(
+          args.filter((a, i) => a === '-map' || args[i - 1] === '-map'),
+        ).toEqual(expected);
+      },
+    );
 
     test('reads the playlist at real-time pace by default', () => {
       const args = wrapArgs(0);

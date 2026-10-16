@@ -22,7 +22,11 @@ import { FfmpegState } from '@/ffmpeg/builder/state/FfmpegState.ts';
 import type { FfmpegInfo, FfmpegVersionResult } from '@/ffmpeg/ffmpegInfo.ts';
 import type { StreamSelector } from '@/ffmpeg/StreamSelector.ts';
 import type { FeatureFlagService } from '@/services/FeatureFlagService.ts';
-import type { StreamDetails, SubtitleStreamDetails } from '@/stream/types.ts';
+import type {
+  AudioStreamDetails,
+  StreamDetails,
+  SubtitleStreamDetails,
+} from '@/stream/types.ts';
 import { FileStreamSource, HttpStreamSource } from '@/stream/types.ts';
 import type { SubtitlesInputSource } from '@/ffmpeg/builder/input/SubtitlesInputSource.ts';
 import type { VideoInputSource } from '@/ffmpeg/builder/input/VideoInputSource.ts';
@@ -234,17 +238,22 @@ function createCapturingPipelineBuilderFactory(): {
       return builderProxy;
     });
 
+    const pipelineStub = () => ({
+      getCommandArgs: () => [],
+      getCommandEnvironment: () => ({}),
+      inputs: {},
+      steps: [],
+      setInputs: vi.fn(),
+    });
     builderProxy.build = vi.fn().mockResolvedValue({
       build: (ffmpegState: FfmpegState, frameState: FrameState) => {
         capturedFfmpegState = ffmpegState;
         capturedFrameState = frameState;
-        return {
-          getCommandArgs: () => [],
-          getCommandEnvironment: () => ({}),
-          inputs: {},
-          steps: [],
-          setInputs: vi.fn(),
-        };
+        return pipelineStub();
+      },
+      concat: (_input: unknown, ffmpegState: FfmpegState) => {
+        capturedFfmpegState = ffmpegState;
+        return pipelineStub();
       },
     } as unknown as PipelineBuilder);
 
@@ -893,6 +902,221 @@ describe('FfmpegStreamFactory', () => {
       expect(frameState.scaledSize.height).toBe(2160);
       expect(frameState.paddedSize.width).toBe(3840);
       expect(frameState.paddedSize.height).toBe(2160);
+    });
+  });
+
+  describe('audio track layout (switchable audio in Plex Live TV)', () => {
+    const eng = {
+      codec: 'ac3',
+      channels: 6,
+      index: 1,
+      language: 'English',
+      languageCodeISO6392: 'eng',
+    };
+    const jpn = {
+      codec: 'aac',
+      channels: 2,
+      index: 2,
+      language: 'Japanese',
+      languageCodeISO6392: 'jpn',
+    };
+
+    function makeSut(
+      channel: Partial<ChannelOrm>,
+      main: AudioStreamDetails = eng,
+    ) {
+      const capture = createCapturingPipelineBuilderFactory();
+      const selector = {
+        selectAudioAndSubtitleStreams: vi
+          .fn()
+          .mockResolvedValue({ audioStream: main, subtitleStream: null }),
+      } as unknown as StreamSelector;
+      const sut = new FfmpegStreamFactory(
+        makeMockFfmpegInfo(),
+        makeMockSettingsDB(makeFfmpegSettings()),
+        capture.factory,
+        makeMockChannelDB(),
+        makeMockFeatureFlagService(),
+        selector,
+        makeTranscodeConfig(),
+        makeChannel(channel),
+      );
+      return { sut, ...capture };
+    }
+
+    async function streamSession(
+      sut: FfmpegStreamFactory,
+      audioDetails: StreamDetails['audioDetails'],
+    ) {
+      await sut.createStreamSession({
+        stream: {
+          source: new HttpStreamSource('http://example.com/video.ts'),
+          details: { ...makeStreamDetails(), audioDetails },
+        },
+        options: {
+          startTime: dayjs.duration(0),
+          duration: dayjs.duration({ seconds: 30 }),
+          outputFormat: HlsOutputFormat(defaultHlsOptions),
+          ptsOffset: 0,
+          realtime: true,
+          streamMode: 'hls',
+        },
+        lineupItem: makeLineupItem(),
+      });
+    }
+
+    function tracks(input: AudioInputSource | null | undefined) {
+      return input?.streams.map((s) => [s.index, s.language]);
+    }
+
+    test("a program with every slot's language gets its own track in each", async () => {
+      const { sut, getCapturedAudioInput } = makeSut({
+        audioTracks: ['eng', 'jpn'],
+      });
+
+      await streamSession(sut, [eng, jpn]);
+
+      expect(tracks(getCapturedAudioInput())).toEqual([
+        [1, 'eng'],
+        [2, 'jpn'],
+      ]);
+    });
+
+    test('a program without a slot language repeats its main track there', async () => {
+      const { sut, getCapturedAudioInput } = makeSut({
+        audioTracks: ['eng', 'jpn'],
+      });
+
+      await streamSession(sut, [eng]);
+
+      expect(tracks(getCapturedAudioInput())).toEqual([
+        [1, 'eng'],
+        [1, 'jpn'],
+      ]);
+    });
+
+    test("the layout's order wins over the program's main track", async () => {
+      const { sut, getCapturedAudioInput } = makeSut({
+        audioTracks: ['jpn', 'eng'],
+      });
+
+      await streamSession(sut, [eng, jpn]);
+
+      expect(tracks(getCapturedAudioInput())).toEqual([
+        [2, 'jpn'],
+        [1, 'eng'],
+      ]);
+    });
+
+    test.each([[null], [[] as string[]]])(
+      'without a layout (%j) a program keeps one track in its own language',
+      async (audioTracks) => {
+        const { sut, getCapturedAudioInput } = makeSut({ audioTracks });
+
+        await streamSession(sut, [eng, jpn]);
+
+        expect(tracks(getCapturedAudioInput())).toEqual([[1, 'eng']]);
+      },
+    );
+
+    test('a program without audio has silence in every slot', async () => {
+      const { sut, getCapturedAudioInput } = makeSut({
+        audioTracks: ['eng', 'jpn'],
+      });
+
+      await streamSession(sut, undefined);
+
+      const input = getCapturedAudioInput();
+      expect(input).toBeInstanceOf(NullAudioInputSource);
+      expect(tracks(input)).toEqual([
+        [0, 'eng'],
+        [0, 'jpn'],
+      ]);
+    });
+
+    test('gap music plays in every slot', async () => {
+      const { sut, getCapturedAudioInput } = makeSut({
+        audioTracks: ['eng', 'jpn'],
+      });
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+        backgroundMusic: {
+          source: new FileStreamSource('/media/music/01.flac'),
+          audioStream: { index: 0, codec: 'flac', channels: 2 },
+          trackDurationMs: 240_000,
+        },
+      });
+
+      expect(tracks(getCapturedAudioInput())).toEqual([
+        [0, 'eng'],
+        [0, 'jpn'],
+      ]);
+    });
+
+    test.each(['offline', 'error'] as const)(
+      'the %s placeholder has its audio in every slot',
+      async (kind) => {
+        const { sut, getCapturedAudioInput } = makeSut({
+          audioTracks: ['eng', 'jpn', 'spa'],
+        });
+
+        await sut.createPlaceholderSession(
+          kind === 'offline'
+            ? {
+                kind,
+                duration: dayjs.duration({ seconds: 90 }),
+                outputFormat: MpegTsOutputFormat,
+              }
+            : {
+                kind,
+                title: 'Error',
+                duration: dayjs.duration({ seconds: 90 }),
+                outputFormat: MpegTsOutputFormat,
+              },
+        );
+
+        expect(tracks(getCapturedAudioInput())).toEqual([
+          [0, 'eng'],
+          [0, 'jpn'],
+          [0, 'spa'],
+        ]);
+      },
+    );
+
+    test.each([
+      [['eng', 'jpn'], true],
+      [null, false],
+    ])(
+      'the MPEG-TS concat maps every stream with a layout (%j: %s)',
+      async (audioTracks, mapAll) => {
+        const { sut, getCapturedFfmpegState } = makeSut({ audioTracks });
+
+        await sut.createConcatSession('http://localhost/stream.ts', {
+          mode: 'mpegts_concat',
+          outputFormat: MpegTsOutputFormat,
+        });
+
+        expect(getCapturedFfmpegState()?.mapAllStreams).toBe(mapAll);
+      },
+    );
+
+    test('the HLS-slower concat re-encodes the audio streams after the video, tagged', async () => {
+      const { sut, getCapturedAudioInput } = makeSut({
+        audioTracks: ['eng', 'jpn'],
+      });
+
+      await sut.createConcatSession('http://localhost/stream.nut', {
+        mode: 'hls_slower_concat',
+        outputFormat: MpegTsOutputFormat,
+      });
+
+      expect(tracks(getCapturedAudioInput())).toEqual([
+        [1, 'eng'],
+        [2, 'jpn'],
+      ]);
     });
   });
 

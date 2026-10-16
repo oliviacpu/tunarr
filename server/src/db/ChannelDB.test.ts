@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { SaveableChannel } from '@tunarr/types';
+import { StrictChannelAudioTracksSchema } from '@tunarr/types/schemas';
 import tmp from 'tmp-promise';
 import { copyPreMigratedDb } from '../testing/testDbFactory.ts';
 import { mock } from 'ts-mockito';
@@ -331,6 +332,76 @@ describe('ChannelDB', () => {
       });
 
       expect(updated.channel.fillerShows).toHaveLength(0);
+    });
+
+    describe('audio track layout (switchable audio)', () => {
+      test('saves the layout and reads it back in order', async ({
+        channelDb,
+        defaultTranscodeConfigId,
+      }) => {
+        const created = await channelDb.saveChannel(
+          createSaveableChannel(defaultTranscodeConfigId, {
+            audioTracks: ['eng', 'jpn'],
+          }),
+        );
+
+        expect(created.channel.audioTracks).toEqual(['eng', 'jpn']);
+        const read = await channelDb.getChannel(created.channel.uuid);
+        expect(read?.audioTracks).toEqual(['eng', 'jpn']);
+      });
+
+      test('an update without the field keeps it; an empty list turns it off', async ({
+        channelDb,
+        defaultTranscodeConfigId,
+      }) => {
+        const channelData = createSaveableChannel(defaultTranscodeConfigId, {
+          audioTracks: ['jpn', 'eng'],
+        });
+        const created = await channelDb.saveChannel(channelData);
+
+        // A client from before the field existed sends the channel without it
+        const { audioTracks: _, ...withoutField } = channelData;
+        const kept = await channelDb.updateChannel(
+          created.channel.uuid,
+          withoutField,
+        );
+        expect(kept.channel.audioTracks).toEqual(['jpn', 'eng']);
+
+        const off = await channelDb.updateChannel(created.channel.uuid, {
+          ...channelData,
+          audioTracks: [],
+        });
+        expect(off.channel.audioTracks).toBeNull();
+      });
+
+      test('a channel without a layout stores none', async ({
+        channelDb,
+        defaultTranscodeConfigId,
+      }) => {
+        const created = await channelDb.saveChannel(
+          createSaveableChannel(defaultTranscodeConfigId),
+        );
+
+        expect(created.channel.audioTracks).toBeNull();
+      });
+
+      test.each([
+        [['eng', 'jpn'], true],
+        [[], true],
+        [['en'], false],
+        [['ENG'], false],
+        [['eng', 'eng'], false],
+        [['eng', 'jpn', 'deu', 'fra', 'spa'], false],
+        // a well-formed code that isn't a language
+        [['zzz'], false],
+        // one language under its bibliographic and terminological codes
+        [['ger', 'deu'], false],
+        [['ger', 'eng'], true],
+      ])('a save validates %j: %s', (audioTracks, valid) => {
+        expect(
+          StrictChannelAudioTracksSchema.safeParse(audioTracks).success,
+        ).toBe(valid);
+      });
     });
   });
 

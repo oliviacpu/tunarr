@@ -91,6 +91,7 @@ function getDefaultFormValues(channel: Channel): DeepRequired<SaveableChannel> {
     },
     subtitlesEnabled: channel.subtitlesEnabled,
     subtitlePreferences: channel.subtitlePreferences ?? [],
+    audioTracks: channel.audioTracks ?? [],
   };
 }
 
@@ -118,6 +119,7 @@ const EditChannelTabsProps: EditChannelTabProps[] = [
       'streamMode',
       'subtitlesEnabled',
       'subtitlePreferences',
+      'audioTracks',
     ],
   },
 ];

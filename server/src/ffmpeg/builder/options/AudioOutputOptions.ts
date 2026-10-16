@@ -21,12 +21,17 @@ export const AudioChannelsOutputOption = (
   return makeConstantOutputOption(opts);
 };
 
-// Tunarr's output has one audio stream. Tag its language (ISO 639-2, e.g. "eng") so clients don't treat every
-// program as foreign-language audio.
+// Tag an output audio track's language (ISO 639-2, e.g. "eng") so clients don't treat every program as
+// foreign-language audio. Tunarr's output has one audio track, or one per slot of a channel's fixed audio track
+// layout (`outputIndex`).
 export const AudioLanguageOutputOption = (
   iso6392: string,
+  outputIndex: number = 0,
 ): ConstantOutputOption =>
-  makeConstantOutputOption(['-metadata:s:a:0', `language=${iso6392}`]);
+  makeConstantOutputOption([
+    `-metadata:s:a:${outputIndex}`,
+    `language=${iso6392}`,
+  ]);
 
 export const AudioBitrateOutputOption = (
   bitrate: number,

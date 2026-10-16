@@ -26,6 +26,7 @@
     "typescript": "catalog:"
   },
   "dependencies": {
+    "@cospired/i18n-iso-languages": "^4.2.0",
     "zod": "catalog:"
   },
   "exports": {

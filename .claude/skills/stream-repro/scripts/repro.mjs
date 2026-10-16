@@ -33,6 +33,7 @@ const { values: opt } = parseArgs({
     reanalyze: { type: 'string' },
     'flex-first': { type: 'string' },
     'ffmpeg-setting': { type: 'string', multiple: true, default: [] },
+    'channel-setting': { type: 'string', multiple: true, default: [] },
     resolution: { type: 'string' },
     hwaccel: { type: 'string' },
     'vaapi-device': { type: 'string' },
@@ -374,6 +375,7 @@ async function buildSyntheticChannel(base, clipsDir) {
       transcodeConfigId: tc.id,
       icon: {},
       offline: { mode: 'pic' },
+      ...channelOverrides,
     },
   });
   await api(base, 'POST', `/api/channels/${channel.id}/programming`, {
@@ -411,13 +413,12 @@ async function applyTranscodeConfig(base, transcodeConfigId) {
   return patch;
 }
 
-// Values parse as JSON when they can (true, 3, "x"), and as plain strings otherwise.
-async function applyFfmpegSettings(base) {
-  if (opt['ffmpeg-setting'].length === 0) return undefined;
+// key=value pairs; values parse as JSON when they can (true, 3, "x", ["eng","jpn"]), and as plain strings otherwise.
+function parseKeyValues(pairs, flag) {
   const overrides = {};
-  for (const kv of opt['ffmpeg-setting']) {
+  for (const kv of pairs) {
     const eq = kv.indexOf('=');
-    if (eq < 1) throw new Error(`--ffmpeg-setting needs key=value, got ${kv}`);
+    if (eq < 1) throw new Error(`${flag} needs key=value, got ${kv}`);
     const raw = kv.slice(eq + 1);
     let value;
     try {
@@ -427,6 +428,30 @@ async function applyFfmpegSettings(base) {
     }
     overrides[kv.slice(0, eq)] = value;
   }
+  return overrides;
+}
+
+const channelOverrides = parseKeyValues(opt['channel-setting'], '--channel-setting');
+
+// --channel-setting fields of the channel: a synthetic channel is created with them (an update would round its
+// startTime to the minute); a copied channel is updated. Either way a field that didn't stick fails the run.
+async function applyChannelSettings(base, channelId, { update }) {
+  if (Object.keys(channelOverrides).length === 0) return undefined;
+  if (update) {
+    const current = await api(base, 'GET', `/api/channels/${channelId}`);
+    await api(base, 'PUT', `/api/channels/${channelId}`, { ...current, ...channelOverrides });
+  }
+  const saved = await api(base, 'GET', `/api/channels/${channelId}`);
+  const ignored = Object.keys(channelOverrides).filter(
+    (k) => JSON.stringify(saved[k]) !== JSON.stringify(channelOverrides[k]),
+  );
+  if (ignored.length) throw new Error(`channel settings not applied: ${ignored.join(', ')}`);
+  return channelOverrides;
+}
+
+async function applyFfmpegSettings(base) {
+  if (opt['ffmpeg-setting'].length === 0) return undefined;
+  const overrides = parseKeyValues(opt['ffmpeg-setting'], '--ffmpeg-setting');
   const current = await api(base, 'GET', '/api/ffmpeg-settings');
   await api(base, 'PUT', '/api/ffmpeg-settings', { ...current, ...overrides });
 
@@ -881,6 +906,7 @@ try {
     report.ffmpegSettings = await applyFfmpegSettings(server.base);
     log('building channel', server.base);
     channel = await buildSyntheticChannel(server.base, clipsDir);
+    report.channelSettings = await applyChannelSettings(server.base, channel.channelId, { update: false });
     if (opt['truncate-clip']) truncateClip(clipsDir, opt['truncate-clip']);
     if (opt['sar-override'] !== undefined) {
       // Mirrors Jellyfin/Emby, which save '0:0' for anamorphic media.
@@ -901,6 +927,7 @@ try {
     report.ffmpegSettings = await applyFfmpegSettings(server.base);
     const ch = await findChannel(server.base, opt.channel);
     report.transcodeConfig = await applyTranscodeConfig(server.base, ch.transcodeConfigId);
+    report.channelSettings = await applyChannelSettings(server.base, ch.id, { update: true });
     channel = { channelId: ch.id, startTime: ch.startTime, lineup: null };
   } else {
     throw new Error(`unknown --source ${opt.source}`);
