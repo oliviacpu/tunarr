@@ -1,6 +1,12 @@
 import { faker } from '@faker-js/faker';
 import { SaveableChannel } from '@tunarr/types';
-import { StrictChannelAudioTracksSchema } from '@tunarr/types/schemas';
+import {
+  CaptionAppearanceOverridesSchema,
+  CaptionAppearanceSchema,
+  ChannelCaptionsSchema,
+  SaveableChannelSchema,
+  StrictChannelAudioTracksSchema,
+} from '@tunarr/types/schemas';
 import tmp from 'tmp-promise';
 import { copyPreMigratedDb } from '../testing/testDbFactory.ts';
 import { mock } from 'ts-mockito';
@@ -401,6 +407,99 @@ describe('ChannelDB', () => {
         expect(
           StrictChannelAudioTracksSchema.safeParse(audioTracks).success,
         ).toBe(valid);
+      });
+    });
+
+    describe("a channel's own caption settings", () => {
+      test('saves them and reads them back', async ({
+        channelDb,
+        defaultTranscodeConfigId,
+      }) => {
+        const captions = {
+          testPattern: true,
+          alignment: 'left' as const,
+          appearance: { backgroundColor: 'magenta' as const, maxLines: 3 },
+        };
+        const created = await channelDb.saveChannel(
+          createSaveableChannel(defaultTranscodeConfigId, { captions }),
+        );
+
+        expect(created.channel.captions).toEqual(captions);
+        const read = await channelDb.getChannel(created.channel.uuid);
+        expect(read?.captions).toEqual(captions);
+      });
+
+      test('an update without the field keeps them; null goes back to the global settings', async ({
+        channelDb,
+        defaultTranscodeConfigId,
+      }) => {
+        const channelData = createSaveableChannel(defaultTranscodeConfigId, {
+          captions: { appearance: { textColor: 'yellow' } },
+        });
+        const created = await channelDb.saveChannel(channelData);
+
+        // A client or script from before the field existed
+        const { captions: _, ...withoutField } = channelData;
+        const kept = await channelDb.updateChannel(
+          created.channel.uuid,
+          withoutField,
+        );
+        expect(kept.channel.captions).toEqual({
+          appearance: { textColor: 'yellow' },
+        });
+
+        const reset = await channelDb.updateChannel(created.channel.uuid, {
+          ...channelData,
+          captions: null,
+        });
+        expect(reset.channel.captions).toBeNull();
+      });
+
+      test('stores nothing when they set nothing', async ({
+        channelDb,
+        defaultTranscodeConfigId,
+      }) => {
+        for (const captions of [
+          undefined,
+          {},
+          { testPattern: false },
+          { appearance: {} },
+        ]) {
+          const created = await channelDb.saveChannel(
+            createSaveableChannel(defaultTranscodeConfigId, {
+              number: faker.number.int({ min: 1000, max: 999999 }),
+              captions,
+            }),
+          );
+          expect(created.channel.captions).toBeNull();
+        }
+      });
+
+      test.each([
+        [{ appearance: { backgroundColor: 'magenta' } }, true],
+        [{ alignment: 'left', testPattern: true }, true],
+        [{ appearance: { maxLines: 9 } }, false],
+        [{ appearance: { textColor: 'black' } }, false],
+        [{ alignment: 'middle' }, false],
+      ])('a save validates %j: %s', (captions, valid) => {
+        expect(ChannelCaptionsSchema.safeParse(captions).success).toBe(valid);
+      });
+
+      // A default inside an optional field would fill every field in and
+      // override the global look with the defaults
+      test("a channel's appearance gets no defaults filled in", () => {
+        expect(
+          ChannelCaptionsSchema.parse({ appearance: { textColor: 'red' } }),
+        ).toEqual({ appearance: { textColor: 'red' } });
+        expect(
+          SaveableChannelSchema.shape.captions.parse({ appearance: {} }),
+        ).toEqual({ appearance: {} });
+      });
+
+      test('can override every appearance setting', () => {
+        expect(
+          Object.keys(CaptionAppearanceOverridesSchema.shape).sort(),
+        ).toEqual(Object.keys(CaptionAppearanceSchema.shape).sort());
       });
     });
   });

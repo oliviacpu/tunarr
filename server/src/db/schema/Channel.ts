@@ -1,3 +1,4 @@
+import type { ChannelCaptions } from '@tunarr/types';
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 import { inArray, relations } from 'drizzle-orm';
 import {
@@ -50,6 +51,9 @@ export const Channel = sqliteTable(
     // Fixed audio track layout (switchable audio in Plex Live TV): ISO 639-2
     // codes in output order; null or empty = one audio track, as before
     audioTracks: text({ mode: 'json' }).$type<string[]>(),
+    // The channel's own closed-caption settings over the global ones (a test
+    // channel's look and test pattern); null = the global settings
+    captions: text({ mode: 'json' }).$type<ChannelCaptions>(),
     streamSelectionProfileId: text().references(
       () => StreamSelectionProfile.uuid,
       { onDelete: 'set null' },

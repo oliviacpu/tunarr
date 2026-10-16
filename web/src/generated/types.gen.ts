@@ -3020,6 +3020,24 @@ export type GetChannelsResponses = {
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
         audioTracks?: Array<string>;
+        captions?: {
+            testPattern?: boolean;
+            alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+            appearance?: {
+                textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                bottomRow?: number;
+                topRow?: number;
+                maxLines?: number;
+                lineWidth?: number;
+                upperCase?: boolean;
+                mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                keepStyles?: boolean;
+                keepTopPlacement?: boolean;
+                overlappingCues?: 'together' | 'apart' | 'newest';
+            };
+        } | null;
     }>;
 };
 
@@ -3090,6 +3108,24 @@ export type CreateChannelV2Data = {
                 filter?: 'none' | 'forced' | 'default' | 'any';
             }>;
             audioTracks?: Array<string>;
+            captions?: {
+                testPattern?: boolean;
+                alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+                appearance?: {
+                    textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                    backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                    backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                    bottomRow?: number;
+                    topRow?: number;
+                    maxLines?: number;
+                    lineWidth?: number;
+                    upperCase?: boolean;
+                    mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                    keepStyles?: boolean;
+                    keepTopPlacement?: boolean;
+                    overlappingCues?: 'together' | 'apart' | 'newest';
+                };
+            } | null;
         };
     } | {
         type: 'copy';
@@ -3232,6 +3268,24 @@ export type CreateChannelV2Responses = {
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
         audioTracks?: Array<string>;
+        captions?: {
+            testPattern?: boolean;
+            alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+            appearance?: {
+                textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                bottomRow?: number;
+                topRow?: number;
+                maxLines?: number;
+                lineWidth?: number;
+                upperCase?: boolean;
+                mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                keepStyles?: boolean;
+                keepTopPlacement?: boolean;
+                overlappingCues?: 'together' | 'apart' | 'newest';
+            };
+        } | null;
     };
 };
 
@@ -3395,6 +3449,24 @@ export type GetChannelsByNumberV2Responses = {
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
         audioTracks?: Array<string>;
+        captions?: {
+            testPattern?: boolean;
+            alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+            appearance?: {
+                textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                bottomRow?: number;
+                topRow?: number;
+                maxLines?: number;
+                lineWidth?: number;
+                upperCase?: boolean;
+                mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                keepStyles?: boolean;
+                keepTopPlacement?: boolean;
+                overlappingCues?: 'together' | 'apart' | 'newest';
+            };
+        } | null;
     };
 };
 
@@ -3463,6 +3535,24 @@ export type PutApiChannelsByIdData = {
             filter?: 'none' | 'forced' | 'default' | 'any';
         }>;
         audioTracks?: Array<string>;
+        captions?: {
+            testPattern?: boolean;
+            alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+            appearance?: {
+                textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                bottomRow?: number;
+                topRow?: number;
+                maxLines?: number;
+                lineWidth?: number;
+                upperCase?: boolean;
+                mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                keepStyles?: boolean;
+                keepTopPlacement?: boolean;
+                overlappingCues?: 'together' | 'apart' | 'newest';
+            };
+        } | null;
     };
     path: {
         id: string;
@@ -3607,6 +3697,24 @@ export type PutApiChannelsByIdResponses = {
             filter: 'none' | 'forced' | 'default' | 'any';
         }>;
         audioTracks?: Array<string>;
+        captions?: {
+            testPattern?: boolean;
+            alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+            appearance?: {
+                textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                bottomRow?: number;
+                topRow?: number;
+                maxLines?: number;
+                lineWidth?: number;
+                upperCase?: boolean;
+                mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                keepStyles?: boolean;
+                keepTopPlacement?: boolean;
+                overlappingCues?: 'together' | 'apart' | 'newest';
+            };
+        } | null;
     };
 };
 
@@ -7025,6 +7133,24 @@ export type GetApiChannelsByIdScheduleResponses = {
                         filter: 'none' | 'forced' | 'default' | 'any';
                     }>;
                     audioTracks?: Array<string>;
+                    captions?: {
+                        testPattern?: boolean;
+                        alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+                        appearance?: {
+                            textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                            backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                            backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                            bottomRow?: number;
+                            topRow?: number;
+                            maxLines?: number;
+                            lineWidth?: number;
+                            upperCase?: boolean;
+                            mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                            keepStyles?: boolean;
+                            keepTopPlacement?: boolean;
+                            overlappingCues?: 'together' | 'apart' | 'newest';
+                        };
+                    } | null;
                 } | null;
                 isMissing: boolean;
             } | {
@@ -7439,6 +7565,24 @@ export type GetApiChannelsByIdScheduleResponses = {
                         filter: 'none' | 'forced' | 'default' | 'any';
                     }>;
                     audioTracks?: Array<string>;
+                    captions?: {
+                        testPattern?: boolean;
+                        alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+                        appearance?: {
+                            textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                            backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                            backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                            bottomRow?: number;
+                            topRow?: number;
+                            maxLines?: number;
+                            lineWidth?: number;
+                            upperCase?: boolean;
+                            mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                            keepStyles?: boolean;
+                            keepTopPlacement?: boolean;
+                            overlappingCues?: 'together' | 'apart' | 'newest';
+                        };
+                    } | null;
                 } | null;
                 isMissing: boolean;
             } | {
@@ -13621,6 +13765,24 @@ export type PostApiTroubleshootResponses = {
                 filter: 'none' | 'forced' | 'default' | 'any';
             }>;
             audioTracks?: Array<string>;
+            captions?: {
+                testPattern?: boolean;
+                alignment?: 'centeredBlock' | 'centeredLines' | 'left';
+                appearance?: {
+                    textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                    backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+                    backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+                    bottomRow?: number;
+                    topRow?: number;
+                    maxLines?: number;
+                    lineWidth?: number;
+                    upperCase?: boolean;
+                    mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+                    keepStyles?: boolean;
+                    keepTopPlacement?: boolean;
+                    overlappingCues?: 'together' | 'apart' | 'newest';
+                };
+            } | null;
         };
         streamSelection?: {
             profileName?: string;
