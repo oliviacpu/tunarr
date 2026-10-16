@@ -79,6 +79,30 @@ export class ExternalSubtitleDownloader {
     details: SubtitleStreamDetails,
     getSubtitlesCb: GetSubtitlesCallback,
   ) {
+    const result = await this.fetchToCache(item, details, getSubtitlesCb);
+    if (result.type === 'not_found') {
+      this.logger.info(missingSubtitleMessage(item, details));
+      return;
+    }
+    return result.path;
+  }
+
+  /**
+   * Fetches an external subtitle into the subtitle cache, named after its key.
+   * Without `refresh` an existing copy is used as it is. With `refresh` the
+   * copy is fetched again and replaced only when its content changed, so a
+   * subtitle whose file the media server rewrote (a re-sync, a better
+   * download) doesn't stay old for good. Copies are written to a temporary
+   * file and renamed into place, so ffmpeg never reads half a file. A failed
+   * fetch keeps the existing copy. A 404 is returned, not logged: the caller
+   * decides what it means.
+   */
+  async fetchToCache(
+    item: ExternalItem,
+    details: SubtitleStreamDetails,
+    getSubtitlesCb: GetSubtitlesCallback,
+    opts: { refresh?: boolean } = {},
+  ): Promise<SubtitleCacheResult> {
     const outPath = getSubtitleCacheFilePath(
       {
         externalKey: item.externalKey,
@@ -99,7 +123,7 @@ export class ExternalSubtitleDownloader {
         'Was not able to calculate output path or extension for subtitle codec: %s',
         details.codec,
       );
-      return;
+      return { type: 'failed' };
     }
 
     // This should've been created on startup but double-check
@@ -112,36 +136,65 @@ export class ExternalSubtitleDownloader {
 
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
 
-    if (!(await fileExists(fullPath))) {
-      const subtitlesRes = await getSubtitlesCb({ extension: ext });
-
-      if (subtitlesRes.isFailure()) {
-        if (subtitlesRes.error.type === 'not_found') {
-          this.logger.info(missingSubtitleMessage(item, details));
-          return;
-        }
-
-        this.logger.warn(
-          subtitlesRes.error,
-          'Error while requesting external subtitle stream: %s',
-          subtitlesRes.error.message ?? '',
-        );
-        return;
-      }
-
-      try {
-        await fs.writeFile(fullPath, subtitlesRes.get());
-        return fullPath;
-      } catch (e) {
-        this.logger.warn(
-          e,
-          'Error writing subtitle output file to %s',
-          fullPath,
-        );
-        return;
-      }
+    const existing = (await fileExists(fullPath)) ? fullPath : undefined;
+    if (existing && !opts.refresh) {
+      return { type: 'cached', path: existing };
     }
 
-    return fullPath;
+    const subtitlesRes = await getSubtitlesCb({ extension: ext });
+
+    if (subtitlesRes.isFailure()) {
+      if (subtitlesRes.error.type === 'not_found') {
+        return { type: 'not_found' };
+      }
+
+      this.logger.warn(
+        subtitlesRes.error,
+        'Error while requesting external subtitle stream: %s',
+        subtitlesRes.error.message ?? '',
+      );
+      return { type: 'failed', path: existing };
+    }
+
+    const content = Buffer.from(subtitlesRes.get(), 'utf-8');
+    try {
+      if (existing) {
+        const current = await fs.readFile(existing).catch(() => null);
+        if (current?.equals(content)) {
+          // The same subtitle: keep the copy, and restart its age so it isn't
+          // fetched again until it is stale once more.
+          const now = new Date();
+          await fs.utimes(existing, now, now);
+          return { type: 'unchanged', path: existing };
+        }
+      }
+      await writeFileAtomically(fullPath, content);
+      return { type: existing ? 'replaced' : 'written', path: fullPath };
+    } catch (e) {
+      this.logger.warn(e, 'Error writing subtitle output file to %s', fullPath);
+      return { type: 'failed', path: existing };
+    }
+  }
+}
+
+/**
+ * What fetchToCache did: `cached` (an existing copy, not fetched), `written`
+ * (a new copy), `unchanged` (fetched again, the same content), `replaced`
+ * (fetched again, the new content swapped in), `not_found` (the media server
+ * no longer has the stream) or `failed` (an existing copy, if any, is kept).
+ */
+export type SubtitleCacheResult =
+  | { type: 'cached' | 'written' | 'unchanged' | 'replaced'; path: string }
+  | { type: 'not_found' }
+  | { type: 'failed'; path?: string };
+
+async function writeFileAtomically(target: string, content: Buffer) {
+  const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await fs.writeFile(tmp, content);
+    await fs.rename(tmp, target);
+  } catch (e) {
+    await fs.rm(tmp, { force: true });
+    throw e;
   }
 }
