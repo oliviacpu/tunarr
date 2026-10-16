@@ -76,7 +76,10 @@ describe('captionTestPattern', () => {
       // The user's own settings, which the samples override
       appearance: { backgroundColor: 'red', textColor: 'green' },
     });
-    const frames = Math.ceil(((cues[33]?.endMs ?? 0) / 1000) * frameRate) + 30;
+    const frames =
+      Math.ceil(
+        ((cues[CaptionTestSamples.length - 1]?.endMs ?? 0) / 1000) * frameRate,
+      ) + 30;
     const screens = decodeScreens(
       Array.from({ length: frames }, (_, k) => [
         ...schedule.pairAt((k * 1000) / frameRate),

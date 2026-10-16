@@ -341,15 +341,19 @@ function resolveAppearance(
 function parseCueText(text: string): ParsedCue {
   let style = PlainStyle;
   let alignment: number | undefined;
+  // ASS vector drawings ({\p1}...{\p0}) are shapes, not text
+  let drawing = false;
   const lines: StyledChar[][] = [[]];
   const current = () => lines.at(-1) ?? [];
   for (const [token] of text.matchAll(
     /\{[^}]*\}|<[^>]*>|\\[Nnh]|\n|[\s\S]/gu,
   )) {
     if (token.length > 1 && token.startsWith('{')) {
-      for (const [, tag, value] of token.matchAll(/\\(an|a|i|u)(\d+)|\\r/g)) {
+      for (const [, tag, value] of token.matchAll(/\\(an|a|i|u|p)(\d+)|\\r/g)) {
         const n = Number(value);
-        if (tag === undefined) {
+        if (tag === 'p') {
+          drawing = n > 0;
+        } else if (tag === undefined) {
           style = PlainStyle;
         } else if (tag === 'i') {
           style = { ...style, italic: n !== 0 };
@@ -368,6 +372,8 @@ function parseCueText(text: string): ParsedCue {
       } else if (name === 'u') {
         style = { ...style, underline: tag?.[1] !== '/' };
       }
+    } else if (drawing) {
+      continue;
     } else if (token === '\n' || token === '\\N' || token === '\\n') {
       lines.push([]);
     } else {
@@ -380,8 +386,21 @@ function parseCueText(text: string): ParsedCue {
   };
 }
 
-// Where a cue goes: at the top when the subtitle file puts it there, else at
-// the bottom, centred by the alignment setting
+// A numpad position (7-9 top, 4-6 middle, 1-3 bottom; left, centre, right)
+function numpadPlacement(n: number): CaptionPlacement | undefined {
+  if (!Number.isInteger(n) || n < 1 || n > 9) {
+    return;
+  }
+  const horizontal = (['left', 'center', 'right'] as const)[(n - 1) % 3];
+  return {
+    vertical: n >= 7 ? 'top' : n >= 4 ? 'middle' : 'bottom',
+    horizontal: horizontal ?? 'center',
+  };
+}
+
+// Where a cue goes: where the subtitle file puts it (its alignment override),
+// else at the bottom, centred by the alignment setting. With placement from
+// the file turned off, always the default.
 function resolvePlacement(
   cue: ParsedCue,
   appearance: CaptionAppearance,
@@ -389,9 +408,7 @@ function resolvePlacement(
   if (!appearance.keepTopPlacement || cue.alignment === undefined) {
     return DefaultPlacement;
   }
-  return cue.alignment >= 7 && cue.alignment <= 9
-    ? { vertical: 'top', horizontal: 'center' }
-    : DefaultPlacement;
+  return numpadPlacement(cue.alignment) ?? DefaultPlacement;
 }
 
 // Whitespace runs become one space, and none at either end

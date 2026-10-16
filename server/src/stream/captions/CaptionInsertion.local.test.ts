@@ -282,6 +282,49 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
       expect(event?.text).toContain('Red on blue');
     });
 
+    // FFmpeg's decoder writes each caption's first row as {\\an7}{\\pos(x,y)}
+    test('places middle and right-aligned cues', async () => {
+      const pos = (text: string) => {
+        const m = /\\pos\((\d+),(\d+)\)/.exec(text);
+        return m ? [Number(m[1]), Number(m[2])] : [];
+      };
+      if (!binaries) {
+        return;
+      }
+      const shown = await events(
+        'placement',
+        [
+          { startMs: 1000, endMs: 3000, text: 'Bottom' },
+          { startMs: 4000, endMs: 6000, text: '{\\an5}Middle' },
+          { startMs: 7000, endMs: 9000, text: '{\\an3}Right' },
+        ],
+        {},
+      );
+      // events() strips the position, so read it from the raw text again
+      const raw = execFileSync(binaries.ffmpeg, [
+        ...['-hide_banner', '-loglevel', 'error', '-f', 'lavfi'],
+        ...[
+          '-i',
+          `movie=${path.join(workdir, 'appearance-placement.ts')}[out0+subcc]`,
+        ],
+        ...['-map', '0:s', '-f', 'ass', '-'],
+      ])
+        .toString()
+        .split('\n')
+        .filter((line) => line.startsWith('Dialogue:'));
+      expect(shown.map((e) => e.text.trim())).toEqual([
+        'Bottom',
+        'Middle',
+        'Right',
+      ]);
+      const [bottom, middle, right] = raw.map(pos);
+      // The middle row sits between the top and bottom of a 288-line script
+      expect(middle?.[1]).toBeGreaterThan(100);
+      expect(middle?.[1]).toBeLessThan(bottom?.[1] ?? 0);
+      // Right-aligned text starts well right of centred text
+      expect(right?.[0]).toBeGreaterThan((bottom?.[0] ?? 0) + 60);
+    });
+
     test('rolls lines up, keeping the chosen number of rows', async () => {
       const shown = await events(
         'rollup',

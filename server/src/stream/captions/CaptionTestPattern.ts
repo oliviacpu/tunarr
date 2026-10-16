@@ -92,6 +92,8 @@ export const CaptionTestSamples: readonly Sample[] = [
     text: '34 ROLL-UP, 4 ROWS\nLINE TWO\nLINE THREE\nLINE FOUR\nLINE FIVE',
     appearance: { mode: 'rollUp4' },
   },
+  { text: '{\\an5}35 MIDDLE OF THE SCREEN' },
+  { text: '{\\an3}36 RIGHT-ALIGNED\nTWO LINES WIDE' },
 ];
 
 // How long each sample shows, and the gap after it: longer around the modes

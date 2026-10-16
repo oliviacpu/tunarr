@@ -840,9 +840,47 @@ describe('caption placement', () => {
     });
   });
 
-  test('keeps other alignments at the bottom', () => {
+  test('keeps bottom alignments at the bottom', () => {
     expect(decode('{\\an2}Bottom')[0]?.map((r) => r.row)).toEqual([15]);
-    expect(decode('{\\an5}Middle')[0]?.map((r) => r.row)).toEqual([15]);
+    expect(decode('{\\a2}Old SSA bottom')[0]?.map((r) => r.row)).toEqual([15]);
+  });
+
+  test('puts a cue with a middle alignment in the middle of the screen', () => {
+    expect(decode('{\\an5}Middle')[0]?.map((r) => r.row)).toEqual([8]);
+    expect(decode('{\\an5}Two\nlines')[0]?.map((r) => r.row)).toEqual([7, 8]);
+    expect(decode('{\\a10}Old SSA middle')[0]?.map((r) => r.row)).toEqual([8]);
+  });
+
+  test('puts a cue at the side the file aligns it to', () => {
+    // Left: column 0, whatever the alignment setting
+    expect(decode('{\\an1}Left')[0]?.[0]).toMatchObject({ row: 15, column: 0 });
+    // Right: each line ends at the right edge
+    const right = decode('{\\an9}Right\nside')[0];
+    expect(right?.map((r) => [r.row, r.column + r.width])).toEqual([
+      [1, 32],
+      [2, 32],
+    ]);
+    // Centre follows the alignment setting
+    expect(
+      decode('{\\an2}Centred', { alignment: 'left' })[0]?.[0]?.column,
+    ).toBe(0);
+  });
+
+  test("ignores the file's placement when asked", () => {
+    expect(
+      decode('{\\an9}Right top', { keepTopPlacement: false })[0]?.map((r) => [
+        r.row,
+        r.column,
+      ]),
+    ).toEqual([[15, 12]]);
+  });
+
+  test('leaves out vector drawings', () => {
+    expect(
+      decode('{\\p1}m 0 0 l 100 0 100 100{\\p0}Sign text')[0]?.map(
+        (r) => r.text,
+      ),
+    ).toEqual(['Sign text']);
   });
 
   test('centres each line on its own with tab offsets', () => {
