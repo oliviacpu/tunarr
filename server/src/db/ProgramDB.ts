@@ -34,7 +34,6 @@ import type { ProgramGroupingType } from './schema/ProgramGrouping.js';
 import type {
   MediaSourceId,
   MediaSourceType,
-  ProgramExternalIdSourceType,
   ProgramState,
   RemoteSourceType,
 } from './schema/base.js';
@@ -211,9 +210,7 @@ export class ProgramDB implements IProgramDB {
   programIdsByExternalIds(
     ids: Set<[string, string, string]>,
     chunkSize?: number,
-  ): Promise<
-    Record<`${ProgramExternalIdSourceType}.${string}.${string}`, string>
-  > {
+  ): Promise<Record<`${string}|${string}|${string}`, string>> {
     return this.externalIdRepo.programIdsByExternalIds(
       ids as Set<[string, MediaSourceId, string]>,
       chunkSize ?? 50,
