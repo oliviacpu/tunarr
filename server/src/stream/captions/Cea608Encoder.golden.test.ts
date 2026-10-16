@@ -65,7 +65,7 @@ function serialize(
     firstFrameMs,
     frameRate,
     endMs,
-    layout: { alignment },
+    appearance: { alignment },
   });
   const lines: string[] = [];
   const frames = Math.ceil((32_000 / 1000) * frameRate);

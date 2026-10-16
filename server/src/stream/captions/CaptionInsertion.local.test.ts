@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { createTempWorkdir } from '../../testing/ffmpeg/FfmpegIntegrationHelper.ts';
 import { binaries } from '../../testing/ffmpeg/FfmpegTestFixtures.ts';
 import { CaptionLanguageStream } from './CaptionLanguageStream.ts';
-import type { CaptionCue, CaptionLayoutOptions } from './Cea608Encoder.ts';
+import type { CaptionAppearance, CaptionCue } from './Cea608Encoder.ts';
 import { PaddingPair, buildCaptionSchedule } from './Cea608Encoder.ts';
 import { insertCaptions } from './MpegTsCaptionInserter.ts';
 
@@ -144,11 +144,11 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
       },
     ];
 
-    const decode = async (layout: CaptionLayoutOptions) => {
+    const decode = async (layout: Pick<CaptionAppearance, 'alignment'>) => {
       const schedule = buildCaptionSchedule(cues, {
         firstFrameMs: firstMs,
         frameRate: 30,
-        layout,
+        appearance: layout,
       });
       const result = insertCaptions(await fs.readFile(input), {
         pairForPts: (pts) => schedule.pairAt(pts / 90),

@@ -1,6 +1,6 @@
 import type {
+  CaptionAppearance,
   CaptionLayout,
-  CaptionLayoutOptions,
   CcPair,
 } from './Cea608Encoder.ts';
 import {
@@ -14,6 +14,7 @@ import {
   NoCaptionsNoticeText,
   noCaptionsNoticeStartMs,
 } from './ProgramCaptions.ts';
+import { decodeScreens } from '../../testing/captions/Cea608TestDecoder.ts';
 
 const FrameRate = 30;
 const frameMs = 1000 / FrameRate;
@@ -38,12 +39,12 @@ function framePairs(
   cues: Parameters<typeof buildCaptionSchedule>[0],
   frames: number,
   firstFrameMs = 0,
-  layout?: CaptionLayoutOptions,
+  appearance?: Partial<CaptionAppearance>,
 ) {
   const schedule = buildCaptionSchedule(cues, {
     firstFrameMs,
     frameRate: FrameRate,
-    layout,
+    appearance,
   });
   return Array.from({ length: frames }, (_, k) =>
     withoutParity(schedule.pairAt(firstFrameMs + k * frameMs)),
@@ -146,7 +147,7 @@ function decodeCaptions(pairs: number[][]): DecodedRow[][] {
 
 const decode = (
   text: string,
-  layout?: CaptionLayoutOptions,
+  layout?: Partial<CaptionAppearance>,
   endMs = 6000,
 ): DecodedRow[][] =>
   decodeCaptions(
@@ -445,6 +446,179 @@ describe('caption styles', () => {
     expect(fits[0]?.width).toBe(32);
     expect(wraps).toHaveLength(2);
     expect(wraps.every((r) => r.column + r.width <= 32)).toBe(true);
+  });
+});
+
+// The rows of each caption shown, as the test decoder reads them
+function shownCaptions(
+  cues: Parameters<typeof buildCaptionSchedule>[0],
+  appearance?: Partial<CaptionAppearance>,
+) {
+  return decodeScreens(framePairs(cues, 30 * 20, 0, appearance))
+    .filter((screen) => screen.rows.length > 0)
+    .map((screen) => screen.rows);
+}
+
+const cue = (text: string) => [{ startMs: 3000, endMs: 6000, text }];
+const rowTexts = (captions: ReturnType<typeof shownCaptions>) =>
+  captions.map((rows) => rows.map((r) => r.text));
+
+describe('caption appearance', () => {
+  test('draws text in the chosen colour, from the start of each line', () => {
+    expect(
+      rowTexts(shownCaptions(cue('Hello\nthere'), { textColor: 'red' })),
+    ).toEqual([['[red]Hello', '[red]there']]);
+  });
+
+  // 608's italics are white, so italic words lose the colour
+  test('shows italics white and goes back to the colour after them', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('<i>Psst,</i> said <u>he</u>'), {
+          textColor: 'green',
+        }),
+      ),
+    ).toEqual([['[i]Psst,[green]said[green u]he']]);
+  });
+
+  test('puts a box of the chosen colour behind each line', () => {
+    expect(
+      rowTexts(shownCaptions(cue('Hi\nthere'), { backgroundColor: 'blue' })),
+    ).toEqual([[' [bg blue]Hi', ' [bg blue]there']]);
+  });
+
+  test('sends semi-transparent and transparent boxes', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'black',
+          backgroundOpacity: 'semiTransparent',
+        }),
+      ),
+    ).toEqual([[' [bg black semi]Hi']]);
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'red',
+          backgroundOpacity: 'transparent',
+        }),
+      ),
+    ).toEqual([[' [bg transparent]Hi']]);
+  });
+
+  test("sends no box code for the player's own box, whatever the opacity", () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'player',
+          backgroundOpacity: 'semiTransparent',
+        }),
+      ),
+    ).toEqual([['Hi']]);
+  });
+
+  // A colour code ends flashing, so it has to come first
+  test('sends the box, then the colour, then flash', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Hi'), {
+          backgroundColor: 'blue',
+          textColor: 'yellow',
+          flash: true,
+        }),
+      ),
+    ).toEqual([[' [bg blue][yellow][flash]Hi']]);
+  });
+
+  test('counts the codes in the line width', () => {
+    // 32 columns: one line plain, two with a box
+    const line = 'Thirty-two characters, exactly.!';
+    expect(line).toHaveLength(32);
+    expect(shownCaptions(cue(line))[0]).toHaveLength(1);
+    expect(
+      shownCaptions(cue(line), { backgroundColor: 'blue' })[0],
+    ).toHaveLength(2);
+  });
+
+  test('ends bottom captions on the chosen row', () => {
+    const [rows] = shownCaptions(cue('One\nTwo'), { bottomRow: 11 });
+    expect(rows?.map((r) => r.row)).toEqual([10, 11]);
+  });
+
+  test('starts top captions on the chosen row', () => {
+    const [rows] = shownCaptions(cue('{\\an8}One\nTwo'), { topRow: 5 });
+    expect(rows?.map((r) => r.row)).toEqual([5, 6]);
+  });
+
+  test('keeps every line on screen whatever the rows', () => {
+    expect(
+      shownCaptions(cue('One\nTwo'), { bottomRow: 1 })[0]?.map((r) => r.row),
+    ).toEqual([1, 2]);
+    expect(
+      shownCaptions(cue('{\\an8}One\nTwo'), { topRow: 15 })[0]?.map(
+        (r) => r.row,
+      ),
+    ).toEqual([14, 15]);
+  });
+
+  test('puts up to the chosen number of lines in a caption', () => {
+    const text = 'One\nTwo\nThree\nFour';
+    expect(rowTexts(shownCaptions(cue(text)))).toEqual([
+      ['One', 'Two'],
+      ['Three', 'Four'],
+    ]);
+    const [four] = shownCaptions(cue(text), { maxLines: 4 });
+    expect(four?.map((r) => [r.row, r.text])).toEqual([
+      [12, 'One'],
+      [13, 'Two'],
+      [14, 'Three'],
+      [15, 'Four'],
+    ]);
+  });
+
+  test('wraps lines at the chosen width', () => {
+    const captions = shownCaptions(
+      cue('A sentence long enough to need wrapping at twenty columns.'),
+      { lineWidth: 20, maxLines: 4 },
+    );
+    const widths = captions.flat().map((r) => r.width);
+    expect(Math.max(...widths)).toBeLessThanOrEqual(20);
+    expect(widths.length).toBeGreaterThan(2);
+  });
+
+  test('shows the text in capitals', () => {
+    expect(
+      rowTexts(
+        shownCaptions(cue('Die Straße, <i>jetzt</i>'), { upperCase: true }),
+      ),
+    ).toEqual([['DIE STRASSE,[i]JETZT']]);
+  });
+
+  test("leaves out the file's styles and top placement when asked", () => {
+    const [rows] = shownCaptions(cue('{\\an8}<i>Hi</i> there'), {
+      keepStyles: false,
+      keepTopPlacement: false,
+    });
+    expect(rows?.map((r) => [r.row, r.text])).toEqual([[15, 'Hi there']]);
+  });
+
+  test("gives a cue its own appearance over the schedule's", () => {
+    const captions = shownCaptions(
+      [
+        { startMs: 1000, endMs: 3000, text: 'Plain' },
+        {
+          startMs: 4000,
+          endMs: 6000,
+          text: 'Mine',
+          appearance: { textColor: 'cyan' },
+        },
+      ],
+      { backgroundColor: 'red' },
+    );
+    expect(rowTexts(captions)).toEqual([
+      [' [bg red]Plain'],
+      [' [bg red][cyan]Mine'],
+    ]);
   });
 });
 
