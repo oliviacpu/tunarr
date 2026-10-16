@@ -35,6 +35,46 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Saving a channel no longer rewrites every channel's guide entries (2026-10-16)
+
+- **What you saw:** Live TV paused while channels were saved. On the deployment, with the owner watching channel 1,
+  the latency probe saw 6 requests over 250 ms (worst 1.05 s), all while the Sci-Fi channel was being saved. The
+  save took 4 s there. Editing channels in the web UI did the same on 2026-10-14.
+- **Cause:**
+  - Every save (`PUT /api/channels/:id`) ends with an XMLTV write.
+  - That write fetched every guide program of every channel with all its relations, and rendered every channel's
+    programmes.
+  - On a copy of the deployment's database (6 channels, 72 h guide, 784 programs), the fetch was 133–382 ms of a
+    181–426 ms write. The rest of the save took under 10 ms.
+  - The fetch yields between chunks, but on the shared server a chunk can wait on a cold disk.
+- **Fix:**
+  - **`XmlTvWriter.write(channels, { reuse, onRendered })`:** a channel in `reuse` keeps the programmes an earlier
+    write rendered, with no render and no artwork publish.
+  - **`TvGuideService`:** remembers each channel's rendered programmes, keyed on the guide entry, channel object and
+    programs array they came from, and on the render settings (XMLTV settings, credit-images flag).
+  - **Redirects:** the key also holds each redirect target's presence, name and number. A redirect that wasn't
+    followed when the guide was built renders from its target at write time (Codex on PR #26).
+  - **Effect:** a save re-fetches and re-renders only the saved channel. A guide rebuild or a settings change renders
+    everything again.
+  - **Trade-off:** program details edited since (a scan) reach the other channels' entries at their next scheduled
+    rebuild, as when nothing was saved (`docs/configure/channels/epg.md`).
+  - The plan is in `plans/channel-save-guide-reuse.md`.
+- **Measured** with `guide-refresh-ab.ts --action save` (new, with `--template-dir` for a copy of a real database)
+  against the deployment's copy, medians of 3 trials, reuse off vs on:
+  - **saving an offline picture:** 199 → 46 ms, probe p99 17.6 → 4.3 ms;
+  - **saving a new start time** (the nightly grid build's save, which regenerates the lineup): 236 → 60 ms, probe
+    p99 31.1 → 4.2 ms; stalls of 25–63 ms with reuse off, none with it on.
+- **Tests:**
+  - `XmlTvWriter.test.ts`: a full write matches `serialize`; a reused channel isn't rendered and publishes nothing.
+  - `TvGuideService.test.ts`:
+    - after a build, a save fetches and renders only the saved channel;
+    - a rebuild or a settings change renders all;
+    - a channel with an unresolved redirect is rendered again when its target appears, is renumbered or leaves;
+    - a followed redirect stays reused when its target is renumbered.
+  - Fail without their change: the writer's two, the first guide test and the unresolved-redirect one. The other two
+    pass either way, by design.
+- **Upstream:** not sent.
+
 ### Downloaded subtitles stay fresh, and a replaced subtitle heals at once (2026-10-16)
 
 - **What you saw:** 132 programs served an older subtitle than the file next to the video (Bazarr's re-syncs and
@@ -105,7 +145,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - Plex picks each account's preferred audio language from them;
   - but Plex keeps the track list it sees at tune-in for the whole session, and ends the session if the stream
     restarts, so the tracks can't change from program to program.
-- **Change:** a channel setting, **Audio tracks**, under *Audio & Subtitles* on the Streaming tab:
+- **Change:** a channel setting, **Audio tracks**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.audioTracks`, up to four ISO 639-2 codes in order, stored in the new column
     `audio_tracks` (migration 0053).
   - **Effect:** every program, commercial, gap (offline picture, with gap music or silence) and error screen on the
@@ -127,15 +167,16 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Verified end to end** (stream-repro, jellyfin-ffmpeg 8.1.3, new `--channel-setting` option), with a 20 s flex gap
   and three clips (English stereo; English 5.1 at 44.1 kHz with subtitles; English + Japanese), layout `eng, jpn`:
 
-  | Mode | Result |
-  | --- | --- |
-  | HLS | 35/35 segments `[eng 2ch 48k, jpn 2ch 48k]` |
-  | HLS alt | 33/33 segments, the same |
-  | MPEG-TS | the whole capture has both tracks |
+  | Mode    | Result                                      |
+  | ------- | ------------------------------------------- |
+  | HLS     | 35/35 segments `[eng 2ch 48k, jpn 2ch 48k]` |
+  | HLS alt | 33/33 segments, the same                    |
+  | MPEG-TS | the whole capture has both tracks           |
 
   - **What Plex reads:** the channel's HDHomeRun `.ts` carried video + eng + jpn.
   - **English + Spanish layout:** 19/19 segments `[eng, spa]`.
   - **Without the setting:** one track, as before.
+
 - **Tests:**
   - `AudioTrackLayout.test.ts`: slot rules, commentary, B/T codes, selected/default.
   - `FfmpegStreamFactory.test.ts`: programs, a missing language, order, no audio, gap music, offline/error
@@ -184,6 +225,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `Episode 1` matched `Episode 10.en.srt`, and `Movie` matched `Movie.part2.en.srt`;
   - `Movie.srt` was read as the language `srt`.
 - **Fix:** `server/src/services/local/LocalSubtitlesService.ts`:
+
   - it passes both full paths;
   - a file must start with the video's name and a dot, and not with a longer video name in the same folder;
   - the language is the first part that is a language code, or looks like one and isn't an option (a private
@@ -193,6 +235,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - extensions match in any case.
 
   The ffmpeg docs list the naming rules. Folders that haven't changed since their last scan need one **Force Scan**.
+
 - **Tests:** `LocalSubtitlesService.test.ts`:
   - real files in a temporary folder: full paths, other files ignored, a dot in the video's name, a neighbouring
     episode's subtitles, a longer video name;
