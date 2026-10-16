@@ -189,7 +189,7 @@ export const TranscodeConfigVideoSettingsForm = ({
                   options={VideoPresetOptions}
                   converter={videoPresetConverter}
                   selectProps={{ label: t`Video Preset` }}
-                  helperText={t`How hard the software encoder works per frame. Faster presets use less CPU but need a higher bitrate for the same quality. Takes effect when the next program starts.`}
+                  helperText={t`How hard the software encoder works per frame. Faster presets use less CPU but need a higher bitrate for the same quality. An HLS channel keeps the settings its stream started with, so a change applies once everyone stops watching it and it starts again; an MPEG-TS channel picks it up from the next program.`}
                 />
               )}
             />
