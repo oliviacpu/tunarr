@@ -617,21 +617,40 @@ export function buildCaptionSchedule(
     }
     return true;
   };
-  // Loads the atoms as early as possible from `startSlot`; returns the slot after the last
-  const placeFrom = (atoms: CcPair[][], startSlot: number) => {
+  // Loads the atoms as early as possible from `startSlot`; returns the slot
+  // after the last. With `dryRun`, only finds that slot.
+  const placeFrom = (
+    atoms: CcPair[][],
+    startSlot: number,
+    { dryRun = false } = {},
+  ) => {
     let slot = startSlot;
     for (const atom of atoms) {
       while (!isFreeRun(slot, atom.length)) {
         slot++;
       }
-      atom.forEach((p, k) => take(slot + k, p));
+      if (!dryRun) {
+        atom.forEach((p, k) => take(slot + k, p));
+      }
       slot += atom.length;
     }
     return slot;
   };
+  const firstFreeFrom = (slot: number) => {
+    let free = slot;
+    while (!isFree(free)) {
+      free++;
+    }
+    return free;
+  };
+  const clearFrom = (slot: number) =>
+    take(firstFreeFrom(slot), EraseDisplayedMemory);
 
   // Hidden memory can only be reloaded once the previous caption is on screen
   let loadAfter = 0;
+  // Where the caption on screen ends, when it was left up for the next one to
+  // replace
+  let replacedAt: number | undefined;
   for (const [i, caption] of captions.entries()) {
     const load = loadSequence(caption.caption, layout);
     const wanted = Math.max(slotOf(caption.startMs), 0);
@@ -640,11 +659,22 @@ export function buildCaptionSchedule(
     // isn't room before it (a short gap, or a cue already under way)
     let showAt = wanted;
     if (!placeBefore(load, wanted, loadAfter)) {
-      showAt = Math.max(wanted, placeFrom(load, loadAfter));
+      showAt = firstFreeFrom(
+        Math.max(wanted, placeFrom(load, loadAfter, { dryRun: true })),
+      );
+      // A caption that can't be loaded before it ends is left out, rather
+      // than flashed for a frame. A cue nearly over when a viewer tunes in is
+      // one: its load would also hold up the next caption.
+      if (showAt >= slotOf(caption.endMs)) {
+        if (replacedAt !== undefined) {
+          clearFrom(replacedAt);
+          replacedAt = undefined;
+        }
+        continue;
+      }
+      placeFrom(load, loadAfter);
     }
-    while (!isFree(showAt)) {
-      showAt++;
-    }
+    showAt = firstFreeFrom(showAt);
     take(showAt, EndOfCaption);
     loadAfter = showAt + 1;
 
@@ -652,11 +682,10 @@ export function buildCaptionSchedule(
     const next = captions[i + 1];
     const endSlot = Math.max(slotOf(caption.endMs), showAt + 1);
     if (!next || slotOf(next.startMs) > endSlot + 1) {
-      let clearAt = endSlot;
-      while (!isFree(clearAt)) {
-        clearAt++;
-      }
-      take(clearAt, EraseDisplayedMemory);
+      clearFrom(endSlot);
+      replacedAt = undefined;
+    } else {
+      replacedAt = endSlot;
     }
   }
 
