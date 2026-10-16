@@ -139,6 +139,12 @@ export const CaptionModes = [
 
 export type CaptionMode = TupleToUnion<typeof CaptionModes>;
 
+// What captions show while two subtitles overlap: both in one block (older
+// above newer), each where the subtitle file places it, or only the newest
+export const CaptionOverlaps = ['together', 'apart', 'newest'] as const;
+
+export type CaptionOverlap = TupleToUnion<typeof CaptionOverlaps>;
+
 // How closed captions look. The defaults send what Tunarr always sent; the
 // player decides the font, the text size and, unless a background colour is
 // chosen, the box.
@@ -157,8 +163,10 @@ export const CaptionAppearanceSchema = z.object({
   mode: z.enum(CaptionModes).default('popOn'),
   // Italics and underline from the subtitle file
   keepStyles: z.boolean().default(true),
-  // Top-of-screen placement from the subtitle file
+  // Placement from the subtitle file: top, middle, left and right, from
+  // alignment overrides, ASS styles and ASS positions
   keepTopPlacement: z.boolean().default(true),
+  overlappingCues: z.enum(CaptionOverlaps).default('together'),
 });
 
 export type CaptionAppearanceSettings = z.infer<typeof CaptionAppearanceSchema>;

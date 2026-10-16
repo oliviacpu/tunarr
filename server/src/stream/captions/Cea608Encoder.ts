@@ -855,6 +855,253 @@ function separateRepeatedCodes(units: CharUnit[]): CharUnit[] {
   return out;
 }
 
+// One caption of a schedule: its blocks, shown from startMs to endMs
+type ScheduleItem = {
+  startMs: number;
+  endMs: number;
+  blocks: CaptionLayout[];
+  appearance: CaptionAppearance;
+};
+
+// Overlapping subtitles: each change to what is on screen is a new pop-on
+// caption, which takes up to a few seconds to load (two characters a frame),
+// so changes are kept at least this far apart
+const MinOverlapMs = 500;
+const MinIntervalMs = 1000;
+const MinResumeMs = 1000;
+// Lines of overlapping subtitles stacked in one block, the newest kept
+const MaxStackedLines = 4;
+
+// How many frames a pop-on caption takes to load
+function loadFrames(
+  blocks: readonly CaptionLayout[],
+  appearance: CaptionAppearance,
+): number {
+  return loadSequence(blocks, appearance).flat().length;
+}
+
+/**
+ * Pop-on captions of subtitles that overlap in time, as the overlap setting
+ * has them. Pop-on shows one caption at a time, so without this the later
+ * subtitle replaced the earlier, which never came back.
+ *
+ * - together: while they overlap by more than MinOverlapMs, they share one
+ *   block, older lines above newer. Where their places differ (a sign at the
+ *   top over dialogue), the block goes at the bottom: decoders of FFmpeg's
+ *   family position only a caption's first row.
+ * - apart: as together, but each band of the screen (top, middle, bottom)
+ *   gets its own block, for decoders that position every row.
+ * - newest: the latest-started subtitle shows; one that outlasts a newer one
+ *   comes back for the rest of its time, when that is at least MinResumeMs
+ *   and leaves the next caption time to load.
+ *
+ * Paint-on and roll-up draw as text arrives, and are left as they are. Input
+ * with no overlaps comes back as the same array.
+ */
+function resolveOverlaps(
+  items: ScheduleItem[],
+  frameMs: number,
+): ScheduleItem[] {
+  const out: ScheduleItem[] = [];
+  let changed = false;
+  for (let i = 0; i < items.length; ) {
+    const first = items[i];
+    if (!first) {
+      break;
+    }
+    const policy = first.appearance.overlappingCues;
+    const minOverlap = policy === 'newest' ? 0 : MinOverlapMs;
+    const cluster = [first];
+    let clusterEnd = first.endMs;
+    let j = i + 1;
+    for (; first.appearance.mode === 'popOn' && j < items.length; j++) {
+      const next = items[j];
+      if (
+        !next ||
+        next.appearance.mode !== 'popOn' ||
+        next.appearance.overlappingCues !== policy ||
+        !(clusterEnd - next.startMs > minOverlap)
+      ) {
+        break;
+      }
+      cluster.push(next);
+      clusterEnd = Math.max(clusterEnd, next.endMs);
+    }
+    const resolved =
+      cluster.length === 1
+        ? cluster
+        : policy === 'newest'
+          ? newestOf(cluster, frameMs, items[j])
+          : stackedOf(cluster, policy === 'apart');
+    changed ||= resolved !== cluster;
+    out.push(...resolved);
+    i = j;
+  }
+  return changed ? out : items;
+}
+
+// The stretches of a cluster with the same subtitles on screen, in order;
+// each subtitle in its order of start (ties: file order)
+function activeIntervals(cluster: ScheduleItem[]) {
+  const times = [
+    ...new Set(cluster.flatMap((item) => [item.startMs, item.endMs])),
+  ].sort((a, b) => a - b);
+  const intervals: {
+    startMs: number;
+    endMs: number;
+    active: ScheduleItem[];
+  }[] = [];
+  for (const [k, startMs] of times.slice(0, -1).entries()) {
+    const endMs = times[k + 1] ?? startMs;
+    const active = cluster.filter(
+      (item) => item.startMs <= startMs && startMs < item.endMs,
+    );
+    if (active.length > 0) {
+      intervals.push({ startMs, endMs, active });
+    }
+  }
+  return intervals;
+}
+
+function stackedOf(cluster: ScheduleItem[], apart: boolean): ScheduleItem[] {
+  // Stretches too short to load a caption for go with the one before (or,
+  // at the start, the one after); then neighbours that show the same merge
+  const intervals = activeIntervals(cluster);
+  const folded: typeof intervals = [];
+  for (const interval of intervals) {
+    const previous = folded.at(-1);
+    if (previous && interval.endMs - interval.startMs < MinIntervalMs) {
+      previous.endMs = interval.endMs;
+    } else if (
+      previous &&
+      previous.endMs - previous.startMs < MinIntervalMs &&
+      folded.length === 1
+    ) {
+      folded[0] = { ...interval, startMs: previous.startMs };
+    } else {
+      folded.push({ ...interval });
+    }
+  }
+  const merged: typeof intervals = [];
+  for (const interval of folded) {
+    const previous = merged.at(-1);
+    if (
+      previous &&
+      previous.active.length === interval.active.length &&
+      previous.active.every((item, k) => item === interval.active[k])
+    ) {
+      previous.endMs = interval.endMs;
+    } else {
+      merged.push(interval);
+    }
+  }
+
+  return merged.map(({ startMs, endMs, active }) => {
+    const newest = active.at(-1) ?? cluster[0];
+    const appearance = newest?.appearance ?? DefaultCaptionAppearance;
+    const together = stackBlock(active.flatMap((item) => item.blocks));
+    let blocks = [together];
+    if (apart) {
+      const bands = (['top', 'middle', 'bottom'] as const)
+        .map((vertical) =>
+          active
+            .flatMap((item) => item.blocks)
+            .filter((b) => b.placement.vertical === vertical),
+        )
+        .filter((band) => band.length > 0)
+        .map(stackBlock);
+      // Bands that would share rows go together after all
+      const rows = bands.map((block) => {
+        const row = firstRow(block, appearance);
+        return [row, row + block.lines.length - 1] as const;
+      });
+      const clear = rows.every(([, last], k) => {
+        const next = rows[k + 1];
+        return !next || last < next[0];
+      });
+      if (clear) {
+        blocks = bands;
+      }
+    }
+    return { startMs, endMs, blocks, appearance };
+  });
+}
+
+// Blocks stacked into one: their lines in order (the newest kept when there
+// are too many), placed where they all agree, else at the bottom and centred
+function stackBlock(blocks: readonly CaptionLayout[]): CaptionLayout {
+  const agreed = <K extends keyof CaptionPlacement>(key: K) => {
+    const first = blocks[0]?.placement[key];
+    return blocks.every((b) => b.placement[key] === first) ? first : undefined;
+  };
+  return {
+    placement: {
+      vertical: agreed('vertical') ?? 'bottom',
+      horizontal: agreed('horizontal') ?? 'center',
+    },
+    lines: blocks.flatMap((b) => b.lines).slice(-MaxStackedLines),
+  };
+}
+
+function newestOf(
+  cluster: ScheduleItem[],
+  frameMs: number,
+  after: ScheduleItem | undefined,
+): ScheduleItem[] {
+  // The newest subtitle on screen in each stretch, joined into segments
+  const segments: { startMs: number; endMs: number; item: ScheduleItem }[] = [];
+  for (const { startMs, endMs, active } of activeIntervals(cluster)) {
+    const item = active.at(-1);
+    if (!item) {
+      continue;
+    }
+    const last = segments.at(-1);
+    if (last && last.item === item && last.endMs === startMs) {
+      last.endMs = endMs;
+    } else {
+      segments.push({ startMs, endMs, item });
+    }
+  }
+
+  const shown = new Set<ScheduleItem>();
+  const out: ScheduleItem[] = [];
+  for (const [k, segment] of segments.entries()) {
+    if (!shown.has(segment.item)) {
+      // Its first showing: the subtitle itself, with its own end, so it is
+      // still cleared then if the one replacing it is left out. One that
+      // starts with a newer one shows only once that one ends.
+      shown.add(segment.item);
+      out.push(
+        segment.startMs === segment.item.startMs
+          ? segment.item
+          : { ...segment.item, startMs: segment.startMs },
+      );
+      continue;
+    }
+    // A comeback, when long enough, and when the next caption can still load
+    // while it shows
+    const next = segments[k + 1]?.item ?? after;
+    const nextStart = segments[k + 1]?.startMs ?? after?.startMs;
+    const roomForNext =
+      next === undefined ||
+      nextStart === undefined ||
+      nextStart - segment.startMs >=
+        (loadFrames(next.blocks, next.appearance) + 2) * frameMs;
+    if (segment.endMs - segment.startMs >= MinResumeMs && roomForNext) {
+      out.push({
+        ...segment.item,
+        startMs: segment.startMs,
+        endMs: segment.endMs,
+      });
+    }
+  }
+  // Unchanged when every subtitle showed once and nothing came back
+  return out.length === cluster.length &&
+    out.every((item, k) => item === cluster[k])
+    ? cluster
+    : out;
+}
+
 export type CaptionScheduleOptions = {
   // Time of the first video frame this schedule covers, on the same clock as the cues
   firstFrameMs: number;
@@ -897,7 +1144,7 @@ export function buildCaptionSchedule(
   const lastSlot = slotOf(endMs) - 1;
 
   // Each cue becomes one or more captions, sharing its time
-  const captions = cues
+  const parts: ScheduleItem[] = cues
     .flatMap((cue) => {
       const appearance = resolveAppearance(options.appearance, cue.appearance);
       // A cue too long for one caption is shown in parts, each for a share of
@@ -927,6 +1174,7 @@ export function buildCaptionSchedule(
     })
     .filter((c) => c.endMs > options.firstFrameMs && c.startMs < endMs)
     .sort((a, b) => a.startMs - b.startMs);
+  const captions = resolveOverlaps(parts, frameMs);
 
   const pairs = new Map<number, CcPair>();
   const take = (slot: number, p: CcPair) => {

@@ -776,6 +776,126 @@ describe('drawn captions that take longer to send than they last', () => {
   });
 });
 
+describe('overlapping subtitles', () => {
+  const rowsAt = (pairs: number[][], frame: number) => textsAt(pairs, frame);
+
+  test('stacks them in one block while they overlap, older above newer', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 5000, text: 'First line' },
+        { startMs: 2500, endMs: 4000, text: 'Second line' },
+      ],
+      180,
+    );
+
+    expect(rowsAt(pairs, 60)).toEqual([[15, 'First line']]);
+    expect(rowsAt(pairs, 100)).toEqual([
+      [14, 'First line'],
+      [15, 'Second line'],
+    ]);
+    // The first comes back alone when the second ends
+    expect(rowsAt(pairs, 135)).toEqual([[15, 'First line']]);
+    expect(rowsAt(pairs, 155)).toEqual([]);
+  });
+
+  test('keeps a short overlap sequential, the later replacing the earlier', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 3000, text: 'First' },
+        { startMs: 2800, endMs: 4000, text: 'Second' },
+      ],
+      150,
+    );
+    expect(rowsAt(pairs, 86)).toEqual([[15, 'Second']]);
+  });
+
+  test('stacks a sign over dialogue at the bottom', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 5000, text: '{\\an8}Sign' },
+        { startMs: 2000, endMs: 4000, text: 'Talk' },
+      ],
+      180,
+    );
+    expect(rowsAt(pairs, 90)).toEqual([
+      [14, 'Sign'],
+      [15, 'Talk'],
+    ]);
+  });
+
+  test('keeps the newest 4 lines', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 6000, text: 'One\nTwo' },
+        { startMs: 2000, endMs: 6000, text: 'Three\nFour' },
+        { startMs: 3000, endMs: 6000, text: 'Five\nSix' },
+      ],
+      200,
+    );
+    expect(rowsAt(pairs, 150).map(([, text]) => text)).toEqual([
+      'Three',
+      'Four',
+      'Five',
+      'Six',
+    ]);
+  });
+
+  test('apart: puts each where the file places it', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 5000, text: '{\\an8}Sign' },
+        { startMs: 2000, endMs: 4000, text: 'Talk' },
+      ],
+      180,
+      0,
+      { overlappingCues: 'apart' },
+    );
+    expect(rowsAt(pairs, 90)).toEqual([
+      [1, 'Sign'],
+      [15, 'Talk'],
+    ]);
+  });
+
+  test('newest: the later replaces the earlier, which comes back after it', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 6000, text: 'Long' },
+        { startMs: 2000, endMs: 3500, text: 'Short' },
+      ],
+      200,
+      0,
+      { overlappingCues: 'newest' },
+    );
+    expect(rowsAt(pairs, 50)).toEqual([[15, 'Long']]);
+    expect(rowsAt(pairs, 75)).toEqual([[15, 'Short']]);
+    expect(rowsAt(pairs, 130)).toEqual([[15, 'Long']]);
+    expect(rowsAt(pairs, 181)).toEqual([]);
+  });
+
+  test('newest: no comeback shorter than a second', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 1000, endMs: 4000, text: 'Long' },
+        { startMs: 2000, endMs: 3500, text: 'Short' },
+      ],
+      150,
+      0,
+      { overlappingCues: 'newest' },
+    );
+    expect(rowsAt(pairs, 112)).toEqual([]);
+  });
+
+  test('leaves overlapping paint-on captions as they are', () => {
+    const cues = [
+      { startMs: 1000, endMs: 5000, text: 'First' },
+      { startMs: 2000, endMs: 4000, text: 'Second' },
+    ];
+    expect(rowsAt(framePairs(cues, 180, 0, { mode: 'paintOn' }), 90)).toEqual([
+      [15, 'Second'],
+    ]);
+  });
+});
+
 describe('switching modes', () => {
   // pop-on, roll-up, paint-on, pop-on, each cue in its own mode
   const cues = [

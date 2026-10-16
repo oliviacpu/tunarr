@@ -9841,6 +9841,7 @@ export type GetApiFfmpegSettingsResponses = {
             mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
             keepStyles: boolean;
             keepTopPlacement: boolean;
+            overlappingCues: 'together' | 'apart' | 'newest';
         };
         hdhrCaptionTestPattern: boolean;
         enableSubtitleExtraction: boolean;
@@ -9907,6 +9908,7 @@ export type PostApiFfmpegSettingsResponses = {
             mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
             keepStyles: boolean;
             keepTopPlacement: boolean;
+            overlappingCues: 'together' | 'apart' | 'newest';
         };
         hdhrCaptionTestPattern: boolean;
         enableSubtitleExtraction: boolean;
@@ -9952,6 +9954,7 @@ export type PutApiFfmpegSettingsData = {
             mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
             keepStyles?: boolean;
             keepTopPlacement?: boolean;
+            overlappingCues?: 'together' | 'apart' | 'newest';
         };
         hdhrCaptionTestPattern?: boolean;
         enableSubtitleExtraction?: boolean;
@@ -10014,6 +10017,7 @@ export type PutApiFfmpegSettingsResponses = {
             mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
             keepStyles: boolean;
             keepTopPlacement: boolean;
+            overlappingCues: 'together' | 'apart' | 'newest';
         };
         hdhrCaptionTestPattern: boolean;
         enableSubtitleExtraction: boolean;
