@@ -121,7 +121,7 @@ Everything CEA-608 captions can ask for, under **Caption appearance (experimenta
 - **Bottom row and Top row:** the screen has 15 caption rows. Captions end on the bottom row (15, the default); captions the subtitle file places at the top start on the top row (1).
 - **All capitals**, and whether to keep the subtitle file's **italics and underline** and its **top placement**.
 
-A box, a color or narrower lines make each caption take longer to send, so in fast dialogue a caption can come a little late.
+A box, a color or narrower lines make each caption take longer to send, so in fast dialogue a caption can come a little late. Roll-up and paint-on send a caption's text while it is on screen, at two characters a frame, so a long caption with a short time is cut off at its end.
 
 **Test pattern:** replaces every program's captions with 34 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples.
 

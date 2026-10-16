@@ -62,7 +62,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `CaptionTestPattern.test.ts`: numbering, whole appearances, timing and looping; every sample shows, in order, whatever the settings.
   - `HlsSession.test.ts` (the settings reach each program's captions), `FfmpegStreamFactory.test.ts` (the pattern replaces captions and the notice; the notice waits for a longer load), `ProgramCaptions.test.ts`.
   - The web settings page passes the e2e sweep, and with captions on its controls save.
-- **Known limits:** italic words are white whatever the text color. A box or color makes each caption take longer to send, so fast dialogue can show captions a little late. What Plex does with each option is untested until the test pattern is watched on an Apple TV; a preview and "works in Plex" labels come after that.
+- **Known limits:** italic words are white whatever the text color. A box or color makes each caption take longer to send, so fast dialogue can show captions a little late. Roll-up and paint-on send a caption's text while it is up, at two characters a frame; what doesn't fit before its end is cut off, so it never outlasts its subtitle or holds up the next one. What Plex does with each option is untested until the test pattern is watched on an Apple TV; a preview and "works in Plex" labels come after that.
 - **Upstream:** not sent.
 
 ### A session's first program shows its captions on time (2026-10-15)

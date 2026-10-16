@@ -742,6 +742,40 @@ describe('roll-up captions', () => {
   });
 });
 
+// Paint-on and roll-up send their text while the cue is up
+describe('drawn captions that take longer to send than they last', () => {
+  const long =
+    'A line long enough to take a while\nAnd a second one just as long\nA third line of text to send\nAnd a fourth line to finish';
+  const cues = [
+    { startMs: 1000, endMs: 2000, text: long },
+    { startMs: 2100, endMs: 3500, text: 'Next' },
+  ];
+
+  test('paint-on: cuts the text off at the end, and the next cue starts on time', () => {
+    const pairs = framePairs(cues, 150, 0, { mode: 'paintOn' });
+
+    // Cleared on its end frame, not later
+    expect(pairs[60]).toEqual(EraseDisplayedMemory);
+    expect(textsAt(pairs, 61)).toEqual([]);
+    // The next cue erases on its start frame and its text follows
+    expect(pairs[63]).toEqual(EraseDisplayedMemory);
+    expect(textsAt(pairs, 70)).toEqual([[15, 'Next']]);
+  });
+
+  test('roll-up: sends nothing of the cue after its end, and the next cue starts on time', () => {
+    const pairs = framePairs(cues, 150, 0, { mode: 'rollUp4' });
+
+    // The frames between the two cues carry nothing
+    expect(pairs.slice(60, 63)).toEqual([
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ]);
+    expect(pairs[63]).toEqual(CarriageReturn);
+    expect(textsAt(pairs, 70).at(-1)).toEqual([15, 'Next']);
+  });
+});
+
 describe('switching modes', () => {
   // pop-on, roll-up, paint-on, pop-on, each cue in its own mode
   const cues = [

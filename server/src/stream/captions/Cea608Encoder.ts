@@ -834,21 +834,26 @@ export function buildCaptionSchedule(
     return true;
   };
   // Loads the atoms as early as possible from `startSlot`; returns the slot
-  // after the last. With `dryRun`, only finds that slot.
+  // after the last. With `dryRun`, only finds that slot. Atoms that would
+  // reach `until` are left out, with those after them.
   const placeFrom = (
     atoms: CcPair[][],
     startSlot: number,
-    { dryRun = false } = {},
+    { dryRun = false, until = Number.POSITIVE_INFINITY } = {},
   ) => {
     let slot = startSlot;
     for (const atom of atoms) {
-      while (!isFreeRun(slot, atom.length)) {
-        slot++;
+      let at = slot;
+      while (!isFreeRun(at, atom.length)) {
+        at++;
+      }
+      if (at + atom.length > until) {
+        break;
       }
       if (!dryRun) {
-        atom.forEach((p, k) => take(slot + k, p));
+        atom.forEach((p, k) => take(at + k, p));
       }
-      slot += atom.length;
+      slot = at + atom.length;
     }
     return slot;
   };
@@ -939,6 +944,10 @@ export function buildCaptionSchedule(
         placeFrom(entry, loadAfter);
       }
 
+      // Text drawn on screen can only be sent while the cue lasts, at two
+      // characters a frame. What doesn't fit is cut off, rather than keeping
+      // the caption up past its end and holding up the next one.
+      const until = slotOf(caption.endMs);
       if (mode === 'paintOn') {
         take(startAt, EraseDisplayedMemory);
         doneAt = placeFrom(
@@ -946,6 +955,7 @@ export function buildCaptionSchedule(
             ({ units, row, column }) => lineAtoms(units, row, column),
           ),
           startAt + 1,
+          { until },
         );
       } else {
         const [first = [], ...rest] = rollUpLines(
@@ -955,7 +965,9 @@ export function buildCaptionSchedule(
         );
         // The first line's carriage return on the start frame, the rest after
         take(startAt, CarriageReturn);
-        doneAt = placeFrom([...first.slice(1), ...rest.flat()], startAt + 1);
+        doneAt = placeFrom([...first.slice(1), ...rest.flat()], startAt + 1, {
+          until,
+        });
       }
     }
     screenMode = mode;
