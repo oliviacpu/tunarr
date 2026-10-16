@@ -47,8 +47,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     override would fill in every field.
   - **Test pattern on this channel:** the numbered samples on this channel only. The global switch still shows them on
     every channel, and the global closed-captions switch stays the master switch.
-  - **Use own caption look:** alignment and every appearance field, starting from the global look. **Copy to all
-    channels** writes this look to the FFmpeg settings; **Reset to global** drops it and keeps the test pattern.
+  - **Use own caption look:** alignment and every appearance field, shown with the global look; only the settings
+    changed are saved as the channel's own. **Copy to all channels** writes this look over the latest FFmpeg
+    settings; **Reset to global** drops it and keeps the test pattern.
 - **How:**
   - `server/src/stream/captions/channelCaptions.ts`: the channel's look over the global one, whether it has one, and
     whether its test pattern is on.
@@ -73,8 +74,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `HlsSession.test.ts`: captions laid out in their channel's look. `Cea608Encoder.golden.test.ts` unchanged.
   - `ChannelDB.test.ts`: save and read back, update without the field, reset, only what is set is stored, validation,
     no defaults filled in, override fields in step with the global ones.
-  - Web: `channelCaptions.test.ts` and `ChannelCaptionsField.test.tsx` (seeded from global, edit, test pattern
-    alone, reset, copy to all channels).
+  - Web: `channelCaptions.test.ts` and `ChannelCaptionsField.test.tsx` (the global look shown, only changed
+    settings saved, test pattern alone, off and reset, copy to all channels over settings changed since loading).
 - **Upstream:** not sent.
 
 ### Test media for a test channel (2026-10-16)

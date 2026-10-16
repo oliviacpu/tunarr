@@ -3,7 +3,7 @@ import type {
   CaptionAlignment,
   CaptionAppearanceSettings,
 } from '@tunarr/types/schemas';
-import { isEmpty, isUndefined, omitBy } from 'lodash-es';
+import { isEmpty, isEqual, isUndefined, omitBy, pickBy } from 'lodash-es';
 
 // The channel's caption settings as saved: only what it sets, null for none
 // (the global settings). A test pattern switched off is the same as not set.
@@ -53,4 +53,17 @@ export function channelCaptionLook(
     },
     alignment: captions?.alignment ?? global.hdhrCaptionAlignment,
   };
+}
+
+// The appearance fields an edit changed, to save as the channel's own; the
+// others keep following the global settings
+export function changedCaptionAppearance(
+  current: CaptionAppearanceSettings,
+  next: CaptionAppearanceSettings,
+): Partial<CaptionAppearanceSettings> {
+  return pickBy(
+    next,
+    (value, key) =>
+      !isEqual(value, current[key as keyof CaptionAppearanceSettings]),
+  );
 }

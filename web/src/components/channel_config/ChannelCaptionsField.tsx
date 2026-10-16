@@ -32,6 +32,7 @@ import {
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { putApiFfmpegSettings } from '../../generated/sdk.gen.ts';
 import {
+  changedCaptionAppearance,
   channelCaptionLook,
   hasOwnCaptionLook,
   normalizeChannelCaptions,
@@ -54,6 +55,9 @@ export function ChannelCaptionsField() {
   const queryClient = useQueryClient();
   const snackbar = useSnackbar();
   const [confirmCopy, setConfirmCopy] = useState(false);
+  // The look's fields are open: a channel with nothing of its own yet shows
+  // the global look there, and saves only the fields changed
+  const [lookOpen, setLookOpen] = useState(false);
 
   const copyToAll = useMutation({
     // From the latest settings, not the ones this page loaded, so a change made
@@ -102,10 +106,14 @@ export function ChannelCaptionsField() {
       name="captions"
       render={({ field }) => {
         const captions = field.value ?? null;
-        const ownLook = hasOwnCaptionLook(captions);
+        const showLook = lookOpen || hasOwnCaptionLook(captions);
         const look = channelCaptionLook(global, captions);
         const update = (next: ChannelCaptions) =>
           field.onChange(normalizeChannelCaptions(next));
+        const resetLook = () => {
+          setLookOpen(false);
+          update({ testPattern: captions?.testPattern });
+        };
 
         return (
           <Box>
@@ -143,17 +151,9 @@ export function ChannelCaptionsField() {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={ownLook}
+                    checked={showLook}
                     onChange={(e) =>
-                      update(
-                        e.target.checked
-                          ? {
-                              ...captions,
-                              alignment: global.hdhrCaptionAlignment,
-                              appearance: { ...global.hdhrCaptionAppearance },
-                            }
-                          : { testPattern: captions?.testPattern },
-                      )
+                      e.target.checked ? setLookOpen(true) : resetLook()
                     }
                   />
                 }
@@ -161,12 +161,13 @@ export function ChannelCaptionsField() {
               />
               <FormHelperText>
                 <Trans>
-                  Starts from the global look. Off: this channel uses the global
-                  look.
+                  The fields show the global look. A setting you change becomes
+                  this channel's own; the rest keep following the global look.
+                  Off: this channel uses the global look.
                 </Trans>
               </FormHelperText>
             </FormControl>
-            <Collapse in={ownLook} unmountOnExit>
+            <Collapse in={showLook} unmountOnExit>
               <Stack spacing={2} sx={{ mt: 2 }}>
                 <FormControl fullWidth>
                   <InputLabel id="channel-caption-alignment-label">
@@ -180,7 +181,6 @@ export function ChannelCaptionsField() {
                       update({
                         ...captions,
                         alignment: e.target.value as CaptionAlignment,
-                        appearance: look.appearance,
                       })
                     }
                   >
@@ -197,8 +197,13 @@ export function ChannelCaptionsField() {
                   onChange={(appearance) =>
                     update({
                       ...captions,
-                      alignment: look.alignment,
-                      appearance,
+                      appearance: {
+                        ...captions?.appearance,
+                        ...changedCaptionAppearance(
+                          look.appearance,
+                          appearance,
+                        ),
+                      },
                     })
                   }
                 />
@@ -210,11 +215,7 @@ export function ChannelCaptionsField() {
                   >
                     <Trans>Copy to all channels</Trans>
                   </Button>
-                  <Button
-                    onClick={() =>
-                      update({ testPattern: captions?.testPattern })
-                    }
-                  >
+                  <Button onClick={resetLook}>
                     <Trans>Reset to global</Trans>
                   </Button>
                 </Stack>
