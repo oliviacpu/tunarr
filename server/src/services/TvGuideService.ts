@@ -129,12 +129,14 @@ type ChannelWithLineup = {
 type ChannelId = string;
 
 // A channel's programmes as an XMLTV write rendered them. They are reused while
-// the guide entry, its channel and its programs are the same objects, and the
-// render settings the same string: a rebuild or a channel save replaces them.
+// the guide entry, its channel and its programs are the same objects, and its
+// redirect targets and the render settings the same strings: a rebuild or a
+// channel save replaces them.
 type RenderedProgrammes = {
   guide: ChannelPrograms;
   channel: ChannelOrm;
   programs: GuideItem[];
+  redirects: string;
   settings: string;
   xml: string;
 };
@@ -1169,6 +1171,26 @@ export class TVGuideService {
     });
   }
 
+  /**
+   * What a channel's redirects render from their target channels (see
+   * materializeGuideItem): each target's name and number, or that it has left
+   * the guide. A change re-renders the redirecting channel too.
+   */
+  private redirectTargets(programs: GuideItem[]): string {
+    const targets = new Set<string>();
+    for (const { lineupItem } of programs) {
+      if (lineupItem.type === 'redirect') {
+        targets.add(lineupItem.channel);
+      }
+    }
+    return JSON.stringify(
+      [...targets].map((id) => {
+        const target = this.cachedGuide[id]?.channel;
+        return target ? [id, target.name, target.number] : [id];
+      }),
+    );
+  }
+
   private async writeXmlTvInternal() {
     // What this write renders from, captured now: a channel saved or rebuilt
     // while it runs gets a new guide or channel object, so the next write
@@ -1177,6 +1199,7 @@ export class TVGuideService {
       guide,
       channel: guide.channel,
       programs: guide.programs,
+      redirects: this.redirectTargets(guide.programs),
     }));
     // Read once, when first needed: to compare with a channel's last render, or
     // to remember one
@@ -1192,13 +1215,14 @@ export class TVGuideService {
     // unchanged channel's guide at its next guide refresh, as they did before
     // when nothing was saved.
     const reuse = new Map<string, string>();
-    for (const { guide, channel, programs } of guides) {
+    for (const { guide, channel, programs, redirects } of guides) {
       const rendered = this.renderedProgrammes.get(channel.uuid);
       if (
         rendered !== undefined &&
         rendered.guide === guide &&
         rendered.channel === channel &&
         rendered.programs === programs &&
+        rendered.redirects === redirects &&
         rendered.settings === renderSettings()
       ) {
         reuse.set(channel.uuid, rendered.xml);

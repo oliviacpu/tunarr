@@ -1211,19 +1211,26 @@ describe('TVGuideService', () => {
 describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
   const HOUR = 60 * 60 * 1000;
 
-  function setup() {
-    const channelA = {
-      channel: makeChannelOrm({ number: 1, name: 'Channel A' }),
-      lineup: makeLineup([
-        { type: 'content', id: 'program-a', durationMs: 4 * HOUR },
-      ]),
-    };
+  // `aItems` builds channel A's lineup, given channel B's id
+  function setup(
+    aItems: (channelBId: string) => LineupItem[] = () => [
+      { type: 'content', id: 'program-a', durationMs: 4 * HOUR },
+    ],
+  ) {
     const channelB = {
       channel: makeChannelOrm({ number: 2, name: 'Channel B' }),
       lineup: makeLineup([
         { type: 'content', id: 'program-b', durationMs: 4 * HOUR },
       ]),
     };
+    const channelA = {
+      channel: makeChannelOrm({ number: 1, name: 'Channel A' }),
+      lineup: makeLineup(aItems(channelB.channel.uuid)),
+    };
+    // What channel B looks like when it is next saved
+    let savedB: Partial<ChannelOrm> = {};
+    // Whether a build loads channel A alone
+    let onlyA = false;
     let xmltvSettings = { programmingHours: 4, useShowPoster: false };
 
     // Behaves like XmlTvWriter.write: renders every channel it isn't told to reuse
@@ -1250,16 +1257,22 @@ describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { push: vi.fn() } as any,
       {
-        loadAllLineups: vi.fn().mockResolvedValue({
-          [channelA.channel.uuid]: channelA,
-          [channelB.channel.uuid]: channelB,
-        }),
+        loadAllLineups: vi.fn(() =>
+          Promise.resolve(
+            onlyA
+              ? { [channelA.channel.uuid]: channelA }
+              : {
+                  [channelA.channel.uuid]: channelA,
+                  [channelB.channel.uuid]: channelB,
+                },
+          ),
+        ),
         // A save reloads the channel: a new object with the same uuid
         getChannelOrm: vi.fn((id: string) =>
           Promise.resolve(
             id === channelA.channel.uuid
               ? { ...channelA.channel }
-              : { ...channelB.channel },
+              : { ...channelB.channel, ...savedB },
           ),
         ),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1300,8 +1313,69 @@ describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
       changeSettings: () => {
         xmltvSettings = { ...xmltvSettings, useShowPoster: true };
       },
+      saveB: (changes: Partial<ChannelOrm>) => {
+        savedB = changes;
+      },
+      loadOnlyA: () => {
+        onlyA = true;
+      },
+      // A channel in the guide cache without rebuilding the others, as a
+      // single channel's refresh leaves it
+      putInGuide: (channel: ChannelOrm) => {
+        (
+          service as unknown as {
+            cachedGuide: Record<string, { channel: ChannelOrm; programs: [] }>;
+          }
+        ).cachedGuide[channel.uuid] = { channel, programs: [] };
+      },
     };
   }
+
+  // A redirect followed when the guide was built copies the target's
+  // programmes into the redirecting channel's guide, so the target's own
+  // name and number don't appear in it: renumbering the target keeps it.
+  it('a channel whose redirect was followed is reused when the target is renumbered', async () => {
+    const r = setup((channelBId) => [
+      { type: 'redirect', channel: channelBId, durationMs: 4 * HOUR },
+    ]);
+    await r.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+
+    r.saveB({ number: 7 });
+    await r.service.updateCachedChannel(r.channelB.channel.uuid);
+    expect(r.reused(1).map(([id]) => id)).toEqual([r.channelA.channel.uuid]);
+  });
+
+  // Codex on PR #26: a redirect whose target wasn't in the guide when the
+  // channel was built stays a redirect, and renders from the target as it is
+  // at write time (materializeGuideItem): flex while it's missing, its name
+  // and number once it's there. Each change to that must render the
+  // redirecting channel again.
+  it('a channel with an unresolved redirect is rendered again when its target appears, changes or leaves', async () => {
+    const r = setup((channelBId) => [
+      { type: 'redirect', channel: channelBId, durationMs: 4 * HOUR },
+    ]);
+    // Only A is loaded, so its redirect to B can't be followed
+    r.loadOnlyA();
+    await r.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    const a = r.channelA.channel.uuid;
+    const b = r.channelB.channel.uuid;
+
+    // B enters the guide; any later write must not reuse A's flex render
+    r.putInGuide(r.channelB.channel);
+    await r.service.updateCachedChannel(b);
+    expect(r.reused(1).map(([id]) => id)).not.toContain(a);
+
+    // B saved with nothing A shows changed: A is reused
+    await r.service.updateCachedChannel(b);
+    expect(r.reused(2).map(([id]) => id)).toContain(a);
+
+    // B renumbered, then removed: A is rendered again each time
+    r.saveB({ number: 7 });
+    await r.service.updateCachedChannel(b);
+    expect(r.reused(3).map(([id]) => id)).not.toContain(a);
+    await r.service.removeCachedChannel(b);
+    expect(r.reused(4).map(([id]) => id)).not.toContain(a);
+  });
 
   it('a channel save fetches and renders only that channel', async () => {
     const t = setup();
