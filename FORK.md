@@ -35,6 +35,43 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Downloaded subtitles stay fresh, and a replaced subtitle heals at once (2026-10-16)
+
+- **What you saw:** 132 programs served an older subtitle than the file next to the video (Bazarr's re-syncs and
+  replacements), and a subtitle Plex had replaced answered 404 until two rescans later. Investigation:
+  `plans/plex-stale-subtitle-404-2026-10-16.md`.
+- **Cause:**
+  - Through its `plex.direct` address Plex leaves out a sidecar subtitle's file path, so Tunarr downloaded a copy of
+    every sidecar. The copy is named after the stream key and was never fetched again.
+  - Playback read the copy ahead of a readable live file.
+  - The hourly top-up skipped any copy that existed.
+  - A 404 waited for Plex's rescan and then Tunarr's.
+  - The deployment's fix was a local Plex address and a forced scan (done 2026-10-16). This makes Tunarr cope where
+    that isn't possible.
+- **Fix:**
+  - **Playback prefers the live file:** `ProgramStreamDetailsFetcher` uses a sidecar's resolvable source path ahead of
+    a downloaded copy.
+  - **Old copies refresh:** `ExternalSubtitleDownloader.fetchToCache` with `refresh` fetches again and swaps the copy
+    in only if it changed, through a temporary file and a rename. `SubtitleExtractorTask` does this hourly, for programs
+    airing within the hour, to copies more than 6 hours old whose live file it can't read.
+  - **A 404 heals at once:** the task reads the item again (`getMovie`/`getEpisode`), mints its subtitles and saves
+    them with `upsertSubtitles`, the scan's own save (new on `IProgramDB`). Sidecars that are still the same stream
+    keep their file; replaced copies are deleted. Once per program per run. An item that is gone is left to the next
+    scan.
+  - **The scan says so:** a Plex scan logs once when sidecar paths are hidden while the video's path came through.
+- **Tests:**
+  - `ExternalSubtitleDownloader.test.ts`: refresh replaces a changed copy, keeps an unchanged one and renews its age,
+    keeps the copy when a fetch fails, never fetches without refresh, and returns a 404 unlogged.
+  - `ProgramStreamDetailsFetcher.test.ts`: the live file ahead of a copy (fails without the change), and the copy
+    when the live file is out of reach.
+  - `SubtitleExtractorTask.test.ts`:
+    - a copy older than 6 hours is fetched again, a younger one isn't, nor one whose live file is readable;
+    - on a 404 the item is read once, re-minted and saved, the new stream downloaded, and a still-valid sidecar keeps
+      its file; films use the movie call; a gone item is left alone; a second 404 doesn't loop.
+  - `MediaSourceScanner.test.ts`: the info line once a scan, again in the next scan, and not when the paths are
+    reported or the video has none.
+- **Upstream:** not sent.
+
 ### Switchable audio in Plex Live TV: a fixed audio track layout per channel (2026-10-16)
 
 - **What you saw:** Plex Live TV offered one audio track, whichever the program's selection picked, so a dual-audio
