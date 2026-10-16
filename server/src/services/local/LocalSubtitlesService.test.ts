@@ -71,6 +71,8 @@ describe('LocalSubtitlesService', () => {
     ['Movie (2010).hi.sdh.srt', 'hin', true],
     ['Movie (2010).sdh.srt', 'unknown', true],
     ['Movie (2010).cc.de.srt', 'deu', true],
+    ['Movie (2010).qaa.hi.srt', 'qaa', true],
+    ['Movie (2010).commentary.en.srt', 'eng', false],
   ])(
     '"hi" is Hindi where the language goes, and hard of hearing after it: %s',
     (file, language, sdh) => {

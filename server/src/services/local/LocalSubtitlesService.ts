@@ -12,6 +12,8 @@ import { KnownVideoFileExtensions } from '../scanner/constants.ts';
 
 // Parts of a subtitle file name that describe the subtitles rather than their language
 const SubtitleFileFlags = new Set(['hi', 'cc', 'sdh', 'forced']);
+// Two or three letters, with an optional region: "en", "eng", "en-us", "pt_BR", "qaa"
+const LanguageCodeShape = /^[a-z]{2,3}([-_][a-z0-9]{2,8})?$/;
 
 @injectable()
 export class LocalSubtitlesService {
@@ -81,9 +83,10 @@ export class LocalSubtitlesService {
 
     // Subtitles generally are meant to be in the form {media_name}(.{lang})?(.{opts})*.{codec_ext}
     // Remove the media name and the codec_ext. The language is the first part that is a
-    // language code, as Jellyfin reads it: "Movie.hi.srt" is Hindi and "Movie.en.hi.srt" is
-    // English for the hard of hearing. Failing that, it is the first part that isn't an
-    // option, and "unknown" when there is none. The other parts are the options.
+    // language code, or looks like one and isn't an option (a private code such as "qaa"):
+    // "Movie.hi.srt" is Hindi, "Movie.en.hi.srt" and "Movie.qaa.hi.srt" are for the hard of
+    // hearing, and "Movie.commentary.en.srt" is English. Failing that, it is the first part
+    // that isn't an option, and "unknown" when there is none. The other parts are the options.
     const parts = basename(fileName, codecExt)
       .replace(itemName, '')
       .toLowerCase()
@@ -92,7 +95,9 @@ export class LocalSubtitlesService {
     const languageCode = (part: string) =>
       LanguageService.getAlpha3TCode(part.split(/[-_]/)[0] ?? part);
     let languageIndex = parts.findIndex(
-      (part) => languageCode(part) !== undefined,
+      (part) =>
+        languageCode(part) !== undefined ||
+        (LanguageCodeShape.test(part) && !SubtitleFileFlags.has(part)),
     );
     if (languageIndex < 0) {
       languageIndex = parts.findIndex((part) => !SubtitleFileFlags.has(part));
