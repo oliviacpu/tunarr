@@ -35,6 +35,31 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Captions follow subtitle placement, and overlapping subtitles show together (2026-10-16)
+
+- **What you saw:** captions went only at the top (an inline `{\an7-9}`) or the bottom. ASS styles, exact positions, the middle and the sides were ignored, and vector drawings came out as text. When two subtitles overlapped, the later replaced the earlier, which never came back.
+- **Why it mattered, in this library:** the extracted ASS files style 4,336 lines at the top and about 1,100 at a side, and position 43,786 with `\pos` or `\move`; 1,448 lines are drawings. About 1,400 SRT files have 20,339 overlapping pairs, nearly all two bottom lines.
+- **Placement** (`Cea608Encoder.ts`, `ProgramCaptions.ts`): a caption is now a list of blocks, each placed in a third of the screen: top, middle or bottom, and left, centered (by the alignment setting) or right. A cue's place comes from, in order:
+
+  1. an ASS `\pos` or `\move` start point, against the script's PlayResX/PlayResY (filled in as libass does);
+  2. its alignment override (numpad `\an`, or SSA's `\a`);
+  3. its ASS style's alignment (`[V4+ Styles]`, or `[V4 Styles]` in SSA numbering, each by its own Format line);
+  4. the bottom.
+
+  The middle sits between the top and bottom rows; right-aligned lines end at column 32. Drawing text is left out, and a layered copy of a line (the same text at the same times) is kept once. Files that only use `{\an8}`, as all of the library's SRT do, show as before.
+
+- **Overlaps** (`resolveOverlaps`, setting `overlappingCues`):
+
+  - **together** (default): while subtitles overlap by more than 500 ms they share one block, older above newer, the newest 4 lines kept. Stretches under a second fold into a neighbour so each caption has time to load. When their places differ, the block goes at the bottom, because FFmpeg-family decoders position only a caption's first row.
+  - **apart:** each band keeps its own block, for players that position every row.
+  - **newest:** the later replaces the earlier, which comes back when it still has at least a second and the next caption can load.
+
+  Paint-on and roll-up are unchanged, and input without overlaps is returned as is (the golden snapshot is unchanged).
+
+- **Test pattern:** samples 35 (middle), 36 (right-aligned), 37 (two lines stacked) and 38 (a top sign and a bottom line as two blocks: the check for `apart` in Plex). FFmpeg writes a position for each block, but libass honours only the first in an event, so in FFmpeg's own rendering sample 38 shows both at the top.
+- **Tests:** `Cea608Encoder.test.ts` (middle, sides, legacy SSA, drawings, ASS precedence, stacking, the 4-line cap, apart, newest and its comeback rule, paint-on unchanged; the overlap tests fail with the resolver off), `ProgramCaptions.test.ts` (styles in any column order, SSA numbering, unknown and `*` style names, PlayRes fallbacks, layered lines), `CaptionTestPattern.test.ts`, and through jellyfin-ffmpeg 8.1.3 (`CaptionInsertion.local.test.ts`: middle and right positions, stacked rows, the two-block caption's positions).
+- **Upstream:** not sent.
+
 ### Closed caption appearance settings, and a test pattern (2026-10-15)
 
 - **What you wanted:** every presentation feature CEA-608 closed captions have, as settings, to find out which ones Plex Live TV shows. Plex draws captions itself, with a decoder of FFmpeg's family, so what it honours can only be found by trying.
