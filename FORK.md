@@ -35,6 +35,33 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Local libraries find the subtitle files next to their videos (2026-10-16)
+
+- **What you saw:** nothing; found while reading the subtitle code. A local library never picked up `Movie.en.srt`
+  next to `Movie.mkv`, although the docs say it does. Libraries from Plex, Jellyfin and Emby aren't affected.
+- **Cause:** `LocalSubtitlesService.findExternalSubtitles` handed `parseSubtitleFilePath` the subtitle's name without
+  its extension or folder (`Movie.en`), so the extension check saw `.en` and dropped every file. Three smaller faults
+  sat behind it:
+  - the video's name was stripped of an extension twice, so `Movie.2010` became `Movie`;
+  - `Episode 1` matched `Episode 10.en.srt`, and `Movie` matched `Movie.part2.en.srt`;
+  - `Movie.srt` was read as the language `srt`.
+- **Fix:** `server/src/services/local/LocalSubtitlesService.ts`:
+  - it passes both full paths;
+  - a file must start with the video's name and a dot, and not with a longer video name in the same folder;
+  - the language is the first part that is a language code, or looks like one and isn't an option (a private
+    code such as `qaa`). `Movie.hi.srt` is Hindi; `Movie.en.hi.srt` and `Movie.qaa.hi.srt` are for the hard of
+    hearing. Failing that it's the first part that isn't `hi`, `cc`, `sdh` or `forced`, and `unknown` when there is
+    none;
+  - extensions match in any case.
+
+  The ffmpeg docs list the naming rules. Folders that haven't changed since their last scan need one **Force Scan**.
+- **Tests:** `LocalSubtitlesService.test.ts`:
+  - real files in a temporary folder: full paths, other files ignored, a dot in the video's name, a neighbouring
+    episode's subtitles, a longer video name;
+  - no language, flags first, `hi` as Hindi or as hard of hearing (also after a private code), upper-case
+    extensions.
+- **Upstream:** not sent.
+
 ### Captions follow subtitle placement, and overlapping subtitles show together (2026-10-16)
 
 - **What you saw:** captions went only at the top (an inline `{\an7-9}`) or the bottom. ASS styles, exact positions, the middle and the sides were ignored, and vector drawings came out as text. When two subtitles overlapped, the later replaced the earlier, which never came back.

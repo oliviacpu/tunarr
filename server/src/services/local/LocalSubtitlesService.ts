@@ -2,12 +2,18 @@ import { isNonEmptyString } from '@tunarr/shared/util';
 import type { MediaSubtitles } from '@tunarr/types';
 import { injectable } from 'inversify';
 import fs from 'node:fs/promises';
-import { basename, dirname, extname } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import { match, P } from 'ts-pattern';
 import type { Nullable } from '../../types/util.ts';
 import type { Logger } from '../../util/logging/LoggerFactory.ts';
 import { LoggerFactory } from '../../util/logging/LoggerFactory.ts';
 import { LanguageService } from '../LanguageService.ts';
+import { KnownVideoFileExtensions } from '../scanner/constants.ts';
+
+// Parts of a subtitle file name that describe the subtitles rather than their language
+const SubtitleFileFlags = new Set(['hi', 'cc', 'sdh', 'forced']);
+// Two or three letters, with an optional region: "en", "eng", "en-us", "pt_BR", "qaa"
+const LanguageCodeShape = /^[a-z]{2,3}([-_][a-z0-9]{2,8})?$/;
 
 @injectable()
 export class LocalSubtitlesService {
@@ -21,22 +27,31 @@ export class LocalSubtitlesService {
 
   async findExternalSubtitles(fullItemPath: string) {
     const subtitles: MediaSubtitles[] = [];
+    const directory = dirname(fullItemPath);
     const itemName = basename(fullItemPath, extname(fullItemPath));
-    for (const dirent of await fs.readdir(dirname(fullItemPath), {
-      withFileTypes: true,
-    })) {
-      if (!dirent.isFile()) {
+    const files = (await fs.readdir(directory, { withFileTypes: true })).filter(
+      (dirent) => dirent.isFile(),
+    );
+    // Other videos whose names extend this one's ("Movie.part2" beside "Movie"):
+    // a subtitle that starts with one of those names is that video's.
+    const longerVideoNames = files
+      .filter((dirent) => KnownVideoFileExtensions.has(extname(dirent.name)))
+      .map((dirent) => basename(dirent.name, extname(dirent.name)))
+      .filter((name) => name.startsWith(`${itemName}.`));
+
+    for (const dirent of files) {
+      // "Episode 1." so that "Episode 10.en.srt" isn't taken for episode 1's
+      if (!dirent.name.startsWith(`${itemName}.`)) {
         continue;
       }
 
-      if (!dirent.name.startsWith(itemName)) {
+      if (longerVideoNames.some((name) => dirent.name.startsWith(`${name}.`))) {
         continue;
       }
 
-      const filename = basename(dirent.name, extname(dirent.name));
       const parsedSubtitles = LocalSubtitlesService.parseSubtitleFilePath(
-        itemName,
-        filename,
+        fullItemPath,
+        join(directory, dirent.name),
       );
 
       if (!parsedSubtitles) {
@@ -55,7 +70,8 @@ export class LocalSubtitlesService {
   ): Nullable<MediaSubtitles> {
     const itemName = basename(originalItemPath, extname(originalItemPath));
     const fileName = basename(fullPath);
-    const codec = match(extname(fileName))
+    const codecExt = extname(fileName);
+    const codec = match(codecExt.toLowerCase())
       .with(P.union('.ssa', '.ass'), () => 'ass')
       .with('.srt', () => 'subrip')
       .with('.vtt', () => 'webvtt')
@@ -65,22 +81,36 @@ export class LocalSubtitlesService {
       return null;
     }
 
-    // Subtitles generally are meant to be in the form {media_name}.{lang}(.{opts})*.{codec_ext}
-    // At this point we've removed the codec_ext and we want to read out the options in the filename
-    // and then derive the language.
-    const [lang = '', ...opts] = fileName
+    // Subtitles generally are meant to be in the form {media_name}(.{lang})?(.{opts})*.{codec_ext}
+    // Remove the media name and the codec_ext. The language is the first part that is a
+    // language code, or looks like one and isn't an option (a private code such as "qaa"):
+    // "Movie.hi.srt" is Hindi, "Movie.en.hi.srt" and "Movie.qaa.hi.srt" are for the hard of
+    // hearing, and "Movie.commentary.en.srt" is English. Failing that, it is the first part
+    // that isn't an option, and "unknown" when there is none. The other parts are the options.
+    const parts = basename(fileName, codecExt)
       .replace(itemName, '')
       .toLowerCase()
       .split('.')
       .filter((s) => s.length > 0);
+    const languageCode = (part: string) =>
+      LanguageService.getAlpha3TCode(part.split(/[-_]/)[0] ?? part);
+    let languageIndex = parts.findIndex(
+      (part) =>
+        languageCode(part) !== undefined ||
+        (LanguageCodeShape.test(part) && !SubtitleFileFlags.has(part)),
+    );
+    if (languageIndex < 0) {
+      languageIndex = parts.findIndex((part) => !SubtitleFileFlags.has(part));
+    }
+    const lang =
+      languageIndex >= 0 ? (parts[languageIndex] ?? 'unknown') : 'unknown';
+    const opts = parts.filter((_, index) => index !== languageIndex);
 
     const sdh =
       opts.includes('hi') || opts.includes('cc') || opts.includes('sdh');
     const forced = opts.includes('forced');
 
-    const maybeLang3T = LanguageService.getAlpha3TCode(
-      lang.split(/[-_]/)?.[0] ?? lang,
-    );
+    const maybeLang3T = languageCode(lang);
 
     if (isNonEmptyString(maybeLang3T)) {
       return {
