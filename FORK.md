@@ -35,6 +35,38 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A caption's box colour holds to its end (2026-10-16)
+
+- **What you saw:** with a magenta box, Plex for Mac often turned the box back to black partway through a caption,
+  for its end or a closing ♪ (user: "almost like it was drawing the magenta over black or the timing of our codes is
+  off?").
+- **Cause:**
+  - **The decoder:** FFmpeg's 608 decoder, the family Plex's players come from, keeps one current box colour
+    (`libavcodec/ccaption_dec.c`). A background code sets it, each character is stamped with it as it's written
+    (`write_char`), and Erase Displayed Memory resets it to black (`handle_edm`: `bg_color = CCCOL_BLACK`; End of
+    Caption calls `handle_edm` too).
+  - **The encoder:** a pop-on caption loads while the one before it is on screen, and that one's clear (Erase
+    Displayed Memory) is placed first. The next caption's load is then fitted around it, so with a gap shorter than the
+    load (under about a second, common in dialogue and songs) the clear landed inside it. The box code goes once at the
+    start of each line, so the rest of the line was written on black.
+  - **Seen in jellyfin-ffmpeg 8.1.3**, before the fix: `{\3c&HFF00FF&}Then{\i1} Hey!{\i0} to\Nthe
+    ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and was never affected.
+- **Fix:** `server/src/stream/captions/Cea608Encoder.ts`.
+  - A pop-on line that sets a box colour loads wholly before or wholly after any Erase Displayed Memory in the schedule
+    (`groupedLoadSequence`; `placeBefore` and `placeFrom` keep each group on one side of a clear).
+  - A caption is never left out for this: if keeping its lines clear would push it past its end, it loads as before.
+  - Default output (no box) is byte-identical; the golden snapshot is unchanged.
+- **Test pattern:** sample 39 is a magenta box, then a second line 200 ms after it, keeping the box through italics, a ♪
+  and its end.
+- **Tests:**
+  - `Cea608Encoder.test.ts`: a model of FFmpeg's box handling (box set by the code, stamped per character, reset by
+    Erase Displayed Memory and End of Caption). Gaps of 2 to 30 frames and a late-loading caption keep every character
+    magenta; 7 of the 9 cases fail without the fix.
+  - `CaptionInsertion.local.test.ts`: jellyfin-ffmpeg 8.1.3 decodes the second caption with no black box after the
+    magenta one; it fails without the fix.
+  - `CaptionTestPattern.test.ts`: sample 39's timing.
+- **Upstream:** not sent.
+
 ### Switchable audio in Plex Live TV: a fixed audio track layout per channel (2026-10-16)
 
 - **What you saw:** Plex Live TV offered one audio track, whichever the program's selection picked, so a dual-audio
