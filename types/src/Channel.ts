@@ -1,5 +1,6 @@
 import type z from 'zod/v4';
 import type {
+  ChannelCaptionsSchema,
   ChannelOfflineSchema,
   ChannelSchema,
   ChannelSessionSchema,
@@ -32,6 +33,9 @@ export type ChannelTranscodingOptions = z.infer<
 export type ChannelSession = z.infer<typeof ChannelSessionSchema>;
 
 export type Channel = z.infer<typeof ChannelSchema>;
+
+// A channel's own closed-caption settings, over the global ones
+export type ChannelCaptions = z.infer<typeof ChannelCaptionsSchema>;
 
 export type SaveableChannel = z.infer<typeof SaveableChannelSchema>;
 

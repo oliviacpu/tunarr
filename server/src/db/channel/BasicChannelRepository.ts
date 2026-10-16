@@ -4,11 +4,15 @@ import { KEYS } from '@/types/inject.js';
 import { Result } from '@/types/result.js';
 import type { Maybe } from '@/types/util.js';
 import dayjs from '@/util/dayjs.js';
-import type { SaveableChannel, Watermark } from '@tunarr/types';
+import type {
+  ChannelCaptions,
+  SaveableChannel,
+  Watermark,
+} from '@tunarr/types';
 import { desc, eq, sql } from 'drizzle-orm';
 import { inject, injectable } from 'inversify';
 import type { Kysely } from 'kysely';
-import { isEmpty, isNil, isUndefined, map, sum } from 'lodash-es';
+import { isEmpty, isNil, isUndefined, map, omitBy, sum } from 'lodash-es';
 import type { MarkRequired } from 'ts-essentials';
 import { v4 } from 'uuid';
 import { isDefined, isNonEmptyString } from '../../util/index.ts';
@@ -75,6 +79,11 @@ function updateRequestToChannel(
       updateReq.audioTracks === undefined
         ? undefined
         : audioTracksToColumn(updateReq.audioTracks),
+    // Left out = unchanged; null or nothing set = the global settings
+    captions:
+      updateReq.captions === undefined
+        ? undefined
+        : captionsToColumn(updateReq.captions),
   } satisfies Partial<NewChannelOrm>;
 }
 
@@ -102,6 +111,7 @@ function createRequestToChannel(saveReq: SaveableChannel): NewChannelOrm {
     transcodeConfigId: saveReq.transcodeConfigId,
     subtitlesEnabled: saveReq.subtitlesEnabled,
     audioTracks: audioTracksToColumn(saveReq.audioTracks),
+    captions: captionsToColumn(saveReq.captions),
   } satisfies NewChannelOrm;
 }
 
@@ -110,6 +120,29 @@ export function audioTracksToColumn(
   audioTracks: readonly string[] | undefined,
 ): string[] | null {
   return audioTracks && audioTracks.length > 0 ? [...audioTracks] : null;
+}
+
+// A channel's own caption settings as stored: only what it sets, null when it
+// sets nothing. A test pattern switched off is the same as not set: the
+// channel can turn the samples on for itself, not off when they're on for all.
+export function captionsToColumn(
+  captions: ChannelCaptions | null | undefined,
+): ChannelCaptions | null {
+  if (!captions) {
+    return null;
+  }
+  const stored: ChannelCaptions = {};
+  if (captions.testPattern === true) {
+    stored.testPattern = true;
+  }
+  if (captions.alignment !== undefined) {
+    stored.alignment = captions.alignment;
+  }
+  const appearance = omitBy(captions.appearance ?? {}, isUndefined);
+  if (!isEmpty(appearance)) {
+    stored.appearance = appearance;
+  }
+  return isEmpty(stored) ? null : stored;
 }
 
 @injectable()

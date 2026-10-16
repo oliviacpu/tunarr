@@ -65,6 +65,7 @@ export const dbChannelToApiChannel = ({
       ? subtitlePreferences
       : undefined,
     audioTracks: channel.audioTracks ?? [],
+    captions: channel.captions ?? null,
   };
 };
 
@@ -119,5 +120,6 @@ export const ormChannelToApiChannel = ({
       ? subtitlePreferences
       : undefined,
     audioTracks: channel.audioTracks ?? [],
+    captions: channel.captions ?? null,
   };
 };
