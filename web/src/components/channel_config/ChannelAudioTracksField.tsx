@@ -60,6 +60,10 @@ export function ChannelAudioTracksField({ disabled }: { disabled: boolean }) {
     <Controller
       control={control}
       name="audioTracks"
+      // Disabled (HLS Direct v2 can't use it), the field isn't validated and
+      // is left out of the save, which keeps the stored layout, so a value
+      // that can't be corrected there never blocks saving the channel
+      disabled={disabled}
       rules={{
         validate: (value) => {
           const result = StrictChannelAudioTracksSchema.safeParse(value ?? []);
