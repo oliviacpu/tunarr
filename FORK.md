@@ -54,14 +54,18 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:** `server/src/stream/captions/Cea608Encoder.ts`.
   - A pop-on line that sets a box colour loads wholly before or wholly after any Erase Displayed Memory in the schedule
     (`groupedLoadSequence`; `placeBefore` and `placeFrom` keep each group on one side of a clear).
-  - A caption is never left out for this: if keeping its lines clear would push it past its end, it loads as before.
+  - Only where that doesn't move the frame the caption shows on. A later caption would hold up the next one's load,
+    which could then miss its own time and be left out (Codex, PR #28: three quick boxed cues showed only two). A
+    caption with no room to load before its start loads as before, so its timing never changes. A line the clear
+    falls in can still lose its box there; that only happens with very quick cues.
   - Default output (no box) is byte-identical; the golden snapshot is unchanged.
 - **Test pattern:** sample 39 is a magenta box, then a second line 200 ms after it, keeping the box through italics, a ♪
   and its end.
 - **Tests:**
   - `Cea608Encoder.test.ts`: a model of FFmpeg's box handling (box set by the code, stamped per character, reset by
-    Erase Displayed Memory and End of Caption). Gaps of 2 to 30 frames and a late-loading caption keep every character
-    magenta; 7 of the 9 cases fail without the fix.
+    Erase Displayed Memory and End of Caption). Gaps of 2 to 30 frames keep every character magenta, and 6 of those 7
+    fail without the fix. Three quick boxed cues all show, and a caption that has to load late still shows, boxed from
+    its start.
   - `CaptionInsertion.local.test.ts`: jellyfin-ffmpeg 8.1.3 decodes the second caption with no black box after the
     magenta one; it fails without the fix.
   - `CaptionTestPattern.test.ts`: sample 39's timing.

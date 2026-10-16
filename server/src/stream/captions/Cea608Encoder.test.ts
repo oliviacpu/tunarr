@@ -1310,9 +1310,11 @@ describe('a box colour across the previous caption clearing', () => {
     },
   );
 
-  test('keeps the box when the next caption loads after the clear (shown late)', () => {
-    // The first caption is up for a moment only, and the second has more to
-    // load than fits before its start, so it loads forward across the clear
+  // A caption with more to load than fits before its start loads late, from
+  // the previous caption's show frame on. Keeping a line clear of the clear
+  // would make it later still, so it loads as it always did: it shows, boxed
+  // from its start, though a line the clear falls in can lose the box.
+  test('shows a caption that has to load late, boxed from its start', () => {
     const pairs = framePairs(
       [
         { startMs: 1000, endMs: 1300, text: 'Hi' },
@@ -1329,7 +1331,33 @@ describe('a box colour across the previous caption clearing', () => {
     const captions = ffmpegBoxes(pairs);
 
     expect(captions).toHaveLength(2);
-    expect(boxes(captions[1])).toEqual(['magenta']);
+    expect(captions[1]?.[0]).toEqual({ ch: 'A', box: 'magenta' });
+  });
+
+  // Keeping a boxed line on one side of a clear must never make a caption
+  // late: a late caption holds up the next one's load, which can then miss
+  // its own time and be left out (Codex, PR #28)
+  test('never shows a caption later for its box, so quick cues all show', () => {
+    const cues = [0, 1, 2].map((k) => ({
+      startMs: 1000 + k * 600,
+      endMs: 1500 + k * 600,
+      text: `Caption ${k + 1} of three, quick`,
+    }));
+    const shownAt = (pairs: number[][]) =>
+      pairs.flatMap((p, frame) =>
+        p[0] === EndOfCaption[0] && p[1] === EndOfCaption[1] ? [frame] : [],
+      );
+    const boxed = framePairs(cues, 30 * 4, 0, magenta);
+    const plain = framePairs(cues, 30 * 4);
+
+    expect(ffmpegBoxes(boxed)).toHaveLength(3);
+    // Each caption shows on its own start frame or the frame its load allows,
+    // and no later than the same captions without a box need for their load
+    // plus the box codes (2 pairs per line)
+    expect(shownAt(boxed)).toHaveLength(3);
+    for (const [k, frame] of shownAt(boxed).entries()) {
+      expect(frame).toBeLessThanOrEqual((shownAt(plain)[k] ?? 0) + 4);
+    }
   });
 
   test('leaves the default box alone (no background codes, nothing moved)', () => {
