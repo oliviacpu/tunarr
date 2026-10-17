@@ -38,9 +38,17 @@ describe('outputFrameRate', () => {
     [14.26, 30000 / 1001],
     [31, 30000 / 1001],
     [48, 60000 / 1001],
-    [120, 60000 / 1001],
   ])('gives a source reporting %j, not standard, %d', (framerate, rate) => {
     expect(outputFrameRate(framerate)).toEqual({ rate, standard: false });
+  });
+
+  test.each([
+    [120, 120],
+    [100, 100],
+    [119.88, 120000 / 1001],
+    ['120000/1001', 120000 / 1001],
+  ])('keeps a high-frame-rate source reporting %j as %d', (framerate, rate) => {
+    expect(outputFrameRate(framerate)).toEqual({ rate, standard: true });
   });
 
   test.each([undefined, null, '', 'abc', '0/0', 0, -5, 1000])(

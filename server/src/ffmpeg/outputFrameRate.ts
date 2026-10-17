@@ -38,9 +38,10 @@ function parseRate(framerate: number | string | null | undefined) {
 
 /**
  * The constant frame rate to give a transcode of a source that reports `framerate`. A standard rate, or one close to
- * it, is that standard rate exactly. Any other reported rate can't be trusted: outputting it would make ffmpeg drop
- * (or repeat) frames to fit it. Such a source gets 29.97, which holds any video up to 30 frames a second without
- * dropping one, or 59.94 when it reports more than that. Undefined when the rate is missing or implausible.
+ * it, is that standard rate exactly, and a rate above them all (120) is kept. Any other reported rate can't be
+ * trusted: outputting it would make ffmpeg drop (or repeat) frames to fit it. Such a source gets 29.97, which holds
+ * any video up to 30 frames a second without dropping one, or 59.94 when it reports more than that. Undefined when
+ * the rate is missing or implausible.
  */
 export function outputFrameRate(
   framerate: number | string | null | undefined,
@@ -57,6 +58,18 @@ export function outputFrameRate(
   }
   if (Math.abs(reported - nearest) / nearest <= StandardRateTolerance) {
     return { rate: nearest, standard: true };
+  }
+  // Above every standard rate: high-frame-rate video, kept as reported (exactly
+  // for an NTSC multiple, 119.88 as 120000/1001)
+  if (reported > 60 * (1 + StandardRateTolerance)) {
+    const ntsc = (Math.round((reported * 1001) / 1000) * 1000) / 1001;
+    return {
+      rate:
+        Math.abs(reported - ntsc) < 0.005 && !Number.isInteger(reported)
+          ? ntsc
+          : reported,
+      standard: true,
+    };
   }
   return {
     rate: reported <= 31 ? 30000 / 1001 : 60000 / 1001,
