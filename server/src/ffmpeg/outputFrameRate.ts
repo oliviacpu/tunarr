@@ -21,7 +21,8 @@ const RoundingTolerance = 0.0005;
 export type OutputFrameRate = {
   // Frames per second, exact for the NTSC rates
   rate: number;
-  // Whether the source reported a standard rate (or one within the tolerance of it)
+  // Whether the source reported this rate (a standard one, rounding aside, or a high frame rate): ffmpeg keeps it
+  // anyway. Otherwise the rate is a correction the transcode must be given.
   standard: boolean;
 };
 
@@ -74,7 +75,7 @@ export function outputFrameRate(
     };
   }
   if (reported >= atOrAbove * (1 - BelowStandardTolerance)) {
-    return { rate: atOrAbove, standard: true };
+    return { rate: atOrAbove, standard: false };
   }
   return {
     rate: reported < 30 ? 30000 / 1001 : 60000 / 1001,

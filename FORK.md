@@ -54,7 +54,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     standard rate exactly; one above them all (high-frame-rate video, 120) is kept; any other, including one a little
     above a standard rate (30.3), gets 29.97 below 30 fps or 59.94 above.
   - `FfmpegPlaybackParamsCalculator.calculateForStream` sets the output rate (`-r <rate> -fps_mode cfr`) for a
-    non-standard source always, with "Normalize Frame Rate", and, new, whenever HDHomeRun captions are on
+    non-standard source, or one corrected up to a standard rate, always (left alone, ffmpeg's HLS output keeps the
+    reported rate), with "Normalize Frame Rate", and, new, whenever HDHomeRun captions are on
     (`pinFrameRate`). When the pipeline deinterlaces in software, a field-rate filter (`none`, which is yadif=1,
     `yadif=1`, `bwdif=1`, `w3fdif`) doubles it, so no field-rate frames are dropped: without hardware acceleration,
     with VideoToolbox, with QSV when hardware filters are off, with VAAPI and CUDA when hardware decoding is off, and

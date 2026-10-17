@@ -21,16 +21,22 @@ describe('outputFrameRate', () => {
   });
 
   test.each([
-    // an average over a few missing frames, or a rounded label
-    [23.81, 24000 / 1001],
+    // rounded labels
     ['23.98', 24000 / 1001],
+    [60.02, 60],
+  ])('treats %j, rounded, as %d', (framerate, rate) => {
+    expect(outputFrameRate(framerate)).toEqual({ rate, standard: true });
+  });
+
+  test.each([
+    // an average over a few missing frames: a correction to give ffmpeg
+    [23.81, 24000 / 1001],
     [29.5, 30000 / 1001],
     [59.9, 60000 / 1001],
-    [60.02, 60],
   ])(
-    'treats %j, up to 2%% below a standard rate or rounded, as %d',
+    'corrects %j, up to 2%% below a standard rate, to %d',
     (framerate, rate) => {
-      expect(outputFrameRate(framerate)).toEqual({ rate, standard: true });
+      expect(outputFrameRate(framerate)).toEqual({ rate, standard: false });
     },
   );
 

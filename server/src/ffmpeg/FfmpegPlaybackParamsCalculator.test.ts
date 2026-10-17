@@ -332,6 +332,18 @@ describe('FfmpegPlaybackParamsCalculator', () => {
       );
     });
 
+    test('pins a rate snapped up to a standard one with the setting and captions off', () => {
+      // ffmpeg's HLS output would keep 23.81 and drop frames from 23.976 video
+      const calculator = new FfmpegPlaybackParamsCalculator(
+        makeTranscodeConfig({ normalizeFrameRate: false }),
+        'hls',
+      );
+      const params = calculator.calculateForStream(
+        makeStreamDetails({ framerate: 23.81 }),
+      );
+      expect(params.frameRate).toBe(24000 / 1001);
+    });
+
     describe('pinFrameRate (captions)', () => {
       test('pins a standard source rate exactly', () => {
         const calculator = new FfmpegPlaybackParamsCalculator(
