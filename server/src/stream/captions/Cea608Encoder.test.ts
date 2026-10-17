@@ -281,6 +281,96 @@ describe('buildCaptionSchedule', () => {
     expect(indexOfPair(pairs, EndOfCaption)).toBe(15);
   });
 
+  // A viewer who tunes in 0.6 s before a cue ends: once loaded, the end of the
+  // line would flash up for a quarter of a second and vanish
+  test('leaves out a cue already under way with less than a second of it left to show', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 0, endMs: 1600, text: 'Already talking' },
+        { startMs: 2000, endMs: 3500, text: 'Next' },
+      ],
+      90,
+      1000,
+    );
+
+    expect(decodeCaptions(pairs).map((c) => c.map((r) => r.text))).toEqual([
+      ['Next'],
+    ]);
+    // On its own start frame, 1 s in
+    expect(indexOfPair(pairs, EndOfCaption)).toBe(30);
+  });
+
+  // Tuning in 0.6 s before a program ends, mid-cue: the program's end cuts the
+  // caption off, however long its cue runs on (Codex, PR #32)
+  test('leaves out a cue under way when the program ends less than a second after the first frame', () => {
+    const schedule = buildCaptionSchedule(
+      [{ startMs: 0, endMs: 5000, text: 'Already talking' }],
+      { firstFrameMs: 1000, frameRate: FrameRate, endMs: 1600 },
+    );
+    const pairs = Array.from({ length: 30 }, (_, k) =>
+      withoutParity(schedule.pairAt(1000 + k * frameMs)),
+    );
+
+    expect(decodeCaptions(pairs)).toEqual([]);
+  });
+
+  // Two subtitles overlap at tune-in, one ending 0.6 s in: the other still has
+  // seconds to go, so it shows on its own once loaded, not at the first's end
+  // (Codex, PR #32)
+  test('shows an overlapping cue under way as soon as it is loaded when the other is nearly over', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 0, endMs: 1600, text: 'Ending soon' },
+        { startMs: 500, endMs: 6000, text: 'Still going' },
+      ],
+      120,
+      1000,
+    );
+
+    expect(decodeCaptions(pairs).map((c) => c.map((r) => r.text))).toEqual([
+      ['Still going'],
+    ]);
+    // Before the first one's end at frame 18
+    expect(indexOfPair(pairs, EndOfCaption)).toBeLessThan(18);
+  });
+
+  test('still shows a cue under way with more than a second left, once loaded, until its end', () => {
+    // 2 s of it left
+    const pairs = framePairs(
+      [{ startMs: 0, endMs: 3000, text: 'Already talking' }],
+      90,
+      1000,
+    );
+    const shown = indexOfPair(pairs, EndOfCaption);
+
+    expect(decodeCaptions(pairs).map((c) => c.map((r) => r.text))).toEqual([
+      ['Already talking'],
+    ]);
+    // About a third of a second in, as soon as it is loaded
+    expect(shown).toBeGreaterThan(0);
+    expect(shown).toBeLessThan(15);
+    expect(indexOfPair(pairs, EraseDisplayedMemory, shown)).toBe(60);
+  });
+
+  test('shows a short cue that starts on or after the first frame, however short', () => {
+    const pairs = framePairs(
+      [
+        // Starts on the first frame: loaded late, shown for about 0.2 s
+        { startMs: 1000, endMs: 1600, text: 'Quick' },
+        { startMs: 2000, endMs: 2500, text: 'Short' },
+      ],
+      90,
+      1000,
+    );
+
+    expect(decodeCaptions(pairs).map((c) => c.map((r) => r.text))).toEqual([
+      ['Quick'],
+      ['Short'],
+    ]);
+    expect(indexOfPair(pairs, EndOfCaption, 1)).toBeLessThan(18);
+    expect(indexOfPair(pairs, EndOfCaption, 18)).toBe(30);
+  });
+
   test('clears the caption on screen at its end when the one meant to replace it is left out', () => {
     const pairs = framePairs(
       [
@@ -679,9 +769,42 @@ describe('paint-on captions', () => {
     );
     expect(decodeScreens(pairs).filter((s) => s.rows.length > 0)).toEqual([]);
   });
+
+  test('leaves out a cue already under way with less than a second of it left', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 0, endMs: 1600, text: 'Already talking' },
+        { startMs: 2000, endMs: 3000, text: 'Next' },
+      ],
+      90,
+      1000,
+      { mode: 'paintOn' },
+    );
+
+    expect(textsAt(pairs, 15)).toEqual([]);
+    expect(textsAt(pairs, 50)).toEqual([[15, 'Next']]);
+  });
 });
 
 describe('roll-up captions', () => {
+  test('keeps the rest of a cue under way, which the next cue scrolls up', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 0, endMs: 1600, text: 'Already' },
+        { startMs: 2000, endMs: 3000, text: 'Next' },
+      ],
+      90,
+      1000,
+      { mode: 'rollUp2' },
+    );
+
+    expect(textsAt(pairs, 15)).toEqual([[15, 'Already']]);
+    expect(textsAt(pairs, 50)).toEqual([
+      [14, 'Already'],
+      [15, 'Next'],
+    ]);
+  });
+
   test("scrolls a cue's lines up from the bottom, keeping the chosen number of rows", () => {
     const pairs = framePairs(
       [{ startMs: 2000, endMs: 5000, text: 'One\nTwo\nThree' }],
