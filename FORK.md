@@ -77,6 +77,11 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   happens with captions off too (0 to 2 frames in 60 s of a fast replay against a local server; about one in 40 s on a
   slow shared server, where the transcode runs near real time). A lost frame takes its caption pair with it: control
   codes survive (each is sent twice), but two letters of text are lost. The segments themselves are complete.
+  - **Hardware pipelines:** whether a pipeline's deinterlacer doubles the frame rate is worked out from the transcode
+    config and the source, mirroring each builder's choice. A GPU that can't decode a codec falls back to software
+    in VAAPI and CUDA, which only the pipeline knows: there the pinned rate keeps the source's, so a field-rate
+    deinterlacer's extra frames are dropped (captions still match). Only the software pipeline has been checked end
+    to end. Follow-up: have the pipeline report the output rate it ends up with, and lay captions out at that.
 - **Tests:** `outputFrameRate.test.ts`; `FfmpegPlaybackParamsCalculator.test.ts` (non-standard rates with the setting
   on and off and in MPEG-TS mode, near-standard rates, `pinFrameRate`, deinterlacing per filter and pipeline);
   `FfmpegStreamFactory.test.ts` (captions and the notice at the output rate; a 20 fps source outputs 29.97; nothing
