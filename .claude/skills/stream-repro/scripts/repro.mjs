@@ -973,6 +973,8 @@ function captionFrames(file) {
       } else pes?.push(payload);
     }
   }
+  // The last frame ends with the capture, not with a next frame's start
+  if (pes) finish(pes);
   return frames.sort((a, b) => a.pts - b.pts);
 }
 
