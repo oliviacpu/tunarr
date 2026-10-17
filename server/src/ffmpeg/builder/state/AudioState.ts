@@ -3,6 +3,7 @@ import type { LoudnormConfig } from '@tunarr/types';
 import { isNil, omitBy } from 'lodash-es';
 import type { AnyFunction } from 'ts-essentials';
 import type { TranscodeAudioOutputFormat } from '../../../db/schema/TranscodeConfig.ts';
+import type { LoudnessGain } from '../../loudness.ts';
 
 export type AudioStateFields = ExcludeByValueType<AudioState, AnyFunction>;
 
@@ -22,6 +23,7 @@ const DefaultAudioState: AudioState = {
   audioVolume: null,
   normalizeLoudness: false,
   loudnormConfig: null,
+  loudnessGains: null,
   fades: null,
 };
 
@@ -35,6 +37,9 @@ export class AudioState {
   audioVolume: Nullable<number>;
   normalizeLoudness: boolean;
   loudnormConfig: Nullable<LoudnormConfig>;
+  // Fixed gains by source stream index, from measured loudness, in place of
+  // live loudnorm (plans/loudness-measured-once.md)
+  loudnessGains: Nullable<ReadonlyMap<number, LoudnessGain>>;
   fades: Nullable<AudioFades>;
 
   private constructor(fields: Partial<AudioStateFields> = {}) {
@@ -51,6 +56,7 @@ export class AudioState {
     this.audioVolume = merged.audioVolume;
     this.normalizeLoudness = merged.normalizeLoudness ?? false;
     this.loudnormConfig = merged.loudnormConfig;
+    this.loudnessGains = merged.loudnessGains;
     this.fades = merged.fades;
   }
 

@@ -56,6 +56,19 @@ export type AudioStreamDetails = {
   languageCodeISO6391?: string;
   languageCodeISO6392?: string;
   forced?: boolean;
+  // The stream's loudness, measured once over its current file
+  // (plans/loudness-measured-once.md)
+  loudness?: MeasuredLoudness;
+};
+
+/** A stream's EBU R128 loudness over a whole file, as loudnorm reports it. */
+export type MeasuredLoudness = {
+  // LUFS
+  integrated: number;
+  // dBTP
+  truePeak: number;
+  // LU
+  range: number;
 };
 
 export type SubtitleType = 'embedded' | 'external';

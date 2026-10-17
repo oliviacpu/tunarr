@@ -52,6 +52,10 @@ import {
   MediaSourceLibraryReplacePathRelations,
 } from './MediaSourceLibraryReplacePath.ts';
 import { Program, ProgramRelations } from './Program.ts';
+import {
+  ProgramAudioLoudness,
+  ProgramAudioLoudnessRelations,
+} from './ProgramAudioLoudness.ts';
 import { ProgramChapter, ProgramChapterRelations } from './ProgramChapter.ts';
 import {
   ProgramExternalId,
@@ -122,6 +126,8 @@ export const schema = {
   programExternalIdRelations: ProgramExternalIdRelations,
   programPlayHistory: ProgramPlayHistory,
   programPlayHistoryRelations: ProgramPlayHistoryRelations,
+  programAudioLoudness: ProgramAudioLoudness,
+  programAudioLoudnessRelations: ProgramAudioLoudnessRelations,
   programGroupingExternalId: ProgramGroupingExternalId,
   programGroupingExternalIdRelations: ProgramGroupingExternalIdRelations,
   programMediaStream: ProgramMediaStream,

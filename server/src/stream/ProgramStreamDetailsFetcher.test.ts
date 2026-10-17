@@ -1,5 +1,7 @@
 import { faker } from '@faker-js/faker';
 import axios from 'axios';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IProgramDB } from '../db/interfaces/IProgramDB.ts';
@@ -12,7 +14,12 @@ import type {
 import { fileExists } from '../util/fsUtil.ts';
 import { PathCalculator } from './PathCalculator.ts';
 import { ProgramStreamDetailsFetcher } from './ProgramStreamDetailsFetcher.ts';
-import { FileStreamSource, HttpStreamSource } from './types.ts';
+import {
+  FileStreamSource,
+  HttpStreamSource,
+  type StreamDetails,
+} from './types.ts';
+import type { ProgramAudioLoudnessDB } from '../db/ProgramAudioLoudnessDB.ts';
 
 vi.mock('@/util/logging/LoggerFactory.js', () => {
   const logger = {
@@ -208,6 +215,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         programDB,
         makeArtworkService(),
+        noLoudnessDB(),
       );
 
       const server = makeServer({
@@ -241,6 +249,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         programDB,
         makeArtworkService(),
+        noLoudnessDB(),
       );
 
       const server = makeServer({
@@ -273,6 +282,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         programDB,
         makeArtworkService(),
+        noLoudnessDB(),
       );
 
       const server = makeServer({
@@ -305,6 +315,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         programDB,
         makeArtworkService(),
+        noLoudnessDB(),
       );
 
       const server = makeServer({
@@ -344,6 +355,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         programDB,
         makeArtworkService(),
+        noLoudnessDB(),
       );
 
       const server = makeServer({
@@ -373,6 +385,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         programDB,
         makeArtworkService(),
+        noLoudnessDB(),
       );
 
       const server = makeServer({
@@ -402,6 +415,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         programDB,
         makeArtworkService(),
+        noLoudnessDB(),
       );
 
       const server = makeServer({
@@ -456,6 +470,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         makeProgramDB(program),
         artworkService,
+        noLoudnessDB(),
       );
       const result = await fetcher.getStream({
         server: makeServer({ type: 'local', uri: '' }),
@@ -570,6 +585,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         makeProgramDB(program),
         artworkService,
+        noLoudnessDB(),
       );
 
       const result = await fetcher.getStream({
@@ -579,6 +595,115 @@ describe('ProgramStreamDetailsFetcher', () => {
 
       expect(result.get().streamDetails.placeholderImage).toBeUndefined();
       expect(artworkService.resolveArtwork).not.toHaveBeenCalled();
+    });
+  });
+
+  // plans/loudness-measured-once.md
+  describe('measured loudness', () => {
+    async function withEpisode(
+      rows: (file: string, size: number) => object[],
+      run: (
+        fetch: () => Promise<StreamDetails>,
+        loudnessDB: ProgramAudioLoudnessDB,
+      ) => Promise<void>,
+    ) {
+      const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'tunarr-loudness-'));
+      const file = path.join(dir, 'episode.mkv');
+      await fsp.writeFile(file, 'twelve bytes');
+      const program = makeProgram('local', '');
+      const version = program.versions[0]!;
+      version.mediaFiles = [{ ...version.mediaFiles[0]!, path: file }];
+      version.mediaStreams = [
+        ...(version.mediaStreams ?? []),
+        {
+          ...version.mediaStreams![0]!,
+          streamKind: 'audio',
+          index: 1,
+          codec: 'aac',
+          channels: 2,
+          language: 'eng',
+        },
+      ];
+      const loudnessDB = {
+        getForProgram: vi.fn().mockResolvedValue(rows(file, 12)),
+      } as unknown as ProgramAudioLoudnessDB;
+      const fetcher = new ProgramStreamDetailsFetcher(
+        makeProgramDB(program),
+        makeArtworkService(),
+        loudnessDB,
+      );
+      try {
+        await run(
+          async () =>
+            (
+              await fetcher.getStream({
+                server: makeServer({ type: 'local', uri: '' }),
+                lineupItem: program.externalIds[0] as any,
+              })
+            ).get().streamDetails,
+          loudnessDB,
+        );
+      } finally {
+        await fsp.rm(dir, { recursive: true, force: true });
+      }
+    }
+
+    const measured = (file: string, size: number) => ({
+      streamIndex: 1,
+      filePath: file,
+      fileSize: size,
+      integrated: -20.5,
+      truePeak: -8,
+      range: 6.2,
+      error: null,
+    });
+
+    it('attaches the loudness measured on this very file', async () => {
+      await withEpisode(
+        (file, size) => [measured(file, size)],
+        async (fetch) => {
+          expect((await fetch()).audioDetails?.[0]?.loudness).toEqual({
+            integrated: -20.5,
+            truePeak: -8,
+            range: 6.2,
+          });
+        },
+      );
+    });
+
+    it.each([
+      ['a file that changed size since', (file: string, size: number) => [measured(file, size + 1)]],
+      ['another file', (_: string, size: number) => [measured('/elsewhere/episode.mkv', size)]],
+      ['a failed measurement', (file: string, size: number) => [{ ...measured(file, size), integrated: null, error: 'boom' }]],
+    ])('attaches nothing for %s', async (_, rows) => {
+      await withEpisode(rows, async (fetch) => {
+        expect((await fetch()).audioDetails?.[0]?.loudness).toBeUndefined();
+      });
+    });
+
+    it('looks nothing up for a stream it would fetch over HTTP', async () => {
+      const program = makeProgram('plex', '/library/parts/1/2/file.mkv');
+      const version = program.versions[0]!;
+      version.mediaStreams = [
+        { ...version.mediaStreams![0]!, streamKind: 'audio', index: 1 },
+      ];
+      const loudnessDB = {
+        getForProgram: vi.fn().mockResolvedValue([]),
+      } as unknown as ProgramAudioLoudnessDB;
+      vi.mocked(PathCalculator.findLocalPath).mockResolvedValue(undefined);
+      const fetcher = new ProgramStreamDetailsFetcher(
+        makeProgramDB(program),
+        makeArtworkService(),
+        loudnessDB,
+      );
+
+      const result = await fetcher.getStream({
+        server: makeServer({ type: 'plex', uri: 'http://plex.example' }),
+        lineupItem: program.externalIds[0] as any,
+      });
+
+      expect(result.get().streamSource.type).toBe('http');
+      expect(loudnessDB.getForProgram).not.toHaveBeenCalled();
     });
   });
 
@@ -612,6 +737,7 @@ describe('ProgramStreamDetailsFetcher', () => {
       const fetcher = new ProgramStreamDetailsFetcher(
         makeProgramDB(program),
         makeArtworkService(),
+        noLoudnessDB(),
       );
       const result = await fetcher.getStream({
         server: makeServer({ type: 'plex', uri: 'http://10.0.0.110:32400' }),
@@ -646,3 +772,10 @@ describe('ProgramStreamDetailsFetcher', () => {
     });
   });
 });
+
+// No measured loudness: playback levels with live loudnorm
+function noLoudnessDB(): ProgramAudioLoudnessDB {
+  return {
+    getForProgram: vi.fn().mockResolvedValue([]),
+  } as unknown as ProgramAudioLoudnessDB;
+}

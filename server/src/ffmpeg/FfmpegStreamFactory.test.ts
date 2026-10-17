@@ -670,6 +670,156 @@ describe('FfmpegStreamFactory', () => {
     });
   });
 
+  // plans/loudness-measured-once.md
+  describe('measured loudness', () => {
+    const levelling = { i: -24, lra: 7, tp: -2 };
+    const eng: AudioStreamDetails = {
+      codec: 'ac3',
+      channels: 6,
+      index: 1,
+      languageCodeISO6392: 'eng',
+    };
+    const jpn: AudioStreamDetails = {
+      codec: 'aac',
+      channels: 2,
+      index: 2,
+      languageCodeISO6392: 'jpn',
+    };
+    const loud = { integrated: -20, truePeak: -10, range: 5 };
+    const quiet = { integrated: -30, truePeak: -20, range: 5 };
+
+    function makeSut(
+      config: Partial<TranscodeConfigOrm>,
+      main: AudioStreamDetails,
+      channel: Partial<ChannelOrm> = {},
+    ) {
+      const capture = createCapturingPipelineBuilderFactory();
+      const selector = {
+        selectAudioAndSubtitleStreams: vi
+          .fn()
+          .mockResolvedValue({ audioStream: main, subtitleStream: null }),
+      } as unknown as StreamSelector;
+      const sut = new FfmpegStreamFactory(
+        makeMockFfmpegInfo(),
+        makeMockSettingsDB(makeFfmpegSettings()),
+        capture.factory,
+        makeMockChannelDB(),
+        makeMockFeatureFlagService(),
+        selector,
+        makeTranscodeConfig(config),
+        makeChannel(channel),
+      );
+      return { sut, ...capture };
+    }
+
+    async function streamSession(
+      sut: FfmpegStreamFactory,
+      audioDetails: NonEmptyArray<AudioStreamDetails>,
+    ) {
+      await sut.createStreamSession({
+        stream: {
+          source: new FileStreamSource('/media/tv/show/episode.mkv'),
+          details: { ...makeStreamDetails(), audioDetails },
+        },
+        options: {
+          startTime: dayjs.duration(0),
+          duration: dayjs.duration({ seconds: 30 }),
+          outputFormat: HlsOutputFormat(defaultHlsOptions),
+          ptsOffset: 0,
+          realtime: false,
+          streamMode: 'hls',
+        },
+        lineupItem: makeLineupItem(),
+      });
+    }
+
+    test('levels a measured program with a fixed gain, not loudnorm', async () => {
+      const main = { ...eng, loudness: loud };
+      const { sut, getCapturedAudioInput } = makeSut(
+        { audioLoudnormConfig: levelling },
+        main,
+      );
+
+      await streamSession(sut, [main]);
+
+      const state = getCapturedAudioInput()?.desiredState;
+      expect(state?.loudnessGains).toEqual(new Map([[1, { gainDb: -4 }]]));
+      expect(state?.loudnormConfig).toBeNull();
+    });
+
+    test('keeps live loudnorm for a program not measured yet', async () => {
+      const { sut, getCapturedAudioInput } = makeSut(
+        { audioLoudnormConfig: levelling },
+        eng,
+      );
+
+      await streamSession(sut, [eng]);
+
+      const state = getCapturedAudioInput()?.desiredState;
+      expect(state?.loudnessGains).toBeNull();
+      expect(state?.loudnormConfig).toEqual(levelling);
+    });
+
+    test('levels nothing where the transcode config levels nothing', async () => {
+      const main = { ...eng, loudness: loud };
+      const { sut, getCapturedAudioInput } = makeSut({}, main);
+
+      await streamSession(sut, [main]);
+
+      const state = getCapturedAudioInput()?.desiredState;
+      expect(state?.loudnessGains).toBeNull();
+      expect(state?.loudnormConfig).toBeNull();
+    });
+
+    test("with an audio track layout, every slot's track needs a measurement", async () => {
+      const layout = { audioTracks: ['eng', 'jpn'] };
+      const measuredEng = { ...eng, loudness: loud };
+
+      const half = makeSut({ audioLoudnormConfig: levelling }, measuredEng, layout);
+      await streamSession(half.sut, [measuredEng, jpn]);
+      expect(half.getCapturedAudioInput()?.desiredState.loudnormConfig).toEqual(
+        levelling,
+      );
+
+      const both = makeSut({ audioLoudnormConfig: levelling }, measuredEng, layout);
+      await streamSession(both.sut, [measuredEng, { ...jpn, loudness: quiet }]);
+      const state = both.getCapturedAudioInput()?.desiredState;
+      expect(state?.loudnessGains).toEqual(
+        new Map([
+          [1, { gainDb: -4 }],
+          [2, { gainDb: 6 }],
+        ]),
+      );
+      expect(state?.loudnormConfig).toBeNull();
+    });
+
+    test('levels measured gap music to its own target with a fixed gain', async () => {
+      const { sut, getCapturedAudioInput } = makeSut({}, eng);
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+        backgroundMusic: {
+          source: new FileStreamSource('/media/music/Artist/Album/01.flac'),
+          audioStream: {
+            index: 0,
+            codec: 'flac',
+            channels: 2,
+            loudness: { integrated: -9, truePeak: -0.5, range: 6 },
+          },
+          trackDurationMs: 240_000,
+        },
+      });
+
+      const state = getCapturedAudioInput()?.desiredState;
+      expect(state?.loudnessGains).toEqual(
+        new Map([[0, { gainDb: GapMusicLoudnorm.i + 9 }]]),
+      );
+      expect(state?.loudnormConfig).toBeNull();
+    });
+  });
+
   describe('passthrough mode (HlsDirectV2 / remux)', () => {
     const hlsDirectV2Format = HlsDirectOutputFormat(defaultHlsOptions);
 

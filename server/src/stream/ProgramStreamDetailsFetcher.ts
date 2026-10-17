@@ -11,9 +11,11 @@ import {
   trimEnd,
   trimStart,
 } from 'lodash-es';
+import fs from 'node:fs/promises';
 import { match } from 'ts-pattern';
 import type { IProgramDB } from '../db/interfaces/IProgramDB.ts';
 import type { MediaSourceWithRelations } from '../db/schema/derivedTypes.ts';
+import { ProgramAudioLoudnessDB } from '../db/ProgramAudioLoudnessDB.ts';
 import { ArtworkService } from '../services/ArtworkService.ts';
 import type { ArtworkResult } from '../services/ArtworkService.ts';
 import { KEYS } from '../types/inject.ts';
@@ -44,6 +46,8 @@ export class ProgramStreamDetailsFetcher {
   constructor(
     @inject(KEYS.ProgramDB) private programDB: IProgramDB,
     @inject(ArtworkService) private artworkService: ArtworkService,
+    @inject(ProgramAudioLoudnessDB)
+    private loudnessDB: ProgramAudioLoudnessDB,
   ) {}
 
   async getStream({
@@ -249,6 +253,11 @@ export class ProgramStreamDetailsFetcher {
         path: file.path,
       };
 
+      await this.attachMeasuredLoudness(
+        program.uuid,
+        audioStreamDetails,
+        streamSource,
+      );
       return Result.success({ streamDetails, streamSource });
     } else {
       const filePath = head(firstVersion.mediaFiles)?.path;
@@ -261,7 +270,60 @@ export class ProgramStreamDetailsFetcher {
         filePath,
         serverPath,
       );
+      await this.attachMeasuredLoudness(
+        program.uuid,
+        audioStreamDetails,
+        streamSource,
+      );
       return Result.success({ streamDetails, streamSource });
+    }
+  }
+
+  /**
+   * Each audio stream's loudness, when it was measured on the file this play
+   * reads (the same path and size). Playback then levels the stream with a
+   * fixed gain instead of live loudnorm (plans/loudness-measured-once.md).
+   * Anything going wrong here only leaves the stream to live loudnorm.
+   */
+  private async attachMeasuredLoudness(
+    programId: string,
+    audioStreams: AudioStreamDetails[],
+    streamSource: StreamSource,
+  ) {
+    if (streamSource.type !== 'file' || audioStreams.length === 0) {
+      return;
+    }
+    try {
+      const rows = (await this.loudnessDB.getForProgram(programId)).filter(
+        (row) => row.filePath === streamSource.path,
+      );
+      if (rows.length === 0) {
+        return;
+      }
+      const { size } = await fs.stat(streamSource.path);
+      for (const stream of audioStreams) {
+        const row = rows.find(
+          (row) => row.streamIndex === stream.index && row.fileSize === size,
+        );
+        if (
+          row &&
+          row.integrated !== null &&
+          row.truePeak !== null &&
+          row.range !== null
+        ) {
+          stream.loudness = {
+            integrated: row.integrated,
+            truePeak: row.truePeak,
+            range: row.range,
+          };
+        }
+      }
+    } catch (e) {
+      this.logger.debug(
+        e,
+        'Measured loudness of program %s not used: live loudnorm levels it',
+        programId,
+      );
     }
   }
 

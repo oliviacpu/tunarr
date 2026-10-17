@@ -11,6 +11,7 @@ import {
 import { InfiniteLoopInputOption } from '@/ffmpeg/builder/options/input/InfiniteLoopInputOption.js';
 import type {
   AudioRenditionInfo,
+  AudioStreamDetails,
   StreamDetails,
   StreamRenditions,
   SubtitleRenditionInfo,
@@ -30,7 +31,7 @@ import { ChannelStreamModes } from '@tunarr/types';
 import dayjs from 'dayjs';
 import type { Duration } from 'dayjs/plugin/duration.js';
 import { injectable } from 'inversify';
-import { isUndefined } from 'lodash-es';
+import { isNull, isUndefined } from 'lodash-es';
 import type { DeepReadonly } from 'ts-essentials';
 import { match, P } from 'ts-pattern';
 import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLineup.ts';
@@ -60,6 +61,7 @@ import { FfmpegProcess } from './FfmpegProcess.ts';
 import { FfmpegTranscodeSession } from './FfmpegTrancodeSession.ts';
 import { StreamSelector } from './StreamSelector.ts';
 import { audioTrackSlots, pickSlotAudioStreams } from './AudioTrackLayout.ts';
+import { measuredLoudnessGains } from './loudness.ts';
 import { SubtitleStreamPicker } from './SubtitleStreamPicker.ts';
 import {
   AudioStream,
@@ -609,28 +611,20 @@ export class FfmpegStreamFactory {
       // With the channel's audio track layout: the program's track for each
       // slot (its main track where it has none), tagged with the slot language
       const slots = this.audioSlots;
-      const outputStreams =
+      const sourceStreams =
         slots.length > 0
-          ? pickSlotAudioStreams(
-              slots,
-              streamDetails.audioDetails,
-              audioStream,
-            ).map((stream, i) =>
-              AudioStream.create({
-                index: stream.index,
-                codec: stream.codec ?? 'unknown',
-                channels: stream.channels ?? -2,
-                language: slots[i],
-              }),
-            )
-          : [
-              AudioStream.create({
-                index: audioStream.index,
-                codec: audioStream.codec ?? 'unknown',
-                channels: audioStream.channels ?? -2,
-                language: audioStream.languageCodeISO6392,
-              }),
-            ];
+          ? pickSlotAudioStreams(slots, streamDetails.audioDetails, audioStream)
+          : [audioStream];
+      const outputStreams = sourceStreams.map((stream, i) =>
+        AudioStream.create({
+          index: stream.index,
+          codec: stream.codec ?? 'unknown',
+          channels: stream.channels ?? -2,
+          language:
+            slots.length > 0 ? slots[i] : stream.languageCodeISO6392,
+        }),
+      );
+      this.levelWithMeasuredLoudness(audioState, sourceStreams);
       audioInput = new AudioInputSource(
         streamSource,
         outputStreams,
@@ -1154,8 +1148,10 @@ export class FfmpegStreamFactory {
       true,
     );
 
-    // Gap music is normalized to its own target (programs are left as they
-    // are), fades in, and fades out when the gap ends before the track does.
+    // Gap music is levelled to its own target, whatever the transcode config
+    // does for programs: with a fixed gain once the track's loudness has been
+    // measured, else live loudnorm. It fades in, and fades out when the gap
+    // ends before the track does.
     const audioState = this.createAudioState(
       playbackParams,
       duration.asMilliseconds(),
@@ -1167,6 +1163,9 @@ export class FfmpegStreamFactory {
           )
         : null,
     );
+    if (backgroundMusic) {
+      this.levelWithMeasuredLoudness(audioState, [backgroundMusic.audioStream]);
+    }
 
     const audioInput = this.withAudioSlots(
       backgroundMusic
@@ -1277,6 +1276,23 @@ export class FfmpegStreamFactory {
       }),
     );
     return input;
+  }
+
+  // Swaps live loudnorm for fixed gains when every stream the transcode plays
+  // has a measured loudness (plans/loudness-measured-once.md). Without one,
+  // live loudnorm levels them as before.
+  private levelWithMeasuredLoudness(
+    audioState: AudioState,
+    streams: readonly AudioStreamDetails[],
+  ) {
+    if (isNull(audioState.loudnormConfig)) {
+      return;
+    }
+    const gains = measuredLoudnessGains(audioState.loudnormConfig, streams);
+    if (gains) {
+      audioState.loudnessGains = gains;
+      audioState.loudnormConfig = null;
+    }
   }
 
   private createAudioState(

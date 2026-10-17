@@ -257,6 +257,9 @@ export class DirectMigrationProvider implements MigrationProvider {
         migration1792181517: makeMigrationFromSqlFile(
           './sql/0054_serious_rattler.sql',
         ),
+        migration1792260648: makeMigrationFromSqlFile(
+          './sql/0055_plain_the_order.sql',
+        ),
       } satisfies Record<string, TunarrDatabaseMigration>,
       wrapWithTransaction,
     );

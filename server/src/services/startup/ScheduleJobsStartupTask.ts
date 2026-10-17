@@ -4,6 +4,7 @@ import { container } from '../../container.ts';
 import type { ISettingsDB } from '../../db/interfaces/ISettingsDB.ts';
 import { CleanupSessionsTask } from '../../tasks/CleanupSessionsTask.ts';
 import { OnDemandChannelStateTask } from '../../tasks/OnDemandChannelStateTask.ts';
+import { MeasureLoudnessTask } from '../../tasks/MeasureLoudnessTask.ts';
 import { RefreshMediaSourceLibraryTask } from '../../tasks/RefreshMediaSourceLibraryTask.ts';
 import { ScanLibrariesTask } from '../../tasks/ScanLibrariesTask.ts';
 import { ScheduledTask } from '../../tasks/ScheduledTask.ts';
@@ -68,6 +69,21 @@ export class ScheduleJobsStartupTask extends SimpleStartupTask {
         ),
         undefined,
         { runAtStartup: true },
+      ),
+    );
+
+    // Programs airing soon and gap music, measured once each, so playback can
+    // level them without live loudnorm's look-ahead. Not at startup, when
+    // the server is busiest.
+    GlobalScheduler.scheduleTask(
+      MeasureLoudnessTask.ID,
+      new ScheduledTask(
+        MeasureLoudnessTask,
+        minutesCrontab(15),
+        container.get<() => MeasureLoudnessTask>(
+          autoFactoryKey(MeasureLoudnessTask),
+        ),
+        {},
       ),
     );
 

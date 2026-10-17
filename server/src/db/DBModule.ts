@@ -8,6 +8,7 @@ import { ContainerModule } from 'inversify';
 import type { Kysely } from 'kysely';
 import { DBAccess } from './DBAccess.ts';
 import { FillerDB } from './FillerListDB.ts';
+import { ProgramAudioLoudnessDB } from './ProgramAudioLoudnessDB.ts';
 import { ProgramPlayHistoryDB } from './ProgramPlayHistoryDB.ts';
 import { BasicChannelRepository } from './channel/BasicChannelRepository.ts';
 import { ChannelConfigRepository } from './channel/ChannelConfigRepository.ts';
@@ -88,6 +89,7 @@ const DBModule = new ContainerModule(({ bind }) => {
   );
   bind(KEYS.FillerListDB).to(FillerDB).inSingletonScope();
   bind(ProgramPlayHistoryDB).toSelf().inSingletonScope();
+  bind(ProgramAudioLoudnessDB).toSelf().inSingletonScope();
 
   bind(ProgramGroupingMinter).toSelf().inSingletonScope();
   bind(ProgramDaoMinter).toSelf();

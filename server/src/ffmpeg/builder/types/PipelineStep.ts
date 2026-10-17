@@ -42,6 +42,20 @@ export interface HasFilterOption {
   filter: string;
 }
 
+// A filter whose text depends on the source stream it runs on: one filter
+// chain per audio track, each with its own measured gain
+export interface HasStreamFilterOption extends HasFilterOption {
+  filterForStream(streamIndex: number): string;
+}
+
+export function hasStreamFilterOption(
+  step: HasFilterOption,
+): step is HasStreamFilterOption {
+  return (
+    'filterForStream' in step && typeof step.filterForStream === 'function'
+  );
+}
+
 export interface EnvironmentVariablePipelineStep
   extends IPipelineStep<[], Dictionary<string, string>> {
   readonly type: 'environment';

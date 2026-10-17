@@ -89,6 +89,7 @@ import { AudioVolumeFilter } from '../filter/AudioVolumeFilter.ts';
 import type { FilterOption } from '../filter/FilterOption.ts';
 import { AudioFadeFilter } from '../filter/AudioFadeFilter.ts';
 import { LoudnormFilter } from '../filter/LoudnormFilter.ts';
+import { MeasuredLoudnessFilter } from '../filter/MeasuredLoudnessFilter.ts';
 import { StreamSeekFilter } from '../filter/StreamSeekFilter.ts';
 import type { SubtitlesInputSource } from '../input/SubtitlesInputSource.ts';
 import {
@@ -760,6 +761,14 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
     }
 
     if (
+      !isNull(this.desiredAudioState.loudnessGains) &&
+      encoder.name !== TranscodeAudioOutputFormat.Copy
+    ) {
+      // Measured loudness: a fixed gain per stream, no look-ahead
+      this.audioInputSource?.filterSteps.push(
+        new MeasuredLoudnessFilter(this.desiredAudioState.loudnessGains),
+      );
+    } else if (
       !isNull(this.desiredAudioState.loudnormConfig) &&
       encoder.name !== TranscodeAudioOutputFormat.Copy
     ) {

@@ -24,7 +24,7 @@ import {
   SubtitleMethods,
   VideoStream,
 } from '../MediaStream.ts';
-import { AudioState } from '../state/AudioState.ts';
+import { AudioState, type AudioStateFields } from '../state/AudioState.ts';
 import { DefaultPipelineOptions, FfmpegState } from '../state/FfmpegState.ts';
 import { FrameState } from '../state/FrameState.ts';
 import { FrameSize } from '../types.ts';
@@ -499,6 +499,7 @@ describe('BasePipelineBuilder', () => {
     function argsForTracks(
       streams: { index: number; channels: number; language: string }[],
       audioVolume = 100,
+      audioState: Partial<AudioStateFields> = {},
     ) {
       const audio = new AudioInputSource(
         new FileStreamSource('/path/to/movie.mkv'),
@@ -509,6 +510,7 @@ describe('BasePipelineBuilder', () => {
           audioBufferSize: 384,
           audioChannels: 2,
           audioVolume,
+          ...audioState,
         }),
       );
 
@@ -539,6 +541,31 @@ describe('BasePipelineBuilder', () => {
       // the audio file is the second input
       expect(graph).toMatch(/\[1:1\]aresample=async=1[^;]*\[a0\]/);
       expect(graph).toMatch(/\[1:2\]aresample=async=1[^;]*\[a1\]/);
+    });
+
+    // plans/loudness-measured-once.md
+    test('levels each track with its own measured gain, without loudnorm', () => {
+      const args = argsForTracks(
+        [
+          { index: 1, channels: 2, language: 'eng' },
+          { index: 2, channels: 2, language: 'jpn' },
+        ],
+        100,
+        {
+          loudnormConfig: null,
+          loudnessGains: new Map([
+            [1, { gainDb: -3.5 }],
+            [2, { gainDb: 6, limit: 0.7943 }],
+          ]),
+        },
+      );
+      const graph = args[args.indexOf('-filter_complex') + 1] ?? '';
+
+      expect(graph).toMatch(/\[1:1\][^;]*volume=-3\.5dB\[a0\]/);
+      expect(graph).toMatch(
+        /\[1:2\][^;]*volume=6dB,alimiter=limit=0\.7943:attack=5:release=50:level=0:latency=1\[a1\]/,
+      );
+      expect(graph).not.toContain('loudnorm');
     });
 
     test('a source track repeated into a second slot gets its own chain', () => {

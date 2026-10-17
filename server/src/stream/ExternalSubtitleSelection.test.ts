@@ -16,6 +16,7 @@ import type {
 import type { ArtworkService } from '../services/ArtworkService.ts';
 import { ProgramStreamDetailsFetcher } from './ProgramStreamDetailsFetcher.ts';
 import type { AudioStreamDetails, SubtitleStreamDetails } from './types.ts';
+import type { ProgramAudioLoudnessDB } from '../db/ProgramAudioLoudnessDB.ts';
 
 vi.mock('@/util/logging/LoggerFactory.js', () => {
   const logger = {
@@ -304,6 +305,7 @@ function makeFetcher(program: StreamLineupProgram) {
   return new ProgramStreamDetailsFetcher(
     makeProgramDB(program),
     artworkService,
+    noLoudnessDB(),
   );
 }
 
@@ -575,3 +577,10 @@ describe('external subtitles end-to-end (fetcher -> stream selector)', () => {
     expect(details.subtitleDetails?.[0]?.index).toBe(2);
   });
 });
+
+// No measured loudness: playback levels with live loudnorm
+function noLoudnessDB(): ProgramAudioLoudnessDB {
+  return {
+    getForProgram: vi.fn().mockResolvedValue([]),
+  } as unknown as ProgramAudioLoudnessDB;
+}

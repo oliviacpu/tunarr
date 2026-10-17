@@ -33,6 +33,7 @@ import { RefreshMediaSourceLibraryTask } from './RefreshMediaSourceLibraryTask.t
 import { RemoveDanglingProgramsFromSearchTask } from './RemoveDanglingProgramsFromSearchTask.ts';
 import { RollLogFileTask } from './RollLogFileTask.ts';
 import { ScanLibrariesTask } from './ScanLibrariesTask.ts';
+import { MeasureLoudnessTask } from './MeasureLoudnessTask.ts';
 import { SubtitleExtractorTask } from './SubtitleExtractorTask.ts';
 import { SyncCollectionsTask } from './SyncCollectionsTask.ts';
 import { SyncCustomShowsTask } from './SyncCustomShowsTask.ts';
@@ -136,6 +137,13 @@ const TasksModule = new ContainerModule(({ bind }) => {
         ctx.get<MediaSourceApiFactory>(MediaSourceApiFactory),
         sessionId,
       ),
+  );
+
+  bind(MeasureLoudnessTask).toSelf();
+  bindAutoFactory(
+    bind,
+    autoFactoryKey(MeasureLoudnessTask),
+    MeasureLoudnessTask,
   );
 
   bind(SubtitleExtractorTask).toSelf();

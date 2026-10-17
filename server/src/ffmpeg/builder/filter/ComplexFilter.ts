@@ -8,9 +8,10 @@ import { seq } from '@tunarr/shared/util';
 import { filter, forEach, isNull, some } from 'lodash-es';
 import type { SubtitlesInputSource } from '../input/SubtitlesInputSource.ts';
 import { SubtitleMethods } from '../MediaStream.ts';
-import type {
-  FilterOptionPipelineStep,
-  HasFilterOption,
+import {
+  hasStreamFilterOption,
+  type FilterOptionPipelineStep,
+  type HasFilterOption,
 } from '../types/PipelineStep.ts';
 import type { FilterChain } from './FilterChain.ts';
 
@@ -171,7 +172,7 @@ export class ComplexFilter implements FilterOptionPipelineStep {
         ) {
           audioLabel = several ? `[a${i}]` : '[a]';
           chains.push(
-            `[${audioInputIndex}:${index}]${collectAndJoinSteps(audioInput.filterSteps)}${audioLabel}`,
+            `[${audioInputIndex}:${index}]${collectAndJoinSteps(stepsForStream(audioInput.filterSteps, index))}${audioLabel}`,
           );
         }
         audioLabels.push(audioLabel);
@@ -228,4 +229,16 @@ function collectSteps(steps: HasFilterOption[]) {
 
 function collectAndJoinSteps(steps: HasFilterOption[]) {
   return collectSteps(steps).join(',');
+}
+
+// The steps as they run on one source stream (see HasStreamFilterOption)
+function stepsForStream(
+  steps: HasFilterOption[],
+  streamIndex: number,
+): HasFilterOption[] {
+  return steps.map((step) =>
+    hasStreamFilterOption(step)
+      ? { filter: step.filterForStream(streamIndex) }
+      : step,
+  );
 }
