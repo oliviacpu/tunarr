@@ -32,6 +32,7 @@ const { values: opt } = parseArgs({
     'rewind-polls': { type: 'string', default: '8' },
     reanalyze: { type: 'string' },
     'flex-first': { type: 'string' },
+    'offline-picture': { type: 'string' },
     'ffmpeg-setting': { type: 'string', multiple: true, default: [] },
     'channel-setting': { type: 'string', multiple: true, default: [] },
     resolution: { type: 'string' },
@@ -71,6 +72,7 @@ if (clipDurations.some((d) => !(d > 0))) throw new Error('--clip-durations must 
 const flexMs = opt['flex-first'] === undefined ? 0 : Number(opt['flex-first']);
 if (!(flexMs >= 0)) throw new Error('--flex-first takes milliseconds');
 if (flexMs > 0 && opt.source !== 'synthetic') throw new Error('--flex-first only works with --source synthetic');
+if (opt['offline-picture'] !== undefined && opt.source !== 'synthetic') throw new Error('--offline-picture only works with --source synthetic');
 const resolutionMatch = opt.resolution === undefined ? null : /^(\d+)x(\d+)$/.exec(opt.resolution);
 if (opt.resolution !== undefined && !resolutionMatch) throw new Error('--resolution takes WIDTHxHEIGHT, such as 1280x720');
 const resolution = resolutionMatch && { widthPx: Number(resolutionMatch[1]), heightPx: Number(resolutionMatch[2]) };
@@ -376,7 +378,7 @@ async function buildSyntheticChannel(base, clipsDir) {
       streamMode: opt.mode === 'mpegts' ? 'mpegts' : opt.mode,
       transcodeConfigId: tc.id,
       icon: {},
-      offline: { mode: 'pic' },
+      offline: await offlineSettings(base),
       ...channelOverrides,
     },
   });
@@ -398,6 +400,23 @@ async function buildSyntheticChannel(base, clipsDir) {
       ...programs.map((p) => ({ title: p.program?.title, durationMs: p.duration })),
     ],
   };
+}
+
+// --offline-picture uploads an image and makes it the channel's offline picture, the way channel cards are set up:
+// the channel then points at the server's own upload URL.
+async function offlineSettings(base) {
+  const offline = { mode: 'pic' };
+  const file = opt['offline-picture'];
+  if (file) {
+    const form = new FormData();
+    const type = /\.jpe?g$/i.test(file) ? 'image/jpeg' : 'image/png';
+    form.append('file', new Blob([fs.readFileSync(file)], { type }), path.basename(file));
+    const res = await fetch(`${base}/api/upload/image`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`uploading ${file} -> ${res.status}`);
+    offline.picture = (await res.json()).fileUrl;
+    report.offlinePicture = offline.picture;
+  }
+  return offline;
 }
 
 // Applies --resolution, --hwaccel, --vaapi-device, and --thread-count to the channel's transcode config.

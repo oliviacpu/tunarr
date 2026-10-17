@@ -13,6 +13,8 @@ Once you have a Filler list created, you can select the list you'd like to use o
 ![Flex Filler](/assets/channels-flex-filler.png)
 
 Once you have a Filler list added to a channel, it will only be used when there is Flex time scheduled, such as when using [Time Slots](/configure/scheduling-tools/time-slots) with the Pad Times feature. 
+Tuning in during a gap starts as quickly as tuning in during a program: the start of the gap is prepared ahead, the same way a program's is, and a fallback image uploaded in the web UI is read straight from the server's disk. With NVIDIA, Intel QSV or VAAPI hardware acceleration the fallback image still starts at normal speed, because those pipelines can't prepare a still image ahead.
+
 ## Gap music
 
 The channel fallback can play music under its image. Build a [filler list](/configure/library/filler) of tracks from a music library (add whole artists or albums, or single tracks), then choose it as **Gap music** next to the fallback image.
