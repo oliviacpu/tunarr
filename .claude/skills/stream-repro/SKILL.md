@@ -45,6 +45,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--resolution WxH` | | Set the output resolution of the channel's transcode config, such as `1280x720` |
 | `--hwaccel MODE` | | Set the hardware acceleration of the channel's transcode config: `none`, `cuda`, `vaapi`, `qsv`, or `videotoolbox` |
 | `--vaapi-device PATH` | | With `--hwaccel vaapi` or `qsv`, the render node to use, such as `/dev/dri/renderD128` |
+| `--thread-count N` | | Set the thread count of the channel's transcode config (0 lets ffmpeg choose) |
 | `--sar-override VALUE` | | `synthetic` only. After the scan, set every program's saved sample aspect ratio to VALUE, such as `0:0`. Needs the `sqlite3` CLI |
 | `--schedule FILE` | | `synthetic` only. Build custom shows and time-slot channels from a JSON spec, and report their saved lineups and guide (see below) |
 | `--seconds 0` | | Skip the stream capture. Use with `--schedule` when only the schedule matters |
