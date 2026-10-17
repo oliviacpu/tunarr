@@ -35,6 +35,18 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A tune-in notices its first segments within 0.1 s (2026-10-17)
+
+- **What you saw:** every Live TV tune-in took several seconds before the picture came up.
+- **Cause:** a starting HLS session checked for its first segments once a second
+  (`BaseHlsSession.waitForStreamReady`, 15 retries 1000 ms apart). The segments were often there well before the
+  next check, so a tune-in waited about 0.5 s more on average, and up to a whole second.
+- **Fix:** the check runs every 100 ms, with the same 15 s limit (`ReadyPollMs`, `ReadyTimeoutMs`). The "still
+  waiting" debug line is logged about once a second, as before.
+- **Test:** `BaseHlsSession.test.ts`: segments written 1.25 s in are noticed within 150 ms; the stream isn't ready
+  until every required segment exists; it still gives up after about 15 s. The first two fail on the old interval.
+- **Upstream:** not sent.
+
 ### The end of a caption no longer flashes past at tune-in (2026-10-17)
 
 - **What you saw:** tuning in mid-sentence, a fragment of a caption was on screen for about half a second, then nothing
