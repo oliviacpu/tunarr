@@ -57,7 +57,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     non-standard source always, with "Normalize Frame Rate", and, new, whenever HDHomeRun captions are on
     (`pinFrameRate`). When the pipeline deinterlaces in software, a field-rate filter (`none`, which is yadif=1,
     `yadif=1`, `bwdif=1`, `w3fdif`) doubles it, so no field-rate frames are dropped: without hardware acceleration,
-    with VideoToolbox, with QSV when hardware filters are off, and with VAAPI and CUDA when hardware decoding is off.
+    with VideoToolbox, with QSV when hardware filters are off, with VAAPI and CUDA when hardware decoding is off, and
+    with CUDA for interlaced MPEG-2, which it always decodes in software.
     VAAPI and CUDA also fall back to software when the GPU can't decode the source, which only the pipeline knows;
     there the extra frames are dropped back to the source rate, and captions still match the output.
   - `FfmpegStreamFactory` lays captions and the "No captions" notice out at that output rate, never at the source's.

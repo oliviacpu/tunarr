@@ -143,7 +143,7 @@ export class FfmpegPlaybackParamsCalculator {
       ) {
         const fieldRate =
           params.deinterlace &&
-          this.usesSoftwareDeinterlacer() &&
+          this.usesSoftwareDeinterlacer(videoStream) &&
           deinterlacerDoublesFrameRate(options.deinterlaceFilter);
         params.frameRate = output.rate * (fieldRate ? 2 : 1);
       }
@@ -164,9 +164,10 @@ export class FfmpegPlaybackParamsCalculator {
   // Whether the pipeline deinterlaces with the software filter (DeinterlaceFilter), as far as the transcode config
   // tells: always without hardware acceleration and with VideoToolbox (whose pipeline is the software one's), with QSV
   // when hardware filters are off, and with VAAPI and CUDA when hardware decoding is off, as their frames are then in
-  // system memory. Those two also fall back when the GPU can't decode the source, which only the pipeline knows; there
-  // a field-rate filter's extra frames are dropped back to the source rate.
-  private usesSoftwareDeinterlacer() {
+  // system memory. CUDA always decodes interlaced MPEG-2 in software (NvidiaPipelineBuilder). Both also fall back when
+  // the GPU can't decode the source, which only the pipeline knows; there a field-rate filter's extra frames are
+  // dropped back to the source rate.
+  private usesSoftwareDeinterlacer(videoStream: VideoStreamDetails) {
     switch (this.transcodeConfig.hardwareAccelerationMode) {
       case HardwareAccelerationMode.None:
       case HardwareAccelerationMode.Videotoolbox:
@@ -174,8 +175,12 @@ export class FfmpegPlaybackParamsCalculator {
       case HardwareAccelerationMode.Qsv:
         return !!this.transcodeConfig.disableHardwareFilters;
       case HardwareAccelerationMode.Vaapi:
-      case HardwareAccelerationMode.Cuda:
         return !!this.transcodeConfig.disableHardwareDecoder;
+      case HardwareAccelerationMode.Cuda:
+        return (
+          !!this.transcodeConfig.disableHardwareDecoder ||
+          videoStream.codec === VideoFormats.Mpeg2Video
+        );
       default:
         return false;
     }

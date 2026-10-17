@@ -409,13 +409,15 @@ describe('FfmpegPlaybackParamsCalculator', () => {
 
       // These pipelines use the software filter then
       test.each([
-        ['videotoolbox', {}],
-        ['qsv', { disableHardwareFilters: true }],
-        ['vaapi', { disableHardwareDecoder: true }],
-        ['cuda', { disableHardwareDecoder: true }],
+        ['videotoolbox', {}, 'h264'],
+        ['qsv', { disableHardwareFilters: true }, 'h264'],
+        ['vaapi', { disableHardwareDecoder: true }, 'h264'],
+        ['cuda', { disableHardwareDecoder: true }, 'h264'],
+        // CUDA decodes interlaced MPEG-2 in software
+        ['cuda', {}, 'mpeg2video'],
       ] as const)(
-        'doubles the rate when %s deinterlaces in software (%j)',
-        (hardwareAccelerationMode, overrides) => {
+        'doubles the rate when %s deinterlaces in software (%j, %s)',
+        (hardwareAccelerationMode, overrides, codec) => {
           const calculator = new FfmpegPlaybackParamsCalculator(
             makeTranscodeConfig({
               deinterlaceVideo: true,
@@ -426,6 +428,7 @@ describe('FfmpegPlaybackParamsCalculator', () => {
           );
           const params = calculator.calculateForStream(
             makeStreamDetails({
+              codec,
               framerate: '30000/1001',
               scanType: 'interlaced',
             }),
