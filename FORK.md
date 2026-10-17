@@ -35,6 +35,34 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A caption pair is never lost or sent twice because of frame timing (2026-10-17)
+
+- **What you saw:** captions in Plex that lost two letters ("You" as "u"), or lost a whole caption when the lost pair
+  was a command.
+- **Cause:** each video frame took the caption pair of the frame slot it is shown in (`CaptionSchedule.pairAt`,
+  rounding its time). A slot without a frame lost its pair, and two frames in one slot sent it twice, which doubles
+  letters or turns a control code's redundant copy into a second command. The inserter also asked per frame in decode
+  order, so the answer couldn't depend on the frames around it.
+- **Fix:**
+  - `insertCaptions` reads a segment's frames first and asks once for all their pairs, in presentation order
+    (`pairsForFrames`).
+  - `CaptionPairCursor` (one per program, in `HlsSession`) hands the pairs out: a slot without a frame has its pair
+    sent on the frames that follow, one a frame and in order; a second frame in a slot sends padding, or the copy of
+    the control code the frame before sent, so the two copies stay on consecutive frames. A frame asked about again
+    (another viewer, a retry) gets the same pair, from a memory of the last 4096 frames. A jump of 8 slots or more is
+    a new start, not a backlog to send late; an earlier frame not seen before gets its slot's pair, as before.
+  - `HlsSession` checks a segment's frame spacing before taking any pair, so a segment sent as padding (frames spaced
+    unlike the schedule) no longer uses up the program's pairs.
+- **What it can't fix:** a frame the .ts wrapper loses after captioning ("Still open" in "A source reporting a
+  frame rate that isn't standard keeps all its frames"). The captioned segments are complete; the loss happens where
+  the wrapper joins them.
+- **Tests:** `CaptionPairCursor.test.ts` (a missing frame, two frames in a slot and a control code's copies fail on
+  the old slot lookup; one per slot, asked again, a long jump and an earlier frame are guards);
+  `MpegTsCaptionInserter.test.ts` (asked once, in presentation order, with B-frames); `HlsSession.test.ts` (a segment
+  missing a frame sends every pair in order, which fails on the old code; a segment asked for twice is captioned the
+  same way). The golden caption snapshot is unchanged.
+- **Upstream:** not sent.
+
 ### Tuning in during a gap starts as fast as during a program (2026-10-17)
 
 - **What you saw:** Live TV took about 11 s to start when you tuned in during a gap (the channel's offline picture and

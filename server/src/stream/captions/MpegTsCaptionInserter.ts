@@ -1,4 +1,5 @@
 import type { CcPair } from './Cea608Encoder.ts';
+import { PaddingPair } from './Cea608Encoder.ts';
 
 // Adds CEA-608 captions to the H.264 video of one MPEG-TS segment: an ATSC A/53
 // caption SEI before the first slice of every access unit, and descriptors in
@@ -14,8 +15,11 @@ const CaptionServiceDescriptorTag = 0x86;
 const StartCode = Buffer.from([0, 0, 1]);
 
 export type InsertCaptionsOptions = {
-  // The caption pair for the frame shown at this PTS (90 kHz clock)
-  pairForPts: (pts90k: number) => CcPair;
+  // The caption pair for each of the segment's video frames: given every
+  // frame's PTS (90 kHz clock) once, in presentation order, the pairs in that
+  // order. Asked once per segment, before any frame is written, so the answer
+  // can depend on the frames around each one.
+  pairsForFrames: (pts90k: readonly number[]) => readonly CcPair[];
   // ISO 639-2 code for the PMT's language descriptors
   language: string;
 };
@@ -435,17 +439,16 @@ export function insertCaptions(
     return packet;
   };
 
-  // Rebuild each PES with its caption SEI
-  const rebuilt = new Map<number, Buffer[]>(); // first payload packet index -> packets
-  let lastRebuilt:
-    | {
-        firstIndex: number;
-        pes: Buffer;
-        adaptation: Buffer | undefined;
-        priority: number;
-      }
-    | undefined;
-  let framesCaptioned = 0;
+  // Read each frame first, so its pair can be chosen knowing the others
+  type Frame = {
+    firstIndex: number;
+    data: Buffer;
+    headerLength: number;
+    pts: number;
+    es: Buffer;
+    firstSliceStart: number;
+  };
+  const frames: Frame[] = [];
   for (const pes of pesList) {
     const firstIndex = pes.payloadIndexes[0];
     if (firstIndex === undefined) {
@@ -473,8 +476,43 @@ export function insertCaptions(
     if (scan.firstSliceStart === undefined) {
       return { ok: false, reason: 'video PES without a slice' };
     }
+    frames.push({
+      firstIndex,
+      data,
+      headerLength,
+      pts,
+      es,
+      firstSliceStart: scan.firstSliceStart,
+    });
+  }
 
-    const sei = captionSei(options.pairForPts(pts));
+  // Presentation order: frames are stored in decode order, which B-frames
+  // reorder
+  const presented = frames.map((f) => f.pts).toSorted((a, b) => a - b);
+  const pairs = options.pairsForFrames(presented);
+  const pairByPts = new Map<number, CcPair>();
+  presented.forEach((pts, i) => pairByPts.set(pts, pairs[i] ?? PaddingPair));
+
+  // Rebuild each PES with its caption SEI
+  const rebuilt = new Map<number, Buffer[]>(); // first payload packet index -> packets
+  let lastRebuilt:
+    | {
+        firstIndex: number;
+        pes: Buffer;
+        adaptation: Buffer | undefined;
+        priority: number;
+      }
+    | undefined;
+  let framesCaptioned = 0;
+  for (const {
+    firstIndex,
+    data,
+    headerLength,
+    pts,
+    es,
+    firstSliceStart,
+  } of frames) {
+    const sei = captionSei(pairByPts.get(pts) ?? PaddingPair);
     const header = Buffer.from(data.subarray(0, headerLength));
     const pesLength = (header.readUInt8(4) << 8) | header.readUInt8(5);
     if (pesLength !== 0) {
@@ -483,9 +521,9 @@ export function insertCaptions(
     }
     const newPes = Buffer.concat([
       header,
-      es.subarray(0, scan.firstSliceStart),
+      es.subarray(0, firstSliceStart),
       sei,
-      es.subarray(scan.firstSliceStart),
+      es.subarray(firstSliceStart),
     ]);
 
     const first = packetAt(firstIndex);

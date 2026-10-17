@@ -12,7 +12,8 @@ import type { OnDemandChannelService } from '@/services/OnDemandChannelService.j
 import { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StopOptions } from '@/stream/Session.js';
 import type { StreamProgramCalculator } from '@/stream/StreamProgramCalculator.js';
-import type { CaptionSchedule } from '@/stream/captions/Cea608Encoder.js';
+import { CaptionPairCursor } from '@/stream/captions/CaptionPairCursor.js';
+import type { CcPair } from '@/stream/captions/Cea608Encoder.js';
 import {
   buildCaptionSchedule,
   PaddingPair,
@@ -64,7 +65,8 @@ type CaptionTimelineEntry = {
   startPts: number;
   durationPts: number;
   framePts: number;
-  schedule: CaptionSchedule;
+  // Hands the program's caption pairs to its frames
+  cursor: CaptionPairCursor;
   language: string;
   rateMismatchLogged: boolean;
 };
@@ -559,7 +561,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         startPts: ptsOffset,
         durationPts: captions.durationMs * 90,
         framePts: 90_000 / captions.frameRate,
-        schedule,
+        cursor: new CaptionPairCursor(schedule),
         language: captions.language,
         rateMismatchLogged: false,
       },
@@ -590,20 +592,9 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         ?.iso6392 ??
       'eng';
 
-    const framesByEntry = new Map<CaptionTimelineEntry, number[]>();
     const captioned = insertCaptions(segment, {
       language,
-      pairForPts: (pts) => {
-        const hit = this.captionEntryAt(pts);
-        if (!hit) {
-          return PaddingPair;
-        }
-        framesByEntry.set(hit.entry, [
-          ...(framesByEntry.get(hit.entry) ?? []),
-          pts,
-        ]);
-        return hit.entry.schedule.pairAt(hit.timeMs);
-      },
+      pairsForFrames: (ptsInOrder) => this.captionPairs(ptsInOrder),
     });
     if (!captioned.ok) {
       this.logger.debug(
@@ -613,13 +604,32 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
       );
       return;
     }
+    return captioned.segment;
+  }
+
+  // The caption pair for each of a segment's frames, in presentation order
+  private captionPairs(ptsInOrder: readonly number[]): CcPair[] {
+    const hits = ptsInOrder.map((pts) => ({
+      pts,
+      hit: this.captionEntryAt(pts),
+    }));
 
     // The schedule assumes the program's frame rate. If the frames are spaced
-    // differently (deinterlacing that doubles the rate, variable frame rate),
-    // characters would be dropped or repeated, so send padding only.
+    // differently, characters would be dropped or repeated, so send padding
+    // only. Checked before any pair is taken, so a segment sent as padding
+    // leaves the program's pairs for the frames that follow.
+    const mismatched = new Set<CaptionTimelineEntry>();
+    const framesByEntry = new Map<CaptionTimelineEntry, number[]>();
+    for (const { pts, hit } of hits) {
+      if (hit) {
+        framesByEntry.set(hit.entry, [
+          ...(framesByEntry.get(hit.entry) ?? []),
+          pts,
+        ]);
+      }
+    }
     for (const [entry, frames] of framesByEntry) {
-      const sorted = frames.toSorted((a, b) => a - b);
-      const steps = sorted.slice(1).map((pts, i) => pts - (sorted[i] ?? pts));
+      const steps = frames.slice(1).map((pts, i) => pts - (frames[i] ?? pts));
       const step = steps.toSorted((a, b) => a - b)[
         Math.floor(steps.length / 2)
       ];
@@ -627,6 +637,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         step !== undefined &&
         Math.abs(step - entry.framePts) > entry.framePts / 100
       ) {
+        mismatched.add(entry);
         if (!entry.rateMismatchLogged) {
           entry.rateMismatchLogged = true;
           this.logger.warn(
@@ -635,14 +646,14 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
             Math.round(entry.framePts),
           );
         }
-        const padded = insertCaptions(segment, {
-          language,
-          pairForPts: () => PaddingPair,
-        });
-        return padded.ok ? padded.segment : undefined;
       }
     }
-    return captioned.segment;
+
+    return hits.map(({ pts, hit }) =>
+      !hit || mismatched.has(hit.entry)
+        ? PaddingPair
+        : hit.entry.cursor.pairFor(pts, hit.timeMs),
+    );
   }
 
   protected getHlsOptions(): DeepRequired<HlsOptions> {

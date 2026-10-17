@@ -1219,7 +1219,15 @@ export class CaptionSchedule {
   ) {}
 
   pairAt(frameTimeMs: number): CcPair {
-    const slot = Math.round((frameTimeMs - this.firstFrameMs) / this.frameMs);
+    return this.pairAtSlot(this.slotAt(frameTimeMs));
+  }
+
+  // The frame slot a frame shown at this time falls in
+  slotAt(frameTimeMs: number): number {
+    return Math.round((frameTimeMs - this.firstFrameMs) / this.frameMs);
+  }
+
+  pairAtSlot(slot: number): CcPair {
     return this.pairs.get(slot) ?? PaddingPair;
   }
 
