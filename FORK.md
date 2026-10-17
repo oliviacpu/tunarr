@@ -1082,8 +1082,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 
 ### Movie scans pick up subtitle files added later (2026-10-14)
 
-- **What you saw:** a movie got no captions although Bazarr had added an `.srt` the day before (Star Trek II: Plex
-  listed the sidecar, Tunarr still knew only the embedded PGS track after the nightly scan).
+- **What you saw:** a movie got no captions although Bazarr had added an `.srt` the day before (Plex listed the
+  sidecar, Tunarr still knew only the embedded PGS track after the nightly scan).
 - **Cause:**
   - **Wrong comparison:** `MediaSourceMovieLibraryScanner.scanSingleInternal` decided "unchanged" by comparing the
     stored canonical id with the **library listing's**. The episode and other-video scanners compare the full
