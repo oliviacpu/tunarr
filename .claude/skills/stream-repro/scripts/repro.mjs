@@ -38,6 +38,7 @@ const { values: opt } = parseArgs({
     resolution: { type: 'string' },
     hwaccel: { type: 'string' },
     'vaapi-device': { type: 'string' },
+    'thread-count': { type: 'string' },
     schedule: { type: 'string' },
     'sar-override': { type: 'string' },
     'subs-start': { type: 'string', default: '0' },
@@ -77,6 +78,7 @@ const resolution = resolutionMatch && { widthPx: Number(resolutionMatch[1]), hei
 const HWACCELS = ['none', 'cuda', 'vaapi', 'qsv', 'videotoolbox'];
 if (opt.hwaccel !== undefined && !HWACCELS.includes(opt.hwaccel)) throw new Error(`--hwaccel takes one of ${HWACCELS.join(', ')}`);
 if (opt['vaapi-device'] !== undefined && !['vaapi', 'qsv'].includes(opt.hwaccel)) throw new Error('--vaapi-device needs --hwaccel vaapi or qsv');
+if (opt['thread-count'] !== undefined && !/^\d+$/.test(opt['thread-count'])) throw new Error('--thread-count takes a whole number (0 lets ffmpeg choose)');
 const subsStart = Number(opt['subs-start']);
 if (!(subsStart >= 0)) throw new Error('--subs-start takes seconds');
 const log = (...a) => console.error('[repro]', ...a);
@@ -416,12 +418,13 @@ async function offlineSettings(base) {
   return offline;
 }
 
-// Applies --resolution, --hwaccel, and --vaapi-device to the channel's transcode config.
+// Applies --resolution, --hwaccel, --vaapi-device, and --thread-count to the channel's transcode config.
 async function applyTranscodeConfig(base, transcodeConfigId) {
   const patch = {};
   if (resolution) patch.resolution = resolution;
   if (opt.hwaccel !== undefined) patch.hardwareAccelerationMode = opt.hwaccel;
   if (opt['vaapi-device'] !== undefined) patch.vaapiDevice = opt['vaapi-device'];
+  if (opt['thread-count'] !== undefined) patch.threadCount = Number(opt['thread-count']);
   if (Object.keys(patch).length === 0) return undefined;
   const tc = await api(base, 'GET', `/api/transcode_configs/${transcodeConfigId}`);
   await api(base, 'PUT', `/api/transcode_configs/${transcodeConfigId}`, { ...tc, ...patch });

@@ -12,6 +12,7 @@ import duration from 'dayjs/plugin/duration.js';
 import { sumBy } from 'lodash-es';
 import type { FileHandle } from 'node:fs/promises';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import tmp from 'tmp';
 import type { Mock } from 'vitest';
@@ -1034,9 +1035,10 @@ describe('HlsSession', () => {
     // `untilWatching` only until the speed watcher is starting.
     async function startTranscode(
       streamMode: HlsSessionOptions['streamMode'],
-      { untilWatching = false } = {},
+      { untilWatching = false, realtime = true } = {},
     ) {
       const calls = speedWatcherCalls.current;
+      const contexts: PlayerContext[] = [];
       const exited = Promise.withResolvers<void>();
       const lineupItem = {
         type: 'program',
@@ -1050,7 +1052,11 @@ describe('HlsSession', () => {
         uuid: channelUuid,
         number: 7,
         name: 'Sitcoms',
-        transcodeConfig: { name: 'Default', threadCount: 4 },
+        transcodeConfig: {
+          name: 'Default',
+          threadCount: 4,
+          hardwareAccelerationMode: 'none',
+        },
       } as unknown as ChannelOrmWithTranscodeConfig;
       const transcodeSession = {
         streamDuration: dayjs.duration(60, 'seconds'),
@@ -1077,8 +1083,9 @@ describe('HlsSession', () => {
         {
           getLiveTimestamp: async () => Date.now(),
         } as unknown as OnDemandChannelService,
-        ((context: PlayerContext) =>
-          ({
+        ((context: PlayerContext) => {
+          contexts.push(context);
+          return {
             context,
             on: vi.fn(),
             renditions: undefined,
@@ -1087,10 +1094,8 @@ describe('HlsSession', () => {
             start: async () => {
               calls.push('ffmpeg started');
             },
-          }) as unknown as ProgramStream) as (
-          ctx: PlayerContext,
-          fmt: OutputFormat,
-        ) => ProgramStream,
+          } as unknown as ProgramStream;
+        }) as (ctx: PlayerContext, fmt: OutputFormat) => ProgramStream,
       );
       await fs.mkdir(session.workingDirectory, { recursive: true });
       const internals = session as unknown as {
@@ -1099,13 +1104,14 @@ describe('HlsSession', () => {
         logger: { warn: Mock; info: Mock; error: Mock };
       };
       internals.state = 'started';
-      const done = internals.transcode(true);
+      const done = internals.transcode(realtime);
       await vi.waitFor(() =>
         expect(calls).toContain(untilWatching ? 'watching' : 'ffmpeg started'),
       );
 
       return {
         calls,
+        contexts,
         internals,
         done,
         logger: internals.logger,
@@ -1161,6 +1167,34 @@ describe('HlsSession', () => {
 
       expect(calls).toEqual(['watching', 'stopped watching']);
       expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    // Plex answers a tune only once it has 5 s of video, so the transcode
+    // that reads ahead is the one a viewer waits on
+    test('a transcode that reads ahead gets up to 16 threads', async () => {
+      const cores = vi.spyOn(os, 'availableParallelism').mockReturnValue(16);
+      try {
+        const { contexts, exit } = await startTranscode('hls', {
+          realtime: false,
+        });
+        await exit();
+
+        expect(contexts[0]?.transcodeConfig.threadCount).toBe(16);
+      } finally {
+        cores.mockRestore();
+      }
+    });
+
+    test('a real-time transcode keeps the configured thread count', async () => {
+      const cores = vi.spyOn(os, 'availableParallelism').mockReturnValue(16);
+      try {
+        const { contexts, exit } = await startTranscode('hls');
+        await exit();
+
+        expect(contexts[0]?.transcodeConfig.threadCount).toBe(4);
+      } finally {
+        cores.mockRestore();
+      }
     });
 
     test('does not watch hls_direct_v2, which copies the video', async () => {
