@@ -62,7 +62,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     that aren't plain file names keep the URL too.
   - Local measurement (`stream-repro --flex-first 45000 --offline-picture <png>`, 2 s segments, 2 before the
     playlist, 3 runs each): the first segment of a tune into a gap came after 7.0 s before and 1.0 s after; into a
-    program, 1.0 s both times. The 1 s floor is the once-a-second readiness check.
+    program, 1.0 s both times. The 1 s floor was the once-a-second readiness check, which now looks every 0.1 s (next entry).
 - **Tests:** `ProgramStream.test.ts` (a gap and an error screen follow the session's pace; an uploaded picture is read
   from disk; other pictures keep their URL; the first three fail without the fix), `FfmpegStreamFactory.test.ts` (the
   offline input uses the picture it's given, else the URL; with CUDA, QSV or VAAPI a still-picture placeholder stays
@@ -70,6 +70,17 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   picture with other contents).
 - **Also:** `stream-repro` gained `--offline-picture FILE`, which uploads an image and makes it the channel's offline
   picture.
+
+### A tune-in notices its first segments within 0.1 s (2026-10-17)
+
+- **What you saw:** every Live TV tune-in took several seconds before the picture came up.
+- **Cause:** a starting HLS session checked for its first segments once a second
+  (`BaseHlsSession.waitForStreamReady`, 15 retries 1000 ms apart). The segments were often there well before the
+  next check, so a tune-in waited about 0.5 s more on average, and up to a whole second.
+- **Fix:** the check runs every 100 ms, with the same 15 s limit (`ReadyPollMs`, `ReadyTimeoutMs`). The "still
+  waiting" debug line is logged about once a second, as before.
+- **Test:** `BaseHlsSession.test.ts`: segments written 1.25 s in are noticed within 150 ms; the stream isn't ready
+  until every required segment exists; it still gives up after about 15 s. The first two fail on the old interval.
 - **Upstream:** not sent.
 
 ### The end of a caption no longer flashes past at tune-in (2026-10-17)

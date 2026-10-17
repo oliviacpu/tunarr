@@ -21,6 +21,14 @@ export const SegmentNameRegex = /\D+(\d+)\.(ts|mp4|vtt)/;
 // kill to land.
 const ExitWaitTimeoutMs = 30_000;
 
+// How often a starting stream checks for its first segments, and how long it
+// waits for them in all. A viewer tuning in waits for this check, so a long
+// interval adds up to the whole interval to every tune-in (half on average).
+export const ReadyPollMs = 100;
+export const ReadyTimeoutMs = 15_000;
+// The "still waiting" debug line, about once a second rather than every check
+const ReadyLogEvery = Math.max(1, Math.round(1000 / ReadyPollMs));
+
 // Tracks the most recently requested segment number per client IP, split by
 // numbering space: video (.ts/.mp4) and subtitle (.vtt) segments are produced
 // at very different cadences and must not be conflated into a single floor.
@@ -191,7 +199,7 @@ export abstract class BaseHlsSession<
     try {
       this.logger.debug('Waiting for HLS stream session to be ready...');
       await retry(
-        async (bail) => {
+        async (bail, attempt) => {
           if (this.hasError) {
             this.logger.error(
               this.error,
@@ -240,21 +248,23 @@ export abstract class BaseHlsSession<
             !playlistExists ||
             !additionalExist
           ) {
-            this.logger.debug(
-              'Still waiting for stream session to start. (num segments=%d < %d, playlist exists? %s, additional=%j)',
-              numSegments,
-              this.sessionOptions.initialSegmentCount,
-              playlistExists,
-              additionalRequired,
-            );
+            if ((attempt - 1) % ReadyLogEvery === 0) {
+              this.logger.debug(
+                'Still waiting for stream session to start. (num segments=%d < %d, playlist exists? %s, additional=%j)',
+                numSegments,
+                this.sessionOptions.initialSegmentCount,
+                playlistExists,
+                additionalRequired,
+              );
+            }
             throw new Error('Stream not ready yet. Retry');
           }
         },
         {
-          retries: 15,
+          retries: Math.ceil(ReadyTimeoutMs / ReadyPollMs),
           factor: 1,
-          minTimeout: 1000,
-          maxTimeout: 1000,
+          minTimeout: ReadyPollMs,
+          maxTimeout: ReadyPollMs,
           randomize: false,
         },
       );

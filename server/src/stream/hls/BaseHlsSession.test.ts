@@ -276,6 +276,81 @@ describe('BaseHlsSession', () => {
     });
   });
 
+  describe('waitForStreamReady', () => {
+    class ReadySession extends TestHlsSession {
+      waitReady() {
+        return this.waitForStreamReady();
+      }
+    }
+
+    let files: string[];
+
+    beforeEach(() => {
+      files = [];
+      vi.spyOn(fs, 'readdir').mockImplementation(
+        (async () => files) as unknown as typeof fs.readdir,
+      );
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // A viewer tuning in waits on this check, so the segments must be noticed
+    // soon after they're written, not at the next whole second
+    it('notices the first segments within a tenth of a second', async () => {
+      const ready = new ReadySession(makeChannel(), baseOptions);
+      let done = false;
+      const result = ready.waitReady().then((r) => {
+        done = true;
+        return r;
+      });
+
+      await vi.advanceTimersByTimeAsync(1_250);
+      expect(done).toBe(false);
+
+      files = ['stream.m3u8', 'data000000.ts', 'data000001.ts'];
+      await vi.advanceTimersByTimeAsync(150);
+
+      expect(done).toBe(true);
+      expect((await result).isSuccess()).toBe(true);
+    });
+
+    it('waits for every required segment before it is ready', async () => {
+      const ready = new ReadySession(makeChannel(), baseOptions);
+      let done = false;
+      void ready.waitReady().then(() => {
+        done = true;
+      });
+
+      files = ['stream.m3u8', 'data000000.ts'];
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(done).toBe(false);
+
+      files = [...files, 'data000001.ts'];
+      await vi.advanceTimersByTimeAsync(150);
+      expect(done).toBe(true);
+    });
+
+    it('still gives up after about 15 seconds', async () => {
+      const ready = new ReadySession(makeChannel(), baseOptions);
+      files = ['stream.m3u8'];
+      let done = false;
+      const result = ready.waitReady().then((r) => {
+        done = true;
+        return r;
+      });
+
+      await vi.advanceTimersByTimeAsync(14_000);
+      expect(done).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(done).toBe(true);
+      expect((await result).isFailure()).toBe(true);
+      expect(ready.state).toBe('error');
+    });
+  });
+
   describe('stop waits for ffmpeg before removing the working directory', () => {
     let transcodeDirectory: string;
     let stoppable: StoppableHlsSession;

@@ -42,7 +42,7 @@ These settings trade a little efficiency for a faster tune-in on channels that u
 | Setting | Default | What it does |
 |---|---|---|
 | **HLS Segment Length (seconds)** | 4 | Length of each HLS segment, with a keyframe at every segment start. Shorter segments are ready sooner; their extra keyframes cost a little picture quality at the same bitrate. HLS Direct (v2) channels copy their source's video and keep 4 s segments. |
-| **Segments Before Playback** | 2 | How many segments must exist before a client gets the playlist. Segment length × this count is roughly the video encoded before the first byte is sent. |
+| **Segments Before Playback** | 2 | How many segments must exist before a client gets the playlist. Segment length × this count is roughly the video encoded before the first byte is sent. Tunarr checks for them every 100 ms and waits up to 15 s. |
 | **MPEG-TS Start-up Burst (seconds)** | 0 | HDHomeRun clients such as Plex read an HLS channel as one `.ts` stream, made by reading the channel's playlist at real-time pace. With a burst, that reader first sends up to this many seconds of video as fast as it is available, so the client's buffer fills at once. 0 turns it off. |
 
 For example, when the encoder runs near real time, 2 s segments with a 10 s burst send a cold channel's first byte in about half the time of the defaults (4 s instead of 8 s), and fill the client's buffer faster after that.
