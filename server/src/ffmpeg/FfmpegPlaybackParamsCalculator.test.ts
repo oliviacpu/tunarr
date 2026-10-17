@@ -385,7 +385,6 @@ describe('FfmpegPlaybackParamsCalculator', () => {
       test.each([
         ['vaapi', {}],
         ['cuda', {}],
-        ['qsv', {}],
       ] as const)(
         'keeps the rate when %s deinterlaces on the GPU',
         (hardwareAccelerationMode, overrides) => {
@@ -407,6 +406,46 @@ describe('FfmpegPlaybackParamsCalculator', () => {
           expect(params.frameRate).toBe(30000 / 1001);
         },
       );
+
+      test.each(['yadif=0', 'yadif=1'])(
+        'doubles the rate when QSV deinterlaces on the GPU, whose deinterlace_qsv outputs a frame per field (%s set for software)',
+        (deinterlaceFilter) => {
+          const calculator = new FfmpegPlaybackParamsCalculator(
+            makeTranscodeConfig({
+              deinterlaceVideo: true,
+              hardwareAccelerationMode: 'qsv',
+            }),
+            'hls',
+          );
+          const params = calculator.calculateForStream(
+            makeStreamDetails({
+              framerate: '30000/1001',
+              scanType: 'interlaced',
+            }),
+            { pinFrameRate: true, deinterlaceFilter },
+          );
+          expect(params.frameRate).toBe(60000 / 1001);
+        },
+      );
+
+      test('keeps the rate when QSV deinterlaces in software with a frame-rate filter', () => {
+        const calculator = new FfmpegPlaybackParamsCalculator(
+          makeTranscodeConfig({
+            deinterlaceVideo: true,
+            hardwareAccelerationMode: 'qsv',
+            disableHardwareFilters: true,
+          }),
+          'hls',
+        );
+        const params = calculator.calculateForStream(
+          makeStreamDetails({
+            framerate: '30000/1001',
+            scanType: 'interlaced',
+          }),
+          { pinFrameRate: true, deinterlaceFilter: 'bwdif=0' },
+        );
+        expect(params.frameRate).toBe(30000 / 1001);
+      });
 
       // These pipelines use the software filter then
       test.each([

@@ -143,8 +143,7 @@ export class FfmpegPlaybackParamsCalculator {
       ) {
         const fieldRate =
           params.deinterlace &&
-          this.usesSoftwareDeinterlacer(videoStream) &&
-          deinterlacerDoublesFrameRate(options.deinterlaceFilter);
+          this.deinterlacerDoublesRate(videoStream, options.deinterlaceFilter);
         params.frameRate = output.rate * (fieldRate ? 2 : 1);
       }
 
@@ -161,25 +160,33 @@ export class FfmpegPlaybackParamsCalculator {
     return params;
   }
 
-  // Whether the pipeline deinterlaces with the software filter (DeinterlaceFilter), as far as the transcode config
-  // tells: always without hardware acceleration and with VideoToolbox (whose pipeline is the software one's), with QSV
-  // when hardware filters are off, and with VAAPI and CUDA when hardware decoding is off, as their frames are then in
-  // system memory. CUDA always decodes interlaced MPEG-2 in software (NvidiaPipelineBuilder). Both also fall back when
-  // the GPU can't decode the source, which only the pipeline knows; there a field-rate filter's extra frames are
-  // dropped back to the source rate.
-  private usesSoftwareDeinterlacer(videoStream: VideoStreamDetails) {
+  // Whether the pipeline's deinterlacer outputs a frame per field, doubling the frame rate, as far as the transcode
+  // config and source tell. The software filter (DeinterlaceFilter) does with a field-rate setting; the pipelines use
+  // it always without hardware acceleration and with VideoToolbox (whose pipeline is the software one's), with QSV when
+  // hardware filters are off, and with VAAPI and CUDA when hardware decoding is off, as their frames are then in
+  // system memory; CUDA also always decodes interlaced MPEG-2 in software (NvidiaPipelineBuilder). QSV's own
+  // deinterlace_qsv always outputs at field rate (FFmpeg sets field_rate in its preinit); deinterlace_vaapi and
+  // yadif_cuda output at frame rate by default. VAAPI and CUDA also fall back to software when the GPU can't decode
+  // the source, which only the pipeline knows; there a field-rate filter's extra frames are dropped back to the
+  // source rate.
+  private deinterlacerDoublesRate(
+    videoStream: VideoStreamDetails,
+    softwareFilter: string | undefined,
+  ) {
+    const software = deinterlacerDoublesFrameRate(softwareFilter);
     switch (this.transcodeConfig.hardwareAccelerationMode) {
       case HardwareAccelerationMode.None:
       case HardwareAccelerationMode.Videotoolbox:
-        return true;
+        return software;
       case HardwareAccelerationMode.Qsv:
-        return !!this.transcodeConfig.disableHardwareFilters;
+        return this.transcodeConfig.disableHardwareFilters ? software : true;
       case HardwareAccelerationMode.Vaapi:
-        return !!this.transcodeConfig.disableHardwareDecoder;
+        return !!this.transcodeConfig.disableHardwareDecoder && software;
       case HardwareAccelerationMode.Cuda:
         return (
-          !!this.transcodeConfig.disableHardwareDecoder ||
-          videoStream.codec === VideoFormats.Mpeg2Video
+          (!!this.transcodeConfig.disableHardwareDecoder ||
+            videoStream.codec === VideoFormats.Mpeg2Video) &&
+          software
         );
       default:
         return false;

@@ -58,7 +58,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     (`pinFrameRate`). When the pipeline deinterlaces in software, a field-rate filter (`none`, which is yadif=1,
     `yadif=1`, `bwdif=1`, `w3fdif`) doubles it, so no field-rate frames are dropped: without hardware acceleration,
     with VideoToolbox, with QSV when hardware filters are off, with VAAPI and CUDA when hardware decoding is off, and
-    with CUDA for interlaced MPEG-2, which it always decodes in software.
+    with CUDA for interlaced MPEG-2, which it always decodes in software. QSV's own `deinterlace_qsv` always outputs a
+    frame per field (FFmpeg sets `field_rate` for it), so QSV with hardware filters doubles it too.
     VAAPI and CUDA also fall back to software when the GPU can't decode the source, which only the pipeline knows;
     there the extra frames are dropped back to the source rate, and captions still match the output.
   - `FfmpegStreamFactory` lays captions and the "No captions" notice out at that output rate, never at the source's.
