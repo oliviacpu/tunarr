@@ -324,6 +324,98 @@ describe('HlsSession', () => {
       ).toBe(true);
     });
 
+    test('sends every pair, in order, when a frame is missing', async () => {
+      const ptsOffset = 900_000;
+      const whole = await serve(captions(30000 / 1001), ptsOffset, {
+        firstPts: ptsOffset,
+        frames: 60,
+      });
+      if (!whole) {
+        throw new Error('not captioned');
+      }
+      const notPadding = (p: number[]) => !(p[0] === 0x80 && p[1] === 0x80);
+      const expected = framePairs(whole).filter(notPadding);
+      // Without the first frame that carries something
+      const missing = framePairs(whole).findIndex(notPadding);
+      expect(missing).toBeGreaterThan(0);
+
+      const gapped = await serve(captions(30000 / 1001), ptsOffset, {
+        pts: Array.from({ length: 60 }, (_, k) =>
+          framePts(k, { firstPts: ptsOffset }),
+        ).filter((_, k) => k !== missing),
+      });
+      if (!gapped) {
+        throw new Error('not captioned');
+      }
+
+      expect(framePairs(gapped).filter(notPadding)).toEqual(expected);
+    });
+
+    test('captions a segment asked for again the same way', async () => {
+      const ptsOffset = 900_000;
+      const session = makeSession(dir.name);
+      await fs.mkdir(session.workingDirectory, { recursive: true });
+      await fs.writeFile(
+        path.join(session.workingDirectory, 'data000001.ts'),
+        makeTsSegment({ firstPts: ptsOffset, frames: 60 }),
+      );
+      (
+        session as unknown as {
+          addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+        }
+      ).addCaptions(ptsOffset, captions(30000 / 1001));
+
+      // Two viewers, or a retry
+      const first = await session.captionedSegment('data000001.ts');
+      const second = await session.captionedSegment('data000001.ts');
+      expect(first).toBeDefined();
+      expect(second).toEqual(first);
+    });
+
+    test('captions segments the same whichever is asked for first', async () => {
+      const ptsOffset = 900_000;
+      // A cue loading across the two segments' join, and the first segment's
+      // last frame missing
+      const across: ProgramCaptions = {
+        cues: [{ startMs: 62 * ntscFrame, endMs: 90 * ntscFrame, text: 'Hi' }],
+        frameRate: 30000 / 1001,
+        durationMs: 60_000,
+        language: 'eng',
+      };
+      async function captionBoth(order: string[]) {
+        const session = makeSession(dir.name);
+        await fs.mkdir(session.workingDirectory, { recursive: true });
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: ptsOffset, frames: 59 }),
+        );
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000002.ts'),
+          makeTsSegment({ firstPts: ptsOffset + 60 * 3003, frames: 60 }),
+        );
+        (
+          session as unknown as {
+            addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+          }
+        ).addCaptions(ptsOffset, across);
+        const served = new Map<string, Buffer | undefined>();
+        for (const file of order) {
+          served.set(file, await session.captionedSegment(file));
+        }
+        return served;
+      }
+
+      const inOrder = await captionBoth(['data000001.ts', 'data000002.ts']);
+      const reversed = await captionBoth(['data000002.ts', 'data000001.ts']);
+      expect(inOrder.get('data000001.ts')).toBeDefined();
+      expect(reversed.get('data000001.ts')).toEqual(
+        inOrder.get('data000001.ts'),
+      );
+      expect(reversed.get('data000002.ts')).toEqual(
+        inOrder.get('data000002.ts'),
+      );
+    });
+
     test('serves nothing for a segment it cannot caption', async () => {
       const session = makeSession(dir.name);
       await fs.mkdir(session.workingDirectory, { recursive: true });
