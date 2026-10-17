@@ -157,15 +157,19 @@ export type SegmentOptions = {
   // Slice payload per frame; 343 makes a non-IDR frame's PES fill exactly two
   // packets, so any added bytes need a third
   sliceBytes?: number;
+  // Each frame's PTS in stream (decode) order, instead of evenly spaced ones:
+  // B-frame reordering, or a frame missing
+  pts?: number[];
 };
 
 export const framePts = (k: number, options: SegmentOptions = {}) =>
+  options.pts?.[k] ??
   (options.firstPts ?? 126_000) + k * (options.frameStep ?? 3003);
 
 export function makeTsSegment(options: SegmentOptions = {}): Buffer {
   const parts: Buffer[] = [pat(), pmt(options.videoStreamType)];
   let videoCc = options.firstVideoCc ?? 5;
-  for (let k = 0; k < (options.frames ?? 3); k++) {
+  for (let k = 0; k < (options.pts?.length ?? options.frames ?? 3); k++) {
     const packets = tsPackets(
       VideoPid,
       pes(

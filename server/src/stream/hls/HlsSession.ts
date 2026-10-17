@@ -12,13 +12,17 @@ import type { OnDemandChannelService } from '@/services/OnDemandChannelService.j
 import { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StopOptions } from '@/stream/Session.js';
 import type { StreamProgramCalculator } from '@/stream/StreamProgramCalculator.js';
-import type { CaptionSchedule } from '@/stream/captions/Cea608Encoder.js';
+import type {
+  CaptionSchedule,
+  CcPair,
+} from '@/stream/captions/Cea608Encoder.js';
 import {
   buildCaptionSchedule,
   PaddingPair,
 } from '@/stream/captions/Cea608Encoder.js';
 import { insertCaptions } from '@/stream/captions/MpegTsCaptionInserter.js';
 import type { ProgramCaptions } from '@/stream/captions/ProgramCaptions.js';
+import { pairsForFrames } from '@/stream/captions/pairsForFrames.js';
 import type { HlsSlowerSession } from '@/stream/hls/HlsSlowerSession.js';
 import type {
   AudioRenditionInfo,
@@ -590,20 +594,9 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         ?.iso6392 ??
       'eng';
 
-    const framesByEntry = new Map<CaptionTimelineEntry, number[]>();
     const captioned = insertCaptions(segment, {
       language,
-      pairForPts: (pts) => {
-        const hit = this.captionEntryAt(pts);
-        if (!hit) {
-          return PaddingPair;
-        }
-        framesByEntry.set(hit.entry, [
-          ...(framesByEntry.get(hit.entry) ?? []),
-          pts,
-        ]);
-        return hit.entry.schedule.pairAt(hit.timeMs);
-      },
+      pairsForFrames: (ptsInOrder) => this.captionPairs(ptsInOrder),
     });
     if (!captioned.ok) {
       this.logger.debug(
@@ -613,13 +606,34 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
       );
       return;
     }
+    return captioned.segment;
+  }
 
-    // The schedule assumes the program's frame rate. If the frames are spaced
-    // differently (deinterlacing that doubles the rate, variable frame rate),
-    // characters would be dropped or repeated, so send padding only.
-    for (const [entry, frames] of framesByEntry) {
-      const sorted = frames.toSorted((a, b) => a - b);
-      const steps = sorted.slice(1).map((pts, i) => pts - (sorted[i] ?? pts));
+  // The caption pair for each of a segment's frames, in presentation order
+  private captionPairs(ptsInOrder: readonly number[]): CcPair[] {
+    const pairs: CcPair[] = ptsInOrder.map(() => PaddingPair);
+    // Each program's frames in this segment: their places, PTS and times
+    const byEntry = new Map<
+      CaptionTimelineEntry,
+      { index: number; pts: number; timeMs: number }[]
+    >();
+    ptsInOrder.forEach((pts, index) => {
+      const hit = this.captionEntryAt(pts);
+      if (hit) {
+        byEntry.set(hit.entry, [
+          ...(byEntry.get(hit.entry) ?? []),
+          { index, pts, timeMs: hit.timeMs },
+        ]);
+      }
+    });
+
+    for (const [entry, frames] of byEntry) {
+      // The schedule assumes the program's frame rate. If the frames are
+      // spaced differently, characters would be dropped or repeated, so send
+      // padding only.
+      const steps = frames
+        .slice(1)
+        .map((f, i) => f.pts - (frames[i]?.pts ?? f.pts));
       const step = steps.toSorted((a, b) => a - b)[
         Math.floor(steps.length / 2)
       ];
@@ -635,14 +649,17 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
             Math.round(entry.framePts),
           );
         }
-        const padded = insertCaptions(segment, {
-          language,
-          pairForPts: () => PaddingPair,
-        });
-        return padded.ok ? padded.segment : undefined;
+        continue;
       }
+      const programPairs = pairsForFrames(
+        entry.schedule,
+        frames.map((f) => f.timeMs),
+      );
+      frames.forEach((f, k) => {
+        pairs[f.index] = programPairs[k] ?? PaddingPair;
+      });
     }
-    return captioned.segment;
+    return pairs;
   }
 
   protected getHlsOptions(): DeepRequired<HlsOptions> {

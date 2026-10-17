@@ -8,6 +8,10 @@ import {
 import { crc32Mpeg2, insertCaptions } from './MpegTsCaptionInserter.ts';
 
 const pairFor = (pts: number): CcPair => [0x80 | pts % 0x7f, 0x81];
+const eachFrame =
+  (f: (pts: number) => CcPair) =>
+  (pts: readonly number[]): CcPair[] =>
+    pts.map(f);
 const captionSeiFor = (pts: number) => {
   const [a, b] = pairFor(pts);
   return Buffer.from([
@@ -38,7 +42,7 @@ const captionSeiFor = (pts: number) => {
 describe('insertCaptions', () => {
   test("puts one caption SEI with the frame's pair before the first slice of every frame", () => {
     const result = insertCaptions(segment(), {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
     if (!result.ok) {
@@ -64,10 +68,51 @@ describe('insertCaptions', () => {
     });
   });
 
+  test('asks for the pairs once, with every frame in presentation order', () => {
+    // Stored in decode order, a B-frame after the frame it precedes
+    const pts = [126_000, 132_006, 129_003];
+    const asked: (readonly number[])[] = [];
+    const result = insertCaptions(segment({ pts }), {
+      pairsForFrames: (presented) => {
+        asked.push(presented);
+        return presented.map(pairFor);
+      },
+      language: 'eng',
+    });
+    if (!result.ok) {
+      throw new Error(result.reason);
+    }
+
+    expect(asked).toEqual([[126_000, 129_003, 132_006]]);
+    // Each frame still carries its own pair
+    const { videoPes } = parse(result.segment);
+    pts.forEach((p, k) => {
+      expect(videoPes[k]?.indexOf(captionSeiFor(p))).toBeGreaterThan(0);
+    });
+  });
+
+  test('keeps presentation order across the 33-bit PTS wrap', () => {
+    // The last frame before the wrap, then two after it, one a B-frame
+    const pts = [2 ** 33 - 3003, 3003, 0];
+    const asked: (readonly number[])[] = [];
+    const result = insertCaptions(segment({ pts }), {
+      pairsForFrames: (presented) => {
+        asked.push(presented);
+        return presented.map(pairFor);
+      },
+      language: 'eng',
+    });
+    if (!result.ok) {
+      throw new Error(result.reason);
+    }
+
+    expect(asked).toEqual([[2 ** 33 - 3003, 0, 3003]]);
+  });
+
   test('keeps whole TS packets, continuous counters and the first PCR', () => {
     const input = segment();
     const result = insertCaptions(input, {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
     if (!result.ok) {
@@ -101,11 +146,11 @@ describe('insertCaptions', () => {
       firstVideoCc: ((firstCcs.at(-1) ?? 0) + 1) & 0x0f,
     });
     const captionedFirst = insertCaptions(first, {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
     const captionedNext = insertCaptions(next, {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
     if (!captionedFirst.ok || !captionedNext.ok) {
@@ -127,7 +172,7 @@ describe('insertCaptions', () => {
 
   test("names the captions' language in the PMT, with a valid CRC", () => {
     const result = insertCaptions(segment(), {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
     if (!result.ok) {
@@ -170,7 +215,7 @@ describe('insertCaptions', () => {
       0x80,
     ];
     const result = insertCaptions(segment({ extraNals: existingCaptions }), {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
 
@@ -182,7 +227,7 @@ describe('insertCaptions', () => {
 
   test('only handles H.264 video', () => {
     const result = insertCaptions(segment({ videoStreamType: 0x24 }), {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
 
@@ -191,7 +236,7 @@ describe('insertCaptions', () => {
 
   test("rejects data that isn't whole TS packets", () => {
     const result = insertCaptions(segment().subarray(0, 300), {
-      pairForPts: pairFor,
+      pairsForFrames: eachFrame(pairFor),
       language: 'eng',
     });
 

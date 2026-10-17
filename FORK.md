@@ -35,6 +35,41 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A caption pair is never lost or sent twice because of frame timing (2026-10-17)
+
+- **What you saw:** captions in Plex that lost two letters ("You" as "u"), or lost a whole caption when the lost pair
+  was a command.
+- **Cause:** each video frame took the caption pair of the frame slot it is shown in (`CaptionSchedule.pairAt`,
+  rounding its time). A slot without a frame lost its pair, and two frames in one slot sent it twice, which doubles
+  letters or turns a control code's redundant copy into a second command. The inserter also asked per frame in decode
+  order, so the answer couldn't depend on the frames around it.
+- **Fix:**
+  - `insertCaptions` reads a segment's frames first and asks once for all their pairs, in presentation order
+    (`pairsForFrames`; sorted by offset from the segment's first frame, so a segment across the 33-bit PTS wrap keeps
+    its order).
+  - `pairsForFrames` (`server/src/stream/captions/pairsForFrames.ts`), called by `HlsSession` for each program's
+    frames in a segment, hands the pairs out: a slot without a frame has its pair sent on the frames that follow, one
+    a frame and in order; a second frame in a slot sends padding, or the copy of the control code the frame before
+    sent, so the two copies stay on consecutive frames; a program's first frames start from its first slot, so pairs
+    due before a frame missing there still go out; a jump of 8 slots or more is a new start, not a backlog to send
+    late.
+  - It reads only the segment's own frames, so a segment is captioned the same however often and in whatever order
+    segments are asked for (two viewers, a retry). A frame missing right where a segment starts can't be told from the
+    segment alone and loses its pair; Tunarr's own segments are evenly spaced, so that would take a frame lost before
+    them.
+  - `HlsSession` checks each program's frame spacing in a segment before laying out its pairs, so a mismatched program
+    is sent as padding without touching other programs in the same segment.
+- **What it can't fix:** a frame the .ts wrapper loses after captioning ("Still open" in "A source reporting a
+  frame rate that isn't standard keeps all its frames"). The captioned segments are complete; the loss happens where
+  the wrapper joins them.
+- **Tests:** `pairsForFrames.test.ts` (a missing frame, two frames in a slot, a control code's copies and a program's
+  missing first frames fail on the old slot lookup; one per slot, a later segment's start and a long jump are guards);
+  `MpegTsCaptionInserter.test.ts` (asked once, in presentation order, with B-frames and across the PTS wrap);
+  `HlsSession.test.ts` (a segment missing a frame sends every pair in order, which fails on the old code; a segment
+  asked for twice is captioned the same way; two segments come out the same whichever is asked for first, which
+  fails on a cursor shared between requests). The golden caption snapshot is unchanged.
+- **Upstream:** not sent.
+
 ### Tuning in during a gap starts as fast as during a program (2026-10-17)
 
 - **What you saw:** Live TV took about 11 s to start when you tuned in during a gap (the channel's offline picture and
