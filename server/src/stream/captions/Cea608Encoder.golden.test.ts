@@ -9,7 +9,10 @@ import {
 
 // The bytes the encoder sends with its default appearance, pinned before the
 // appearance settings were added. Those settings must leave the defaults
-// byte for byte as they were, so this snapshot is never updated.
+// byte for byte as they were. The snapshot changes only with a deliberate
+// change to when captions show, named in its commit: since 2026-10-17 a cue
+// under way at the first frame with less than a second left to show is left
+// out (the 15 fps sections' first cue).
 
 const Alignments: CaptionAlignment[] = [
   'centeredBlock',
@@ -21,7 +24,9 @@ const FrameRates = [15, 24000 / 1001, 30000 / 1001];
 function cues(frameRate: number): CaptionCue[] {
   const noticeStart = noCaptionsNoticeStartMs(frameRate);
   return [
-    // Under way when the program starts, with time left to show
+    // Under way when the program starts. Shown once loaded where that leaves
+    // over a second of it (23.976 and 29.97 fps); at 15 fps it loads too
+    // slowly, so it is left out
     { startMs: -800, endMs: 1500, text: 'Already talking' },
     { startMs: 2000, endMs: 4000, text: 'Hello there.' },
     {

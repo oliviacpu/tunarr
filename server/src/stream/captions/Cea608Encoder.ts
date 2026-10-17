@@ -925,7 +925,11 @@ type ScheduleItem = {
 // so changes are kept at least this far apart
 const MinOverlapMs = 500;
 const MinIntervalMs = 1000;
-const MinResumeMs = 1000;
+// The shortest rest of a subtitle that began earlier worth showing on its own:
+// one that outlasts a newer one comes back for it, and a cue already under way
+// when a stream starts (a viewer tuning in) shows it. Less would flash up and
+// vanish before it could be read.
+const MinTailMs = 1000;
 // Lines of overlapping subtitles stacked in one block, the newest kept
 const MaxStackedLines = 4;
 
@@ -949,7 +953,7 @@ function loadFrames(
  * - apart: as together, but each band of the screen (top, middle, bottom)
  *   gets its own block, for decoders that position every row.
  * - newest: the latest-started subtitle shows; one that outlasts a newer one
- *   comes back for the rest of its time, when that is at least MinResumeMs
+ *   comes back for the rest of its time, when that is at least MinTailMs
  *   and leaves the next caption time to load.
  *
  * Paint-on and roll-up draw as text arrives, and are left as they are. Input
@@ -1178,7 +1182,7 @@ function newestOf(
       nextStart === undefined ||
       nextStart - segment.startMs >=
         (loadFrames(next.blocks, next.appearance) + 2) * frameMs;
-    if (segment.endMs - segment.startMs >= MinResumeMs && roomForNext) {
+    if (segment.endMs - segment.startMs >= MinTailMs && roomForNext) {
       out.push({
         ...segment.item,
         startMs: segment.startMs,
@@ -1439,6 +1443,14 @@ export function buildCaptionSchedule(
       replacedAt = undefined;
     }
   };
+  // Whether a caption first on screen at `shownAt` is left out: it can't show
+  // before it ends, or it was already under way at the first frame and less
+  // than MinTailMs of it is left, the end of a line flashing up and gone.
+  // The next caption is then the first one shown.
+  const tooLateToShow = (caption: ScheduleItem, shownAt: number) =>
+    shownAt >= slotOf(caption.endMs) ||
+    (caption.startMs < options.firstFrameMs &&
+      (slotOf(caption.endMs) - shownAt) * frameMs < MinTailMs);
 
   for (const [i, caption] of captions.entries()) {
     const { appearance } = caption;
@@ -1474,7 +1486,7 @@ export function buildCaptionSchedule(
             ),
           );
         showAt = lateShow();
-        if (showAt >= slotOf(caption.endMs)) {
+        if (tooLateToShow(caption, showAt)) {
           leaveOut();
           continue;
         }
@@ -1506,7 +1518,13 @@ export function buildCaptionSchedule(
           ? wanted
           : Math.max(wanted, placeFrom(entry, loadAfter, { dryRun: true })),
       );
-      if (startAt >= slotOf(caption.endMs)) {
+      // Roll-up keeps a cue's lines up, scrolling, while the next cue's arrive,
+      // so the rest of one under way is no flash: it stays as context
+      if (
+        mode === 'paintOn'
+          ? tooLateToShow(caption, startAt)
+          : startAt >= slotOf(caption.endMs)
+      ) {
         leaveOut();
         continue;
       }

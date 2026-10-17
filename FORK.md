@@ -35,6 +35,40 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The end of a caption no longer flashes past at tune-in (2026-10-17)
+
+- **What you saw:** tuning in mid-sentence, a fragment of a caption was on screen for about half a second, then nothing
+  for a second or two until the next caption.
+- **Cause:** a cue already under way at the stream's first frame is loaded and shown as soon as it can be, until its
+  own end ("A session's first program shows its captions on time", below). Loading takes about a third of a second at
+  29.97 fps and more at lower frame rates, so a cue with under a second left showed its last words for 0.1–0.6 s.
+- **Fix** (`buildCaptionSchedule`, `server/src/stream/captions/Cea608Encoder.ts`): a pop-on or paint-on caption under
+  way at the first frame is left out when less than a second of it would be on screen. The next caption is then the
+  first one shown, and nothing of the left-out one holds up its load.
+
+  - **Why a second:** it is `MinTailMs`, the minimum the encoder already used to bring a subtitle back for the rest of
+    its time when a newer one ends ("Show the newest" overlaps). Both are the rest of a subtitle that began before the
+    viewer saw it, so both get the same floor.
+  - **Untouched:** captions that start on or after the first frame, however short; their start is what the subtitle
+    file asks for. Roll-up keeps its rest too: its lines stay up, scrolled, while the next cue's arrive, so it reads as
+    context rather than a flash.
+  - At 29.97 fps, a 15-character cue under way at tune-in, on screen (first caption shown → cleared):
+
+    | Left of the cue at tune-in | Before  | After             |
+    | -------------------------- | ------- | ----------------- |
+    | 0.6 s                      | 234 ms  | left out          |
+    | 1.0 s                      | 634 ms  | left out          |
+    | 1.3 s                      | 934 ms  | left out          |
+    | 2.0 s                      | 1635 ms | 1635 ms, the same |
+
+- **Tests:**
+  - `Cea608Encoder.test.ts`: a cue under way with 0.6 s left is left out and the next shows on its own frame (fails
+    without the fix); with 2 s left it shows once loaded until its end; a short cue starting on the first frame still
+    shows; paint-on leaves the rest out too (fails without the fix); roll-up keeps it, scrolled up by the next cue.
+  - `Cea608Encoder.golden.test.ts`: its first cue is under way with 0.8 s to show at 15 fps, so the six 15 fps sections
+    lose it (frames 0–23 only). The 23.976 and 29.97 fps sections, where it has over a second, are unchanged.
+- **Upstream:** not sent.
+
 ### A channel's own caption settings, for a test channel (2026-10-16)
 
 - **What you saw:** caption appearance, alignment and the test pattern were global FFmpeg settings, so trying a
