@@ -45,6 +45,7 @@ import type {
 } from './HlsPlaylistMutator.js';
 import { HlsPlaylistMutator } from './HlsPlaylistMutator.js';
 import { MediaPlaylistReader } from './MediaPlaylistReader.js';
+import { transcodeConfigFor } from './readAheadThreads.js';
 import { describeTranscodeSpeedEvent } from './TranscodeSpeedMonitor.js';
 import { TranscodeSpeedWatcher } from './TranscodeSpeedWatcher.js';
 
@@ -359,6 +360,13 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
       ),
     });
 
+    // A transcode that reads ahead (a tune-in, or catching up) gets more
+    // threads, so a viewer waits less for its first seconds
+    const transcodeConfig = transcodeConfigFor(
+      this.channel.transcodeConfig,
+      realtime,
+    );
+
     const transcodeResult = await lineupItemResult.mapAsync(async (result) => {
       this.logger.debug(
         'About to play lineup item: %s',
@@ -368,7 +376,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         result.lineupItem,
         result.channelContext,
         result.sourceChannel,
-        this.channel.transcodeConfig,
+        transcodeConfig,
         {
           audioOnly: false,
           realtime,
@@ -405,7 +413,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
             result.channelContext,
             this.channel,
             realtime,
-            this.channel.transcodeConfig,
+            transcodeConfig,
             this.sessionType,
           ),
           ptsOffset,

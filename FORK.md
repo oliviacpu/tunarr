@@ -35,6 +35,27 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A tune-in's first transcode uses more threads (2026-10-17)
+
+- **What you saw:** every Live TV tune-in took several seconds before the picture came up.
+- **Cause:** Plex Live TV answers a tune only once it has 5 s of video, so a tune-in waits on the first transcode's
+  first three 2 s segments. That transcode reads 60 s ahead of real time, but encoded with the transcode config's
+  thread count (8 on the measured server), so on a shared CPU it ran at about 2x real time and segment 3 took ~3.7–4 s.
+- **Fix:** in HLS mode, a transcode that reads ahead of real time (the first one after a tune-in, or one catching
+  up) uses up to 16 threads, never more than the cores Tunarr may run on (`os.availableParallelism()`, which follows
+  `taskset`) and never fewer than configured (`stream/hls/readAheadThreads.ts`, `HlsSession.transcode`). Real-time
+  transcodes keep the configured count, and so does a config of 0 (ffmpeg chooses) or hardware encoding.
+- **Measured** (the server's CPU, libx264 veryfast 6 Mbit/s 1080p with loudnorm, a 15-minute seek, median of 3):
+  segment 3 came at 2.69 s instead of 3.95 s for an HEVC 10-bit Blu-ray source, and 2.41 s instead of 3.71 s for an
+  SD H.264 DVD source. CPU per second of media was unchanged (2.13 against 2.34 s, and 2.06 against 2.10 s), with
+  about 20 more threads per such transcode.
+- **Quality:** unchanged. On the same frames of 4 excerpts, 16 threads scored a mean VMAF within 0.02 of 8 threads
+  (worst 5% of frames within 0.43) and PSNR-Y within 0.01 dB. A faster preset (superfast) would have saved another
+  ~0.7 s but cost 0.4–1.2 VMAF and up to 1.2 dB for the rest of the program, so it isn't used.
+- **Tests:** `readAheadThreads.test.ts` (the rule); `HlsSession.test.ts`: a read-ahead transcode gets 16 threads
+  and a real-time one keeps the configured 4. The first fails on the old code.
+- **Upstream:** not sent.
+
 ### The end of a caption no longer flashes past at tune-in (2026-10-17)
 
 - **What you saw:** tuning in mid-sentence, a fragment of a caption was on screen for about half a second, then nothing
