@@ -35,6 +35,62 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A source reporting a frame rate that isn't standard keeps all its frames (2026-10-17)
+
+- **What you saw:** on a DVD-sourced series, closed captions in Plex were often missing, or lost letters ("You" as
+  "u"), and motion was slightly jerky.
+- **Cause:**
+  - **The reported rate:** the files' headers report 20 fps, but their frames come about 24 a second (they alternate
+    1/24 s and 1/30 s apart). With "Normalize Frame Rate" off, Tunarr sets no output rate, and ffmpeg's HLS output is
+    constant-rate at the input's reported rate, so the channel ran at 20 fps and dropped about one frame in six.
+  - **Captions at 20 fps:** CEA-608 sends two characters per frame, so captions had two thirds of their usual room,
+    and players expect a standard rate. Captions were also laid out at the source's reported rate, not at the output's,
+    so any difference between the two (a field-rate deinterlacer doubling the rate, or QSV, whose `fps` filter always
+    used 24 because `getNumericFrameRateOrDefault` ignores a rate `parseInt` can read) made HlsSession send padding only.
+- **Fix:**
+  - `outputFrameRate` (`server/src/ffmpeg/outputFrameRate.ts`) never gives fewer frames a second than the source
+    reports: a standard rate (23.976, 24, 25, 29.97, 30, 50, 59.94, 60), a rounded label for one (within 0.05%) or a
+    rate up to 2% below one (an average over a few missing frames, 23.81 in the library that showed this) is that
+    standard rate exactly; one above them all (high-frame-rate video, 120) is kept; any other, including one a little
+    above a standard rate (30.3), gets 29.97 below 30 fps or 59.94 above.
+  - `FfmpegPlaybackParamsCalculator.calculateForStream` sets the output rate (`-r <rate> -fps_mode cfr`) for a
+    non-standard source, or one corrected up to a standard rate, always (left alone, ffmpeg's HLS output keeps the
+    reported rate), with "Normalize Frame Rate", and, new, whenever HDHomeRun captions are on
+    (`pinFrameRate`). When the pipeline deinterlaces in software, a field-rate filter (`none`, which is yadif=1,
+    `yadif=1`, `bwdif=1`, `w3fdif`) doubles it, so no field-rate frames are dropped: without hardware acceleration,
+    with VideoToolbox, with QSV when hardware filters are off, with VAAPI and CUDA when hardware decoding is off, and
+    with CUDA for interlaced MPEG-2 and looping items (a filler clip shorter than its slot), which it always decodes
+    in software. QSV's own `deinterlace_qsv` always outputs a
+    frame per field (FFmpeg sets `field_rate` for it), so QSV with hardware filters doubles it too.
+    VAAPI and CUDA also fall back to software when the GPU can't decode the source, which only the pipeline knows;
+    there the extra frames are dropped back to the source rate, and captions still match the output.
+  - `FfmpegStreamFactory` lays captions and the "No captions" notice out at that output rate, never at the source's.
+  - `QsvPipelineBuilder` uses the chosen rate in its `fps` filter instead of dropping the output rate.
+  - NTSC rates go to ffmpeg as exact fractions (`30000/1001`, `ffmpegFrameRate`).
+  - Local measurement (`stream-repro --clip-file <a 2 min excerpt of a DVD-sourced episode with a 20 fps header,
+    sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --seconds 100`): before, 20.000 fps,
+    2011 frames 50 ms apart (the source has about 2400 in that time); after, 29.97 fps, every source frame kept, the
+    raw HLS segments 33.4 ms apart with no gap, and every caption equal to its subtitle except where the .ts wrapper
+    lost a frame (next point).
+- **Still open:** the .ts wrapper (the ffmpeg that joins a session's HLS segments into the HDHomeRun stream)
+  occasionally loses a frame where one segment meets the next, when its reading catches up with the newest segment. It
+  happens with captions off too (0 to 2 frames in 60 s of a fast replay against a local server; about one in 40 s on a
+  slow shared server, where the transcode runs near real time). A lost frame takes its caption pair with it: control
+  codes survive (each is sent twice), but two letters of text are lost. The segments themselves are complete.
+  - **Hardware pipelines:** whether a pipeline's deinterlacer doubles the frame rate is worked out from the transcode
+    config and the source, mirroring each builder's choice. A GPU that can't decode a codec falls back to software
+    in VAAPI and CUDA, which only the pipeline knows: there the pinned rate keeps the source's, so a field-rate
+    deinterlacer's extra frames are dropped (captions still match). Only the software pipeline has been checked end
+    to end. Follow-up: have the pipeline report the output rate it ends up with, and lay captions out at that.
+- **Tests:** `outputFrameRate.test.ts`; `FfmpegPlaybackParamsCalculator.test.ts` (non-standard rates with the setting
+  on and off and in MPEG-TS mode, near-standard rates, `pinFrameRate`, deinterlacing per filter and pipeline);
+  `FfmpegStreamFactory.test.ts` (captions and the notice at the output rate; a 20 fps source outputs 29.97; nothing
+  pinned with captions off); `QsvPipelineBuilder.test.ts` (the chosen rate in `fps` and `-r`). All new cases fail on
+  the old code.
+- **Also:** `stream-repro` gained `--clip-file PATH` (a real file as a program, sidecar subtitles included) and
+  `--mode hdhr` (the HDHomeRun `.ts` stream, with `report.captions`: frame spacing and the decoded captions).
+- **Upstream:** not sent.
+
 ### A caption pair is never lost or sent twice because of frame timing (2026-10-17)
 
 - **What you saw:** captions in Plex that lost two letters ("You" as "u"), or lost a whole caption when the lost pair

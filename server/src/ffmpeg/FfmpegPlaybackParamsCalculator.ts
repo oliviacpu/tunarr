@@ -19,6 +19,10 @@ import {
 import type { PixelFormat } from './builder/format/PixelFormat.ts';
 import { PixelFormatYuv420P } from './builder/format/PixelFormat.ts';
 import { FrameSize } from './builder/types.ts';
+import {
+  deinterlacerDoublesFrameRate,
+  outputFrameRate,
+} from './outputFrameRate.ts';
 
 const KnownVideoPresets: ReadonlySet<string> = new Set(
   Object.values(VideoPresets),
@@ -35,22 +39,14 @@ function softwareVideoPreset(configured: string | null): VideoPreset {
   return isVideoPreset(preset) ? preset : VideoPresets.VeryFast;
 }
 
-// A probed frame rate (24, 23.976, "24000/1001", "25") as frames per second rounded to 3 decimals, or undefined
-// when it's missing or not a plausible rate.
-function parseFrameRate(framerate: number | string | null | undefined) {
-  let rate: number;
-  if (typeof framerate === 'number') {
-    rate = framerate;
-  } else if (typeof framerate === 'string' && framerate.includes('/')) {
-    const [num, den] = framerate.split('/').map(Number);
-    rate = num !== undefined && den !== undefined ? num / den : NaN;
-  } else {
-    rate = parseFloat(framerate ?? '');
-  }
-  return Number.isFinite(rate) && rate > 0 && rate <= 240
-    ? Math.round(rate * 1000) / 1000
-    : undefined;
-}
+export type StreamPlaybackOptions = {
+  // The output's frame rate must be known exactly: CEA-608 captions are laid out one pair per frame
+  pinFrameRate?: boolean;
+  // ffmpeg settings' software deinterlace filter, to tell whether deinterlacing doubles the frame rate
+  deinterlaceFilter?: string;
+  // The item loops (a filler clip shorter than its slot), which CUDA decodes in software
+  infiniteLoop?: boolean;
+};
 
 export class FfmpegPlaybackParamsCalculator {
   constructor(
@@ -58,7 +54,10 @@ export class FfmpegPlaybackParamsCalculator {
     private streamMode: ChannelStreamMode,
   ) {}
 
-  calculateForStream(streamDetails: StreamDetails): FfmpegPlaybackParams {
+  calculateForStream(
+    streamDetails: StreamDetails,
+    options: StreamPlaybackOptions = {},
+  ): FfmpegPlaybackParams {
     if (
       this.streamMode === ChannelStreamModes.HlsDirect ||
       this.streamMode === ChannelStreamModes.HlsDirectV2
@@ -126,10 +125,28 @@ export class FfmpegPlaybackParamsCalculator {
         params.needsPad = true;
       }
 
-      // "Normalize Frame Rate": a constant output frame rate at the source's own rate (the pipeline before #1349 used
-      // an fps filter for this). The builder turns it into -r <rate> -fps_mode cfr.
-      if (this.transcodeConfig.normalizeFrameRate) {
-        params.frameRate = parseFrameRate(videoStream.framerate);
+      params.deinterlace =
+        !!this.transcodeConfig.deinterlaceVideo &&
+        videoStream.scanType === 'interlaced';
+
+      // The output frame rate, which the builder turns into -r <rate> -fps_mode cfr:
+      // - a source reporting a rate that isn't standard always gets a standard one. Left alone, ffmpeg's HLS output
+      //   keeps the reported rate and drops frames to fit it: a DVD rip reporting 20 fps whose frames really come
+      //   about 24 a second lost one in six, and the CEA-608 caption pairs they carried.
+      // - "Normalize Frame Rate": the source's own rate (the pipeline before #1349 used an fps filter for this).
+      // - captions: the source's own rate, so the caption schedule and the video agree frame for frame.
+      // A software field-rate deinterlacer outputs a frame per field, so the rate is doubled to keep them all.
+      const output = outputFrameRate(videoStream.framerate);
+      if (
+        output &&
+        (!output.standard ||
+          this.transcodeConfig.normalizeFrameRate ||
+          options.pinFrameRate)
+      ) {
+        const fieldRate =
+          params.deinterlace &&
+          this.deinterlacerDoublesRate(videoStream, options);
+        params.frameRate = output.rate * (fieldRate ? 2 : 1);
       }
 
       params.videoTrackTimeScale = 90000;
@@ -140,13 +157,43 @@ export class FfmpegPlaybackParamsCalculator {
       //   .with([HardwareAccelerationMode.Cuda, VideoFormats.Hevc, P.union(PixelFormats.YUV420P10LE, PixelFormats.YUV444P, PixelFormats.YUV444P10LE)], () => 'h264')
       // TODO ffmpeg options for bit depth!
       params.pixelFormat = new PixelFormatYuv420P();
-
-      params.deinterlace =
-        !!this.transcodeConfig.deinterlaceVideo &&
-        videoStream.scanType === 'interlaced';
     }
 
     return params;
+  }
+
+  // Whether the pipeline's deinterlacer outputs a frame per field, doubling the frame rate, as far as the transcode
+  // config and source tell. The software filter (DeinterlaceFilter) does with a field-rate setting; the pipelines use
+  // it always without hardware acceleration and with VideoToolbox (whose pipeline is the software one's), with QSV when
+  // hardware filters are off, and with VAAPI and CUDA when hardware decoding is off, as their frames are then in
+  // system memory; CUDA also always decodes interlaced MPEG-2 and looping items in software (NvidiaPipelineBuilder). QSV's own
+  // deinterlace_qsv always outputs at field rate (FFmpeg sets field_rate in its preinit); deinterlace_vaapi and
+  // yadif_cuda output at frame rate by default. VAAPI and CUDA also fall back to software when the GPU can't decode
+  // the source, which only the pipeline knows; there a field-rate filter's extra frames are dropped back to the
+  // source rate.
+  private deinterlacerDoublesRate(
+    videoStream: VideoStreamDetails,
+    options: StreamPlaybackOptions,
+  ) {
+    const software = deinterlacerDoublesFrameRate(options.deinterlaceFilter);
+    switch (this.transcodeConfig.hardwareAccelerationMode) {
+      case HardwareAccelerationMode.None:
+      case HardwareAccelerationMode.Videotoolbox:
+        return software;
+      case HardwareAccelerationMode.Qsv:
+        return this.transcodeConfig.disableHardwareFilters ? software : true;
+      case HardwareAccelerationMode.Vaapi:
+        return !!this.transcodeConfig.disableHardwareDecoder && software;
+      case HardwareAccelerationMode.Cuda:
+        return (
+          (!!this.transcodeConfig.disableHardwareDecoder ||
+            videoStream.codec === VideoFormats.Mpeg2Video ||
+            !!options.infiniteLoop) &&
+          software
+        );
+      default:
+        return false;
+    }
   }
 
   calculateForErrorStream(

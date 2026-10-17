@@ -25,6 +25,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--layout basic\|multi-audio\|dup-lang\|subs\|mixed\|anamorphic` | `basic` | Synthetic clip track layout (see below) |
 | `--clips N`, `--clip-seconds S` | `3`, `60` | Number and length of synthetic clips; each clip is one program |
 | `--clip-durations LIST` | | Per-clip lengths in seconds, such as `60,8,60` for a bumper between two programs. Overrides `--clips` and `--clip-seconds` |
+| `--clip-file PATH` | | `synthetic` only. Use this real file as a program instead of generating clips. Repeatable, one program per file. Sidecar subtitles beside it (`<name>.en.srt`) come along; embedded subtitles only reach captions once Tunarr's hourly task has extracted them, so use a sidecar for caption runs. Keep the file outside the repo |
 | `--subs-start S` | `0` | Layouts with subtitles: the first cue is S seconds into each clip, like a program that opens without dialogue. Cues follow every 2 s |
 | `--no-subtitles` | off | Turn the channel's subtitles off. The clips keep their subtitle tracks |
 | `--truncate-clip I:S` | | Shorten clip I (1-based) to S seconds after the scan. The database keeps the longer duration, which mimics media that ends before its scheduled time |
@@ -32,7 +33,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--start-ago S` | | `synthetic` only. Backdate the channel start by S seconds, so the channel has already looped its lineup. Pair with `--mid-truncate` on a clip earlier in the cycle to exercise the start-time rebase |
 | `--db-dir DIR` | | `copy` only: Tunarr database directory to copy (the dev server's is `TUNARR_DATABASE_PATH` in `server/.env.development`) |
 | `--channel ID` | | `copy` only: channel number or uuid to stream |
-| `--mode hls\|hls_slower\|hls_direct_v2\|mpegts` | `hls` | Stream mode to request |
+| `--mode hls\|hls_slower\|hls_direct_v2\|mpegts\|hdhr` | `hls` | Stream mode to request. `hdhr` reads the channel's HDHomeRun `.ts` (an HLS channel behind the .ts wrapper), what Plex's tuner reads; with `--ffmpeg-setting hdhrClosedCaptions=true` it carries CEA-608 captions, and `report.captions` gives the video's frame rate and frame spacing and the captions decoded from it |
 | `--seconds S` | `60` | How much stream to capture |
 | `--out DIR` | temp dir | Where clips, database, capture, and `report.json` go |
 | `--keep-server` | off | Leave the server running afterward for manual poking |
@@ -171,6 +172,11 @@ window. A guide entry with `via` came through a redirect.
 - `ffmpeg.commands`: every ffmpeg argv the server started, in order. There is roughly one per program.
 - `sessionRestarts`: times the HLS session died and the capture restarted it.
 - `capturePieces[].fetchedAtMs`: when the capture fetched each HLS segment, from capture start. A long gap between neighbors means the playlist stopped growing.
+- `captions` (`--mode hdhr` only): read from the video PID's PES packets in presentation order, so audio is never
+  mistaken for caption bytes. `fps` and `frameGapsMs` (spacing between frames, `[ms, count]`, most common first: a
+  2× entry is a missing frame), `framesWithCaptionData`, `nonPaddingPairs`, and `shown`: each pop-on caption as a
+  decoder shows it at end of caption, with its time from the first frame. Compare `shown` with the program's
+  subtitles to find lost or doubled character pairs.
 
 | Finding | What it means |
 |---|---|

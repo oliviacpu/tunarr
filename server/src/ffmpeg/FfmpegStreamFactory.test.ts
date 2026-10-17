@@ -1834,9 +1834,15 @@ describe('FfmpegStreamFactory', () => {
         lineupItem?: ContentBackedStreamLineupItem;
         settings?: Partial<ReturnType<typeof makeFfmpegSettings>>;
         channel?: Partial<ChannelOrm>;
+        // The source's reported frame rate (24 by default)
+        framerate?: number | string;
       }) {
         const capturing = createCapturingPipelineBuilderFactory();
         const details = makeStreamDetails();
+        const [video] = details.videoDetails ?? [];
+        if (video && opts.framerate !== undefined) {
+          video.framerate = opts.framerate;
+        }
         details.subtitleDetails =
           opts.subtitles === null
             ? undefined
@@ -1873,8 +1879,50 @@ describe('FfmpegStreamFactory', () => {
         return {
           method: capturing.getCapturedSubtitleInput()?.method,
           captions: result?.renditions.captions,
+          outputFrameRate: capturing.getCapturedFrameState()?.frameRate,
         };
       }
+
+      describe('frame rate', () => {
+        test('pins the output to the source rate, and lays captions out at it', async () => {
+          const { captions, outputFrameRate } = await run({
+            selected: fullTrack(),
+            framerate: '24000/1001',
+          });
+          expect(outputFrameRate).toBe(24000 / 1001);
+          expect(captions?.frameRate).toBe(24000 / 1001);
+        });
+
+        test('gives a source reporting a rate that is not standard 29.97, captions too', async () => {
+          // A DVD rip reporting 20 fps whose frames come about 24 a second: the
+          // output kept 20, dropping frames and the caption pairs on them
+          const { captions, outputFrameRate } = await run({
+            selected: fullTrack(),
+            framerate: 20,
+          });
+          expect(outputFrameRate).toBe(30000 / 1001);
+          expect(captions?.frameRate).toBe(30000 / 1001);
+        });
+
+        test('lays the notice out at the output rate too', async () => {
+          const { captions, outputFrameRate } = await run({
+            selected: null,
+            subtitles: null,
+            framerate: 20,
+          });
+          expect(outputFrameRate).toBe(30000 / 1001);
+          expect(captions?.frameRate).toBe(30000 / 1001);
+        });
+
+        test('leaves a standard rate unpinned when captions are off', async () => {
+          const { outputFrameRate } = await run({
+            selected: fullTrack(),
+            hdhrClosedCaptions: false,
+            framerate: '24000/1001',
+          });
+          expect(outputFrameRate).toBeNull();
+        });
+      });
 
       test('sends full text subtitles as captions and WebVTT instead of burning them in', async () => {
         const { method, captions } = await run({ selected: fullTrack() });
