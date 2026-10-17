@@ -314,6 +314,26 @@ describe('buildCaptionSchedule', () => {
     expect(decodeCaptions(pairs)).toEqual([]);
   });
 
+  // Two subtitles overlap at tune-in, one ending 0.6 s in: the other still has
+  // seconds to go, so it shows on its own once loaded, not at the first's end
+  // (Codex, PR #32)
+  test('shows an overlapping cue under way as soon as it is loaded when the other is nearly over', () => {
+    const pairs = framePairs(
+      [
+        { startMs: 0, endMs: 1600, text: 'Ending soon' },
+        { startMs: 500, endMs: 6000, text: 'Still going' },
+      ],
+      120,
+      1000,
+    );
+
+    expect(decodeCaptions(pairs).map((c) => c.map((r) => r.text))).toEqual([
+      ['Still going'],
+    ]);
+    // Before the first one's end at frame 18
+    expect(indexOfPair(pairs, EndOfCaption)).toBeLessThan(18);
+  });
+
   test('still shows a cue under way with more than a second left, once loaded, until its end', () => {
     // 2 s of it left
     const pairs = framePairs(

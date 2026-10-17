@@ -1268,6 +1268,19 @@ export function buildCaptionSchedule(
       });
     })
     .filter((c) => c.endMs > options.firstFrameMs && c.startMs < endMs)
+    // A pop-on cue already under way at the first frame with less than
+    // MinTailMs of it left once loaded goes before overlaps are resolved, so
+    // a longer cue it overlapped shows on its own as soon as it's loaded,
+    // not at this one's end (Codex, PR #32). tooLateToShow has the last word.
+    .filter(
+      (c) =>
+        c.appearance.mode !== 'popOn' ||
+        c.startMs >= options.firstFrameMs ||
+        Math.min(c.endMs, endMs) -
+          (options.firstFrameMs +
+            loadFrames(c.blocks, c.appearance) * frameMs) >=
+          MinTailMs,
+    )
     .sort((a, b) => a.startMs - b.startMs);
   const captions = resolveOverlaps(parts, frameMs);
 
