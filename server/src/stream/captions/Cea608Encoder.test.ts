@@ -300,6 +300,20 @@ describe('buildCaptionSchedule', () => {
     expect(indexOfPair(pairs, EndOfCaption)).toBe(30);
   });
 
+  // Tuning in 0.6 s before a program ends, mid-cue: the program's end cuts the
+  // caption off, however long its cue runs on (Codex, PR #32)
+  test('leaves out a cue under way when the program ends less than a second after the first frame', () => {
+    const schedule = buildCaptionSchedule(
+      [{ startMs: 0, endMs: 5000, text: 'Already talking' }],
+      { firstFrameMs: 1000, frameRate: FrameRate, endMs: 1600 },
+    );
+    const pairs = Array.from({ length: 30 }, (_, k) =>
+      withoutParity(schedule.pairAt(1000 + k * frameMs)),
+    );
+
+    expect(decodeCaptions(pairs)).toEqual([]);
+  });
+
   test('still shows a cue under way with more than a second left, once loaded, until its end', () => {
     // 2 s of it left
     const pairs = framePairs(

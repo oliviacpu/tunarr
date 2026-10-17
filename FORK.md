@@ -43,8 +43,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   own end ("A session's first program shows its captions on time", below). Loading takes about a third of a second at
   29.97 fps and more at lower frame rates, so a cue with under a second left showed its last words for 0.1–0.6 s.
 - **Fix** (`buildCaptionSchedule`, `server/src/stream/captions/Cea608Encoder.ts`): a pop-on or paint-on caption under
-  way at the first frame is left out when less than a second of it would be on screen. The next caption is then the
-  first one shown, and nothing of the left-out one holds up its load.
+  way at the first frame is left out when less than a second of it would be on screen, counting to its own end or the
+  program's, whichever comes first. The next caption is then the first one shown, and nothing of the left-out one holds
+  up its load.
 
   - **Why a second:** it is `MinTailMs`, the minimum the encoder already used to bring a subtitle back for the rest of
     its time when a newer one ends ("Show the newest" overlaps). Both are the rest of a subtitle that began before the
@@ -63,7 +64,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 
 - **Tests:**
   - `Cea608Encoder.test.ts`: a cue under way with 0.6 s left is left out and the next shows on its own frame (fails
-    without the fix); with 2 s left it shows once loaded until its end; a short cue starting on the first frame still
+    without the fix); so is one whose program ends 0.6 s in, however long the cue runs on (fails without the clamp to
+    the program's end); with 2 s left it shows once loaded until its end; a short cue starting on the first frame still
     shows; paint-on leaves the rest out too (fails without the fix); roll-up keeps it, scrolled up by the next cue.
   - `Cea608Encoder.golden.test.ts`: its first cue is under way with 0.8 s to show at 15 fps, so the six 15 fps sections
     lose it (frames 0–23 only). The 23.976 and 29.97 fps sections, where it has over a second, are unchanged.

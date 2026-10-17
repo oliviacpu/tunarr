@@ -1445,12 +1445,13 @@ export function buildCaptionSchedule(
   };
   // Whether a caption first on screen at `shownAt` is left out: it can't show
   // before it ends, or it was already under way at the first frame and less
-  // than MinTailMs of it is left, the end of a line flashing up and gone.
+  // than MinTailMs of it is left, the end of a line flashing up and gone. What
+  // is left ends with the schedule if that comes first (a program ending).
   // The next caption is then the first one shown.
   const tooLateToShow = (caption: ScheduleItem, shownAt: number) =>
     shownAt >= slotOf(caption.endMs) ||
     (caption.startMs < options.firstFrameMs &&
-      (slotOf(caption.endMs) - shownAt) * frameMs < MinTailMs);
+      (slotOf(Math.min(caption.endMs, endMs)) - shownAt) * frameMs < MinTailMs);
 
   for (const [i, caption] of captions.entries()) {
     const { appearance } = caption;
