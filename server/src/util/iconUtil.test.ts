@@ -12,6 +12,7 @@ import {
   ImmutableCacheControl,
   versionedUploadCacheControl,
   uploadsDirectory,
+  uploadVersion,
 } from './iconUtil.ts';
 import * as fsUtil from './fsUtil.ts';
 
@@ -275,6 +276,9 @@ describe('versionedUploadCacheControl', () => {
 });
 
 describe('localUploadFile', () => {
+  const card = new TextEncoder().encode('png');
+  const version = uploadVersion(card);
+
   async function withUploads(run: (dir: string) => Promise<void>) {
     const db = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-uploads-'));
     const dir = uploadsDirectory(db);
@@ -286,34 +290,51 @@ describe('localUploadFile', () => {
     }
   }
 
-  test('finds an upload on disk from its public URL, version and all', async () => {
+  test('finds an upload on disk from its URL, whatever the host', async () => {
     await withUploads(async (dir) => {
-      await fs.writeFile(path.join(dir, 'card 6.png'), 'png');
-      expect(
-        await localUploadFile(
-          'https://tv.example/images/uploads/card%206.png?v=0123456789ab',
-          dir,
-        ),
-      ).toBe(path.join(dir, 'card 6.png'));
+      await fs.writeFile(path.join(dir, 'card 6.png'), card);
+      for (const origin of ['https://tv.example', 'http://192.0.2.7:8000']) {
+        expect(
+          await localUploadFile(
+            `${origin}/images/uploads/card%206.png?v=${version}`,
+            dir,
+          ),
+        ).toBe(path.join(dir, 'card 6.png'));
+      }
     });
   });
 
   test.each([
-    ['a missing upload', 'https://tv.example/images/uploads/gone.png'],
-    ['another path', 'https://tv.example/images/generic-offline-screen.png'],
-    ['a remote image', 'https://cdn.example/cards/card.png'],
-    ['a relative URL', '/images/uploads/card.png'],
-    ['an encoded path escape', 'https://tv.example/images/uploads/..%2Fdb.db'],
+    [
+      'a same-named picture on another server',
+      `https://other.example/images/uploads/card.png?v=${uploadVersion(new TextEncoder().encode('other'))}`,
+    ],
+    ['a URL without a version', 'https://tv.example/images/uploads/card.png'],
+    [
+      'a missing upload',
+      `https://tv.example/images/uploads/gone.png?v=${version}`,
+    ],
+    ['another path', `https://tv.example/images/card.png?v=${version}`],
+    ['a relative URL', `/images/uploads/card.png?v=${version}`],
+    [
+      'an encoded path escape',
+      `https://tv.example/images/uploads/..%2Fdb.db?v=${version}`,
+    ],
     [
       'an encoded subfolder',
-      'https://tv.example/images/uploads/sub%2Fcard.png',
+      `https://tv.example/images/uploads/sub%2Fcard.png?v=${version}`,
     ],
-    ['a bad escape', 'https://tv.example/images/uploads/%E0%A4%A.png'],
+    [
+      'a bad escape',
+      `https://tv.example/images/uploads/%E0%A4%A.png?v=${version}`,
+    ],
     ['no URL', undefined],
   ])('leaves %s to be fetched over HTTP', async (_, url) => {
     await withUploads(async (dir) => {
-      await fs.writeFile(path.join(dir, 'card.png'), 'png');
-      await fs.writeFile(path.join(path.dirname(dir), 'db.db'), 'db');
+      await fs.writeFile(path.join(dir, 'card.png'), card);
+      await fs.mkdir(path.join(dir, 'sub'));
+      await fs.writeFile(path.join(dir, 'sub', 'card.png'), card);
+      await fs.writeFile(path.join(path.dirname(dir), 'db.db'), card);
       expect(await localUploadFile(url, dir)).toBeUndefined();
     });
   });

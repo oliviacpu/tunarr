@@ -19,7 +19,7 @@ import type {
 import { setGlobalOptionsUnchecked } from '../globals.ts';
 import type { CacheImageService } from '../services/cacheImageService.ts';
 import type { Result } from '../types/result.ts';
-import { uploadsDirectory } from '../util/iconUtil.ts';
+import { uploadVersion, uploadsDirectory } from '../util/iconUtil.ts';
 import { PlayerContext } from './PlayerStreamContext.ts';
 import { ProgramStream } from './ProgramStream.ts';
 import type { ProgramStreamDetailsFetcher } from './ProgramStreamDetailsFetcher.ts';
@@ -58,6 +58,7 @@ describe('ProgramStream', () => {
   // segments.
   describe('placeholder items', () => {
     let databaseDirectory: string;
+    const card = new TextEncoder().encode('png');
 
     beforeAll(async () => {
       databaseDirectory = await fs.mkdtemp(
@@ -70,7 +71,7 @@ describe('ProgramStream', () => {
       });
       const uploads = uploadsDirectory(databaseDirectory);
       await fs.mkdir(uploads, { recursive: true });
-      await fs.writeFile(path.join(uploads, 'card.png'), 'png');
+      await fs.writeFile(path.join(uploads, 'card.png'), card);
     });
 
     afterAll(async () => {
@@ -148,7 +149,7 @@ describe('ProgramStream', () => {
     it('reads an uploaded offline picture from disk', async () => {
       const { stream, createPlaceholderSession } = setUp(gap, {
         realtime: false,
-        picture: 'https://tv.example/images/uploads/card.png?v=0123456789ab',
+        picture: `https://tv.example/images/uploads/card.png?v=${uploadVersion(card)}`,
       });
 
       await stream.setup();
@@ -163,7 +164,10 @@ describe('ProgramStream', () => {
 
     it.each([
       ['a picture elsewhere', 'https://cdn.example/card.png'],
-      ['a missing upload', 'https://tv.example/images/uploads/gone.png'],
+      [
+        'a missing upload',
+        `https://tv.example/images/uploads/gone.png?v=${uploadVersion(card)}`,
+      ],
       ['no picture', undefined],
     ])('leaves %s to the URL', async (_, picture) => {
       const { stream, createPlaceholderSession } = setUp(gap, {

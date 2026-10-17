@@ -49,16 +49,25 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     address, so ffmpeg fetched it back through that address (on a typical setup, over HTTPS through a reverse proxy).
 - **Fix:**
   - `ProgramStream.setupOfflineItem` and `setupErrorItem` fall back to the session's pace (`context.realtime`), as
-    programs do, so a first transcode that lands in a gap reads ahead too.
+    programs do, so a first transcode that lands in a gap reads ahead too. After the 60 s burst it runs at real time,
+    like a program (a 150 s gap: 60 s of it within 5 s, then 10 s of media per 10 s).
+  - **Except where a still picture can't read ahead:** the CUDA, QSV and VAAPI pipelines loop it with the loop filter,
+    which repeats one decoded frame that `-readrate` can't pace; only the realtime filter can, and it has no burst.
+    There a still-picture placeholder stays at real time (`FfmpegStreamFactory.paceStillImage`), or the whole gap
+    would encode at full speed. Software and VideoToolbox loop it at the input, so they read ahead.
   - `ProgramStream` resolves an uploaded offline picture to its file (`localUploadFile`, `uploadsDirectory`,
-    `server/src/util/iconUtil.ts`) and hands it to `createPlaceholderSession` as `picture`. Remote pictures, missing
-    files and names that aren't plain file names keep the URL.
+    `server/src/util/iconUtil.ts`) and hands it to `createPlaceholderSession` as `picture`. It reads the file only
+    when the URL's `?v=` matches the file's contents (`uploadVersion`, the hash every upload URL carries), so a
+    same-named picture on another server keeps its URL whatever host it names. Other URLs, missing files and names
+    that aren't plain file names keep the URL too.
   - Local measurement (`stream-repro --flex-first 45000 --offline-picture <png>`, 2 s segments, 2 before the
     playlist, 3 runs each): the first segment of a tune into a gap came after 7.0 s before and 1.0 s after; into a
     program, 1.0 s both times. The 1 s floor is the once-a-second readiness check.
 - **Tests:** `ProgramStream.test.ts` (a gap and an error screen follow the session's pace; an uploaded picture is read
   from disk; other pictures keep their URL; the first three fail without the fix), `FfmpegStreamFactory.test.ts` (the
-  offline input uses the picture it's given, else the URL), `iconUtil.test.ts` (`localUploadFile`).
+  offline input uses the picture it's given, else the URL; with CUDA, QSV or VAAPI a still-picture placeholder stays
+  at real time, which fails without `paceStillImage`), `iconUtil.test.ts` (`localUploadFile`, including a same-named
+  picture with other contents).
 - **Also:** `stream-repro` gained `--offline-picture FILE`, which uploads an image and makes it the channel's offline
   picture.
 - **Upstream:** not sent.
