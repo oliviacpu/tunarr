@@ -44,6 +44,8 @@ export type StreamPlaybackOptions = {
   pinFrameRate?: boolean;
   // ffmpeg settings' software deinterlace filter, to tell whether deinterlacing doubles the frame rate
   deinterlaceFilter?: string;
+  // The item loops (a filler clip shorter than its slot), which CUDA decodes in software
+  infiniteLoop?: boolean;
 };
 
 export class FfmpegPlaybackParamsCalculator {
@@ -143,7 +145,7 @@ export class FfmpegPlaybackParamsCalculator {
       ) {
         const fieldRate =
           params.deinterlace &&
-          this.deinterlacerDoublesRate(videoStream, options.deinterlaceFilter);
+          this.deinterlacerDoublesRate(videoStream, options);
         params.frameRate = output.rate * (fieldRate ? 2 : 1);
       }
 
@@ -164,16 +166,16 @@ export class FfmpegPlaybackParamsCalculator {
   // config and source tell. The software filter (DeinterlaceFilter) does with a field-rate setting; the pipelines use
   // it always without hardware acceleration and with VideoToolbox (whose pipeline is the software one's), with QSV when
   // hardware filters are off, and with VAAPI and CUDA when hardware decoding is off, as their frames are then in
-  // system memory; CUDA also always decodes interlaced MPEG-2 in software (NvidiaPipelineBuilder). QSV's own
+  // system memory; CUDA also always decodes interlaced MPEG-2 and looping items in software (NvidiaPipelineBuilder). QSV's own
   // deinterlace_qsv always outputs at field rate (FFmpeg sets field_rate in its preinit); deinterlace_vaapi and
   // yadif_cuda output at frame rate by default. VAAPI and CUDA also fall back to software when the GPU can't decode
   // the source, which only the pipeline knows; there a field-rate filter's extra frames are dropped back to the
   // source rate.
   private deinterlacerDoublesRate(
     videoStream: VideoStreamDetails,
-    softwareFilter: string | undefined,
+    options: StreamPlaybackOptions,
   ) {
-    const software = deinterlacerDoublesFrameRate(softwareFilter);
+    const software = deinterlacerDoublesFrameRate(options.deinterlaceFilter);
     switch (this.transcodeConfig.hardwareAccelerationMode) {
       case HardwareAccelerationMode.None:
       case HardwareAccelerationMode.Videotoolbox:
@@ -185,7 +187,8 @@ export class FfmpegPlaybackParamsCalculator {
       case HardwareAccelerationMode.Cuda:
         return (
           (!!this.transcodeConfig.disableHardwareDecoder ||
-            videoStream.codec === VideoFormats.Mpeg2Video) &&
+            videoStream.codec === VideoFormats.Mpeg2Video ||
+            !!options.infiniteLoop) &&
           software
         );
       default:

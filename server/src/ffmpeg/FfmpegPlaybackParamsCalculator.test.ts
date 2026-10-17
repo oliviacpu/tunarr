@@ -453,11 +453,12 @@ describe('FfmpegPlaybackParamsCalculator', () => {
         ['qsv', { disableHardwareFilters: true }, 'h264'],
         ['vaapi', { disableHardwareDecoder: true }, 'h264'],
         ['cuda', { disableHardwareDecoder: true }, 'h264'],
-        // CUDA decodes interlaced MPEG-2 in software
+        // CUDA decodes interlaced MPEG-2 and looping items in software
         ['cuda', {}, 'mpeg2video'],
+        ['cuda', {}, 'h264', true],
       ] as const)(
-        'doubles the rate when %s deinterlaces in software (%j, %s)',
-        (hardwareAccelerationMode, overrides, codec) => {
+        'doubles the rate when %s deinterlaces in software (%j, %s, loops: %s)',
+        (hardwareAccelerationMode, overrides, codec, infiniteLoop = false) => {
           const calculator = new FfmpegPlaybackParamsCalculator(
             makeTranscodeConfig({
               deinterlaceVideo: true,
@@ -472,7 +473,7 @@ describe('FfmpegPlaybackParamsCalculator', () => {
               framerate: '30000/1001',
               scanType: 'interlaced',
             }),
-            { pinFrameRate: true, deinterlaceFilter: 'yadif=1' },
+            { pinFrameRate: true, deinterlaceFilter: 'yadif=1', infiniteLoop },
           );
           expect(params.frameRate).toBe(60000 / 1001);
         },

@@ -390,6 +390,7 @@ export class FfmpegStreamFactory {
           // rate must be known exactly
           pinFrameRate: this.captionsOn(streamMode),
           deinterlaceFilter: this.ffmpegSettings.deinterlaceFilter,
+          infiniteLoop: lineupItem.infiniteLoop,
         });
 
     const { videoStream, videoInputSource } = this.buildVideoInput(
