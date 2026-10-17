@@ -182,8 +182,12 @@ export class QsvPipelineBuilder extends SoftwarePipelineBuilder {
         new ResetPtsFilter(),
       );
 
+      // The output rate Tunarr chose (normalized, captions, or a source whose
+      // reported rate isn't standard), so captions laid out at it match
       const setFrameRate =
-        this.context?.videoStream.getNumericFrameRateOrDefault() ?? 24;
+        this.desiredState.frameRate ??
+        this.context?.videoStream.getNumericFrameRateOrDefault() ??
+        24;
       currentState = this.addFilterToVideoChain(
         currentState,
         new SetFpsFilter(setFrameRate),

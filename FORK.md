@@ -35,6 +35,49 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A source reporting a frame rate that isn't standard keeps all its frames (2026-10-17)
+
+- **What you saw:** on a DVD-sourced series, closed captions in Plex were often missing, or lost letters ("You" as
+  "u"), and motion was slightly jerky.
+- **Cause:**
+  - **The reported rate:** the files' headers report 20 fps, but their frames come about 24 a second (they alternate
+    1/24 s and 1/30 s apart). With "Normalize Frame Rate" off, Tunarr sets no output rate, and ffmpeg's HLS output is
+    constant-rate at the input's reported rate, so the channel ran at 20 fps and dropped about one frame in six.
+  - **Captions at 20 fps:** CEA-608 sends two characters per frame, so captions had two thirds of their usual room,
+    and players expect a standard rate. Captions were also laid out at the source's reported rate, not at the output's,
+    so any difference between the two (a field-rate deinterlacer doubling the rate, or QSV, whose `fps` filter always
+    used 24 because `getNumericFrameRateOrDefault` ignores a rate `parseInt` can read) made HlsSession send padding only.
+- **Fix:**
+  - `outputFrameRate` (`server/src/ffmpeg/outputFrameRate.ts`): a reported rate within 2% of a standard one (23.976,
+    24, 25, 29.97, 30, 50, 59.94, 60) is that rate exactly; any other gets 29.97, or 59.94 above 31 fps. 2% takes in
+    averages over stray or missing frames (23.81, 30.3 in the library that showed this) and rounded labels, and leaves
+    out 20, 15 and 14.26, which describe no real video.
+  - `FfmpegPlaybackParamsCalculator.calculateForStream` sets the output rate (`-r <rate> -fps_mode cfr`) for a
+    non-standard source always, with "Normalize Frame Rate", and, new, whenever HDHomeRun captions are on
+    (`pinFrameRate`). In the software pipeline a field-rate deinterlacer (`none`, which is yadif=1, `yadif=1`,
+    `bwdif=1`, `w3fdif`) doubles it, so no field-rate frames are dropped.
+  - `FfmpegStreamFactory` lays captions and the "No captions" notice out at that output rate, never at the source's.
+  - `QsvPipelineBuilder` uses the chosen rate in its `fps` filter instead of dropping the output rate.
+  - NTSC rates go to ffmpeg as exact fractions (`30000/1001`, `ffmpegFrameRate`).
+  - Local measurement (`stream-repro --clip-file <a 2 min excerpt of a DVD-sourced episode with a 20 fps header,
+    sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --seconds 100`): before, 20.000 fps,
+    2011 frames 50 ms apart (the source has about 2400 in that time); after, 29.97 fps, every source frame kept, the
+    raw HLS segments 33.4 ms apart with no gap, and every caption equal to its subtitle except where the .ts wrapper
+    lost a frame (next point).
+- **Still open:** the .ts wrapper (the ffmpeg that joins a session's HLS segments into the HDHomeRun stream)
+  occasionally loses a frame where one segment meets the next, when its reading catches up with the newest segment. It
+  happens with captions off too (0 to 2 frames in 60 s of a fast replay against a local server; about one in 40 s on a
+  slow shared server, where the transcode runs near real time). A lost frame takes its caption pair with it: control
+  codes survive (each is sent twice), but two letters of text are lost. The segments themselves are complete.
+- **Tests:** `outputFrameRate.test.ts`; `FfmpegPlaybackParamsCalculator.test.ts` (non-standard rates with the setting
+  on and off and in MPEG-TS mode, near-standard rates, `pinFrameRate`, deinterlacing per filter and pipeline);
+  `FfmpegStreamFactory.test.ts` (captions and the notice at the output rate; a 20 fps source outputs 29.97; nothing
+  pinned with captions off); `QsvPipelineBuilder.test.ts` (the chosen rate in `fps` and `-r`). All new cases fail on
+  the old code.
+- **Also:** `stream-repro` gained `--clip-file PATH` (a real file as a program, sidecar subtitles included) and
+  `--mode hdhr` (the HDHomeRun `.ts` stream, with `report.captions`: frame spacing and the decoded captions).
+- **Upstream:** not sent.
+
 ### Tuning in during a gap starts as fast as during a program (2026-10-17)
 
 - **What you saw:** Live TV took about 11 s to start when you tuned in during a gap (the channel's offline picture and

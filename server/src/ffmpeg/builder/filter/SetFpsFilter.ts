@@ -1,3 +1,4 @@
+import { ffmpegFrameRate } from '../../outputFrameRate.ts';
 import type { FrameState } from '../state/FrameState.ts';
 import { FilterOption } from './FilterOption.ts';
 
@@ -7,7 +8,7 @@ export class SetFpsFilter extends FilterOption {
   }
 
   get filter(): string {
-    return `fps=${this.frameRate.toString(10)}`;
+    return `fps=${ffmpegFrameRate(this.frameRate)}`;
   }
 
   nextState(currentState: FrameState): FrameState {

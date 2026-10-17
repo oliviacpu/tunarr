@@ -196,6 +196,58 @@ function buildPipeline(opts: {
 }
 
 describe('QsvPipelineBuilder', () => {
+  test('sets the frame rate Tunarr chose, in the fps filter and the output', () => {
+    // A source reporting 20 fps, given 29.97 by FfmpegPlaybackParamsCalculator
+    const stream = VideoStream.create({
+      codec: 'h264',
+      displayAspectRatio: '16:9',
+      frameSize: FrameSize.withDimensions(720, 480),
+      frameRate: '20',
+      index: 0,
+      pixelFormat: new PixelFormatYuv420P(),
+      providedSampleAspectRatio: null,
+      colorFormat: ColorFormat.unknown,
+    });
+    const video = VideoInputSource.withStream(
+      new FileStreamSource('/path/to/video.mkv'),
+      stream,
+    );
+    const builder = new QsvPipelineBuilder(
+      new VaapiHardwareCapabilities([]),
+      EmptyFfmpegCapabilities,
+      video,
+      null,
+      null,
+      null,
+      null,
+    );
+    const args = builder
+      .build(
+        FfmpegState.create({
+          version: {
+            versionString: 'n7.0.2-15-g0458a86656-20240904',
+            majorVersion: 7,
+            minorVersion: 0,
+            patchVersion: 2,
+            isUnknown: false,
+          },
+        }),
+        new FrameState({
+          isAnamorphic: false,
+          scaledSize: stream.squarePixelFrameSize(FrameSize.FHD),
+          paddedSize: FrameSize.FHD,
+          pixelFormat: new PixelFormatYuv420P(),
+          frameRate: 30000 / 1001,
+        }),
+        DefaultPipelineOptions,
+      )
+      .getCommandArgs()
+      .join(' ');
+
+    expect(args).toContain('fps=30000/1001');
+    expect(args).toContain('-r 30000/1001 -fps_mode cfr');
+  });
+
   test('should work', () => {
     const capabilities = new VaapiHardwareCapabilities([]);
     const video = VideoInputSource.withStream(

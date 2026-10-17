@@ -1,3 +1,4 @@
+import { ffmpegFrameRate } from '../../../outputFrameRate.ts';
 import { OutputOption } from '../OutputOption.ts';
 
 export class FrameRateOutputOption extends OutputOption {
@@ -6,6 +7,6 @@ export class FrameRateOutputOption extends OutputOption {
   }
 
   options(): string[] {
-    return ['-r', this.frameRate.toString(10), '-fps_mode', 'cfr'];
+    return ['-r', ffmpegFrameRate(this.frameRate), '-fps_mode', 'cfr'];
   }
 }

@@ -15,6 +15,7 @@ const { values: opt } = parseArgs({
     source: { type: 'string', default: 'synthetic' },
     layout: { type: 'string', default: 'basic' },
     clips: { type: 'string', default: '3' },
+    'clip-file': { type: 'string', multiple: true, default: [] },
     'clip-seconds': { type: 'string', default: '60' },
     'clip-durations': { type: 'string' },
     'truncate-clip': { type: 'string' },
@@ -64,8 +65,13 @@ const out = path.resolve(
 fs.mkdirSync(out, { recursive: true });
 const dbDir = path.join(out, 'db');
 const seconds = Number(opt.seconds);
+// --clip-file uses real files as the programs instead of generated clips
+const clipFiles = opt['clip-file'].map((f) => path.resolve(f));
+for (const f of clipFiles) if (!fs.existsSync(f)) throw new Error(`--clip-file ${f} does not exist`);
 // Per-clip lengths in seconds, e.g. "60,8,60" for a bumper between two programs.
-const clipDurations = opt['clip-durations']
+const clipDurations = clipFiles.length
+  ? clipFiles.map((f) => Number(execFileSync(opt.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f], { encoding: 'utf8' })))
+  : opt['clip-durations']
   ? opt['clip-durations'].split(',').map(Number)
   : Array.from({ length: Number(opt.clips) }, () => Number(opt['clip-seconds']));
 if (clipDurations.some((d) => !(d > 0))) throw new Error('--clip-durations must be positive seconds, comma separated');
@@ -81,6 +87,7 @@ if (opt.hwaccel !== undefined && !HWACCELS.includes(opt.hwaccel)) throw new Erro
 if (opt['vaapi-device'] !== undefined && !['vaapi', 'qsv'].includes(opt.hwaccel)) throw new Error('--vaapi-device needs --hwaccel vaapi or qsv');
 if (opt['thread-count'] !== undefined && !/^\d+$/.test(opt['thread-count'])) throw new Error('--thread-count takes a whole number (0 lets ffmpeg choose)');
 const subsStart = Number(opt['subs-start']);
+const isTsCapture = opt.mode === 'mpegts' || opt.mode === 'hdhr';
 if (!(subsStart >= 0)) throw new Error('--subs-start takes seconds');
 const log = (...a) => console.error('[repro]', ...a);
 
@@ -177,9 +184,24 @@ const LAYOUTS = {
 };
 
 function makeClips(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  if (clipFiles.length) {
+    // Copies, so --truncate-clip never touches the originals. Sidecar subtitles beside a file (<name>.en.srt) come
+    // along: embedded subtitles only reach captions once Tunarr's hourly task has extracted them.
+    return clipFiles.map((f, i) => {
+      const name = `clip${String(i + 1).padStart(2, '0')}`;
+      const file = path.join(dir, `${name}${path.extname(f)}`);
+      fs.copyFileSync(f, file);
+      const stem = path.basename(f, path.extname(f));
+      const sidecars = fs
+        .readdirSync(path.dirname(f))
+        .filter((s) => s.startsWith(`${stem}.`) && /\.(srt|ass|ssa|vtt)$/i.test(s));
+      for (const s of sidecars) fs.copyFileSync(path.join(path.dirname(f), s), path.join(dir, name + s.slice(stem.length)));
+      return { file: path.basename(file), from: f, sidecars };
+    });
+  }
   const layout = LAYOUTS[opt.layout];
   if (!layout) throw new Error(`unknown --layout ${opt.layout}; use ${Object.keys(LAYOUTS).join(', ')}`);
-  fs.mkdirSync(dir, { recursive: true });
   const clips = [];
   for (let i = 0; i < clipDurations.length; i++) {
     const dur = clipDurations[i];
@@ -228,7 +250,8 @@ function makeClips(dir) {
 function truncateClip(dir, spec) {
   const [i, s] = spec.split(':').map(Number);
   if (!(i >= 1 && i <= clipDurations.length && s > 0)) throw new Error('--truncate-clip takes I:S, a 1-based clip index and seconds');
-  const file = path.join(dir, `clip${String(i).padStart(2, '0')}.mkv`);
+  const name = fs.readdirSync(dir).find((f) => f.startsWith(`clip${String(i).padStart(2, '0')}.`));
+  const file = path.join(dir, name ?? `clip${String(i).padStart(2, '0')}.mkv`);
   const tmp = `${file}.tmp.mkv`;
   execFileSync(opt.ffmpeg, ['-y', '-v', 'error', '-i', file, '-t', String(s), '-map', '0', '-c', 'copy', tmp]);
   fs.renameSync(tmp, file);
@@ -375,7 +398,8 @@ async function buildSyntheticChannel(base, clipsDir) {
       disableFillerOverlay: false,
       stealth: false,
       subtitlesEnabled: !opt['no-subtitles'],
-      streamMode: opt.mode === 'mpegts' ? 'mpegts' : opt.mode,
+      // hdhr reads the .ts stream HDHomeRun clients get, which wraps an HLS session
+      streamMode: opt.mode === 'mpegts' ? 'mpegts' : opt.mode === 'hdhr' ? 'hls' : opt.mode,
       transcodeConfigId: tc.id,
       icon: {},
       offline: await offlineSettings(base),
@@ -660,7 +684,9 @@ async function captureTs(base, channelId) {
   const file = path.join(out, 'capture.ts');
   const ctl = new AbortController();
   const t0 = Date.now();
-  const res = await fetch(`${base}/stream/channels/${channelId}.ts?streamMode=mpegts`, { signal: ctl.signal });
+  // hdhr: the channel's own .ts URL, as in its HDHomeRun lineup (CEA-608 captions when hdhrClosedCaptions is on)
+  const url = `${base}/stream/channels/${channelId}.ts${opt.mode === 'hdhr' ? '' : '?streamMode=mpegts'}`;
+  const res = await fetch(url, { signal: ctl.signal });
   if (!res.ok) throw new Error(`.ts stream -> ${res.status}`);
   const fh = fs.openSync(file, 'w');
   setTimeout(() => ctl.abort(), seconds * 1000);
@@ -887,6 +913,116 @@ function analyze(pieces) {
   return { perPiece, findings };
 }
 
+// The field-1 CEA-608 pair every video frame of a .ts capture carries (ATSC A/53 cc_data in an H.264/HEVC SEI), in
+// presentation order. Only the video PID's PES packets are read, so audio can't be mistaken for caption bytes.
+function captionFrames(file) {
+  const buf = fs.readFileSync(file);
+  let pmtPid;
+  let videoPid;
+  let pes;
+  const frames = [];
+  const finish = (parts) => {
+    const data = Buffer.concat(parts);
+    if (data.length < 14 || data[0] !== 0 || data[1] !== 0 || data[2] !== 1 || !(data[7] & 0x80)) return;
+    const pts = ((data[9] >> 1) & 7) * 2 ** 30 + (((data[10] << 8) | data[11]) >> 1) * 2 ** 15 + (((data[12] << 8) | data[13]) >> 1);
+    const es = data.subarray(9 + data[8]);
+    const pairs = [];
+    const at = es.indexOf(Buffer.from('GA94\x03', 'latin1'));
+    if (at >= 0) {
+      // undo emulation prevention in the cc_data that follows
+      const raw = [];
+      let zeros = 0;
+      for (let i = at + 5; i < es.length && raw.length < 2 + 31 * 3; i++) {
+        if (zeros >= 2 && es[i] === 3) { zeros = 0; continue; }
+        raw.push(es[i]);
+        zeros = es[i] === 0 ? zeros + 1 : 0;
+      }
+      const count = raw[0] & 0x1f;
+      for (let k = 0; k < count; k++) {
+        const [t, b1, b2] = raw.slice(2 + 3 * k, 5 + 3 * k);
+        if (t !== undefined && t & 0x04 && (t & 0x03) === 0) pairs.push([b1 & 0x7f, b2 & 0x7f]);
+      }
+    }
+    frames.push({ pts, captioned: at >= 0, pairs });
+  };
+  for (let off = 0; off + 188 <= buf.length; off += 188) {
+    if (buf[off] !== 0x47) continue;
+    const pid = ((buf[off + 1] & 0x1f) << 8) | buf[off + 2];
+    const pusi = (buf[off + 1] & 0x40) !== 0;
+    const afc = (buf[off + 3] >> 4) & 3;
+    const start = off + 4 + (afc & 2 ? 1 + buf[off + 4] : 0);
+    if (!(afc & 1) || start >= off + 188) continue;
+    const payload = buf.subarray(start, off + 188);
+    if (pid === 0 && pusi && pmtPid === undefined) {
+      const s = 1 + payload[0];
+      const end = s + 3 + (((payload[s + 1] & 0x0f) << 8) | payload[s + 2]) - 4;
+      for (let i = s + 8; i + 4 <= end; i += 4) {
+        if ((payload[i] << 8) | payload[i + 1]) { pmtPid = ((payload[i + 2] & 0x1f) << 8) | payload[i + 3]; break; }
+      }
+    } else if (pid === pmtPid && pusi && videoPid === undefined) {
+      const s = 1 + payload[0];
+      const end = s + 3 + (((payload[s + 1] & 0x0f) << 8) | payload[s + 2]) - 4;
+      for (let i = s + 12 + (((payload[s + 10] & 0x0f) << 8) | payload[s + 11]); i + 5 <= end; i += 5 + (((payload[i + 3] & 0x0f) << 8) | payload[i + 4])) {
+        if ([0x1b, 0x24].includes(payload[i])) { videoPid = ((payload[i + 1] & 0x1f) << 8) | payload[i + 2]; break; }
+      }
+    } else if (pid === videoPid) {
+      if (pusi) {
+        if (pes) finish(pes);
+        pes = [payload];
+      } else pes?.push(payload);
+    }
+  }
+  return frames.sort((a, b) => a.pts - b.pts);
+}
+
+// Pop-on captions as a decoder shows them: text loaded after RCL/ENM goes up at EOC. A control code repeated right
+// after itself is its redundant copy and is skipped, as decoders do.
+const CC_SPECIAL = { 0x37: '♪' };
+function decodeCaptions(frames, t0) {
+  const shown = [];
+  let loading = '';
+  let prevCmd = null;
+  for (const { pts, pairs } of frames) {
+    for (const [b1, b2] of pairs) {
+      if (b1 === 0 && b2 === 0) continue;
+      if (b1 >= 0x10 && b1 <= 0x1f) {
+        const cmd = `${b1},${b2}`;
+        if (cmd === prevCmd) { prevCmd = null; continue; }
+        prevCmd = cmd;
+        const c1 = b1 & ~0x08; // channel 2 codes fold onto channel 1's
+        if ((c1 === 0x14 || c1 === 0x15) && (b2 === 0x20 || b2 === 0x2e)) loading = '';
+        else if ((c1 === 0x14 || c1 === 0x15) && b2 === 0x2f) { shown.push({ atS: +((pts - t0) / 90000).toFixed(3), text: loading.trim() }); loading = ''; }
+        else if (c1 === 0x11 && b2 >= 0x30 && b2 <= 0x3f) loading += CC_SPECIAL[b2] ?? '·';
+        else if (b2 >= 0x40 && loading) loading += ' / ';
+        continue;
+      }
+      prevCmd = null;
+      loading += String.fromCharCode(b1) + (b2 >= 0x20 ? String.fromCharCode(b2) : '');
+    }
+  }
+  return shown;
+}
+
+function captionReport(file) {
+  const frames = captionFrames(file);
+  if (frames.length < 2) return { videoFrames: frames.length };
+  const t0 = frames[0].pts;
+  const gaps = {};
+  for (let i = 1; i < frames.length; i++) {
+    const ms = Math.round((frames[i].pts - frames[i - 1].pts) / 9) / 10;
+    gaps[ms] = (gaps[ms] ?? 0) + 1;
+  }
+  const spanS = (frames.at(-1).pts - t0) / 90000;
+  return {
+    videoFrames: frames.length,
+    fps: +((frames.length - 1) / spanS).toFixed(3),
+    frameGapsMs: Object.entries(gaps).sort((a, b) => b[1] - a[1]).map(([ms, n]) => [Number(ms), n]),
+    framesWithCaptionData: frames.filter((f) => f.captioned).length,
+    nonPaddingPairs: frames.reduce((n, f) => n + f.pairs.filter(([a, b]) => a || b).length, 0),
+    shown: decodeCaptions(frames, t0),
+  };
+}
+
 function ffmpegCommands() {
   const logFile = path.join(dbDir, 'logs', 'tunarr.log');
   if (!fs.existsSync(logFile)) return { logFile, commands: [], note: 'tunarr.log not found' };
@@ -966,7 +1102,7 @@ try {
   let midTruncateRun;
   let onTick;
   if (opt['mid-truncate']) {
-    if (opt.source !== 'synthetic' || opt.mode === 'mpegts') throw new Error('--mid-truncate needs --source synthetic and an HLS mode');
+    if (opt.source !== 'synthetic' || isTsCapture) throw new Error('--mid-truncate needs --source synthetic and an HLS mode');
     const spec = parseMidTruncate(opt['mid-truncate']);
     onTick = (t0) => {
       if (!midTruncateRun && Date.now() - t0 >= spec.atMs) {
@@ -974,7 +1110,7 @@ try {
       }
     };
   }
-  const cap = opt.mode === 'mpegts' ? await captureTs(server.base, channel.channelId) : await captureHls(server.base, channel.channelId, onTick);
+  const cap = isTsCapture ? await captureTs(server.base, channel.channelId) : await captureHls(server.base, channel.channelId, onTick);
   if (midTruncateRun) report.midTruncate = await midTruncateRun;
   report.captureStartedAt = new Date(cap.t0).toISOString();
   report.pieces = cap.pieces.length;
@@ -984,9 +1120,10 @@ try {
   log('analyzing');
   Object.assign(report, analyze(cap.pieces));
   for (const at of report.sessionRestarts) report.findings.push({ kind: 'hls_session_restarted', at });
+  if (opt.mode === 'hdhr') report.captions = captionReport(cap.pieces[0].file);
 
   if (opt.rewind !== undefined) {
-    if (opt.mode === 'mpegts') throw new Error('--rewind needs an HLS mode');
+    if (isTsCapture) throw new Error('--rewind needs an HLS mode');
     log(`rewinding ${opt.rewind} segments`);
     report.rewind = await rewindHls(server.base, channel.channelId, cap.seen);
     if (report.rewind.targetStatus === 404) {

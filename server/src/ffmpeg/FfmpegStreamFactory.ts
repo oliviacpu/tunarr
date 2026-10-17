@@ -44,7 +44,6 @@ import {
 } from '../stream/captions/channelCaptions.ts';
 import type { ProgramCaptions } from '../stream/captions/ProgramCaptions.ts';
 import {
-  exactFrameRate,
   loadProgramCaptions,
   captionTrackCandidates,
   noCaptionsNotice,
@@ -386,7 +385,12 @@ export class FfmpegStreamFactory {
       : new FfmpegPlaybackParamsCalculator(
           this.transcodeConfig,
           streamMode ?? this.channel.streamMode,
-        ).calculateForStream(streamDetails);
+        ).calculateForStream(streamDetails, {
+          // Captions are laid out one pair per output frame, so the output's
+          // rate must be known exactly
+          pinFrameRate: this.captionsOn(streamMode),
+          deinterlaceFilter: this.ffmpegSettings.deinterlaceFilter,
+        });
 
     const { videoStream, videoInputSource } = this.buildVideoInput(
       streamSource,
@@ -576,12 +580,7 @@ export class FfmpegStreamFactory {
     captions: ProgramCaptions | undefined;
   }> {
     const { duration, startTime, streamMode, watermark } = options;
-    // Captions go into the .ts stream HDHomeRun clients read, which wraps an
-    // HLS session; other modes keep today's subtitles
-    const captionsOn =
-      this.ffmpegSettings.hdhrClosedCaptions &&
-      streamMode === ChannelStreamModes.Hls &&
-      this.channel.subtitlesEnabled;
+    const captionsOn = this.captionsOn(streamMode);
     let captions: ProgramCaptions | undefined;
 
     const audioState = this.createAudioState(
@@ -648,10 +647,14 @@ export class FfmpegStreamFactory {
         // WebVTT for HLS players) instead of being burned in; forced ones stay.
         // If they can't be read as captions, they're burned in as before.
         if (captionsOn && canUseSidecar && !subtitleStream.forced) {
-          captions = await this.loadCaptions(subtitleStream, streamDetails, {
-            startTime,
-            duration,
-          });
+          captions = await this.loadCaptions(
+            subtitleStream,
+            playbackParams.frameRate,
+            {
+              startTime,
+              duration,
+            },
+          );
         }
         const useSidecar =
           (sidecarEnabled || captions !== undefined) && canUseSidecar;
@@ -721,7 +724,7 @@ export class FfmpegStreamFactory {
         if (track?.path === undefined) {
           continue;
         }
-        captions = await this.loadCaptions(track, streamDetails, {
+        captions = await this.loadCaptions(track, playbackParams.frameRate, {
           startTime,
           duration,
         });
@@ -737,7 +740,7 @@ export class FfmpegStreamFactory {
       captions = noCaptionsNotice(lineupItem, {
         subtitles: streamDetails.subtitleDetails ?? [],
         durationMs: duration.asMilliseconds(),
-        frameRate: exactFrameRate(streamDetails.videoDetails?.[0]?.framerate),
+        frameRate: playbackParams.frameRate,
         // The first preferred language, the .ts stream's caption label
         language:
           this.ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ??
@@ -797,18 +800,26 @@ export class FfmpegStreamFactory {
     };
   }
 
-  // A subtitle track's cues on the program's clock, for captions
+  // Captions go into the .ts stream HDHomeRun clients read, which wraps an
+  // HLS session; other modes keep today's subtitles
+  private captionsOn(streamMode: ChannelStreamMode | undefined): boolean {
+    return (
+      this.ffmpegSettings.hdhrClosedCaptions &&
+      streamMode === ChannelStreamModes.Hls &&
+      !!this.channel.subtitlesEnabled
+    );
+  }
+
+  // A subtitle track's cues on the program's clock, for captions laid out at
+  // the output's frame rate (pinned whenever captions are on)
   private async loadCaptions(
     track: SubtitleStreamDetails | undefined,
-    streamDetails: StreamDetails,
+    frameRate: number | undefined,
     program: { startTime: Duration; duration: Duration },
   ): Promise<ProgramCaptions | undefined> {
     if (!track) {
       return;
     }
-    const frameRate = exactFrameRate(
-      streamDetails.videoDetails?.[0]?.framerate,
-    );
     if (frameRate === undefined) {
       this.logger.debug('No frame rate for this program; no captions');
       return;
