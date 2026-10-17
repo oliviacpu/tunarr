@@ -126,6 +126,9 @@ the same CPU.
 
 - **Spare disk and CPU** make the measurement cost acceptable. Measuring at library scan time only moves it: each file
   is still read whole once, so a large library or a full rescan pays all of it at once.
-- **A target range close to the content's** (an owner who sets LRA 15 or more) removes the difference in sound.
+- **A target range at least as wide as the programs'** removes the difference in sound: live loudnorm then leaves
+  their range alone too. For the programs above that means an LRA of 21 or more; with less, the wider ones are
+  still compressed live, and the prototype keeps them on live loudnorm (it uses a fixed gain only within 3 LU of the
+  target's range).
 
 Either one makes the prototype worth finishing.
