@@ -14,14 +14,18 @@ export const ReadAheadMaxThreads = 16;
  * The thread count for a transcode that reads ahead of real time: up to
  * {@link ReadAheadMaxThreads}, never more than the cores Tunarr may run on
  * and never fewer than the transcode config asks for. A config that lets
- * ffmpeg choose (0) already uses every core, and hardware encoding doesn't
- * speed up with more threads, so both keep their count.
+ * ffmpeg choose (0) already uses every core, so it keeps 0.
+ *
+ * Hardware pipelines get the same count: a hardware encoder ignores it, but
+ * software decoding and filtering use it, and so does the software encoder
+ * the pipeline falls back to when hardware encoding is disabled or the device
+ * can't encode, which isn't known until the pipeline is built.
  */
 export function readAheadThreadCount(
-  config: Pick<TranscodeConfigOrm, 'threadCount' | 'hardwareAccelerationMode'>,
+  config: Pick<TranscodeConfigOrm, 'threadCount'>,
   availableCores: number = os.availableParallelism(),
 ): number {
-  if (config.threadCount <= 0 || config.hardwareAccelerationMode !== 'none') {
+  if (config.threadCount <= 0) {
     return config.threadCount;
   }
   return Math.max(

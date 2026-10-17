@@ -44,7 +44,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:** in HLS mode, a transcode that reads ahead of real time (the first one after a tune-in, or one catching
   up) uses up to 16 threads, never more than the cores Tunarr may run on (`os.availableParallelism()`, which follows
   `taskset`) and never fewer than configured (`stream/hls/readAheadThreads.ts`, `HlsSession.transcode`). Real-time
-  transcodes keep the configured count, and so does a config of 0 (ffmpeg chooses) or hardware encoding.
+  transcodes keep the configured count, and so does a config of 0 (ffmpeg chooses). Hardware pipelines get it too:
+  a hardware encoder ignores it, but software decoding uses it, and so does the software encoder a pipeline falls
+  back to when hardware encoding is disabled or unavailable.
 - **Measured** (the server's CPU, libx264 veryfast 6 Mbit/s 1080p with loudnorm, a 15-minute seek, median of 3):
   segment 3 came at 2.69 s instead of 3.95 s for an HEVC 10-bit Blu-ray source, and 2.41 s instead of 3.71 s for an
   SD H.264 DVD source. CPU per second of media was unchanged (2.13 against 2.34 s, and 2.06 against 2.10 s), with

@@ -38,9 +38,11 @@ describe('readAheadThreadCount', () => {
     expect(readAheadThreadCount(config(0), 16)).toBe(0);
   });
 
-  it('leaves hardware encoding alone', () => {
-    expect(readAheadThreadCount(config(4, 'cuda'), 16)).toBe(4);
-    expect(readAheadThreadCount(config(4, 'vaapi'), 16)).toBe(4);
+  // Software decoding, and a software encoder when hardware encoding is
+  // disabled or unavailable, use the count in a hardware pipeline too
+  it('raises the count in a hardware pipeline as well', () => {
+    expect(readAheadThreadCount(config(4, 'cuda'), 16)).toBe(16);
+    expect(readAheadThreadCount(config(4, 'vaapi'), 16)).toBe(16);
   });
 });
 
