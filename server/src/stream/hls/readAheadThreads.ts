@@ -5,8 +5,9 @@ import os from 'node:os';
 // one catching up) is the one a viewer waits on: Plex Live TV answers a tune
 // only once it has 5 s of video. More encoder threads get those seconds out
 // sooner without changing the picture: libx264 veryfast at 8 and 16 threads
-// scored the same on VMAF, SSIM and PSNR. Past 16, more frame threads start to
-// cost quality, so that is the most such a transcode uses.
+// scored the same on VMAF, SSIM and PSNR. More than 16 wasn't measured, and
+// x264's frame threads cost quality as they grow, so 16 is the most such a
+// transcode uses.
 export const ReadAheadMaxThreads = 16;
 
 /**
