@@ -37,7 +37,8 @@ export class CaptionPairCursor {
   // Pairs of slots already passed, waiting for a frame
   #waiting: CcPair[] = [];
   #lastSent: CcPair | undefined;
-  #lastPts: number | undefined;
+  // The latest frame handed a pair, by its time on the schedule's clock
+  #lastTimeMs: number | undefined;
   // PTS (90 kHz) -> the pair that frame got
   #given = new Map<number, CcPair>();
 
@@ -45,16 +46,16 @@ export class CaptionPairCursor {
 
   /**
    * The pair for the frame with this PTS, shown at `frameTimeMs` on the
-   * schedule's clock. Frames are expected in presentation order; an earlier
-   * one that wasn't asked about before (a segment captioned out of order)
-   * gets the pair of its slot.
+   * schedule's clock (which, unlike PTS, doesn't wrap). Frames are expected in
+   * presentation order; an earlier one that wasn't asked about before (a
+   * segment captioned out of order) gets the pair of its slot.
    */
   pairFor(pts: number, frameTimeMs: number): CcPair {
     const given = this.#given.get(pts);
     if (given) {
       return given;
     }
-    if (this.#lastPts !== undefined && pts < this.#lastPts) {
+    if (this.#lastTimeMs !== undefined && frameTimeMs < this.#lastTimeMs) {
       return this.schedule.pairAt(frameTimeMs);
     }
 
@@ -85,7 +86,7 @@ export class CaptionPairCursor {
 
     const pair = this.#waiting.shift() ?? PaddingPair;
     this.#lastSent = pair;
-    this.#lastPts = pts;
+    this.#lastTimeMs = frameTimeMs;
     this.#given.set(pts, pair);
     if (this.#given.size > RememberedFrames) {
       const oldest = this.#given.keys().next();

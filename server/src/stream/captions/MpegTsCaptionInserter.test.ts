@@ -91,6 +91,24 @@ describe('insertCaptions', () => {
     });
   });
 
+  test('keeps presentation order across the 33-bit PTS wrap', () => {
+    // The last frame before the wrap, then two after it, one a B-frame
+    const pts = [2 ** 33 - 3003, 3003, 0];
+    const asked: (readonly number[])[] = [];
+    const result = insertCaptions(segment({ pts }), {
+      pairsForFrames: (presented) => {
+        asked.push(presented);
+        return presented.map(pairFor);
+      },
+      language: 'eng',
+    });
+    if (!result.ok) {
+      throw new Error(result.reason);
+    }
+
+    expect(asked).toEqual([[2 ** 33 - 3003, 0, 3003]]);
+  });
+
   test('keeps whole TS packets, continuous counters and the first PCR', () => {
     const input = segment();
     const result = insertCaptions(input, {

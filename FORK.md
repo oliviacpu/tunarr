@@ -45,11 +45,13 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   order, so the answer couldn't depend on the frames around it.
 - **Fix:**
   - `insertCaptions` reads a segment's frames first and asks once for all their pairs, in presentation order
-    (`pairsForFrames`).
+    (`pairsForFrames`; sorted by offset from the segment's first frame, so a segment across the 33-bit PTS wrap keeps
+    its order).
   - `CaptionPairCursor` (one per program, in `HlsSession`) hands the pairs out: a slot without a frame has its pair
     sent on the frames that follow, one a frame and in order; a second frame in a slot sends padding, or the copy of
     the control code the frame before sent, so the two copies stay on consecutive frames. A frame asked about again
-    (another viewer, a retry) gets the same pair, from a memory of the last 4096 frames. A jump of 8 slots or more is
+    (another viewer, a retry) gets the same pair, from a memory of the last 4096 frames. Frames are ordered by the
+    program's own clock, which doesn't wrap like PTS. A jump of 8 slots or more is
     a new start, not a backlog to send late; an earlier frame not seen before gets its slot's pair, as before.
   - `HlsSession` checks a segment's frame spacing before taking any pair, so a segment sent as padding (frames spaced
     unlike the schedule) no longer uses up the program's pairs.

@@ -13,6 +13,8 @@ const StreamTypeH264 = 0x1b;
 const Iso639LanguageDescriptorTag = 0x0a;
 const CaptionServiceDescriptorTag = 0x86;
 const StartCode = Buffer.from([0, 0, 1]);
+// MPEG-TS timestamps are 33 bits
+const PtsWrap = 2 ** 33;
 
 export type InsertCaptionsOptions = {
   // The caption pair for each of the segment's video frames: given every
@@ -487,8 +489,14 @@ export function insertCaptions(
   }
 
   // Presentation order: frames are stored in decode order, which B-frames
-  // reorder
-  const presented = frames.map((f) => f.pts).toSorted((a, b) => a - b);
+  // reorder. Sorted by their offset from the segment's first frame, so a
+  // segment across the 33-bit PTS wrap keeps its order.
+  const firstPts = frames[0]?.pts ?? 0;
+  const offset = (pts: number) =>
+    (((pts - firstPts + PtsWrap / 2) % PtsWrap) + PtsWrap) % PtsWrap;
+  const presented = frames
+    .map((f) => f.pts)
+    .toSorted((a, b) => offset(a) - offset(b));
   const pairs = options.pairsForFrames(presented);
   const pairByPts = new Map<number, CcPair>();
   presented.forEach((pts, i) => pairByPts.set(pts, pairs[i] ?? PaddingPair));

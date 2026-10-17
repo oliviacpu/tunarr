@@ -98,6 +98,19 @@ describe('CaptionPairCursor', () => {
     expect(send(cursor, [0, 40, 41])).toEqual([text(0), text(40), PaddingPair]);
   });
 
+  test('carries on across the 33-bit PTS wrap', () => {
+    const cursor = new CaptionPairCursor(
+      schedule({ 0: text(0), 1: text(1), 2: text(2), 3: text(3) }),
+    );
+    // PTS wraps after the first frame; the schedule's clock doesn't. No frame
+    // in slot 2.
+    expect([
+      cursor.pairFor(2 ** 33 - 10, 0),
+      cursor.pairFor(2990, FrameMs),
+      cursor.pairFor(8996, 3 * FrameMs),
+    ]).toEqual([text(0), text(1), text(2)]);
+  });
+
   test('gives an earlier frame not asked about before the pair of its slot', () => {
     const cursor = new CaptionPairCursor(
       schedule({ 3: text(3), 10: text(10) }),
