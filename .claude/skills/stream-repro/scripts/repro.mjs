@@ -72,6 +72,7 @@ if (clipDurations.some((d) => !(d > 0))) throw new Error('--clip-durations must 
 const flexMs = opt['flex-first'] === undefined ? 0 : Number(opt['flex-first']);
 if (!(flexMs >= 0)) throw new Error('--flex-first takes milliseconds');
 if (flexMs > 0 && opt.source !== 'synthetic') throw new Error('--flex-first only works with --source synthetic');
+if (opt['offline-picture'] !== undefined && opt.source !== 'synthetic') throw new Error('--offline-picture only works with --source synthetic');
 const resolutionMatch = opt.resolution === undefined ? null : /^(\d+)x(\d+)$/.exec(opt.resolution);
 if (opt.resolution !== undefined && !resolutionMatch) throw new Error('--resolution takes WIDTHxHEIGHT, such as 1280x720');
 const resolution = resolutionMatch && { widthPx: Number(resolutionMatch[1]), heightPx: Number(resolutionMatch[2]) };
