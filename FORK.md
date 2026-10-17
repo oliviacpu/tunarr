@@ -50,7 +50,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:**
   - `outputFrameRate` (`server/src/ffmpeg/outputFrameRate.ts`): a reported rate within 2% of a standard one (23.976,
     24, 25, 29.97, 30, 50, 59.94, 60) is that rate exactly, and one above them all (high-frame-rate video, 120) is
-    kept; any other gets 29.97, or 59.94 above 31 fps. 2% takes in
+    kept; any other gets 29.97, or 59.94 above 30 fps. 2% takes in
     averages over stray or missing frames (23.81, 30.3 in the library that showed this) and rounded labels, and leaves
     out 20, 15 and 14.26, which describe no real video.
   - `FfmpegPlaybackParamsCalculator.calculateForStream` sets the output rate (`-r <rate> -fps_mode cfr`) for a

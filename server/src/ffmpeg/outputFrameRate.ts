@@ -40,7 +40,7 @@ function parseRate(framerate: number | string | null | undefined) {
  * The constant frame rate to give a transcode of a source that reports `framerate`. A standard rate, or one close to
  * it, is that standard rate exactly, and a rate above them all (120) is kept. Any other reported rate can't be
  * trusted: outputting it would make ffmpeg drop (or repeat) frames to fit it. Such a source gets 29.97, which holds
- * any video up to 30 frames a second without dropping one, or 59.94 when it reports more than that. Undefined when
+ * any video up to 30 frames a second without dropping one, or 59.94 when it reports more than 30. Undefined when
  * the rate is missing or implausible.
  */
 export function outputFrameRate(
@@ -71,8 +71,10 @@ export function outputFrameRate(
       standard: true,
     };
   }
+  // Untrustworthy rates fall below 29.4 or between 30.6 and 58.8: the first
+  // fit in 29.97, the rest in 59.94, so no frame is dropped either way
   return {
-    rate: reported <= 31 ? 30000 / 1001 : 60000 / 1001,
+    rate: reported < 30 ? 30000 / 1001 : 60000 / 1001,
     standard: false,
   };
 }

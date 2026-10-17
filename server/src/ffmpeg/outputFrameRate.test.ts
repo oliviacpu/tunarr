@@ -36,7 +36,8 @@ describe('outputFrameRate', () => {
     ['20/1', 30000 / 1001],
     [15, 30000 / 1001],
     [14.26, 30000 / 1001],
-    [31, 30000 / 1001],
+    // a frame rate just above 30's tolerance would lose frames at 29.97
+    [31, 60000 / 1001],
     [48, 60000 / 1001],
   ])('gives a source reporting %j, not standard, %d', (framerate, rate) => {
     expect(outputFrameRate(framerate)).toEqual({ rate, standard: false });
