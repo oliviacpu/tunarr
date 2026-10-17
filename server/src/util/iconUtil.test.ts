@@ -1,16 +1,22 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   deleteIfLocalAndCleared,
   extractLocalUploadFilename,
+  localUploadFile,
   publicLinkOrigin,
   resolveIconUrl,
   uploadedImageUrl,
   ImmutableCacheControl,
   versionedUploadCacheControl,
+  uploadsDirectory,
 } from './iconUtil.ts';
 import * as fsUtil from './fsUtil.ts';
 
-vi.mock('./fsUtil.ts', () => ({
+vi.mock('./fsUtil.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof fsUtil>()),
   deleteUploadedFile: vi.fn(),
 }));
 
@@ -265,5 +271,50 @@ describe('versionedUploadCacheControl', () => {
     expect(
       versionedUploadCacheControl('/images/uploads/gone.png?v=ab12cd', 404),
     ).toBeUndefined();
+  });
+});
+
+describe('localUploadFile', () => {
+  async function withUploads(run: (dir: string) => Promise<void>) {
+    const db = await fs.mkdtemp(path.join(os.tmpdir(), 'tunarr-uploads-'));
+    const dir = uploadsDirectory(db);
+    await fs.mkdir(dir, { recursive: true });
+    try {
+      await run(dir);
+    } finally {
+      await fs.rm(db, { recursive: true, force: true });
+    }
+  }
+
+  test('finds an upload on disk from its public URL, version and all', async () => {
+    await withUploads(async (dir) => {
+      await fs.writeFile(path.join(dir, 'card 6.png'), 'png');
+      expect(
+        await localUploadFile(
+          'https://tv.example/images/uploads/card%206.png?v=0123456789ab',
+          dir,
+        ),
+      ).toBe(path.join(dir, 'card 6.png'));
+    });
+  });
+
+  test.each([
+    ['a missing upload', 'https://tv.example/images/uploads/gone.png'],
+    ['another path', 'https://tv.example/images/generic-offline-screen.png'],
+    ['a remote image', 'https://cdn.example/cards/card.png'],
+    ['a relative URL', '/images/uploads/card.png'],
+    ['an encoded path escape', 'https://tv.example/images/uploads/..%2Fdb.db'],
+    [
+      'an encoded subfolder',
+      'https://tv.example/images/uploads/sub%2Fcard.png',
+    ],
+    ['a bad escape', 'https://tv.example/images/uploads/%E0%A4%A.png'],
+    ['no URL', undefined],
+  ])('leaves %s to be fetched over HTTP', async (_, url) => {
+    await withUploads(async (dir) => {
+      await fs.writeFile(path.join(dir, 'card.png'), 'png');
+      await fs.writeFile(path.join(path.dirname(dir), 'db.db'), 'db');
+      expect(await localUploadFile(url, dir)).toBeUndefined();
+    });
   });
 });

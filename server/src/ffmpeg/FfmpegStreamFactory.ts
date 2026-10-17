@@ -991,6 +991,7 @@ export class FfmpegStreamFactory {
         realtime,
         opts.backgroundMusic,
         opts.isFirstTranscode,
+        opts.picture,
       );
     }
 
@@ -1126,13 +1127,15 @@ export class FfmpegStreamFactory {
     realtime: boolean = true,
     backgroundMusic?: OfflineBackgroundMusic,
     isFirstTranscode?: boolean,
+    picture?: FileStreamSource,
   ): Promise<Maybe<FfmpegTranscodeSession>> {
     const offlineInput = VideoInputSource.withStream(
-      new HttpStreamSource(
-        isNonEmptyString(this.channel.offline?.picture)
-          ? this.channel.offline?.picture
-          : makeLocalUrl('/images/generic-offline-screen.png'),
-      ),
+      picture ??
+        new HttpStreamSource(
+          isNonEmptyString(this.channel.offline?.picture)
+            ? this.channel.offline?.picture
+            : makeLocalUrl('/images/generic-offline-screen.png'),
+        ),
       VideoStream.create({
         inputKind: 'stillimage',
         codec: 'unknown',

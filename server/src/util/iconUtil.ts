@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { ChannelIcon } from '@tunarr/types';
-import { deleteUploadedFile } from './fsUtil.js';
+import { deleteUploadedFile, fileExists } from './fsUtil.js';
 import { isNonEmptyString } from './index.js';
 
 export const LocalUploadPathPrefix = '/images/uploads/';
@@ -56,6 +56,43 @@ export function extractLocalUploadFilename(url: string): string | null {
   }
 
   return parsed.pathname.slice(LocalUploadPathPrefix.length);
+}
+
+/** Where uploaded images are stored, under the database directory. */
+export function uploadsDirectory(databaseDirectory: string): string {
+  return path.join(databaseDirectory, 'images', 'uploads');
+}
+
+/**
+ * The file behind a URL to one of this server's own uploads
+ * (`/images/uploads/<name>`), when it exists in `directory`. ffmpeg can then
+ * read a channel's offline picture from disk instead of fetching it back
+ * through the server's address, which is often a public HTTPS one. Undefined
+ * for any other URL, a name that isn't a plain file name, or a missing file.
+ */
+export async function localUploadFile(
+  url: string | undefined,
+  directory: string,
+): Promise<string | undefined> {
+  const encoded = isNonEmptyString(url)
+    ? extractLocalUploadFilename(url)
+    : null;
+  if (!isNonEmptyString(encoded)) {
+    return;
+  }
+  let name: string;
+  try {
+    name = decodeURIComponent(encoded);
+  } catch {
+    return;
+  }
+  if (name !== path.basename(name) || name === '.' || name === '..') {
+    return;
+  }
+  const file = path.join(directory, name);
+  // Any error reading it (permissions, say) falls back to the URL
+  const exists = await fileExists(file).catch(() => false);
+  return exists ? file : undefined;
 }
 
 /**

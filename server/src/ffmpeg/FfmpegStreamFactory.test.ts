@@ -587,6 +587,58 @@ describe('FfmpegStreamFactory', () => {
     );
   });
 
+  describe('the offline picture', () => {
+    function makeSut(picture?: string) {
+      const capture = createCapturingPipelineBuilderFactory();
+      const sut = new FfmpegStreamFactory(
+        makeMockFfmpegInfo(),
+        makeMockSettingsDB(makeFfmpegSettings()),
+        capture.factory,
+        makeMockChannelDB(),
+        makeMockFeatureFlagService(),
+        makeMockStreamSelector(),
+        makeTranscodeConfig({
+          hardwareAccelerationMode: 'none',
+          videoFormat: 'h264',
+        }),
+        makeChannel({ offline: { mode: 'pic', picture } }),
+      );
+      return { sut, ...capture };
+    }
+
+    test('reads the file the caller found on disk', async () => {
+      const { sut, getCapturedVideoInput } = makeSut(
+        'https://tv.example/images/uploads/card.png?v=1',
+      );
+      const picture = new FileStreamSource('/data/images/uploads/card.png');
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 30 }),
+        outputFormat: MpegTsOutputFormat,
+        picture,
+      });
+
+      expect(getCapturedVideoInput()?.source).toBe(picture);
+    });
+
+    test("otherwise fetches the channel's picture URL", async () => {
+      const { sut, getCapturedVideoInput } = makeSut(
+        'https://cdn.example/card.png',
+      );
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 30 }),
+        outputFormat: MpegTsOutputFormat,
+      });
+
+      const source = getCapturedVideoInput()?.source;
+      expect(source).toBeInstanceOf(HttpStreamSource);
+      expect(source?.path).toBe('https://cdn.example/card.png');
+    });
+  });
+
   describe('gap music under the offline picture', () => {
     function makeSut() {
       const config = makeTranscodeConfig({

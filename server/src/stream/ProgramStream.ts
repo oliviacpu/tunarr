@@ -5,7 +5,11 @@ import type { TranscodeSessionResult } from '@/ffmpeg/types.js';
 import { CacheImageService } from '@/services/cacheImageService.js';
 import { Result } from '@/types/result.js';
 import type { Maybe } from '@/types/util.js';
-import { resolveIconUrl } from '@/util/iconUtil.js';
+import {
+  localUploadFile,
+  resolveIconUrl,
+  uploadsDirectory,
+} from '@/util/iconUtil.js';
 import type { Logger } from '@/util/logging/LoggerFactory.js';
 import { makeLocalUrl } from '@/util/serverUtil.js';
 import type { Watermark } from '@tunarr/types';
@@ -22,6 +26,7 @@ import type {
 import { MediaSourceDB } from '../db/mediaSourceDB.ts';
 import type { FFmpegAssistedFactory } from '../ffmpeg/FFmpegModule.ts';
 import type { OfflineBackgroundMusic, StreamOptions } from '../ffmpeg/types.ts';
+import { globalOptions } from '../globals.ts';
 import { KEYS } from '../types/inject.ts';
 import { assisted, injected, multiInjected } from '../util/assistedInject.ts';
 import {
@@ -35,7 +40,7 @@ import { InjectLogger } from '../util/inject.ts';
 import type { PlayerContext } from './PlayerStreamContext.ts';
 import { ProgramStreamDetailsFetcher } from './ProgramStreamDetailsFetcher.ts';
 import type { ProgramStreamPlugin } from './plugins/ProgramStreamPlugin.ts';
-import type { StreamRenditions } from './types.ts';
+import { FileStreamSource, type StreamRenditions } from './types.ts';
 
 type ProgramStreamEvents = {
   // Emitted when the stream has reached a fatal error point
@@ -207,6 +212,7 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
     const backgroundMusic = lineupItem.backgroundMusic
       ? await this.resolveBackgroundMusic(lineupItem.backgroundMusic)
       : undefined;
+    const picture = await this.resolveOfflinePicture();
 
     const result = await ffmpeg.createPlaceholderSession({
       kind: 'offline',
@@ -214,8 +220,11 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       outputFormat: this.outputFormat,
       ptsOffset: this.opts?.ptsOffset,
       isFirstTranscode: this.opts?.isFirstTranscode,
-      realtime: this.opts?.realtime,
+      // Paced like a program: a session's first transcode reads ahead, so a
+      // tune-in that lands in a gap starts as fast as one in a program
+      realtime: this.opts?.realtime ?? this.context.realtime,
       backgroundMusic,
+      picture,
     });
 
     if (isUndefined(result)) {
@@ -281,6 +290,17 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
     };
   }
 
+  // The channel's offline picture from disk when it's one of this server's
+  // uploads, as channel cards are. Fetching it back through the server's
+  // address (often public HTTPS) slowed every tune-in that landed in a gap.
+  private async resolveOfflinePicture(): Promise<FileStreamSource | undefined> {
+    const file = await localUploadFile(
+      this.context.targetChannel.offline?.picture,
+      uploadsDirectory(globalOptions().databaseDirectory),
+    );
+    return file ? new FileStreamSource(file) : undefined;
+  }
+
   private async setupErrorItem(
     lineupItem: ErrorStreamLineupItem,
   ): Promise<Result<TranscodeSessionResult>> {
@@ -305,7 +325,7 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       title: 'Error',
       duration,
       outputFormat: this.outputFormat,
-      realtime: this.opts?.realtime,
+      realtime: this.opts?.realtime ?? this.context.realtime,
       ptsOffset: this.opts?.ptsOffset,
       isFirstTranscode: this.opts?.isFirstTranscode,
     });
