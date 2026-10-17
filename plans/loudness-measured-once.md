@@ -124,7 +124,8 @@ the same CPU.
 
 ## What would change this
 
-- **Measuring at library scan time,** on a server with spare disk and CPU, removes the measurement cost.
+- **Spare disk and CPU** make the measurement cost acceptable. Measuring at library scan time only moves it: each file
+  is still read whole once, so a large library or a full rescan pays all of it at once.
 - **A target range close to the content's** (an owner who sets LRA 15 or more) removes the difference in sound.
 
 Either one makes the prototype worth finishing.
