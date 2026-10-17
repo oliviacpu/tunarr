@@ -12,14 +12,17 @@ import type { OnDemandChannelService } from '@/services/OnDemandChannelService.j
 import { PlayerContext } from '@/stream/PlayerStreamContext.js';
 import type { StopOptions } from '@/stream/Session.js';
 import type { StreamProgramCalculator } from '@/stream/StreamProgramCalculator.js';
-import { CaptionPairCursor } from '@/stream/captions/CaptionPairCursor.js';
-import type { CcPair } from '@/stream/captions/Cea608Encoder.js';
+import type {
+  CaptionSchedule,
+  CcPair,
+} from '@/stream/captions/Cea608Encoder.js';
 import {
   buildCaptionSchedule,
   PaddingPair,
 } from '@/stream/captions/Cea608Encoder.js';
 import { insertCaptions } from '@/stream/captions/MpegTsCaptionInserter.js';
 import type { ProgramCaptions } from '@/stream/captions/ProgramCaptions.js';
+import { pairsForFrames } from '@/stream/captions/pairsForFrames.js';
 import type { HlsSlowerSession } from '@/stream/hls/HlsSlowerSession.js';
 import type {
   AudioRenditionInfo,
@@ -65,8 +68,7 @@ type CaptionTimelineEntry = {
   startPts: number;
   durationPts: number;
   framePts: number;
-  // Hands the program's caption pairs to its frames
-  cursor: CaptionPairCursor;
+  schedule: CaptionSchedule;
   language: string;
   rateMismatchLogged: boolean;
 };
@@ -561,7 +563,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         startPts: ptsOffset,
         durationPts: captions.durationMs * 90,
         framePts: 90_000 / captions.frameRate,
-        cursor: new CaptionPairCursor(schedule),
+        schedule,
         language: captions.language,
         rateMismatchLogged: false,
       },
@@ -609,27 +611,29 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
 
   // The caption pair for each of a segment's frames, in presentation order
   private captionPairs(ptsInOrder: readonly number[]): CcPair[] {
-    const hits = ptsInOrder.map((pts) => ({
-      pts,
-      hit: this.captionEntryAt(pts),
-    }));
-
-    // The schedule assumes the program's frame rate. If the frames are spaced
-    // differently, characters would be dropped or repeated, so send padding
-    // only. Checked before any pair is taken, so a segment sent as padding
-    // leaves the program's pairs for the frames that follow.
-    const mismatched = new Set<CaptionTimelineEntry>();
-    const framesByEntry = new Map<CaptionTimelineEntry, number[]>();
-    for (const { pts, hit } of hits) {
+    const pairs: CcPair[] = ptsInOrder.map(() => PaddingPair);
+    // Each program's frames in this segment: their places, PTS and times
+    const byEntry = new Map<
+      CaptionTimelineEntry,
+      { index: number; pts: number; timeMs: number }[]
+    >();
+    ptsInOrder.forEach((pts, index) => {
+      const hit = this.captionEntryAt(pts);
       if (hit) {
-        framesByEntry.set(hit.entry, [
-          ...(framesByEntry.get(hit.entry) ?? []),
-          pts,
+        byEntry.set(hit.entry, [
+          ...(byEntry.get(hit.entry) ?? []),
+          { index, pts, timeMs: hit.timeMs },
         ]);
       }
-    }
-    for (const [entry, frames] of framesByEntry) {
-      const steps = frames.slice(1).map((pts, i) => pts - (frames[i] ?? pts));
+    });
+
+    for (const [entry, frames] of byEntry) {
+      // The schedule assumes the program's frame rate. If the frames are
+      // spaced differently, characters would be dropped or repeated, so send
+      // padding only.
+      const steps = frames
+        .slice(1)
+        .map((f, i) => f.pts - (frames[i]?.pts ?? f.pts));
       const step = steps.toSorted((a, b) => a - b)[
         Math.floor(steps.length / 2)
       ];
@@ -637,7 +641,6 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         step !== undefined &&
         Math.abs(step - entry.framePts) > entry.framePts / 100
       ) {
-        mismatched.add(entry);
         if (!entry.rateMismatchLogged) {
           entry.rateMismatchLogged = true;
           this.logger.warn(
@@ -646,14 +649,17 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
             Math.round(entry.framePts),
           );
         }
+        continue;
       }
+      const programPairs = pairsForFrames(
+        entry.schedule,
+        frames.map((f) => f.timeMs),
+      );
+      frames.forEach((f, k) => {
+        pairs[f.index] = programPairs[k] ?? PaddingPair;
+      });
     }
-
-    return hits.map(({ pts, hit }) =>
-      !hit || mismatched.has(hit.entry)
-        ? PaddingPair
-        : hit.entry.cursor.pairFor(pts, hit.timeMs),
-    );
+    return pairs;
   }
 
   protected getHlsOptions(): DeepRequired<HlsOptions> {

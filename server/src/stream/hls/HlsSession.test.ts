@@ -372,6 +372,50 @@ describe('HlsSession', () => {
       expect(second).toEqual(first);
     });
 
+    test('captions segments the same whichever is asked for first', async () => {
+      const ptsOffset = 900_000;
+      // A cue loading across the two segments' join, and the first segment's
+      // last frame missing
+      const across: ProgramCaptions = {
+        cues: [{ startMs: 62 * ntscFrame, endMs: 90 * ntscFrame, text: 'Hi' }],
+        frameRate: 30000 / 1001,
+        durationMs: 60_000,
+        language: 'eng',
+      };
+      async function captionBoth(order: string[]) {
+        const session = makeSession(dir.name);
+        await fs.mkdir(session.workingDirectory, { recursive: true });
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: ptsOffset, frames: 59 }),
+        );
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000002.ts'),
+          makeTsSegment({ firstPts: ptsOffset + 60 * 3003, frames: 60 }),
+        );
+        (
+          session as unknown as {
+            addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+          }
+        ).addCaptions(ptsOffset, across);
+        const served = new Map<string, Buffer | undefined>();
+        for (const file of order) {
+          served.set(file, await session.captionedSegment(file));
+        }
+        return served;
+      }
+
+      const inOrder = await captionBoth(['data000001.ts', 'data000002.ts']);
+      const reversed = await captionBoth(['data000002.ts', 'data000001.ts']);
+      expect(inOrder.get('data000001.ts')).toBeDefined();
+      expect(reversed.get('data000001.ts')).toEqual(
+        inOrder.get('data000001.ts'),
+      );
+      expect(reversed.get('data000002.ts')).toEqual(
+        inOrder.get('data000002.ts'),
+      );
+    });
+
     test('serves nothing for a segment it cannot caption', async () => {
       const session = makeSession(dir.name);
       await fs.mkdir(session.workingDirectory, { recursive: true });
