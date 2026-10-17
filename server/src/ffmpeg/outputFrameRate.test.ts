@@ -21,14 +21,31 @@ describe('outputFrameRate', () => {
   });
 
   test.each([
-    // an average over stray or missing frames, or a loose label
+    // an average over a few missing frames, or a rounded label
     [23.81, 24000 / 1001],
     ['23.98', 24000 / 1001],
-    [30.3, 30],
-    [24.4, 24],
-  ])('treats %j, within 2%% of a standard rate, as %d', (framerate, rate) => {
-    expect(outputFrameRate(framerate)).toEqual({ rate, standard: true });
-  });
+    [29.5, 30000 / 1001],
+    [59.9, 60000 / 1001],
+    [60.02, 60],
+  ])(
+    'treats %j, up to 2%% below a standard rate or rounded, as %d',
+    (framerate, rate) => {
+      expect(outputFrameRate(framerate)).toEqual({ rate, standard: true });
+    },
+  );
+
+  test.each([
+    // snapping down to 24, 25, 30 or 50 would drop frames
+    [24.4, 30000 / 1001],
+    [25.5, 30000 / 1001],
+    [30.3, 60000 / 1001],
+    [50.5, 60000 / 1001],
+  ])(
+    'keeps every frame of %j, a little above a standard rate: %d',
+    (framerate, rate) => {
+      expect(outputFrameRate(framerate)).toEqual({ rate, standard: false });
+    },
+  );
 
   test.each([
     // a DVD rip whose frames alternate 1/24 s and 1/30 s apart reported 20
@@ -46,6 +63,9 @@ describe('outputFrameRate', () => {
   test.each([
     [120, 120],
     [100, 100],
+    // just above 60, which snapping down would drop frames from
+    [61, 61],
+    [60.5, 60.5],
     [119.88, 120000 / 1001],
     ['120000/1001', 120000 / 1001],
   ])('keeps a high-frame-rate source reporting %j as %d', (framerate, rate) => {

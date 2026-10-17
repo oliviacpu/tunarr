@@ -314,10 +314,11 @@ describe('FfmpegPlaybackParamsCalculator', () => {
 
       test.each([
         [23.81, 24000 / 1001],
-        [30.3, 30],
         ['23.98', 24000 / 1001],
+        // a little above 30: snapping down to it would drop frames
+        [30.3, 60000 / 1001],
       ])(
-        'treats %j, within 2%% of a standard rate, as %d fps',
+        'outputs %j, near a standard rate, as %d fps',
         (framerate, expected) => {
           const calculator = new FfmpegPlaybackParamsCalculator(
             makeTranscodeConfig({ normalizeFrameRate: true }),

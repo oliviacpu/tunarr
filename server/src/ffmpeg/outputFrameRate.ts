@@ -10,10 +10,13 @@ export const StandardFrameRates: readonly number[] = [
   60,
 ];
 
-// A reported rate this close to a standard one is that rate, measured or rounded loosely: an average over a few
-// stray or missing frames (23.81 for a 23.976 film), or a rounded label ("23.98"). Further off, the header doesn't
-// describe the video at all: a DVD rip whose frames alternate 1/24 s and 1/30 s apart can report 20.
-const StandardRateTolerance = 0.02;
+// A reported rate this far below a standard one is that rate, measured loosely: an average over a few missing frames
+// (23.81 for a 23.976 film). Snapping up to it repeats a frame now and then and never drops one. Further off, the
+// header doesn't describe the video at all: a DVD rip whose frames alternate 1/24 s and 1/30 s apart can report 20.
+const BelowStandardTolerance = 0.02;
+// A reported rate this close to a standard one, either side, is that rate, rounded ("23.98" for 24000/1001). Under
+// the 0.1% between 23.976 and 24. Any further above, snapping down would drop frames.
+const RoundingTolerance = 0.0005;
 
 export type OutputFrameRate = {
   // Frames per second, exact for the NTSC rates
@@ -37,11 +40,13 @@ function parseRate(framerate: number | string | null | undefined) {
 }
 
 /**
- * The constant frame rate to give a transcode of a source that reports `framerate`. A standard rate, or one close to
- * it, is that standard rate exactly, and a rate above them all (120) is kept. Any other reported rate can't be
- * trusted: outputting it would make ffmpeg drop (or repeat) frames to fit it. Such a source gets 29.97, which holds
- * any video up to 30 frames a second without dropping one, or 59.94 when it reports more than 30. Undefined when
- * the rate is missing or implausible.
+ * The constant frame rate to give a transcode of a source that reports `framerate`, never fewer frames a second than
+ * it reports:
+ * - a standard rate, a rounded label for one, or a rate up to 2% below one: that standard rate, exactly
+ * - above every standard rate (120): kept as reported, high-frame-rate video
+ * - any other rate can't be trusted, and outputting it would make ffmpeg drop (or repeat) frames to fit it: 29.97,
+ *   which holds any video up to 30 frames a second, or 59.94 above that
+ * Undefined when the rate is missing or implausible.
  */
 export function outputFrameRate(
   framerate: number | string | null | undefined,
@@ -50,18 +55,15 @@ export function outputFrameRate(
   if (reported === undefined) {
     return;
   }
-  let nearest = StandardFrameRates[0] ?? 30000 / 1001;
-  for (const standard of StandardFrameRates) {
-    if (Math.abs(reported - standard) < Math.abs(reported - nearest)) {
-      nearest = standard;
-    }
+  const rounded = StandardFrameRates.find(
+    (standard) => Math.abs(reported - standard) / standard <= RoundingTolerance,
+  );
+  if (rounded !== undefined) {
+    return { rate: rounded, standard: true };
   }
-  if (Math.abs(reported - nearest) / nearest <= StandardRateTolerance) {
-    return { rate: nearest, standard: true };
-  }
-  // Above every standard rate: high-frame-rate video, kept as reported (exactly
-  // for an NTSC multiple, 119.88 as 120000/1001)
-  if (reported > 60 * (1 + StandardRateTolerance)) {
+  const atOrAbove = StandardFrameRates.find((standard) => standard > reported);
+  if (atOrAbove === undefined) {
+    // High-frame-rate video, exact for an NTSC multiple (119.88 as 120000/1001)
     const ntsc = (Math.round((reported * 1001) / 1000) * 1000) / 1001;
     return {
       rate:
@@ -71,8 +73,9 @@ export function outputFrameRate(
       standard: true,
     };
   }
-  // Untrustworthy rates fall below 29.4 or between 30.6 and 58.8: the first
-  // fit in 29.97, the rest in 59.94, so no frame is dropped either way
+  if (reported >= atOrAbove * (1 - BelowStandardTolerance)) {
+    return { rate: atOrAbove, standard: true };
+  }
   return {
     rate: reported < 30 ? 30000 / 1001 : 60000 / 1001,
     standard: false,

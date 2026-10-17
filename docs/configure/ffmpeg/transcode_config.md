@@ -83,7 +83,7 @@ A common starting point is roughly **2× the video bitrate** (e.g., 4000 kb buff
 
 When enabled, forces the output stream to a consistent frame rate (e.g., 23.976, 29.97, or 60 fps). This is recommended for most setups, as mixing frame rates across lineup items can cause playback issues or stuttering with some clients.
 
-A source whose file reports a frame rate that isn't a standard one (23.976, 24, 25, 29.97, 30, 50, 59.94 or 60, give or take 2%) always gets a standard rate, with this setting on or off: 29.97, or 59.94 if it reports more than 30 fps. A rate above 60 (high-frame-rate video, such as 120) is kept as reported. Some DVD rips report 20 fps for video whose frames really come 24 or 30 a second; kept at 20, about one frame in six was dropped. A rate close to a standard one counts as that rate (23.81 is treated as 23.976).
+A source whose file reports a frame rate that isn't a standard one (23.976, 24, 25, 29.97, 30, 50, 59.94 or 60) always gets a rate that holds every frame, with this setting on or off: 29.97, or 59.94 if it reports more than 30 fps. Some DVD rips report 20 fps for video whose frames really come 24 or 30 a second; kept at 20, about one frame in six was dropped. A rate up to 2% below a standard one counts as that rate (23.81 is treated as 23.976), and so does a rounded label (23.98); a rate a little above a standard one doesn't, since rounding it down would drop frames. A rate above 60 (high-frame-rate video, such as 120) is kept as reported.
 
 ### Deinterlace Video
 

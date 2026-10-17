@@ -48,11 +48,11 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     so any difference between the two (a field-rate deinterlacer doubling the rate, or QSV, whose `fps` filter always
     used 24 because `getNumericFrameRateOrDefault` ignores a rate `parseInt` can read) made HlsSession send padding only.
 - **Fix:**
-  - `outputFrameRate` (`server/src/ffmpeg/outputFrameRate.ts`): a reported rate within 2% of a standard one (23.976,
-    24, 25, 29.97, 30, 50, 59.94, 60) is that rate exactly, and one above them all (high-frame-rate video, 120) is
-    kept; any other gets 29.97, or 59.94 above 30 fps. 2% takes in
-    averages over stray or missing frames (23.81, 30.3 in the library that showed this) and rounded labels, and leaves
-    out 20, 15 and 14.26, which describe no real video.
+  - `outputFrameRate` (`server/src/ffmpeg/outputFrameRate.ts`) never gives fewer frames a second than the source
+    reports: a standard rate (23.976, 24, 25, 29.97, 30, 50, 59.94, 60), a rounded label for one (within 0.05%) or a
+    rate up to 2% below one (an average over a few missing frames, 23.81 in the library that showed this) is that
+    standard rate exactly; one above them all (high-frame-rate video, 120) is kept; any other, including one a little
+    above a standard rate (30.3), gets 29.97 below 30 fps or 59.94 above.
   - `FfmpegPlaybackParamsCalculator.calculateForStream` sets the output rate (`-r <rate> -fps_mode cfr`) for a
     non-standard source always, with "Normalize Frame Rate", and, new, whenever HDHomeRun captions are on
     (`pinFrameRate`). When the pipeline deinterlaces in software, a field-rate filter (`none`, which is yadif=1,
