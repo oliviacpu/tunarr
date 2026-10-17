@@ -991,6 +991,7 @@ export class FfmpegStreamFactory {
         realtime,
         opts.backgroundMusic,
         opts.isFirstTranscode,
+        opts.picture,
       );
     }
 
@@ -1004,10 +1005,14 @@ export class FfmpegStreamFactory {
     subtitle: Maybe<string>,
     duration: Duration,
     outputFormat: OutputFormat,
-    realtime: boolean,
+    requestedRealtime: boolean,
     ptsOffset?: number,
     isFirstTranscode?: boolean,
   ): Promise<Maybe<FfmpegTranscodeSession>> {
+    const realtime =
+      this.transcodeConfig.errorScreen === 'pic'
+        ? this.paceStillImage(requestedRealtime)
+        : requestedRealtime;
     const calculator = new FfmpegPlaybackParamsCalculator(
       this.transcodeConfig,
       this.channel.streamMode,
@@ -1123,16 +1128,19 @@ export class FfmpegStreamFactory {
     duration: Duration,
     outputFormat: OutputFormat,
     ptsOffset: number = 0,
-    realtime: boolean = true,
+    requestedRealtime: boolean = true,
     backgroundMusic?: OfflineBackgroundMusic,
     isFirstTranscode?: boolean,
+    picture?: FileStreamSource,
   ): Promise<Maybe<FfmpegTranscodeSession>> {
+    const realtime = this.paceStillImage(requestedRealtime);
     const offlineInput = VideoInputSource.withStream(
-      new HttpStreamSource(
-        isNonEmptyString(this.channel.offline?.picture)
-          ? this.channel.offline?.picture
-          : makeLocalUrl('/images/generic-offline-screen.png'),
-      ),
+      picture ??
+        new HttpStreamSource(
+          isNonEmptyString(this.channel.offline?.picture)
+            ? this.channel.offline?.picture
+            : makeLocalUrl('/images/generic-offline-screen.png'),
+        ),
       VideoStream.create({
         inputKind: 'stillimage',
         codec: 'unknown',
@@ -1231,6 +1239,26 @@ export class FfmpegStreamFactory {
       `channel-${this.channel.number}-transcode`,
       duration,
     );
+  }
+
+  // Whether a still-image placeholder runs at real time. A first transcode
+  // reads ahead (realtime false) through -readrate's initial burst, which
+  // paces a still image looped at the input. The CUDA, QSV and VAAPI pipelines
+  // loop it with the loop filter instead, which repeats one decoded frame that
+  // -readrate can't pace; only the realtime filter can, and it has no burst.
+  // There it stays at real time, or the whole gap would encode at full speed.
+  private paceStillImage(realtime: boolean): boolean {
+    if (realtime) {
+      return true;
+    }
+    switch (this.transcodeConfig.hardwareAccelerationMode) {
+      case HardwareAccelerationMode.Cuda:
+      case HardwareAccelerationMode.Qsv:
+      case HardwareAccelerationMode.Vaapi:
+        return true;
+      default:
+        return false;
+    }
   }
 
   private wrapInSession(

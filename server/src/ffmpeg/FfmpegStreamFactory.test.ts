@@ -587,6 +587,127 @@ describe('FfmpegStreamFactory', () => {
     );
   });
 
+  describe('the offline picture', () => {
+    function makeSut(picture?: string) {
+      const capture = createCapturingPipelineBuilderFactory();
+      const sut = new FfmpegStreamFactory(
+        makeMockFfmpegInfo(),
+        makeMockSettingsDB(makeFfmpegSettings()),
+        capture.factory,
+        makeMockChannelDB(),
+        makeMockFeatureFlagService(),
+        makeMockStreamSelector(),
+        makeTranscodeConfig({
+          hardwareAccelerationMode: 'none',
+          videoFormat: 'h264',
+        }),
+        makeChannel({ offline: { mode: 'pic', picture } }),
+      );
+      return { sut, ...capture };
+    }
+
+    test('reads the file the caller found on disk', async () => {
+      const { sut, getCapturedVideoInput } = makeSut(
+        'https://tv.example/images/uploads/card.png?v=1',
+      );
+      const picture = new FileStreamSource('/data/images/uploads/card.png');
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 30 }),
+        outputFormat: MpegTsOutputFormat,
+        picture,
+      });
+
+      expect(getCapturedVideoInput()?.source).toBe(picture);
+    });
+
+    test("otherwise fetches the channel's picture URL", async () => {
+      const { sut, getCapturedVideoInput } = makeSut(
+        'https://cdn.example/card.png',
+      );
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 30 }),
+        outputFormat: MpegTsOutputFormat,
+      });
+
+      const source = getCapturedVideoInput()?.source;
+      expect(source).toBeInstanceOf(HttpStreamSource);
+      expect(source?.path).toBe('https://cdn.example/card.png');
+    });
+  });
+
+  // A first transcode reads ahead (realtime false). A still image looped at
+  // the input can, through -readrate's burst; the CUDA, QSV and VAAPI
+  // pipelines loop it with the loop filter, which only the realtime filter
+  // paces, so there a still-image placeholder stays at real time.
+  describe('a placeholder that a first transcode would read ahead', () => {
+    function makeSut(
+      hardwareAccelerationMode: TranscodeConfigOrm['hardwareAccelerationMode'],
+      errorScreen: TranscodeConfigOrm['errorScreen'] = 'pic',
+    ) {
+      const capture = createCapturingPipelineBuilderFactory();
+      const sut = new FfmpegStreamFactory(
+        makeMockFfmpegInfo(),
+        makeMockSettingsDB(makeFfmpegSettings()),
+        capture.factory,
+        makeMockChannelDB(),
+        makeMockFeatureFlagService(),
+        makeMockStreamSelector(),
+        makeTranscodeConfig({
+          hardwareAccelerationMode,
+          videoFormat: 'h264',
+          errorScreen,
+        }),
+        makeChannel(),
+      );
+      return { sut, ...capture };
+    }
+
+    const common = {
+      duration: dayjs.duration({ minutes: 30 }),
+      outputFormat: MpegTsOutputFormat,
+      realtime: false,
+    };
+
+    test.each([
+      ['none', false],
+      ['videotoolbox', false],
+      ['cuda', true],
+      ['qsv', true],
+      ['vaapi', true],
+    ] as const)(
+      'with %s, a still picture runs at real time: %s',
+      async (mode, realtime) => {
+        for (const kind of ['offline', 'error'] as const) {
+          const { sut, getCapturedFrameState } = makeSut(mode);
+
+          await sut.createPlaceholderSession(
+            kind === 'error'
+              ? { ...common, kind, title: 'Error' }
+              : { ...common, kind },
+          );
+
+          expect(getCapturedFrameState()?.realtime).toBe(realtime);
+        }
+      },
+    );
+
+    test('an error screen ffmpeg draws reads ahead on any pipeline', async () => {
+      const { sut, getCapturedFrameState } = makeSut('vaapi', 'testsrc');
+
+      await sut.createPlaceholderSession({
+        ...common,
+        kind: 'error',
+        title: 'Error',
+      });
+
+      expect(getCapturedFrameState()?.realtime).toBe(false);
+    });
+  });
+
   describe('gap music under the offline picture', () => {
     function makeSut() {
       const config = makeTranscodeConfig({

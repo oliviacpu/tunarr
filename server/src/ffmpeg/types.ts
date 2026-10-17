@@ -40,7 +40,14 @@ export type PlaceholderSessionOpts = {
   isFirstTranscode?: boolean;
 } & (
   | { kind: 'error'; title: string; subtitle?: string }
-  | { kind: 'offline'; backgroundMusic?: OfflineBackgroundMusic }
+  | {
+      kind: 'offline';
+      backgroundMusic?: OfflineBackgroundMusic;
+      // The offline picture, when the caller found it on disk (an upload).
+      // Otherwise the channel's offline picture URL, or the generic screen, is
+      // fetched over HTTP.
+      picture?: FileStreamSource;
+    }
 );
 
 export const ConcatStreamModeToChildMode: Record<

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ChannelIcon } from '@tunarr/types';
 import { deleteUploadedFile } from './fsUtil.js';
@@ -58,6 +59,61 @@ export function extractLocalUploadFilename(url: string): string | null {
   return parsed.pathname.slice(LocalUploadPathPrefix.length);
 }
 
+/** Where uploaded images are stored, under the database directory. */
+export function uploadsDirectory(databaseDirectory: string): string {
+  return path.join(databaseDirectory, 'images', 'uploads');
+}
+
+/**
+ * The file behind a URL to one of this server's own uploads
+ * (`/images/uploads/<name>?v=<version>`), when it is in `directory`. ffmpeg can
+ * then read a channel's offline picture from disk instead of fetching it back
+ * through the server's address, which is often a public HTTPS one.
+ *
+ * The URL's version must match the file's contents ({@link uploadVersion}), as
+ * it does in every upload URL Tunarr hands out. That tells this server's upload
+ * apart from a same-named picture on another server, whatever host the URL
+ * names. Undefined for any other URL, a name that isn't a plain file name, a
+ * missing or unreadable file, or a version that doesn't match.
+ */
+export async function localUploadFile(
+  url: string | undefined,
+  directory: string,
+): Promise<string | undefined> {
+  const parsed = isNonEmptyString(url) ? URL.parse(url) : null;
+  const version = parsed?.searchParams.get('v');
+  if (
+    !parsed?.pathname.startsWith(LocalUploadPathPrefix) ||
+    !isNonEmptyString(version)
+  ) {
+    return;
+  }
+  let name: string;
+  try {
+    name = decodeURIComponent(
+      parsed.pathname.slice(LocalUploadPathPrefix.length),
+    );
+  } catch {
+    return;
+  }
+  if (
+    !isNonEmptyString(name) ||
+    name !== path.basename(name) ||
+    name === '.' ||
+    name === '..'
+  ) {
+    return;
+  }
+  const file = path.join(directory, name);
+  let contents: Uint8Array;
+  try {
+    contents = await fs.readFile(file);
+  } catch {
+    return;
+  }
+  return uploadVersion(contents) === version ? file : undefined;
+}
+
 /**
  * The address that links Tunarr hands to other apps start with: the configured
  * public URL (XMLTV settings) when there is one, else the scheme and host the
@@ -90,11 +146,12 @@ export function uploadedImageUrl(
   filename: string,
   contents: Uint8Array,
 ): string {
-  const version = createHash('sha256')
-    .update(contents)
-    .digest('hex')
-    .slice(0, 12);
-  return `${publicLinkOrigin(publicUrl, request)}${LocalUploadPathPrefix}${filename}?v=${version}`;
+  return `${publicLinkOrigin(publicUrl, request)}${LocalUploadPathPrefix}${filename}?v=${uploadVersion(contents)}`;
+}
+
+/** The version in an upload's URL: a short hash of its contents. */
+export function uploadVersion(contents: Uint8Array): string {
+  return createHash('sha256').update(contents).digest('hex').slice(0, 12);
 }
 
 /**
