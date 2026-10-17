@@ -250,7 +250,8 @@ function makeClips(dir) {
 function truncateClip(dir, spec) {
   const [i, s] = spec.split(':').map(Number);
   if (!(i >= 1 && i <= clipDurations.length && s > 0)) throw new Error('--truncate-clip takes I:S, a 1-based clip index and seconds');
-  const name = fs.readdirSync(dir).find((f) => f.startsWith(`clip${String(i).padStart(2, '0')}.`));
+  // The video, not a sidecar subtitle copied beside a --clip-file
+  const name = fs.readdirSync(dir).find((f) => f.startsWith(`clip${String(i).padStart(2, '0')}.`) && !/\.(srt|ass|ssa|vtt)$/i.test(f));
   const file = path.join(dir, name ?? `clip${String(i).padStart(2, '0')}.mkv`);
   const tmp = `${file}.tmp.mkv`;
   execFileSync(opt.ffmpeg, ['-y', '-v', 'error', '-i', file, '-t', String(s), '-map', '0', '-c', 'copy', tmp]);

@@ -381,23 +381,59 @@ describe('FfmpegPlaybackParamsCalculator', () => {
         },
       );
 
-      test('keeps the rate when a hardware pipeline deinterlaces', () => {
-        const calculator = new FfmpegPlaybackParamsCalculator(
-          makeTranscodeConfig({
-            deinterlaceVideo: true,
-            hardwareAccelerationMode: 'vaapi',
-          }),
-          'hls',
-        );
-        const params = calculator.calculateForStream(
-          makeStreamDetails({
-            framerate: '30000/1001',
-            scanType: 'interlaced',
-          }),
-          { pinFrameRate: true, deinterlaceFilter: 'yadif=1' },
-        );
-        expect(params.frameRate).toBe(30000 / 1001);
-      });
+      test.each([
+        ['vaapi', {}],
+        ['cuda', {}],
+        ['qsv', {}],
+      ] as const)(
+        'keeps the rate when %s deinterlaces on the GPU',
+        (hardwareAccelerationMode, overrides) => {
+          const calculator = new FfmpegPlaybackParamsCalculator(
+            makeTranscodeConfig({
+              deinterlaceVideo: true,
+              hardwareAccelerationMode,
+              ...overrides,
+            }),
+            'hls',
+          );
+          const params = calculator.calculateForStream(
+            makeStreamDetails({
+              framerate: '30000/1001',
+              scanType: 'interlaced',
+            }),
+            { pinFrameRate: true, deinterlaceFilter: 'yadif=1' },
+          );
+          expect(params.frameRate).toBe(30000 / 1001);
+        },
+      );
+
+      // These pipelines use the software filter then
+      test.each([
+        ['videotoolbox', {}],
+        ['qsv', { disableHardwareFilters: true }],
+        ['vaapi', { disableHardwareDecoder: true }],
+        ['cuda', { disableHardwareDecoder: true }],
+      ] as const)(
+        'doubles the rate when %s deinterlaces in software (%j)',
+        (hardwareAccelerationMode, overrides) => {
+          const calculator = new FfmpegPlaybackParamsCalculator(
+            makeTranscodeConfig({
+              deinterlaceVideo: true,
+              hardwareAccelerationMode,
+              ...overrides,
+            }),
+            'hls',
+          );
+          const params = calculator.calculateForStream(
+            makeStreamDetails({
+              framerate: '30000/1001',
+              scanType: 'interlaced',
+            }),
+            { pinFrameRate: true, deinterlaceFilter: 'yadif=1' },
+          );
+          expect(params.frameRate).toBe(60000 / 1001);
+        },
+      );
 
       test('keeps the rate of a progressive source', () => {
         const calculator = new FfmpegPlaybackParamsCalculator(

@@ -54,8 +54,11 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     out 20, 15 and 14.26, which describe no real video.
   - `FfmpegPlaybackParamsCalculator.calculateForStream` sets the output rate (`-r <rate> -fps_mode cfr`) for a
     non-standard source always, with "Normalize Frame Rate", and, new, whenever HDHomeRun captions are on
-    (`pinFrameRate`). In the software pipeline a field-rate deinterlacer (`none`, which is yadif=1, `yadif=1`,
-    `bwdif=1`, `w3fdif`) doubles it, so no field-rate frames are dropped.
+    (`pinFrameRate`). When the pipeline deinterlaces in software, a field-rate filter (`none`, which is yadif=1,
+    `yadif=1`, `bwdif=1`, `w3fdif`) doubles it, so no field-rate frames are dropped: without hardware acceleration,
+    with VideoToolbox, with QSV when hardware filters are off, and with VAAPI and CUDA when hardware decoding is off.
+    VAAPI and CUDA also fall back to software when the GPU can't decode the source, which only the pipeline knows;
+    there the extra frames are dropped back to the source rate, and captions still match the output.
   - `FfmpegStreamFactory` lays captions and the "No captions" notice out at that output rate, never at the source's.
   - `QsvPipelineBuilder` uses the chosen rate in its `fps` filter instead of dropping the output rate.
   - NTSC rates go to ffmpeg as exact fractions (`30000/1001`, `ffmpegFrameRate`).

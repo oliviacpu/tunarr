@@ -143,8 +143,7 @@ export class FfmpegPlaybackParamsCalculator {
       ) {
         const fieldRate =
           params.deinterlace &&
-          this.transcodeConfig.hardwareAccelerationMode ===
-            HardwareAccelerationMode.None &&
+          this.usesSoftwareDeinterlacer() &&
           deinterlacerDoublesFrameRate(options.deinterlaceFilter);
         params.frameRate = output.rate * (fieldRate ? 2 : 1);
       }
@@ -160,6 +159,26 @@ export class FfmpegPlaybackParamsCalculator {
     }
 
     return params;
+  }
+
+  // Whether the pipeline deinterlaces with the software filter (DeinterlaceFilter), as far as the transcode config
+  // tells: always without hardware acceleration and with VideoToolbox (whose pipeline is the software one's), with QSV
+  // when hardware filters are off, and with VAAPI and CUDA when hardware decoding is off, as their frames are then in
+  // system memory. Those two also fall back when the GPU can't decode the source, which only the pipeline knows; there
+  // a field-rate filter's extra frames are dropped back to the source rate.
+  private usesSoftwareDeinterlacer() {
+    switch (this.transcodeConfig.hardwareAccelerationMode) {
+      case HardwareAccelerationMode.None:
+      case HardwareAccelerationMode.Videotoolbox:
+        return true;
+      case HardwareAccelerationMode.Qsv:
+        return !!this.transcodeConfig.disableHardwareFilters;
+      case HardwareAccelerationMode.Vaapi:
+      case HardwareAccelerationMode.Cuda:
+        return !!this.transcodeConfig.disableHardwareDecoder;
+      default:
+        return false;
+    }
   }
 
   calculateForErrorStream(
