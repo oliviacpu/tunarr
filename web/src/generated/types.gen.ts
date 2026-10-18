@@ -14505,7 +14505,7 @@ export type GetStreamChannelsByIdM3U8Data = {
          */
         variant?: boolean | 'true' | 'false' | number;
         /**
-         * With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on.
+         * With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on and the channel has subtitles enabled.
          */
         captions?: boolean | 'true' | 'false' | number;
     };
@@ -14531,7 +14531,7 @@ export type HeadStreamChannelsByIdM3U8Data = {
          */
         variant?: boolean | 'true' | 'false' | number;
         /**
-         * With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on.
+         * With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on and the channel has subtitles enabled.
          */
         captions?: boolean | 'true' | 'false' | number;
     };

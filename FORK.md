@@ -35,6 +35,25 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The .ts stream only carries a caption track on channels with subtitles on (2026-10-18)
+
+- **What you saw:** nothing on screen. With **Closed captions for HDHomeRun clients** on, every HLS channel's `.ts`
+  stream was captioned, including channels with subtitles off, which never have a caption to show. Each of their
+  segments went through the caption rewrite for padding alone, on the shared server's CPU.
+- **Cause:** `ConcatStream.captioned` checked only the stream mode (`hls_concat`) and the global switch. So the
+  `.ts` wrapper asked for the HLS playlist with `captions=true` on every HLS channel, the playlist marked every
+  segment, and `/stream/channels/:id/hls/:file?captions=1` ran each one through `HlsSession.captionedSegment` and the
+  TS rewriter. The wrapper's output also went through `CaptionLanguageStream`. The transcode side already skipped
+  these channels: `FfmpegStreamFactory.captionsOn` requires `channel.subtitlesEnabled`.
+- **Fix:** `ConcatStream.captioned` also requires `channel.subtitlesEnabled`, the same gate the transcode uses. The
+  `captions=true` playlist flag and the `CaptionLanguageStream` sink both follow it. A channel with subtitles off gets
+  plain segments and ffmpeg's own PMT, as with the global switch off. The setting is read at tune-in, as before.
+- **Tests:** new `ConcatStream.test.ts`. With captions on and the channel's subtitles off (or never set), the playlist
+  URL has no `captions` flag and there is no output sink; both subtitles-off cases fail on the old code. With
+  subtitles on, the URL has `captions=true` and the sink is a `CaptionLanguageStream`. With the global switch off, or
+  in the MPEG-TS stream mode, no channel is captioned.
+- **Upstream:** not sent.
+
 ### Closed captions only for H.264 output; other formats keep burned-in subtitles (2026-10-18)
 
 - **What you saw:** found in code review, not on the deployment. With closed captions for HDHomeRun clients on, a
