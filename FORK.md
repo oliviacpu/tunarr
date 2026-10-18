@@ -56,6 +56,41 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Tests:** `BasePipelineBuilder.test.ts`: the wrapper gets the window before its input (fails on the old code).
 - **Upstream:** not sent.
 
+### The .ts stream keeps every frame where segments and programs meet (2026-10-17)
+
+- **What you saw:** captions that lost two letters ("You" as "u"), about one frame lost every 40 s on a slow shared
+  server. The .ts stream Plex reads (the wrapper: an ffmpeg that joins a session's
+  HLS segments, with `-fflags +discardcorrupt`) had a 2-frame gap there.
+- **Cause:** ffmpeg's MPEG-TS demuxer marks the PES it is building as corrupt when the next packet's continuity counter
+  doesn't follow on, and `+discardcorrupt` drops it. That PES is the last frame before the join. Two things broke the
+  counters:
+  - **Captioned segments (most joins):** to end a captioned segment on its original counter, the inserter gives the
+    last frame enough extra packets by moving its last bytes one per packet (`packetizePes`). When that frame's last
+    full packet held no more bytes than were moved, the packet disappeared, so the segment came out one packet short
+    and the next segment's first counter didn't follow on. In a 200 s run, a segment's captioned copy ended on counter
+    6 while the original ended on 7, and the verbose wrapper log showed `Packet corrupt (stream = 0, dts = …), dropping
+    it` each time.
+  - **Program boundaries (with or without captions):** a later program's transcode restarts its counters at 0 and was
+    meant to flag its first packets as a discontinuity with `-mpegts_flags +initial_discontinuity`. The HLS muxer
+    doesn't pass that to its segment muxer, so the flag never appeared and the previous program's last frame was
+    dropped.
+- **Fix:**
+  - `packetizePes` decides how many packets a PES takes first (the minimum plus the extra), then fills them, leaving one
+    byte for each packet still to come, so it always makes exactly that many. `insertCaptions` checks that the captioned
+    video ends on the original counter and otherwise serves the segment as it is.
+  - `HlsOutputFormat` and `HlsDirectOutputFormat` pass the flag through `-hls_segment_options
+    mpegts_flags=+initial_discontinuity`, so a later program's first packet of each stream carries the discontinuity
+    indicator, which the demuxer accepts.
+  - Measured with `stream-repro --mode hdhr` (2 s segments, captions on): 3 synthetic programs of 100 s, 240 s
+    captured, 5 lost frames before (each the last frame of a segment, two at program boundaries), none after; a DVD
+    excerpt with sidecar subtitles played three times (330 s, two program boundaries), 10192 frames with no gap and
+    every caption equal to its subtitle cue.
+- **Tests:** `MpegTsCaptionInserter.test.ts`: a captioned segment ends on the original counter for every slice size
+  from 300 to 699 bytes (fails on the old code at 319), and `packetizePes` makes exactly the minimum plus the extra
+  packets for every length up to 600 and every extra up to 15, keeping every byte. `HlsOutputFormat.test.ts` and
+  `HlsDirectOutputFormat.test.ts`: a later program passes the flag through `-hls_segment_options` (fails on the old
+  code).
+
 ### A burned-in subtitle's path can hold any character (2026-10-17)
 
 - **What you saw:** a program with a forced subtitle never started. ffmpeg said `No option name near
@@ -128,11 +163,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     2011 frames 50 ms apart (the source has about 2400 in that time); after, 29.97 fps, every source frame kept, the
     raw HLS segments 33.4 ms apart with no gap, and every caption equal to its subtitle except where the .ts wrapper
     lost a frame (next point).
-- **Still open:** the .ts wrapper (the ffmpeg that joins a session's HLS segments into the HDHomeRun stream)
-  occasionally loses a frame where one segment meets the next, when its reading catches up with the newest segment. It
-  happens with captions off too (0 to 2 frames in 60 s of a fast replay against a local server; about one in 40 s on a
-  slow shared server, where the transcode runs near real time). A lost frame takes its caption pair with it: control
-  codes survive (each is sent twice), but two letters of text are lost. The segments themselves are complete.
+- **Still open:**
+  - **Fixed since:** the .ts wrapper's lost frames where segments and programs meet ("The .ts stream keeps every
+    frame where segments and programs meet").
   - **Hardware pipelines:** whether a pipeline's deinterlacer doubles the frame rate is worked out from the transcode
     config and the source, mirroring each builder's choice. A GPU that can't decode a codec falls back to software
     in VAAPI and CUDA, which only the pipeline knows: there the pinned rate keeps the source's, so a field-rate
@@ -171,9 +204,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     them.
   - `HlsSession` checks each program's frame spacing in a segment before laying out its pairs, so a mismatched program
     is sent as padding without touching other programs in the same segment.
-- **What it can't fix:** a frame the .ts wrapper loses after captioning ("Still open" in "A source reporting a
-  frame rate that isn't standard keeps all its frames"). The captioned segments are complete; the loss happens where
-  the wrapper joins them.
+- **What it couldn't fix:** a frame the .ts wrapper lost after captioning, fixed since ("The .ts stream keeps every
+  frame where segments and programs meet").
 - **Tests:** `pairsForFrames.test.ts` (a missing frame, two frames in a slot, a control code's copies and a program's
   missing first frames fail on the old slot lookup; one per slot, a later segment's start and a long jump are guards);
   `MpegTsCaptionInserter.test.ts` (asked once, in presentation order, with B-frames and across the PTS wrap);
