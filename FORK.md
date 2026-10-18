@@ -35,6 +35,45 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Gap music shows its artist and title on the offline picture (2026-10-18)
+
+- **What you saw:** during a gap the offline picture played gap music, but nothing on screen said what was playing.
+- **Cause:** nothing drew text on the offline picture. The track's artist and title never left the database.
+- **Fix:**
+  - `StreamProgramCalculator.pickGapMusic` puts the picked track's artist on the offline item. It comes from the
+    track's artist grouping, which `getFillerPrograms` already loads, or else the track's `artistName`.
+  - `ProgramStream.resolveNowPlaying` builds the line with `nowPlayingLine` (`ffmpeg/nowPlayingText.ts`): "♪ Artist —
+    Title" on one line, NFC-composed, cut with "..." past 32 ems. Widths come from the font's own glyph advances
+    (`ffmpeg/fontMetrics.ts`, a small cmap/hmtx reader).
+  - No line is drawn when the font lacks one of the characters, when the track's stream didn't resolve (a silent gap),
+    or when the channel's new `offline.showNowPlaying` is false. It's on by default; the checkbox is **Show the artist
+    and title** under Gap music.
+  - The font is M+ Rounded 1c Bold (OFL, 3.5 MB, `server/src/resources/fonts`). It covers Latin, Greek, Cyrillic, kana
+    and about 5,000 kanji, which matters because drawtext uses one font with no fallback.
+  - `loadNowPlayingFont` copies the font to `<data dir>/fonts`, because the packaged binary keeps its resources in its
+    snapshot, which ffmpeg can't read. That folder is outside `cache/`, which backups include. The font is copied again
+    if it goes missing, and the bundle script copies `resources/fonts` into `dist`.
+  - `FfmpegStreamFactory.createOfflineSession` adds `NowPlayingTextFilter` (drawtext) as the picture input's first
+    filter, when ffmpeg has `drawtext` (`FfmpegInfo.hasFilter`). It runs on the software frame at the picture's own
+    size, before every pipeline's scale or GPU upload. On CUDA, QSV and VAAPI it also comes before the loop filter, so
+    the text is drawn once.
+  - The line is sized and placed from the picture's height: `fontsize=h/30`, centred 94.6% of the way down, cream text
+    on a `black@0.6` box. That sits below the lettering on the cards but past the 95% title-safe line. The text is
+    escaped for both of ffmpeg's parsers (`escapeDrawtextValue`) and drawn with `expansion=none`.
+- **Tests:**
+  - `fontMetrics.test.ts`: a format 4 map, and the bundled font's format 12 map.
+  - `nowPlayingText.test.ts`: line format, whitespace, combining accents, missing glyphs, cutting to width, the font
+    copy.
+  - `NowPlayingTextFilter.test.ts`: escaping, the filter, and drawtext first in the software, NVIDIA, VAAPI and QSV
+    pipelines.
+  - `FfmpegStreamFactory.test.ts`: drawn first; not drawn without drawtext.
+  - `ProgramStream.test.ts`: the font is copied, and copied again; nothing drawn when turned off or over a silent gap.
+  - `StreamProgramCalculator.test.ts`: the artist from the grouping, else the column.
+- **Checked** with ffmpeg 8.1.3 on 1920×1080 channel cards scaled to 720p. Quotes, colons, commas, brackets,
+  semicolons, `%` and backslashes draw literally, Japanese titles draw, and the strip's centre measured at 94.6% of the
+  height.
+- **Upstream:** not sent.
+
 ### The guide's full rebuild can run at a chosen hour (2026-10-18)
 
 - **What you saw:** the scheduled full guide rebuild could only run at midnight and every refresh interval after it

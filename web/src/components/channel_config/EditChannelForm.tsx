@@ -59,6 +59,8 @@ function getDefaultFormValues(
         channel.offline.soundtrack ?? DefaultChannel.offline.soundtrack ?? '',
       // '' = no gap music
       musicListId: channel.offline.musicListId ?? '',
+      // on unless turned off
+      showNowPlaying: channel.offline.showNowPlaying ?? true,
       // '' = gaps use the image above, or the channel logo, in the guide
       guidePicture: channel.offline.guidePicture ?? '',
     },

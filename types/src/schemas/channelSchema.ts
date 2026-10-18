@@ -90,6 +90,9 @@ export const ChannelOfflineSchema = z.object({
   mode: z.union([z.literal('pic'), z.literal('clip')]),
   // Filler list whose tracks play, loudness-normalized, under the offline picture during gaps
   musicListId: z.string().optional(),
+  // Whether the gap music's artist and title show along the bottom of the
+  // offline picture. On unless false.
+  showNowPlaying: z.boolean().optional(),
   // The picture gaps get in the guide (XMLTV <icon>), when the offline picture
   // doesn't suit guide tiles: clients crop one picture to both tall and wide
   // tiles, so a square one with its content centred survives both

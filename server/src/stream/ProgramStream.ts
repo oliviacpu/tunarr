@@ -25,7 +25,15 @@ import type {
 } from '../db/derived_types/StreamLineup.ts';
 import { MediaSourceDB } from '../db/mediaSourceDB.ts';
 import type { FFmpegAssistedFactory } from '../ffmpeg/FFmpegModule.ts';
-import type { OfflineBackgroundMusic, StreamOptions } from '../ffmpeg/types.ts';
+import {
+  loadNowPlayingFont,
+  nowPlayingLine,
+} from '../ffmpeg/nowPlayingText.ts';
+import type {
+  OfflineBackgroundMusic,
+  OfflineNowPlaying,
+  StreamOptions,
+} from '../ffmpeg/types.ts';
 import { globalOptions } from '../globals.ts';
 import { KEYS } from '../types/inject.ts';
 import { assisted, injected, multiInjected } from '../util/assistedInject.ts';
@@ -212,6 +220,11 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
     const backgroundMusic = lineupItem.backgroundMusic
       ? await this.resolveBackgroundMusic(lineupItem.backgroundMusic)
       : undefined;
+    // only over a track that plays: a gap whose track failed is silent
+    const nowPlaying =
+      backgroundMusic && lineupItem.backgroundMusic
+        ? await this.resolveNowPlaying(lineupItem.backgroundMusic)
+        : undefined;
     const picture = await this.resolveOfflinePicture();
 
     const result = await ffmpeg.createPlaceholderSession({
@@ -225,6 +238,7 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       realtime: this.opts?.realtime ?? this.context.realtime,
       backgroundMusic,
       picture,
+      nowPlaying,
     });
 
     if (isUndefined(result)) {
@@ -288,6 +302,35 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       audioStream,
       trackDurationMs: music.program.duration,
     };
+  }
+
+  // The gap music track's artist and title, to draw over the offline picture,
+  // unless the channel turned that off. Undefined when the font couldn't be
+  // set up, or can't draw the text.
+  private async resolveNowPlaying(
+    music: NonNullable<OfflineStreamLineupItem['backgroundMusic']>,
+  ): Promise<OfflineNowPlaying | undefined> {
+    if (this.context.targetChannel.offline?.showNowPlaying === false) {
+      return;
+    }
+
+    const font = await loadNowPlayingFont();
+    if (!font) {
+      return;
+    }
+
+    const text = nowPlayingLine(
+      { title: music.program.title, artist: music.artist },
+      font.metrics,
+    );
+    if (text === undefined) {
+      this.logger.debug(
+        "Gap music track %s: no title, or a character the font can't draw",
+        music.program.uuid,
+      );
+      return;
+    }
+    return { text, fontFile: font.file };
   }
 
   // The channel's offline picture from disk when it's one of this server's

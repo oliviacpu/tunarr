@@ -813,6 +813,9 @@ describe('StreamProgramCalculator', () => {
       musicListId?: string;
       gapMs?: number;
       trackMs?: number;
+      // the track's artist grouping, and its own artist name column
+      artist?: string;
+      artistName?: string;
     }) {
       const fillerDB = mock<IFillerListDB>();
       const channelDB = mock<IChannelDB>();
@@ -841,7 +844,14 @@ describe('StreamProgramCalculator', () => {
         Promise.resolve(track),
       );
       when(fillerDB.getFillerPrograms(anything())).thenReturn(
-        Promise.resolve([{ ...track, state: 'ok' }] as never),
+        Promise.resolve([
+          {
+            ...track,
+            state: 'ok',
+            artistName: opts.artistName ?? null,
+            artist: opts.artist ? { title: opts.artist } : null,
+          },
+        ] as never),
       );
       when(playHistoryDB.getFillerHistory(anything(), anything())).thenReturn(
         Promise.resolve([]),
@@ -923,6 +933,33 @@ describe('StreamProgramCalculator', () => {
       expect(recorded).toMatchObject({
         programUuid: trackId,
         fillerListId: 'music-list',
+      });
+    });
+
+    test("carries the track's artist, for the title drawn over the picture", async () => {
+      const { out } = await gapLookup({
+        musicListId: 'music-list',
+        artist: 'Les Exemples',
+        artistName: 'Les Exemples (column)',
+      });
+      expect(out.lineupItem).toMatchObject<DeepPartial<StreamLineupItem>>({
+        type: 'offline',
+        backgroundMusic: { artist: 'Les Exemples' },
+      });
+    });
+
+    test("falls back to the track's artist name without an artist grouping", async () => {
+      const { out } = await gapLookup({
+        musicListId: 'music-list',
+        artistName: 'Les Exemples',
+      });
+      expect(out.lineupItem).toMatchObject<DeepPartial<StreamLineupItem>>({
+        backgroundMusic: { artist: 'Les Exemples' },
+      });
+
+      const { out: noArtist } = await gapLookup({ musicListId: 'music-list' });
+      expect(noArtist.lineupItem).toMatchObject<DeepPartial<StreamLineupItem>>({
+        backgroundMusic: { artist: undefined },
       });
     });
 

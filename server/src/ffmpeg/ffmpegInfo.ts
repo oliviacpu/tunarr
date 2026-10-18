@@ -283,6 +283,11 @@ export class FfmpegInfo {
     return opts.get().includes(option) ? true : defaultOnMissing;
   }
 
+  async hasFilter(filter: string) {
+    const filters = await this.getFilters();
+    return filters.isSuccess() && filters.get().includes(filter);
+  }
+
   async getCapabilities() {
     const [optionsResult, encodersResult, filtersResult, hwAccelResult] =
       await Promise.allSettled([

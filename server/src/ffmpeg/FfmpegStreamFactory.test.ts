@@ -43,6 +43,7 @@ import tmp from 'tmp';
 import type { NonEmptyArray } from 'ts-essentials';
 import { describe, expect, test, vi } from 'vitest';
 import { GapMusicLoudnorm } from './builder/filter/LoudnormFilter.ts';
+import { NowPlayingTextFilter } from './builder/filter/NowPlayingTextFilter.ts';
 import {
   AudioInputSource,
   NullAudioInputSource,
@@ -271,9 +272,12 @@ function createCapturingPipelineBuilderFactory(): {
   };
 }
 
-function makeMockFfmpegInfo(): FfmpegInfo {
+function makeMockFfmpegInfo(filters: string[] = []): FfmpegInfo {
   return {
     getVersion: vi.fn().mockResolvedValue(mockFfmpegVersion),
+    hasFilter: vi.fn((filter: string) =>
+      Promise.resolve(filters.includes(filter)),
+    ),
   } as unknown as FfmpegInfo;
 }
 
@@ -709,14 +713,14 @@ describe('FfmpegStreamFactory', () => {
   });
 
   describe('gap music under the offline picture', () => {
-    function makeSut() {
+    function makeSut(ffmpegFilters: string[] = []) {
       const config = makeTranscodeConfig({
         hardwareAccelerationMode: 'none',
         videoFormat: 'h264',
       });
       const capture = createCapturingPipelineBuilderFactory();
       const sut = new FfmpegStreamFactory(
-        makeMockFfmpegInfo(),
+        makeMockFfmpegInfo(ffmpegFilters),
         makeMockSettingsDB(makeFfmpegSettings()),
         capture.factory,
         makeMockChannelDB(),
@@ -772,6 +776,56 @@ describe('FfmpegStreamFactory', () => {
       expect(audioInput).toBeInstanceOf(NullAudioInputSource);
       expect(audioInput?.desiredState.loudnormConfig).toBeNull();
       expect(audioInput?.desiredState.fades).toBeNull();
+    });
+
+    const nowPlaying = {
+      text: '♪  Les Exemples — Le matin à Paris',
+      fontFile: '/data/fonts/MPLUSRounded1c-Bold.ttf',
+    };
+
+    test("draws the track's artist and title on the picture, first", async () => {
+      const { sut, getCapturedVideoInput } = makeSut(['drawtext']);
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+        nowPlaying,
+      });
+
+      const [first] = getCapturedVideoInput()?.filterSteps ?? [];
+      expect(first).toBeInstanceOf(NowPlayingTextFilter);
+      expect(first?.filter).toContain(
+        'text=♪  Les Exemples — Le matin à Paris',
+      );
+      expect(first?.filter).toContain(
+        'fontfile=/data/fonts/MPLUSRounded1c-Bold.ttf',
+      );
+    });
+
+    test('leaves the picture alone with an ffmpeg that has no drawtext filter', async () => {
+      const { sut, getCapturedVideoInput } = makeSut([]);
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+        nowPlaying,
+      });
+
+      expect(getCapturedVideoInput()?.filterSteps).toEqual([]);
+    });
+
+    test('leaves the picture alone without a title to draw', async () => {
+      const { sut, getCapturedVideoInput } = makeSut(['drawtext']);
+
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+      });
+
+      expect(getCapturedVideoInput()?.filterSteps).toEqual([]);
     });
 
     test('gapMusicFades fades out only when the gap cuts the track short', () => {
