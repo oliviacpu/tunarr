@@ -17,7 +17,7 @@ import { Mutex } from 'async-mutex';
 import { inject, injectable, optional } from 'inversify';
 import throttle from '@/util/throttle.js';
 import { chunk, compact, escape, flatMap, isNil, map, round } from 'lodash-es';
-import { writeFile } from 'node:fs/promises';
+import { rename, writeFile } from 'node:fs/promises';
 import { match } from 'ts-pattern';
 import { type ArtworkType } from '../db/schema/Artwork.ts';
 import type { ProgramWithRelationsOrm } from '../db/schema/derivedTypes.ts';
@@ -158,13 +158,20 @@ export class XmlTvWriter {
       programmes.push(rendered);
     }
 
-    return await writeFile(
-      this.settingsDB.xmlTvSettings().outputPath,
+    // Written beside the final name, then renamed over it: a reader (Plex
+    // downloads this file through /api/xmltv.xml) never sees a half-written
+    // guide. Before this, Plex twice logged "malformed data detected in
+    // XMLTV file" after downloading mid-write.
+    const outputPath = this.settingsDB.xmlTvSettings().outputPath;
+    const tmpPath = `${outputPath}.${process.pid}.tmp`;
+    await writeFile(
+      tmpPath,
       this.assemble(
         channels.map(({ channel }) => channel),
         programmes,
       ),
     );
+    await rename(tmpPath, outputPath);
   }
 
   /**
@@ -275,7 +282,14 @@ export class XmlTvWriter {
   ): XmltvChannel {
     const partial: XmltvChannel = {
       id: xmlChannelId,
+      // Plex titles a channel "<number> <first display-name>", so the name
+      // comes first ("2 2 Sci-Fi" was what "<number> <name>" first produced).
+      // Jellyfin's XMLTV reader keeps the last display-name as the channel
+      // name, so the plain name comes last as well.
       displayName: [
+        {
+          _value: escape(channel.name),
+        },
         {
           _value: `${channel.number} ${escape(channel.name)}`,
         },

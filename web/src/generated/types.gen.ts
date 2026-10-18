@@ -14363,6 +14363,20 @@ export type PostApiXmltvRefreshResponses = {
     200: unknown;
 };
 
+export type PostApiXmltvFlushData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/xmltv/flush';
+};
+
+export type PostApiXmltvFlushResponses = {
+    /**
+     * Default Response
+     */
+    200: unknown;
+};
+
 export type DeleteApiChannelsM3uData = {
     body?: never;
     path?: never;

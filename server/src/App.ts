@@ -2,6 +2,7 @@ import { inject, injectable } from 'inversify';
 import type { GlobalOptions } from './globals.ts';
 import { Server } from './Server.ts';
 import { EmptyTrashService } from './services/EmptyTrashService.ts';
+import { PlexGuideNotifier } from './services/PlexGuideNotifier.ts';
 import { StartupService } from './services/StartupService.ts';
 import { KEYS } from './types/inject.ts';
 import { InjectLogger } from './util/inject.ts';
@@ -23,6 +24,7 @@ export class App {
     @inject(StartupService) private startupService: StartupService,
     @inject(Server) private server: Server,
     @inject(EmptyTrashService) private emptyTrash: EmptyTrashService,
+    @inject(PlexGuideNotifier) private plexGuideNotifier: PlexGuideNotifier,
   ) {}
 
   async start() {
@@ -34,6 +36,8 @@ export class App {
 
     await this.startupService.runStartupServices();
     await this.server.runServer();
+    // The startup guide task ran before this point; Plex can download the guide only now.
+    this.plexGuideNotifier.markListening();
 
     // Fire-and-forget: the HTTP server is already accepting connections and the
     // search service is started, which the drain needs. Placing this after
