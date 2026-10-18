@@ -35,6 +35,27 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The .ts stream starts when a second audio track is a few seconds late (2026-10-17)
+
+- **What you saw:** a cold tune of a channel with two audio tracks (Audio tracks `eng, jpn`, loudness levelling on)
+  failed at once. The .ts wrapper exited with code 234 after `sample rate not set` and `Could not write header
+  (incorrect codec parameters ?)`. Re-tuning a minute later worked.
+- **Cause:** the wrapper copies every stream of the session, so ffmpeg must find each stream's parameters before it
+  writes the output header. It reads only its default window: 5 MB, and for the HLS demuxer's segment demuxer
+  4 s of analysis when none is set. A track whose first packets come after that window has no sample rate, and the
+  MPEG-TS muxer refuses the header. Reproduced with the wrapper's exact command against an HLS stream whose second
+  audio track starts 8 s in: exit 234 with the same messages. The exact trigger on the deployment (what made that
+  track late on that tune) couldn't be reproduced locally: 80 cold and near-cold tunes of a two-track channel, with
+  and without loudness levelling and with the deployment's segment settings, all started.
+- **Fix:** `hlsWrap` gives the wrapper's input `-analyzeduration 15000000 -probesize 50000000`
+  (`ProbeWindowInputOption`). ffmpeg stops probing as soon as every stream is known, so this only waits when a track
+  is late; a track with no packets at all still fails after 15 s.
+  - Against the late-track stream: starts, with the second track's packets in the output from 8 s.
+  - Tune-in through Tunarr unchanged: 20 cold tunes each with the deployment's settings, first byte median 0.80 s
+    before and 0.81 s after.
+- **Tests:** `BasePipelineBuilder.test.ts`: the wrapper gets the window before its input (fails on the old code).
+- **Upstream:** not sent.
+
 ### The .ts stream keeps every frame where segments and programs meet (2026-10-17)
 
 - **What you saw:** captions that lost two letters ("You" as "u"), about one frame lost every 40 s on a slow shared

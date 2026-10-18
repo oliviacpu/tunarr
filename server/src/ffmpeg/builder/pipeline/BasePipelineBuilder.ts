@@ -130,6 +130,7 @@ import {
   VideoBufferSizeOutputOption,
   VideoTrackTimescaleOutputOption,
 } from '../options/OutputOption.ts';
+import { ProbeWindowInputOption } from '../options/input/ProbeWindowInputOption.ts';
 import { RealtimeBufferSizeInputOption } from '../options/input/RealtimeBufferSizeInputOption.ts';
 import { FrameRateOutputOption } from '../options/output/FrameRateOutputOption.ts';
 import { Pipeline } from './Pipeline.ts';
@@ -218,6 +219,11 @@ function isAudioPipelineContext(
 }
 
 export abstract class BasePipelineBuilder implements PipelineBuilder {
+  // The .ts wrapper's probe window (ProbeWindowInputOption): long enough for a
+  // track a few segments late, with bytes to match at high bit rates
+  static readonly HlsWrapAnalyzeSeconds = 15;
+  static readonly HlsWrapProbeBytes = 50_000_000;
+
   protected logger: Logger = LoggerFactory.child({
     caller: import.meta,
     className: this.constructor.name,
@@ -320,6 +326,16 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
     }
 
     input.addOption(new RealtimeBufferSizeInputOption('15M'));
+    // Every stream of the session is copied, so each one's parameters must be
+    // found before the header: a second audio track that starts a few seconds
+    // in (a cold session, loudness levelling's lookahead) failed the stream
+    // with "sample rate not set" under ffmpeg's default window
+    input.addOption(
+      new ProbeWindowInputOption(
+        BasePipelineBuilder.HlsWrapAnalyzeSeconds,
+        BasePipelineBuilder.HlsWrapProbeBytes,
+      ),
+    );
     input.addOption(
       new ReadrateInputOption(
         this.ffmpegCapabilities,
