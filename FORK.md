@@ -47,6 +47,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Tests:** `FfmpegProcess.test.ts`: a shell stand-in that writes 64 KB blocks for ever and acts on SIGTERM only
   between writes, piped to a reader that never drains, exits within seconds of `kill()` with code 0 (on the old code
   it is SIGKILLed after 15 s).
+
 ### Plex shows "2 Sci-Fi", not "2 2 Sci-Fi" (2026-10-18)
 
 - **What you saw:** every channel in Plex's guide carried its number twice.
@@ -117,14 +118,11 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
       caption can make the next late too (up to 0.6 s). 15 fps: 60% before, 35% after, since a two-line caption
       needs more than 2 s of frames.
   - End to end with `stream-repro --mode hdhr` and the same subtitles on a synthetic clip, 2 s segments, the capture
-    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`:
-    - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
-      same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms.
-    - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms.
-    - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
     cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
     same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
-frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+    frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
 - **Tests:** `Cea608Encoder.keyframes.test.ts`: a load that would cross a keyframe goes before it, on time; one
   that fits nowhere on time shows up to 300 ms late, else crosses as before; generated dialogue at 23.976, 25, 29.97
   and 59.94 fps leaves no fragment at any keyframe with pauses between lines, and at most a quarter of them back to
