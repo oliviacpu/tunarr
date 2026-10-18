@@ -25,31 +25,6 @@ export type ProgramCaptions = {
   appearance?: Partial<CaptionAppearance>;
 };
 
-// A frame rate as frames per second, exact for the NTSC rates (24000/1001...)
-// that probes and settings round. A rounded rate drifts captions by about one
-// frame a minute. Undefined when missing or implausible.
-export function exactFrameRate(
-  framerate: number | string | null | undefined,
-): number | undefined {
-  let rate: number;
-  if (typeof framerate === 'number') {
-    rate = framerate;
-  } else if (typeof framerate === 'string' && framerate.includes('/')) {
-    const [num, den] = framerate.split('/').map(Number);
-    rate = num !== undefined && den !== undefined ? num / den : NaN;
-    if (Number.isFinite(rate) && rate > 0 && rate <= 240) {
-      return rate;
-    }
-  } else {
-    rate = parseFloat(framerate ?? '');
-  }
-  if (!Number.isFinite(rate) || rate <= 0 || rate > 240) {
-    return;
-  }
-  const ntsc = (Math.round((rate * 1001) / 1000) * 1000) / 1001;
-  return Math.abs(rate - ntsc) < 0.005 && !Number.isInteger(rate) ? ntsc : rate;
-}
-
 // "01:02:03,456", "01:02:03.456", "02:03.456" (WebVTT), "1:02:03.45" (ASS)
 function parseTimestamp(text: string): number | undefined {
   const match = /^(?:(\d+):)?(\d{1,2}):(\d{1,2})[.,](\d{1,3})$/.exec(
