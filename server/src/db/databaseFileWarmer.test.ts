@@ -5,6 +5,13 @@ import { DatabaseFileWarmer, WarmCooldownMs } from './databaseFileWarmer.ts';
 import type { FileCacheReadResult } from './readIntoFileCache.ts';
 import { readIntoFileCache } from './readIntoFileCache.ts';
 
+// The real read, watched
+vi.mock('./readIntoFileCache.ts', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('./readIntoFileCache.ts')>();
+  return { ...actual, readIntoFileCache: vi.fn(actual.readIntoFileCache) };
+});
+
 function fakeRead() {
   return vi.fn((files: string[]) =>
     Promise.resolve<FileCacheReadResult>({ bytes: files.length, ms: 1 }),
@@ -95,13 +102,25 @@ describe('DatabaseFileWarmer', () => {
       await fs.rm(dir, { recursive: true, force: true });
     });
 
+    // Codex on PR #51: the startup read stops at 512 MiB, which would leave a
+    // larger database's end, and its WAL, uncached
+    test('reads every byte, without the startup read’s cap', async () => {
+      const db = path.join(dir, 'db.db');
+      await fs.writeFile(db, Buffer.alloc(4096, 1));
+      vi.mocked(readIntoFileCache).mockClear();
+
+      await new DatabaseFileWarmer(() => [db, `${db}-wal`]).warm();
+
+      expect(readIntoFileCache).toHaveBeenCalledWith(
+        [db, `${db}-wal`],
+        Number.POSITIVE_INFINITY,
+      );
+    });
+
     test('leaves the event loop running while it reads', async () => {
       const db = path.join(dir, 'db.db');
       await fs.writeFile(db, Buffer.alloc(16 * 1024 * 1024, 1));
-      const warmer = new DatabaseFileWarmer(
-        () => [db, `${db}-wal`],
-        readIntoFileCache,
-      );
+      const warmer = new DatabaseFileWarmer(() => [db, `${db}-wal`]);
 
       // Count event loop turns while the 16 chunks are read: a synchronous
       // read would hold the loop until it finished, and none would run.

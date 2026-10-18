@@ -12,6 +12,15 @@ import { readIntoFileCache } from './readIntoFileCache.ts';
 export const WarmCooldownMs = 10 * 60 * 1000;
 
 /**
+ * Every byte of the files. The startup read's cap (DefaultMaxBytes) keeps a
+ * start quick; a guide refresh's queries can read any page, and with the cap a
+ * database past 512 MiB would leave its end, and its WAL, uncached.
+ */
+export function readEntireFiles(files: string[]) {
+  return readIntoFileCache(files, Number.POSITIVE_INFINITY);
+}
+
+/**
  * Reads files into the operating system's file cache (see readIntoFileCache)
  * before a large synchronous read, at most once per cooldown.
  *
@@ -34,7 +43,7 @@ export class DatabaseFileWarmer {
     private readonly files: () => string[],
     private readonly read: (
       files: string[],
-    ) => Promise<FileCacheReadResult> = readIntoFileCache,
+    ) => Promise<FileCacheReadResult> = readEntireFiles,
     private readonly now: () => number = () => performance.now(),
     private readonly cooldownMs: number = WarmCooldownMs,
   ) {}

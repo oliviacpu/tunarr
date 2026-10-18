@@ -54,7 +54,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - Before a guide fetch, `getGuideProgramsByIds` reads `db.db` and `db.db-wal` into the file cache front to back
     with `readIntoFileCache` (the startup fix below), on the libuv thread pool, so the event loop keeps running and
     the queries after it find every page in memory (`db/databaseFileWarmer.ts`). On the deployment that read took 1.6 s
-    for 148 MB.
+    for 148 MB. Unlike the startup read it has no 512 MiB cap, since the queries can read any page.
   - A read that finished within the last 10 minutes is trusted, so a burst of channel saves reads once, and callers
     asking during a read share it. A failed read only means slower queries.
   - Guide queries take 50 programs instead of 200 (`GuideFetchBatchSize`). Should the file cache drop the database
@@ -68,8 +68,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     refresh ran.
 - **Tests:**
   - `databaseFileWarmer.test.ts`: the provider's files are read; callers share a read in progress; a read within the
-    cooldown is skipped and the next one after it runs; a failed read and a missing database path never throw; with
-    the real read, the event loop keeps turning while 16 MB are read.
+    cooldown is skipped and the next one after it runs; a failed read and a missing database path never throw; the
+    real read is asked for every byte (fails with the startup cap); the event loop keeps turning while 16 MB are read.
   - `BasicProgramRepository.test.ts`: the file is read before the first query when asked, not otherwise or with
     nothing to fetch; 120 programs take 3 queries, with event loop turns between them. The first and last fail on the
     old code.
