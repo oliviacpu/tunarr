@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { resolveBaseLogLevel, resolveLogFileMode } from './LoggerFactory.ts';
+import {
+  getPrettyStreamOpts,
+  resolveBaseLogLevel,
+  resolveLogFileMode,
+} from './LoggerFactory.ts';
 
 /**
  * Regression for #2193 — every worker thread built its own rolling
@@ -83,5 +87,15 @@ describe('resolveBaseLogLevel (#1992)', () => {
         settingsLogLevel: 'info',
       }),
     ).toEqual({ source: 'env', level: 'trace' });
+  });
+});
+
+describe('getPrettyStreamOpts', () => {
+  test('prints local time with its offset, never a literal Z', () => {
+    const format = getPrettyStreamOpts().translateTime;
+    expect(typeof format).toBe('string');
+    expect(format).toMatch(/^SYS:/);
+    expect(format).not.toContain("'Z'");
+    expect(format).toMatch(/ o$/);
   });
 });
