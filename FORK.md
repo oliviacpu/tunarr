@@ -35,6 +35,33 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Forced subtitles inside a video file are read as forced (2026-10-18)
+
+- **What you saw:** on a channel whose subtitle selection burns in forced English subtitles under English audio, an
+  English-dubbed anime's "Signs & Songs" track was never burned in, and its captions came from that sparse track
+  (about 25 lines an episode) instead of "Full" (about 240).
+- **Cause:** `ProgramMinter.mintVersions` never copied a stream's forced flag (`//TODO: forced`), so every embedded
+  subtitle stream was stored as not forced. Its `program_subtitles` row, minted from the same scan, had the flag, but
+  stream selection reads the stream rows: a forced-only rule found nothing, and the caption fallback (full text tracks
+  only) took the forced track first. On the deployment, no stream row of any kind was forced, while 381 embedded
+  subtitle rows were.
+- **Fix:**
+  - `ProgramMinter` copies the flag (`forced: stream.forced ?? false`), for Plex, Jellyfin, Emby and local sources.
+  - A startup fixer, `BackfillSubtitleForcedFlagFixer`, marks forced each embedded subtitle stream whose subtitle row
+    (same program, same stream index) is forced, so existing programs heal without a rescan. It changes nothing on a
+    second run.
+  - Checked and unchanged: burn-in reads the extracted copy of the chosen stream (named by its stream index), never the
+    video file's first subtitle track, and image subtitles are overlaid by their own stream index.
+  - `stream-repro` gains `--run-task NAME`, to run a task such as `SubtitleExtractorTask` before the capture.
+- **Evidence:** `stream-repro --mode hdhr` on a clip with the same tracks as the anime (two PGS tracks, then text
+  "Signs & Songs" default and forced, then text "Full"), a forced-English subtitle preference and extraction run first.
+  Before: nothing burned in, and the captions were the 2 sign cues in 40 s. After: the sign burned in from the text
+  track's extracted copy, and the captions were the 13 "Full" cues.
+- **Tests:** `ProgramMinter.test.ts` (the flag on each stream; fails on the old code) and
+  `BackfillSubtitleForcedFlagFixer.test.ts` (only matching embedded rows change; a sidecar, another program and an
+  audio stream with the same index don't; a second run changes nothing).
+- **Upstream:** not sent.
+
 ### Tuning in no longer puts the rest of a loading caption on screen (2026-10-18)
 
 - **What you saw:** right after tuning in to a captioned channel, the end of a caption flashed up on its own ("ng the
