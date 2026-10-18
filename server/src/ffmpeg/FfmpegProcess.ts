@@ -214,9 +214,16 @@ export class FfmpegProcess extends events.EventEmitter<FfmpegEvents> {
       }
     });
 
+    const spawnedAt = performance.now();
     this.#processHandle.stdout.once('data', (d) => {
       if (d) {
         this.#sentData = true;
+        // Only processes that write to stdout (the .ts wrapper) get here.
+        this.#logger.info(
+          '%s wrote its first output after %d ms',
+          this.ffmpegName,
+          Math.round(performance.now() - spawnedAt),
+        );
       }
     });
 

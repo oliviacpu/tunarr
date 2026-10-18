@@ -35,6 +35,20 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A tune-in's timing is in Tunarr's log (2026-10-18)
+
+- **What you saw:** nothing. How long a tune-in took (and whether it failed before a byte was sent) could only be
+  read off Plex's logs, which show the tuner's side and only at INFO on a lucky day.
+- **Fix:** the `/stream/channels/<id>.ts` route logs `Tune-in: session N ms, first byte N ms` with the channel,
+  token, client address and user agent when the first byte goes out, and `Stream closed after N s, N MB sent` when
+  the request closes (with `(no byte was ever sent)` for a stream that closed before any byte), and `Tune-in failed
+after N ms, no byte was sent: <reason>` when no session could be started. `BaseHlsSession` logs `HLS session
+ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a process writing to stdout (the
+  `.ts` wrapper) sent its first output. `TuneInTimer` holds the marks; `CountingPassThrough` counts the bytes inside
+  the stream so the response's own piping is untouched.
+- **Tests:** `TuneInTimer.test.ts`: marks, rounding, summary; the counting stream counts and reports the first chunk
+  once.
+
 ### The .ts wrapper exits when its session ends, instead of 15 s later by SIGKILL (2026-10-18)
 
 - **What you saw:** `channel-N-concat still running after SIGTERM. Sending SIGKILL` at nearly every session end
@@ -118,6 +132,9 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
       caption can make the next late too (up to 0.6 s). 15 fps: 60% before, 35% after, since a two-line caption
       needs more than 2 s of frames.
   - End to end with `stream-repro --mode hdhr` and the same subtitles on a synthetic clip, 2 s segments, the capture
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
     cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
     same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
     cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
