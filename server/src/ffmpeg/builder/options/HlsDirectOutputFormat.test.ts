@@ -37,4 +37,12 @@ describe('HlsDirectOutputFormat', () => {
     expect(outputIdx).toBeGreaterThan(-1);
     expect(masterIdx).toBeLessThan(outputIdx);
   });
+
+  test("marks a later program's first packets as a discontinuity through the segment muxer", () => {
+    const later = makeFormat(false).options();
+    const idx = later.indexOf('-hls_segment_options');
+    expect(later[idx + 1]).toBe('mpegts_flags=+initial_discontinuity');
+    expect(later).not.toContain('-mpegts_flags');
+    expect(makeFormat(true).options()).not.toContain('-hls_segment_options');
+  });
 });

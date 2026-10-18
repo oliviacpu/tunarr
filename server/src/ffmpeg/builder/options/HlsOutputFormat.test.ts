@@ -49,6 +49,16 @@ describe('HlsOutputFormat', () => {
     expect(masterIdx).toBeLessThan(outputIdx);
   });
 
+  test("marks a later program's first packets as a discontinuity through the segment muxer", () => {
+    // A bare -mpegts_flags never reaches the HLS muxer's segment muxer, so the
+    // .ts wrapper took each program's restarted counters for corruption
+    const later = makeFormat(false).options();
+    const idx = later.indexOf('-hls_segment_options');
+    expect(later[idx + 1]).toBe('mpegts_flags=+initial_discontinuity');
+    expect(later).not.toContain('-mpegts_flags');
+    expect(makeFormat(true).options()).not.toContain('-hls_segment_options');
+  });
+
   describe('keyframe interval', () => {
     function gopOptions(frameRate: number | null, oneSecondGop = false) {
       const state = new FrameState({

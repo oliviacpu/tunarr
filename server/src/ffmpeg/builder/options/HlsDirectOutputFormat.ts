@@ -46,8 +46,9 @@ export class HlsDirectOutputFormat extends OutputOption {
 
     opts.push('-hls_flags', flags.join('+'));
 
+    // Through the HLS muxer to its segment muxer (see HlsOutputFormat)
     if (!this.isFirstTranscode) {
-      opts.push('-mpegts_flags', '+initial_discontinuity');
+      opts.push('-hls_segment_options', 'mpegts_flags=+initial_discontinuity');
     }
 
     opts.push(this.playlistPath);

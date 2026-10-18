@@ -327,7 +327,7 @@ function scanNals(es: Buffer): NalScan {
 
 // Splits one PES into TS packets, keeping the first packet's adaptation field
 // (PCR, random access flag) and stuffing the last one
-function packetizePes(
+export function packetizePes(
   pes: Buffer,
   pid: number,
   firstAdaptation: Buffer | undefined,
@@ -335,14 +335,27 @@ function packetizePes(
   // Packets to add beyond the minimum: the PES's last bytes go one per packet
   extraPackets: number = 0,
 ): Buffer[] {
+  const firstRoom = PacketSize - 4 - (firstAdaptation?.length ?? 0);
+  const minimum =
+    pes.length <= firstRoom
+      ? 1
+      : 1 + Math.ceil((pes.length - firstRoom) / (PacketSize - 4));
+  // Exactly this many, as the caller's continuity counter arithmetic counts on
+  // them: spreading only the last bytes one per packet would lose the last
+  // full packet whenever it held no more bytes than were spread. A packet
+  // needs at least one byte, so there can't be more packets than bytes.
+  const total = Math.min(minimum + extraPackets, pes.length);
   const packets: Buffer[] = [];
-  const spreadFrom = pes.length - Math.min(extraPackets, pes.length - 1);
   let pos = 0;
   let first = true;
   while (pos < pes.length) {
     const adaptation = first ? firstAdaptation : undefined;
     const room = PacketSize - 4 - (adaptation?.length ?? 0);
-    const take = pos >= spreadFrom ? 1 : Math.min(room, spreadFrom - pos);
+    // Fill each packet, leaving one byte for each packet still to come
+    const take = Math.max(
+      1,
+      Math.min(room, pes.length - pos - (total - packets.length - 1)),
+    );
     const stuffing = room - take;
 
     let field: Buffer | undefined = adaptation;
@@ -647,6 +660,18 @@ export function insertCaptions(
       writeVideo(rebuiltPacket, true);
     }
     emitted.set(pesFirst, upTo);
+  }
+
+  // Served as it is, the segment keeps its counters; captioned, it must end
+  // where it did, or the reader drops a frame at the next join
+  const originalLastCc = packets.findLast(
+    (p) => p.pid === video.pid && p.hasPayload,
+  )?.cc;
+  if (originalLastCc !== undefined && cc !== originalLastCc) {
+    return {
+      ok: false,
+      reason: `captioned video would end on continuity counter ${cc}, not ${originalLastCc}`,
+    };
   }
 
   return { ok: true, segment: Buffer.concat(out), framesCaptioned };
