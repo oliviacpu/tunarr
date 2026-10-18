@@ -170,6 +170,13 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
         );
 
       if (sessionResult.isFailure()) {
+        // The tune-ins that matter most: nothing was ever sent.
+        logger.warn(
+          who,
+          'Tune-in failed after %d ms, no byte was sent: %s',
+          timer.elapsedMs(),
+          sessionResult.error.type ?? 'unknown error',
+        );
         return match(sessionResult.error.type)
           .with('channel_not_found', () =>
             res.status(404).send('Channel not found.'),
