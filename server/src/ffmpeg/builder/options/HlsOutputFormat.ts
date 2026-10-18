@@ -56,8 +56,13 @@ export class HlsOutputFormat extends OutputOption {
 
     opts.push('-hls_flags', flags.join('+'));
 
+    // A later program's counters start over, so its first packets say so.
+    // The HLS muxer hands options to its segment muxer only through
+    // -hls_segment_options; a bare -mpegts_flags never reached it, and the
+    // .ts wrapper then took the jump for corruption and dropped the previous
+    // program's last frame.
     if (!this.isFirstTranscode) {
-      opts.push('-mpegts_flags', '+initial_discontinuity');
+      opts.push('-hls_segment_options', 'mpegts_flags=+initial_discontinuity');
     }
 
     opts.push(this.playlistPath);
