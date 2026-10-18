@@ -18,27 +18,32 @@ const settings = {
 } as unknown as ReadableFfmpegSettings;
 
 describe('FfmpegProcess.kill', () => {
-  test('a process blocked writing to an unread pipe exits on SIGTERM, not the 15 s SIGKILL', async () => {
-    const proc = new FfmpegProcess(
-      settings,
-      'test-writer',
-      BlockedWriter,
-      '/tmp',
-    );
-    const out = proc.start()!;
-    // A destination nobody reads: backpressure stops the pipe being drained.
-    out.pipe(new PassThrough({ highWaterMark: 1024 }));
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  // The stand-in needs /bin/sh, head and /dev/zero.
+  test.skipIf(process.platform === 'win32')(
+    'a process blocked writing to an unread pipe exits on SIGTERM, not the 15 s SIGKILL',
+    async () => {
+      const proc = new FfmpegProcess(
+        settings,
+        'test-writer',
+        BlockedWriter,
+        '/tmp',
+      );
+      const out = proc.start()!;
+      // A destination nobody reads: backpressure stops the pipe being drained.
+      out.pipe(new PassThrough({ highWaterMark: 1024 }));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const exit = new Promise<[number | null, string | null]>((resolve) =>
-      proc.once('exit', (code, signal) => resolve([code, signal])),
-    );
-    const started = Date.now();
-    proc.kill();
-    const [code, signal] = await exit;
+      const exit = new Promise<[number | null, string | null]>((resolve) =>
+        proc.once('exit', (code, signal) => resolve([code, signal])),
+      );
+      const started = Date.now();
+      proc.kill();
+      const [code, signal] = await exit;
 
-    expect(Date.now() - started).toBeLessThan(5_000);
-    expect(signal).not.toBe('SIGKILL');
-    expect(code).toBe(0);
-  }, 10_000);
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(signal).not.toBe('SIGKILL');
+      expect(code).toBe(0);
+    },
+    10_000,
+  );
 });
