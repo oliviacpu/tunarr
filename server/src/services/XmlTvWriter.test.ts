@@ -1546,6 +1546,23 @@ describe('XmlTvWriter reused programmes', () => {
     }
   }
 
+  test("a channel's display-names start with its name, so Plex shows one number", async () => {
+    await withOutput(async (outputPath) => {
+      const writer = new XmlTvWriter(
+        inMemorySettingsDB({ settings: { xmltv: { outputPath } } }),
+      );
+      const guide = channelGuide(2, [makeProgram({})]);
+      guide.channel.name = 'Sci-Fi';
+      await writer.write([guide]);
+      const { channels } = parseXmltv(await fs.readFile(outputPath, 'utf-8'));
+      expect(channels?.[0]?.displayName.map((d) => d._value)).toEqual([
+        'Sci-Fi',
+        '2',
+        '2 Sci-Fi',
+      ]);
+    });
+  });
+
   test('a full write reports every channel and matches the serialized guide', async () => {
     await withOutput(async (outputPath) => {
       const channels = [

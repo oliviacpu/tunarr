@@ -275,15 +275,17 @@ export class XmlTvWriter {
   ): XmltvChannel {
     const partial: XmltvChannel = {
       id: xmlChannelId,
+      // Plex titles a channel "<number> <first display-name>", so the name
+      // comes first; "2 2 Sci-Fi" was what the old order produced.
       displayName: [
         {
-          _value: `${channel.number} ${escape(channel.name)}`,
+          _value: escape(channel.name),
         },
         {
           _value: `${channel.number}`,
         },
         {
-          _value: escape(channel.name),
+          _value: `${channel.number} ${escape(channel.name)}`,
         },
       ],
     };
