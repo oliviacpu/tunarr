@@ -16,6 +16,7 @@ const { values: opt } = parseArgs({
     layout: { type: 'string', default: 'basic' },
     clips: { type: 'string', default: '3' },
     'clip-file': { type: 'string', multiple: true, default: [] },
+    'keep-names': { type: 'boolean', default: false },
     'clip-seconds': { type: 'string', default: '60' },
     'clip-durations': { type: 'string' },
     'truncate-clip': { type: 'string' },
@@ -68,6 +69,14 @@ const seconds = Number(opt.seconds);
 // --clip-file uses real files as the programs instead of generated clips
 const clipFiles = opt['clip-file'].map((f) => path.resolve(f));
 for (const f of clipFiles) if (!fs.existsSync(f)) throw new Error(`--clip-file ${f} does not exist`);
+// --keep-names copies each --clip-file (and its sidecars) under its own name instead of clipNN, for bugs that
+// depend on a file's name, such as characters a filtergraph must escape
+if (opt['keep-names']) {
+  if (!clipFiles.length) throw new Error('--keep-names needs --clip-file');
+  if (opt['truncate-clip'] || opt['mid-truncate']) throw new Error('--keep-names works without --truncate-clip and --mid-truncate, which find clips by their clipNN name');
+  const stems = clipFiles.map((f) => path.basename(f, path.extname(f)));
+  if (new Set(stems).size !== stems.length) throw new Error('--keep-names needs --clip-file names that differ');
+}
 // Per-clip lengths in seconds, e.g. "60,8,60" for a bumper between two programs.
 const clipDurations = clipFiles.length
   ? clipFiles.map((f) => Number(execFileSync(opt.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f], { encoding: 'utf8' })))
@@ -189,10 +198,10 @@ function makeClips(dir) {
     // Copies, so --truncate-clip never touches the originals. Sidecar subtitles beside a file (<name>.en.srt) come
     // along: embedded subtitles only reach captions once Tunarr's hourly task has extracted them.
     return clipFiles.map((f, i) => {
-      const name = `clip${String(i + 1).padStart(2, '0')}`;
+      const stem = path.basename(f, path.extname(f));
+      const name = opt['keep-names'] ? stem : `clip${String(i + 1).padStart(2, '0')}`;
       const file = path.join(dir, `${name}${path.extname(f)}`);
       fs.copyFileSync(f, file);
-      const stem = path.basename(f, path.extname(f));
       const sidecars = fs
         .readdirSync(path.dirname(f))
         .filter((s) => s.startsWith(`${stem}.`) && /\.(srt|ass|ssa|vtt)$/i.test(s));

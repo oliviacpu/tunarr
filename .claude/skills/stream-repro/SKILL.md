@@ -26,6 +26,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--clips N`, `--clip-seconds S` | `3`, `60` | Number and length of synthetic clips; each clip is one program |
 | `--clip-durations LIST` | | Per-clip lengths in seconds, such as `60,8,60` for a bumper between two programs. Overrides `--clips` and `--clip-seconds` |
 | `--clip-file PATH` | | `synthetic` only. Use this real file as a program instead of generating clips. Repeatable, one program per file. Sidecar subtitles beside it (`<name>.en.srt`) come along; embedded subtitles only reach captions once Tunarr's hourly task has extracted them, so use a sidecar for caption runs. Keep the file outside the repo |
+| `--keep-names` | off | With `--clip-file`, copy each file and its sidecars under their own names instead of `clipNN`, for bugs that depend on a name, such as characters a filtergraph must escape. Programs then sort by file name. Not with `--truncate-clip` or `--mid-truncate` |
 | `--subs-start S` | `0` | Layouts with subtitles: the first cue is S seconds into each clip, like a program that opens without dialogue. Cues follow every 2 s |
 | `--no-subtitles` | off | Turn the channel's subtitles off. The clips keep their subtitle tracks |
 | `--truncate-clip I:S` | | Shorten clip I (1-based) to S seconds after the scan. The database keeps the longer duration, which mimics media that ends before its scheduled time |
