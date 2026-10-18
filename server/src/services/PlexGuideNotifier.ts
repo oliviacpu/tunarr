@@ -74,6 +74,12 @@ export class PlexGuideNotifier {
 
   writeFinished() {
     this.#writes = Math.max(0, this.#writes - 1);
+    if (this.#writes === 0 && this.#pending) {
+      // An ask deferred by this write: at once when someone is flushing, else after the usual quiet spell.
+      this.#schedule(
+        this.#waiters.length > 0 ? 0 : PlexGuideNotifier.DebounceMs,
+      );
+    }
     this.#settle();
   }
 
@@ -86,8 +92,9 @@ export class PlexGuideNotifier {
     if (this.idle) {
       return Promise.resolve();
     }
-    if (this.#pending && this.#timer && this.#listening) {
-      // Don't make a caller wait out the debounce window.
+    if (this.#pending && this.#timer && this.#listening && this.#writes === 0) {
+      // Don't make a caller wait out the debounce window. While a write is
+      // under way the ask waits for it (writeFinished fires it at once).
       this.#schedule(0);
     }
     return new Promise((resolve) => this.#waiters.push(resolve));
@@ -118,6 +125,12 @@ export class PlexGuideNotifier {
       this.logger.debug(
         'Guide changed before the server listens; Plex will be asked once it does',
       );
+      return;
+    }
+    if (this.#writes > 0) {
+      // A later write is still going: asking now would have Plex read a guide
+      // about to change, and the ask for the new one could be dropped while
+      // Plex is busy. writeFinished schedules the ask.
       return;
     }
     if (this.#inFlight) {

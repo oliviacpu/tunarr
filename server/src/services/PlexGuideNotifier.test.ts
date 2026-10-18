@@ -144,6 +144,45 @@ describe('PlexGuideNotifier', () => {
     expect(calls.refreshGuide).toBe(1);
   });
 
+  test('an ask is deferred while a later write is under way', async () => {
+    const { calls, notifier } = setup();
+    notifier.markListening();
+    notifier.writeStarted(); // channel 1
+    notifier.requestRefresh();
+    notifier.writeFinished();
+    notifier.writeStarted(); // channel 2, still writing when the debounce fires
+    await vi.advanceTimersByTimeAsync(PlexGuideNotifier.DebounceMs * 2);
+    await settle();
+    expect(calls.refreshGuide).toBe(0);
+    notifier.requestRefresh();
+    notifier.writeFinished();
+    await vi.advanceTimersByTimeAsync(PlexGuideNotifier.DebounceMs);
+    await settle();
+    expect(calls.refreshGuide).toBe(1);
+  });
+
+  test('flush during a write does not expedite the ask past the write', async () => {
+    const { calls, notifier } = setup();
+    notifier.markListening();
+    notifier.requestRefresh(); // an earlier write's ask, pending
+    notifier.writeStarted(); // a later write
+    let flushed = false;
+    const flushing = notifier.flush().then(() => {
+      flushed = true;
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    expect(calls.refreshGuide).toBe(0);
+    expect(flushed).toBe(false);
+    notifier.requestRefresh();
+    notifier.writeFinished(); // a flusher is waiting: the ask goes out at once
+    await vi.advanceTimersByTimeAsync(1);
+    await settle();
+    await flushing;
+    expect(calls.refreshGuide).toBe(1);
+    expect(flushed).toBe(true);
+  });
+
   test('flush resolves at once when nothing is pending', async () => {
     const { notifier } = setup();
     await expect(notifier.flush()).resolves.toBeUndefined();
