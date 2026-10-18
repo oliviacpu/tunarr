@@ -34,7 +34,8 @@
     "bench:scan-worker": "cross-env NODE_ENV=development tsx scripts/scan-worker-ab.ts",
     "bench:custom-show-sync": "cross-env NODE_ENV=development tsx scripts/custom-show-sync-ab.ts",
     "tunarr": "dotenv -e .env.development -- tsx src/index.ts",
-    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsgo -p tsconfig.build.json --noEmit --diagnostics"
+    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsgo -p tsconfig.build.json --noEmit --diagnostics && pnpm typecheck:local-tests",
+    "typecheck:local-tests": "tsgo -p tsconfig.local-test.json --noEmit"
   },
   "dependencies": {
     "@cospired/i18n-iso-languages": "^4.2.0",
