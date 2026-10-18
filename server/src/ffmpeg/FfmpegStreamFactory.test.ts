@@ -1888,6 +1888,8 @@ describe('FfmpegStreamFactory', () => {
         lineupItem?: ContentBackedStreamLineupItem;
         settings?: Partial<ReturnType<typeof makeFfmpegSettings>>;
         channel?: Partial<ChannelOrm>;
+        // The channel's transcode config (H.264 by default)
+        transcodeConfig?: Partial<TranscodeConfigOrm>;
         // The source's reported frame rate (24 by default)
         framerate?: number | string;
       }) {
@@ -1912,7 +1914,7 @@ describe('FfmpegStreamFactory', () => {
           makeMockChannelDB(),
           makeMockFeatureFlagService({ webvttSidecarEnabled: false }),
           makeMockStreamSelector(opts.selected),
-          makeTranscodeConfig(),
+          makeTranscodeConfig(opts.transcodeConfig),
           makeChannel({ subtitlesEnabled: true, ...opts.channel }),
         );
         const result = await sut.createStreamSession({
@@ -2089,6 +2091,77 @@ describe('FfmpegStreamFactory', () => {
 
         expect(method).toBe(SubtitleMethods.Burn);
         expect(captions).toBeUndefined();
+      });
+
+      // Captions can only be added to H.264 video: with HEVC the segments went
+      // out with neither captions nor the burned-in subtitles they replaced
+      describe.each(['hevc', 'mpeg2video'] as const)(
+        'with %s output video',
+        (videoFormat) => {
+          const transcodeConfig = { videoFormat };
+
+          test('burns full text subtitles in, as with captions off', async () => {
+            const { method, captions } = await run({
+              selected: fullTrack(),
+              transcodeConfig,
+            });
+
+            expect(method).toBe(SubtitleMethods.Burn);
+            expect(captions).toBeUndefined();
+          });
+
+          test('adds no notice to a program without subtitles', async () => {
+            const { captions } = await run({
+              selected: null,
+              subtitles: null,
+              transcodeConfig,
+            });
+
+            expect(captions).toBeUndefined();
+          });
+
+          test('sends no test pattern', async () => {
+            const { captions } = await run({
+              selected: null,
+              settings: { hdhrCaptionTestPattern: true },
+              transcodeConfig,
+            });
+
+            expect(captions).toBeUndefined();
+          });
+
+          test('leaves a standard rate unpinned', async () => {
+            const { outputFrameRate } = await run({
+              selected: fullTrack(),
+              framerate: '24000/1001',
+              transcodeConfig,
+            });
+
+            expect(outputFrameRate).toBeNull();
+          });
+
+          test('still pins the rate for Normalize Frame Rate', async () => {
+            const { outputFrameRate } = await run({
+              selected: fullTrack(),
+              framerate: '24000/1001',
+              transcodeConfig: { ...transcodeConfig, normalizeFrameRate: true },
+            });
+
+            expect(outputFrameRate).toBe(24000 / 1001);
+          });
+        },
+      );
+
+      test('sends captions with H.264 output video', async () => {
+        const { method, captions, outputFrameRate } = await run({
+          selected: fullTrack(),
+          framerate: '24000/1001',
+          transcodeConfig: { videoFormat: 'h264' },
+        });
+
+        expect(method).toBe(SubtitleMethods.Convert);
+        expect(captions?.cues).toHaveLength(1);
+        expect(outputFrameRate).toBe(24000 / 1001);
       });
 
       describe('the caption test pattern', () => {

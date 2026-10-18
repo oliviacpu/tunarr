@@ -35,6 +35,24 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Closed captions only for H.264 output; other formats keep burned-in subtitles (2026-10-18)
+
+- **What you saw:** found in code review, not on the deployment. With closed captions for HDHomeRun clients on, a
+  channel whose transcode config outputs HEVC or MPEG-2 video would show Plex neither its full text subtitles burned in
+  nor captions. The only trace was a debug line, `Serving segment ... without captions`.
+- **Cause:** `FfmpegStreamFactory.captionsOn` checked the setting, the HLS stream mode and the channel's subtitles, but
+  not the output video format. So the program's full text subtitles went to the WebVTT sidecar instead of being burned
+  in, and `insertCaptions` then refused every segment, since it only writes CEA-608 into H.264 (stream type 0x1b).
+- **Fix:** `captionsOn` is false unless the transcode config's video format is H.264, and logs once per program (at
+  info) that the program gets its subtitles as with captions off. It's worked out once in `createStreamSession` and
+  passed to `buildTranscodeInputs`, before the frame rate is pinned and captions are loaded. So with HEVC or MPEG-2
+  output, full text subtitles are burned in, there's no "No captions for this program" notice or test pattern, and the
+  frame rate isn't pinned for captions. Normalize Frame Rate still pins it.
+- **Tests:** `FfmpegStreamFactory.test.ts`, under "HDHomeRun closed captions", for HEVC and MPEG-2 output: full text
+  subtitles are burned in with no captions, no notice, no test pattern, a standard rate stays unpinned, and Normalize
+  Frame Rate still pins it; H.264 output still sends captions and pins the rate. The first four fail on the old code.
+- **Upstream:** not sent.
+
 ### Gap music shows its artist and title on the offline picture (2026-10-18)
 
 - **What you saw:** during a gap the offline picture played gap music, but nothing on screen said what was playing.
