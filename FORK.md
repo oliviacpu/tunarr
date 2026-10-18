@@ -35,6 +35,44 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Tuning in no longer puts the rest of a loading caption on screen (2026-10-18)
+
+- **What you saw:** right after tuning in to a captioned channel, the end of a caption flashed up on its own ("ng the
+  soup" for "Are you eating the soup?"), sometimes for seconds, before the captions settled.
+- **Cause:** a player that starts reading partway into the stream can only decode from the next keyframe. Plex logs
+  `non-existing PPS 0 referenced` and `no frame!` for the frames before it, and FFmpeg's H.264 decoder only hands
+  over caption data for frames it decodes. Tunarr's transcodes put a keyframe at every segment start (and libx264
+  one more on the frame before). FFmpeg's caption decoder, which Plex's comes from, starts in roll-up mode
+  (`ccaption_dec.c`: `ctx->mode = CCMODE_ROLLUP`). So when a pop-on caption was still loading into hidden memory at
+  that keyframe, the rest of its characters were drawn on screen at once. Tunarr loads each caption just before its
+  start frame, so in dialogue a load spanned a keyframe at about a third of them.
+- **Fix:** `buildCaptionSchedule` takes `keyframeIntervalMs` and loads each pop-on caption between two keyframes: in
+  the latest stretch before its start frame that holds the whole load, else from the next keyframe, showing it up to
+  300 ms late (`MaxKeyframeDelayMs`). Only when even that isn't enough does it load across one, as before. `HlsSession`
+  passes the segment length for transcoded sessions; HLS Direct v2 copies the video, whose keyframes aren't known.
+  Paint-on and roll-up are unchanged: they draw text as it arrives.
+  - Whole episodes of back-to-back sitcom dialogue (two subtitle files, about 30 cues a minute), 2 s segments,
+    counting a keyframe as bad when a decoder starting there shows text the continuous decoder doesn't:
+    - 29.97 fps: 27-34% of keyframes before, 1.5-1.8% after; 3-4% of captions later, median 133 ms, at most 267 ms.
+    - 23.976 fps: 35-40% before, 6.1-6.5% after; 4-7% later, median 167-209 ms, at most 292 ms.
+    - 59.94 fps: 12-17% before, none after; no caption moves.
+    - 1 s segments: about 5% (29.97) to 18% (23.976) after, as fewer loads fit between keyframes, and one late
+      caption can make the next late too (up to 0.6 s). 15 fps: 60% before, 35% after, since a two-line caption
+      needs more than 2 s of frames.
+  - End to end with `stream-repro --mode hdhr` and the same subtitles on a synthetic clip, 2 s segments, the capture
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`:
+    - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+      same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms.
+    - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms.
+    - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+      frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+- **Tests:** `Cea608Encoder.keyframes.test.ts`: a load that would cross a keyframe goes before it, on time; one
+  that fits nowhere on time shows up to 300 ms late, else crosses as before; generated dialogue at 23.976, 25, 29.97
+  and 59.94 fps leaves no fragment at any keyframe with pauses between lines, and at most a quarter of them back to
+  back, with every caption shown and none more than 300 ms later. `Cea608TestDecoder` can start like FFmpeg's decoder
+  partway into a stream. The golden snapshot is unchanged: without keyframes nothing changes.
+- **Upstream:** not sent.
+
 ### The .ts stream starts when a second audio track is a few seconds late (2026-10-17)
 
 - **What you saw:** a cold tune of a channel with two audio tracks (Audio tracks `eng, jpn`, loudness levelling on)
