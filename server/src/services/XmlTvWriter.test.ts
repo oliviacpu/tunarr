@@ -1555,10 +1555,12 @@ describe('XmlTvWriter reused programmes', () => {
       guide.channel.name = 'Sci-Fi';
       await writer.write([guide]);
       const { channels } = parseXmltv(await fs.readFile(outputPath, 'utf-8'));
+      // First for Plex (it prefixes the number), last for Jellyfin (it keeps the last one)
       expect(channels?.[0]?.displayName.map((d) => d._value)).toEqual([
         'Sci-Fi',
-        '2',
         '2 Sci-Fi',
+        '2',
+        'Sci-Fi',
       ]);
     });
   });
