@@ -74,13 +74,25 @@ const snapshot = (memory: Memory): DecodedRow[] =>
  * The screens a viewer sees: one entry each time the displayed caption
  * changes, from the frame it changes on. `pairs` are the frames' byte pairs,
  * with or without parity.
+ *
+ * `joining`: a decoder that starts partway into a stream, as FFmpeg's does:
+ * in roll-up mode with two rows and its cursor at column 0 of row 11
+ * (ccaption_dec.c init_decoder), so text that arrives before any mode command
+ * is drawn on screen at once.
  */
-export function decodeScreens(pairs: readonly (readonly number[])[]): Screen[] {
+export function decodeScreens(
+  pairs: readonly (readonly number[])[],
+  { joining = false }: { joining?: boolean } = {},
+): Screen[] {
   let displayed: Memory = new Map();
   let hidden: Memory = new Map();
-  let mode: 'popOn' | 'paintOn' | 'rollUp' = 'popOn';
+  let mode: 'popOn' | 'paintOn' | 'rollUp' = joining ? 'rollUp' : 'popOn';
   let rollUpRows = 2;
   let cursor: DecodedRow | undefined;
+  if (joining) {
+    cursor = { row: 11, column: 0, width: 0, text: '' };
+    displayed.set(cursor.row, cursor);
+  }
   let lastControl: string | undefined;
   const screens: Screen[] = [];
 

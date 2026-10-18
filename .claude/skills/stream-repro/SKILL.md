@@ -25,7 +25,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--layout basic\|multi-audio\|dup-lang\|subs\|mixed\|anamorphic` | `basic` | Synthetic clip track layout (see below) |
 | `--clips N`, `--clip-seconds S` | `3`, `60` | Number and length of synthetic clips; each clip is one program |
 | `--clip-durations LIST` | | Per-clip lengths in seconds, such as `60,8,60` for a bumper between two programs. Overrides `--clips` and `--clip-seconds` |
-| `--clip-file PATH` | | `synthetic` only. Use this real file as a program instead of generating clips. Repeatable, one program per file. Sidecar subtitles beside it (`<name>.en.srt`) come along; embedded subtitles only reach captions once Tunarr's hourly task has extracted them, so use a sidecar for caption runs. Keep the file outside the repo |
+| `--clip-file PATH` | | `synthetic` only. Use this real file as a program instead of generating clips. Repeatable, one program per file. Sidecar subtitles beside it (`<name>.en.srt`) come along; embedded subtitles only reach captions (and burn-in) once Tunarr's hourly task has extracted them, so use a sidecar or `--run-task SubtitleExtractorTask` with `--ffmpeg-setting enableSubtitleExtraction=true` for caption runs. Keep the file outside the repo |
 | `--keep-names` | off | With `--clip-file`, copy each file and its sidecars under their own names instead of `clipNN`, for bugs that depend on a name, such as characters a filtergraph must escape. Programs then sort by file name. Not with `--truncate-clip` or `--mid-truncate` |
 | `--subs-start S` | `0` | Layouts with subtitles: the first cue is S seconds into each clip, like a program that opens without dialogue. Cues follow every 2 s |
 | `--no-subtitles` | off | Turn the channel's subtitles off. The clips keep their subtitle tracks |
@@ -45,6 +45,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--offline-picture FILE` | | `synthetic` only. Upload FILE (PNG or JPEG) and make it the channel's offline picture, as channel cards are set up. `report.offlinePicture` records its URL |
 | `--ffmpeg-setting KEY=VALUE` | | Override one field of the server's ffmpeg settings before streaming. Repeatable. Values parse as JSON when they can, so `true` and `3` are not strings |
 | `--channel-setting KEY=VALUE` | | Set one field of the channel. Repeatable. Values parse as JSON when they can, such as `audioTracks=["eng","jpn"]`. A synthetic channel is created with it; a copied channel is updated. The run fails if a field does not stick. `report.channelSettings` records what was set |
+| `--run-task NAME` | | Run a server task to completion after the channel is built and before the capture, such as `SubtitleExtractorTask` (extracts the embedded text subtitles of programs airing within the hour, which burn-in and captions read). Repeatable. `report.tasksRun` records them |
 | `--resolution WxH` | | Set the output resolution of the channel's transcode config, such as `1280x720` |
 | `--hwaccel MODE` | | Set the hardware acceleration of the channel's transcode config: `none`, `cuda`, `vaapi`, `qsv`, or `videotoolbox` |
 | `--vaapi-device PATH` | | With `--hwaccel vaapi` or `qsv`, the render node to use, such as `/dev/dri/renderD128` |
