@@ -35,6 +35,20 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The .ts wrapper exits when its session ends, instead of 15 s later by SIGKILL (2026-10-18)
+
+- **What you saw:** `channel-N-concat still running after SIGTERM. Sending SIGKILL` at nearly every session end
+  (89 times in 57 hours on the deployment), so each ended stream kept an ffmpeg and its pipe for 15 more seconds.
+- **Cause:** when the last client leaves, nothing reads the wrapper's stdout any more; ffmpeg fills the pipe and
+  blocks in `write()`. It handles SIGTERM only between writes, so the signal waited for the SIGKILL timer in
+  `FfmpegProcess.kill()`.
+- **Fix:** `kill()` unpipes and resumes the child's stdout after sending SIGTERM, so the pending write completes
+  into nowhere and ffmpeg exits on the SIGTERM. The 15 s SIGKILL stays as the backstop.
+- **Tests:** `FfmpegProcess.test.ts`: a shell stand-in that writes 64 KB blocks for ever and acts on SIGTERM only
+  between writes, piped to a reader that never drains, exits within seconds of `kill()` with code 0 (on the old code
+  it is SIGKILLed after 15 s).
+- **Upstream:** not sent.
+
 ### The .ts stream starts when a second audio track is a few seconds late (2026-10-17)
 
 - **What you saw:** a cold tune of a channel with two audio tracks (Audio tracks `eng, jpn`, loudness levelling on)
