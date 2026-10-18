@@ -1546,6 +1546,19 @@ describe('XmlTvWriter reused programmes', () => {
     }
   }
 
+  test('the write leaves only the guide beside it (written to a temp file, then renamed)', async () => {
+    await withOutput(async (outputPath) => {
+      const writer = new XmlTvWriter(
+        inMemorySettingsDB({ settings: { xmltv: { outputPath } } }),
+      );
+      await writer.write([channelGuide(1, [makeProgram({})])]);
+      await writer.write([channelGuide(1, [makeProgram({})])]);
+      const left = await fs.readdir(path.dirname(outputPath));
+      expect(left).toEqual([path.basename(outputPath)]);
+      expect(await fs.readFile(outputPath, 'utf-8')).toContain('<channel ');
+    });
+  });
+
   test('a full write reports every channel and matches the serialized guide', async () => {
     await withOutput(async (outputPath) => {
       const channels = [

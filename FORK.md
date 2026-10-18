@@ -35,6 +35,28 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Plex is asked to reload the guide once per change, and only when it can download it (2026-10-18)
+
+- **What you saw:** Plex showed yesterday's lineup, or half of today's, for hours after a change. After every
+  Tunarr restart Plex logged `failed to download XMLTV data at …/api/xmltv.xml` (connection refused). After the
+  nightly schedule post, which saves six channels in nine seconds, Plex ran one guide reload (0.4 s after the first
+  write) and ignored the next six asks, so it showed the first channel's new lineup and the others' old ones until
+  the next scheduled write, hours later. Twice Plex logged `malformed data detected in XMLTV file` after a download.
+- **Cause:** `UpdateXmlTvTask` asked Plex (`POST /livetv/dvrs/<id>/reloadGuide`) at the end of every run. The startup
+  run happens before the HTTP server listens (`App.start()` awaits the startup tasks, then `runServer()`), so Plex's
+  download of the guide was refused and nothing asked again. A channel save runs the task for that channel, so a
+  burst of saves is a burst of asks, and Plex drops asks while a reload runs. `XmlTvWriter` wrote the guide in place
+  with `writeFile`, and `/api/xmltv.xml` serves the same path, so a download during a write got a truncated file.
+- **Fix:** `PlexGuideNotifier` (singleton) takes the asks: a request made before `markListening()` (called by
+  `App.start()` after `runServer()`) waits for it; requests within 10 s collapse into one ask after the last; a failed
+  ask is retried 3 times, 5 s apart, then logged once. `POST /api/xmltv/flush` resolves when no ask is pending or
+  running, for a script that saved several channels and wants to check Plex's guide. `XmlTvWriter` writes
+  `<outputPath>.<pid>.tmp` and renames it over the guide. The Plex client doc no longer says a guide refresh ends
+  playing streams (it doesn't; a channel-map change does).
+- **Tests:** `PlexGuideNotifier.test.ts` (debounce, waits for listening, retry and give-up, skip without
+  `sendGuideUpdates`, flush); `XmlTvWriter.test.ts`: the write leaves no temp file beside the guide.
+- **Upstream:** not sent.
+
 ### The .ts stream starts when a second audio track is a few seconds late (2026-10-17)
 
 - **What you saw:** a cold tune of a channel with two audio tracks (Audio tracks `eng, jpn`, loudness levelling on)

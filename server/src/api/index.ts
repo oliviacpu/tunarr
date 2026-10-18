@@ -17,6 +17,7 @@ import { createReadStream, promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod/v4';
 import { container } from '../container.ts';
+import { PlexGuideNotifier } from '../services/PlexGuideNotifier.ts';
 import { TruthyQueryParam } from '../types/schemas.ts';
 import { getBooleanEnvVar, TUNARR_ENV_VARS } from '../util/env.ts';
 import { isDev, isNonEmptyString, run } from '../util/index.js';
@@ -269,6 +270,14 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
   // Force an XMLTV refresh
   fastify.post('/xmltv/refresh', async (_, res) => {
     await GlobalScheduler.getScheduledJob(UpdateXmlTvTask.ID).runNow(false);
+    return res.status(200).send();
+  });
+
+  // Resolves once every pending guide write has been followed by the ask to
+  // Plex (or at once when nothing is pending). A script that saved several
+  // channels can wait here before checking Plex's guide.
+  fastify.post('/xmltv/flush', async (_, res) => {
+    await container.get(PlexGuideNotifier).flush();
     return res.status(200).send();
   });
 
