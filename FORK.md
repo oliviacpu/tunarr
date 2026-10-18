@@ -56,6 +56,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   playing streams (it doesn't; a channel-map change does).
 - **Tests:** `PlexGuideNotifier.test.ts` (debounce, waits for listening, retry and give-up, skip without
   `sendGuideUpdates`, flush); `XmlTvWriter.test.ts`: the write leaves no temp file beside the guide.
+
 ### A tune-in's timing is in Tunarr's log (2026-10-18)
 
 - **What you saw:** nothing. How long a tune-in took (and whether it failed before a byte was sent) could only be
