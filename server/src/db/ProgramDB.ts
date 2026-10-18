@@ -13,7 +13,10 @@ import { inject, injectable } from 'inversify';
 import type { Dictionary, MarkOptional, StrictExclude } from 'ts-essentials';
 import type { ProgramExternalIdType } from './custom_types/ProgramExternalIdType.js';
 import type { PageParams } from './interfaces/IChannelDB.js';
-import type { BasicProgramRepository } from './program/BasicProgramRepository.ts';
+import type {
+  BasicProgramRepository,
+  GuideProgramsFetchOptions,
+} from './program/BasicProgramRepository.ts';
 import type { ProgramExternalIdRepository } from './program/ProgramExternalIdRepository.ts';
 import type { ProgramGroupingRepository } from './program/ProgramGroupingRepository.ts';
 import type { ProgramGroupingUpsertRepository } from './program/ProgramGroupingUpsertRepository.ts';
@@ -121,7 +124,7 @@ export class ProgramDB implements IProgramDB {
 
   getGuideProgramsByIds(
     ids: string[] | readonly string[],
-    opts: { includeCreditArtwork: boolean },
+    opts: GuideProgramsFetchOptions,
     batchSize?: number,
   ): Promise<ProgramWithRelationsOrm[]> {
     return this.basicProg.getGuideProgramsByIds(ids, opts, batchSize);
