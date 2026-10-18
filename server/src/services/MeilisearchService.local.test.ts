@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import tmp from 'tmp-promise';
+import { instance, mock } from 'ts-mockito';
 import type { ISettingsDB } from '../db/interfaces/ISettingsDB.ts';
+import { MediaSourceDB } from '../db/mediaSourceDB.ts';
 import type { GlobalOptions, ServerOptions } from '../globals.ts';
 import { fileExists } from '../util/fsUtil.ts';
 import { ChildProcessHelper } from '../util/ChildProcessHelper.ts';
@@ -61,7 +63,7 @@ describe.skipIf(!(await fileExists(binary)))(
         settings,
         new ChildProcessHelper(),
         new FileSystemService(options as unknown as GlobalOptions),
-        new SearchParser(),
+        new SearchParser(instance(mock(MediaSourceDB))),
       );
       services.push(service);
       return service;

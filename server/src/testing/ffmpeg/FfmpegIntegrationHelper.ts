@@ -59,37 +59,6 @@ export async function createTempWorkdir(): Promise<{
   };
 }
 
-function generateTestMediaFile(ffmpegPath: string, outputPath: string): void {
-  const result = spawnSync(
-    ffmpegPath,
-    [
-      '-f',
-      'lavfi',
-      '-i',
-      'testsrc=size=1280x720:rate=30,format=yuv420p',
-      '-f',
-      'lavfi',
-      '-i',
-      'sine=frequency=1000:duration=3',
-      '-t',
-      '3',
-      '-c:v',
-      'libx264',
-      '-c:a',
-      'aac',
-      '-y',
-      outputPath,
-    ],
-    { stdio: 'ignore' },
-  );
-
-  if (result.status !== 0) {
-    throw new Error(
-      `Failed to generate test media file, exit code: ${result.status}`,
-    );
-  }
-}
-
 export function runFfmpegWithPipeline(
   ffmpegPath: string,
   pipelineArgs: string[],

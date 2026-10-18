@@ -252,7 +252,7 @@ describe.skipIf(!binaries || !nvidiaCaps)(
             'copy',
             inputPath,
           ]);
-          expect(remux.exitCode, remux.stderr).toBe(0);
+          expect(remux.exitCode, remux.stderr.toString()).toBe(0);
 
           const video = makeVideoInput(
             inputPath,
