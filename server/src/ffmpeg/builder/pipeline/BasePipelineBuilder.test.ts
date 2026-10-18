@@ -845,5 +845,17 @@ describe('BasePipelineBuilder HLS stream timing', () => {
 
       expect(args[args.indexOf('-readrate_initial_burst') + 1]).toBe('10');
     });
+
+    test('probes long enough to find a late track, before the input', () => {
+      // ffmpeg's default window missed a second audio track that started a few
+      // seconds in, and the stream failed with "sample rate not set"
+      const args = wrapArgs(10);
+      const input = args.indexOf('-i');
+
+      expect(args[args.indexOf('-analyzeduration') + 1]).toBe('15000000');
+      expect(args[args.indexOf('-probesize') + 1]).toBe('50000000');
+      expect(args.indexOf('-analyzeduration')).toBeLessThan(input);
+      expect(args.indexOf('-probesize')).toBeLessThan(input);
+    });
   });
 });
