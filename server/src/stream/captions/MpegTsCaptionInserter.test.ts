@@ -5,7 +5,11 @@ import {
   parseTsSegment as parse,
   videoAccessUnit,
 } from '../../testing/captions/MpegTsSegmentFixture.ts';
-import { crc32Mpeg2, insertCaptions } from './MpegTsCaptionInserter.ts';
+import {
+  crc32Mpeg2,
+  insertCaptions,
+  packetizePes,
+} from './MpegTsCaptionInserter.ts';
 
 const pairFor = (pts: number): CcPair => [0x80 | pts % 0x7f, 0x81];
 const eachFrame =
@@ -170,6 +174,30 @@ describe('insertCaptions', () => {
     expect(parse(captionedFirst.segment).videoPes.at(-1)?.at(-1)).toBe(0x55);
   });
 
+  test('ends on the original continuity counter whatever the frame sizes', () => {
+    // Spreading the last frame's final bytes one per packet used to remove its
+    // last packet when that packet held no more bytes than were spread, so the
+    // segment came out one packet short and the next join lost a frame
+    for (let sliceBytes = 300; sliceBytes < 700; sliceBytes++) {
+      const input = segment({ frames: 3, sliceBytes });
+      const result = insertCaptions(input, {
+        pairsForFrames: eachFrame(pairFor),
+        language: 'eng',
+      });
+      if (!result.ok) {
+        throw new Error(result.reason);
+      }
+      const original = parse(input);
+      const captioned = parse(result.segment);
+      expect(captioned.videoCcs.at(-1), `slice of ${sliceBytes} bytes`).toBe(
+        original.videoCcs.at(-1),
+      );
+      expect(captioned.videoPes.map((pes) => pes.at(-1))).toEqual(
+        original.videoPes.map((pes) => pes.at(-1)),
+      );
+    }
+  });
+
   test("names the captions' language in the PMT, with a valid CRC", () => {
     const result = insertCaptions(segment(), {
       pairsForFrames: eachFrame(pairFor),
@@ -244,5 +272,42 @@ describe('insertCaptions', () => {
       ok: false,
       reason: 'not a whole number of TS packets',
     });
+  });
+});
+
+describe('packetizePes', () => {
+  // The payload a TS packet carries: after its header and any adaptation field
+  const payloadOf = (packet: Buffer) =>
+    packet.readUInt8(3) & 0x20
+      ? packet.subarray(5 + packet.readUInt8(4))
+      : packet.subarray(4);
+
+  test('makes exactly the minimum plus the extra packets, keeping every byte', () => {
+    const adaptation = Buffer.from([7, 0x50, 0, 0, 0, 0, 0, 0]);
+    const wrong: string[] = [];
+    for (const firstAdaptation of [undefined, adaptation]) {
+      const firstRoom = 184 - (firstAdaptation?.length ?? 0);
+      for (let length = 1; length <= 600; length++) {
+        const pes = Buffer.from(
+          Array.from({ length }, (_, i) => (i * 7 + 1) & 0xff),
+        );
+        const minimum =
+          length <= firstRoom ? 1 : 1 + Math.ceil((length - firstRoom) / 184);
+        for (let extra = 0; extra < 16; extra++) {
+          const packets = packetizePes(pes, 0x100, firstAdaptation, 0, extra);
+          const name = `${length} bytes, ${extra} extra, adaptation ${!!firstAdaptation}`;
+          if (packets.length !== Math.min(minimum + extra, length)) {
+            wrong.push(`${name}: ${packets.length} packets`);
+          }
+          if (!Buffer.concat(packets.map(payloadOf)).equals(pes)) {
+            wrong.push(`${name}: bytes changed`);
+          }
+          if (packets.some((p) => p.length !== 188)) {
+            wrong.push(`${name}: a packet isn't 188 bytes`);
+          }
+        }
+      }
+    }
+    expect(wrong.slice(0, 5)).toEqual([]);
   });
 });
