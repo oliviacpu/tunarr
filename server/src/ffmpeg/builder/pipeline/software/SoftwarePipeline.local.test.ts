@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FileStreamSource } from '../../../../stream/types.ts';
 import {
@@ -17,8 +18,14 @@ import {
 } from '../../constants.ts';
 import { PixelFormatYuv420P } from '../../format/PixelFormat.ts';
 import { AudioInputSource } from '../../input/AudioInputSource.ts';
+import { SubtitlesInputSource } from '../../input/SubtitlesInputSource.ts';
 import { VideoInputSource } from '../../input/VideoInputSource.ts';
-import { AudioStream, VideoStream } from '../../MediaStream.ts';
+import {
+  AudioStream,
+  ExternalSubtitleStream,
+  SubtitleMethods,
+  VideoStream,
+} from '../../MediaStream.ts';
 import { AudioState } from '../../state/AudioState.ts';
 import {
   DefaultPipelineOptions,
@@ -443,6 +450,63 @@ describe.skipIf(!binaries)('SoftwarePipelineBuilder integration', () => {
       ).toBe(0);
 
       const probe = probeFile(binaries!.ffprobe, outputPath);
+      expect(probe.streams.some((s) => s.codec_type === 'video')).toBe(true);
+    },
+  );
+
+  ffmpegTest(
+    'burns in a sidecar whose path has filtergraph special characters',
+    async ({ binaryCapabilities, ffmpegVersion }) => {
+      if (!binaries) {
+        throw new Error('This test needs ffmpeg');
+      }
+      // An apostrophe in a burned-in sidecar's name used to stop the program
+      // playing at all; colons, commas, semicolons, brackets and '=' are as
+      // special to the filtergraph
+      const dir = path.join(workdir, 'Show (1992) {x}, part; [2]');
+      await mkdir(dir, { recursive: true });
+      const subtitlePath = path.join(dir, "Kid's Test: a=b 100%.en.forced.srt");
+      await writeFile(
+        subtitlePath,
+        '1\n00:00:00,000 --> 00:00:05,000\nBurned in\n',
+      );
+
+      const builder = new SoftwarePipelineBuilder(
+        makeVideoInput(Fixtures.video720p, FrameSize.withDimensions(1280, 720)),
+        makeAudioInput(Fixtures.video720p),
+        null,
+        new SubtitlesInputSource(
+          new FileStreamSource(subtitlePath),
+          [new ExternalSubtitleStream('subrip', SubtitleMethods.Burn)],
+          SubtitleMethods.Burn,
+        ),
+        null,
+        binaryCapabilities,
+      );
+
+      const outputPath = path.join(workdir, 'output_burned_subtitles.ts');
+      const pipeline = builder.build(
+        FfmpegState.create({
+          version: ffmpegVersion,
+          outputLocation: FileOutputLocation(outputPath, true),
+        }),
+        new FrameState({
+          isAnamorphic: false,
+          scaledSize: FrameSize.withDimensions(1280, 720),
+          paddedSize: FrameSize.withDimensions(1280, 720),
+        }),
+        DefaultPipelineOptions,
+      );
+      const args = pipeline.getCommandArgs();
+      expect(args.some((a) => a.includes('subtitles=filename='))).toBe(true);
+
+      const { exitCode, stderr } = runFfmpegWithPipeline(binaries.ffmpeg, args);
+
+      expect(
+        exitCode,
+        `Pipeline command failed: ${args.join(' ')}\n${stderr}`,
+      ).toBe(0);
+      const probe = probeFile(binaries.ffprobe, outputPath);
       expect(probe.streams.some((s) => s.codec_type === 'video')).toBe(true);
     },
   );
