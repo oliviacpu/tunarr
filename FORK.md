@@ -76,6 +76,51 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `TvGuideService.test.ts`: a full build and a channel save both ask for the read.
 - **Upstream:** not sent.
 
+### A tune-in's timing is in Tunarr's log (2026-10-18)
+
+- **What you saw:** nothing. How long a tune-in took (and whether it failed before a byte was sent) could only be
+  read off Plex's logs, which show the tuner's side and only at INFO on a lucky day.
+- **Fix:** the `/stream/channels/<id>.ts` route logs `Tune-in: session N ms, first byte N ms` with the channel,
+  token, client address and user agent when the first byte goes out, and `Stream closed after N s, N MB sent` when
+  the request closes (with `(no byte was ever sent)` for a stream that closed before any byte), and `Tune-in failed
+after N ms, no byte was sent: <reason>` when no session could be started. `BaseHlsSession` logs `HLS session
+ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a process writing to stdout (the
+  `.ts` wrapper) sent its first output. `TuneInTimer` holds the marks; `CountingPassThrough` counts the bytes inside
+  the stream so the response's own piping is untouched.
+- **Tests:** `TuneInTimer.test.ts`: marks, rounding, summary; the counting stream counts and reports the first chunk
+  once.
+
+### The .ts wrapper exits when its session ends, instead of 15 s later by SIGKILL (2026-10-18)
+
+- **What you saw:** `channel-N-concat still running after SIGTERM. Sending SIGKILL` at nearly every session end
+  (89 times in 57 hours on the deployment), so each ended stream kept an ffmpeg and its pipe for 15 more seconds.
+- **Cause:** when the last client leaves, nothing reads the wrapper's stdout any more; ffmpeg fills the pipe and
+  blocks in `write()`. It handles SIGTERM only between writes, so the signal waited for the SIGKILL timer in
+  `FfmpegProcess.kill()`.
+- **Fix:** `kill()` unpipes and resumes the child's stdout after sending SIGTERM, so the pending write completes
+  into nowhere and ffmpeg exits on the SIGTERM. The 15 s SIGKILL stays as the backstop.
+- **Tests:** `FfmpegProcess.test.ts`: a shell stand-in that writes 64 KB blocks for ever and acts on SIGTERM only
+  between writes, piped to a reader that never drains, exits within seconds of `kill()` with code 0 (on the old code
+  it is SIGKILLed after 15 s).
+
+### Plex shows "2 Sci-Fi", not "2 2 Sci-Fi" (2026-10-18)
+
+- **What you saw:** every channel in Plex's guide carried its number twice.
+- **Cause:** Plex titles a channel `<number> <first display-name>`, and the first `display-name` was already
+  `<number> <name>`.
+- **Fix:** `XmlTvWriter.makeXmlTvChannel` writes the name first (Plex uses the first), then `<number> <name>`, the
+  number, and the name again last (Jellyfin's XMLTV reader keeps the last). Channel ids are unchanged, so a guide
+  reload is enough; no channel-map change (which would end playing streams).
+- **Tests:** `XmlTvWriter.test.ts`: the display-names of a written channel come in that order.
+
+### Console log times carry their real offset (2026-10-18)
+
+- **What you saw:** `2026-10-18T09:50:49.131Z` in the console log for an event that happened at 14:50:49 UTC: the
+  time was local (TZ=America/Chicago) but ended in `Z`, so every reading against Plex's UTC log was 5 hours off.
+- **Cause:** `getPrettyStreamOpts` used `SYS:yyyy-mm-dd'T'HH:MM:ss.l'Z'`: the system zone with a literal `Z`.
+- **Fix:** `SYS:yyyy-mm-dd HH:MM:ss.l o`, local time with its offset (`-05:00`).
+- **Tests:** `LoggerFactory.test.ts`: the pretty-stream time format has no literal `Z` and prints an offset.
+
 ### Forced subtitles inside a video file are read as forced (2026-10-18)
 
 - **What you saw:** on a channel whose subtitle selection burns in forced English subtitles under English audio, an
@@ -128,12 +173,14 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
       caption can make the next late too (up to 0.6 s). 15 fps: 60% before, 35% after, since a two-line caption
       needs more than 2 s of frames.
   - End to end with `stream-repro --mode hdhr` and the same subtitles on a synthetic clip, 2 s segments, the capture
-    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`:
-    - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
-      same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms.
-    - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms.
-    - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
-      frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+    frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
 - **Tests:** `Cea608Encoder.keyframes.test.ts`: a load that would cross a keyframe goes before it, on time; one
   that fits nowhere on time shows up to 300 ms late, else crosses as before; generated dialogue at 23.976, 25, 29.97
   and 59.94 fps leaves no fragment at any keyframe with pauses between lines, and at most a quarter of them back to
@@ -145,7 +192,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 
 - **What you saw:** a cold tune of a channel with two audio tracks (Audio tracks `eng, jpn`, loudness levelling on)
   failed at once. The .ts wrapper exited with code 234 after `sample rate not set` and `Could not write header
-  (incorrect codec parameters ?)`. Re-tuning a minute later worked.
+(incorrect codec parameters ?)`. Re-tuning a minute later worked.
 - **Cause:** the wrapper copies every stream of the session, so ffmpeg must find each stream's parameters before it
   writes the output header. It reads only its default window: 5 MB, and for the HLS demuxer's segment demuxer
   4 s of analysis when none is set. A track whose first packets come after that window has no sample rate, and the
@@ -175,7 +222,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     full packet held no more bytes than were moved, the packet disappeared, so the segment came out one packet short
     and the next segment's first counter didn't follow on. In a 200 s run, a segment's captioned copy ended on counter
     6 while the original ended on 7, and the verbose wrapper log showed `Packet corrupt (stream = 0, dts = …), dropping
-    it` each time.
+it` each time.
   - **Program boundaries (with or without captions):** a later program's transcode restarts its counters at 0 and was
     meant to flag its first packets as a discontinuity with `-mpegts_flags +initial_discontinuity`. The HLS muxer
     doesn't pass that to its segment muxer, so the flag never appeared and the previous program's last frame was
@@ -185,7 +232,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     byte for each packet still to come, so it always makes exactly that many. `insertCaptions` checks that the captioned
     video ends on the original counter and otherwise serves the segment as it is.
   - `HlsOutputFormat` and `HlsDirectOutputFormat` pass the flag through `-hls_segment_options
-    mpegts_flags=+initial_discontinuity`, so a later program's first packet of each stream carries the discontinuity
+mpegts_flags=+initial_discontinuity`, so a later program's first packet of each stream carries the discontinuity
     indicator, which the demuxer accepts.
   - Measured with `stream-repro --mode hdhr` (2 s segments, captions on): 3 synthetic programs of 100 s, 240 s
     captured, 5 lost frames before (each the last frame of a segment, two at program boundaries), none after; a DVD
@@ -200,7 +247,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 ### A burned-in subtitle's path can hold any character (2026-10-17)
 
 - **What you saw:** a program with a forced subtitle never started. ffmpeg said `No option name near
-  '2]aresample=…'` and `Error parsing filterchain '[0:0]pad=…,subtitles=…'`. The subtitle file's name had an
+'2]aresample=…'` and `Error parsing filterchain '[0:0]pad=…,subtitles=…'`. The subtitle file's name had an
   apostrophe in it (`… - Kid's Final Test.en.forced.srt`).
 - **Cause:** FFmpeg reads a filter option's value twice, first when it splits the filtergraph into filters and
   then when it splits a filter's arguments into options (`av_get_token` both times). `SubtitleFilter` escaped the
@@ -265,7 +312,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `QsvPipelineBuilder` uses the chosen rate in its `fps` filter instead of dropping the output rate.
   - NTSC rates go to ffmpeg as exact fractions (`30000/1001`, `ffmpegFrameRate`).
   - Local measurement (`stream-repro --clip-file <a 2 min excerpt of a DVD-sourced episode with a 20 fps header,
-    sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --seconds 100`): before, 20.000 fps,
+sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --seconds 100`): before, 20.000 fps,
     2011 frames 50 ms apart (the source has about 2400 in that time); after, 29.97 fps, every source frame kept, the
     raw HLS segments 33.4 ms apart with no gap, and every caption equal to its subtitle except where the .ts wrapper
     lost a frame (next point).
@@ -434,7 +481,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **What you saw:** caption appearance, alignment and the test pattern were global FFmpeg settings, so trying a
   magenta box changed the captions on every channel, for the owner and friends alike. A test channel (99,
   plans/test-channel-99.md) needs its own.
-- **Change:** a channel setting, **Captions for this channel**, under *Audio & Subtitles* on the Streaming tab:
+- **Change:** a channel setting, **Captions for this channel**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.captions`, `{ testPattern?, alignment?, appearance? }`, stored in the new column
     `captions` (migration 0054). Only what the channel sets is saved; the rest follows the global settings, so a later
     global change still reaches it. The appearance fields have no defaults (`CaptionAppearanceOverridesSchema`), or an
@@ -456,10 +503,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Verified end to end** (stream-repro, jellyfin-ffmpeg 8.1.3): one server, two HLS channels on the same two
   captioned clips, both HDHomeRun `.ts` streams captured for 30 s at once and decoded with FFmpeg's 608 decoder.
 
-  | Channel 900's own setting | Channel 900 | Channel 901 (no setting) |
-  | --- | --- | --- |
+  | Channel 900's own setting    | Channel 900                                                 | Channel 901 (no setting)                    |
+  | ---------------------------- | ----------------------------------------------------------- | ------------------------------------------- |
   | magenta text, blue box, left | 16 captions, `\c&HFF00FF&` `\3c&HFF0000&` at `\pos(57,243)` | the same 16, white, no box, `\pos(115,243)` |
-  | test pattern | "1 WHITE TEXT", "2 GREEN TEXT", "3 BLUE TEXT"… | the clips' own captions |
+  | test pattern                 | "1 WHITE TEXT", "2 GREEN TEXT", "3 BLUE TEXT"…              | the clips' own captions                     |
 
 - **Tests:**
   - `channelCaptions.test.ts`: merge precedence, fields that fall back, the test pattern rules.
@@ -481,8 +528,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - English + Japanese and 5.1 speaker-check audio, stereo, English-only, AC3/E-AC3/AAC, 44.1 kHz;
   - HDR10 (with mastering metadata), HLG, 10-bit SDR, interlaced 29.97i, four frame rates, anamorphic 720x480;
   - three short clips with differing layouts for program boundaries.
-  Every clip shows what it tests, a clock and a frame counter, and the script writes `manifest.json` with what ffprobe
-  found. Used for the deployment's channel 99 (plan `plans/test-channel-99.md`).
+    Every clip shows what it tests, a clock and a frame counter, and the script writes `manifest.json` with what ffprobe
+    found. Used for the deployment's channel 99 (plan `plans/test-channel-99.md`).
 - **Tests:** none in the suite; it's an offline tool. Its own check is the ffprobe manifest: every clip's tracks,
   language tags, colour tags, HDR side data and interlacing, verified against the table in the README.
 
@@ -501,7 +548,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     load (under about a second, common in dialogue and songs) the clear landed inside it. The box code goes once at the
     start of each line, so the rest of the line was written on black.
   - **Seen in jellyfin-ffmpeg 8.1.3**, before the fix: `{\3c&HFF00FF&}Then{\i1} Hey!{\i0} to\Nthe
-    ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and was never affected.
+ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and was never affected.
 - **Fix:** `server/src/stream/captions/Cea608Encoder.ts`.
   - A pop-on line that sets a box colour loads wholly before or wholly after any Erase Displayed Memory in the schedule
     (`groupedLoadSequence`; `placeBefore` and `placeFrom` keep each group on one side of a clear).

@@ -18,7 +18,7 @@ import type { FastifyReply } from 'fastify';
 import { isArray, isNil, isNumber, isUndefined } from 'lodash-es';
 import fs from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { PassThrough } from 'node:stream';
+import { CountingPassThrough, TuneInTimer } from '../stream/TuneInTimer.ts';
 import { format } from 'node:util';
 import { match } from 'ts-pattern';
 import { v4 } from 'uuid';
@@ -138,6 +138,7 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
       },
     },
     async (req, res) => {
+      const timer = new TuneInTimer();
       const channel = await req.serverCtx.channelDB.getChannel(req.params.id);
       if (isNil(channel)) {
         return res.status(404).send('Channel not found.');
@@ -147,6 +148,12 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
 
       const mode = req.query.streamMode ?? channel.streamMode;
       const token = req.query.token ?? v4();
+      const who = {
+        channel: channel.number,
+        token,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      };
 
       const sessionResult =
         await req.serverCtx.sessionManager.getOrCreateConcatSession(
@@ -163,6 +170,13 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
         );
 
       if (sessionResult.isFailure()) {
+        // The tune-ins that matter most: nothing was ever sent.
+        logger.warn(
+          who,
+          'Tune-in failed after %d ms, no byte was sent: %s',
+          timer.elapsedMs(),
+          sessionResult.error.type ?? 'unknown error',
+        );
         return match(sessionResult.error.type)
           .with('channel_not_found', () =>
             res.status(404).send('Channel not found.'),
@@ -182,6 +196,7 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
       }
 
       const session = sessionResult.get();
+      timer.mark('session');
 
       if (lineup.onDemandConfig) {
         await req.serverCtx.onDemandChannelService.resumeChannel(channel.uuid);
@@ -193,14 +208,22 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
       // in fastify on the send).
       // TODO: We could probably record periodic heartbeats by listening
       // to the data event on this piped stream. Just debounce them!
+      // One line per tune-in with its timing, so slow or failed tune-ins can
+      // be read off Tunarr's own log instead of the tuner's (Plex's).
       const piped = session.rawStream!.pipe(
-        new PassThrough({ allowHalfOpen: false }),
+        new CountingPassThrough(() => {
+          timer.mark('first byte');
+          logger.info(who, 'Tune-in: %s', timer.summary());
+        }),
       );
 
       piped.on('close', () => {
-        logger.debug(
-          { token, ip: req.ip, channel: req.params.id },
-          'Concat request closed.',
+        logger.info(
+          who,
+          'Stream closed after %d s, %d MB sent%s',
+          Math.round(timer.elapsedMs() / 1000),
+          Math.round(piped.bytes / 1_000_000),
+          timer.has('first byte') ? '' : ' (no byte was ever sent)',
         );
 
         session.removeConnection(token);

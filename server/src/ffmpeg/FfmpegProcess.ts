@@ -214,9 +214,16 @@ export class FfmpegProcess extends events.EventEmitter<FfmpegEvents> {
       }
     });
 
+    const spawnedAt = performance.now();
     this.#processHandle.stdout.once('data', (d) => {
       if (d) {
         this.#sentData = true;
+        // Only processes that write to stdout (the .ts wrapper) get here.
+        this.#logger.info(
+          '%s wrote its first output after %d ms',
+          this.ffmpegName,
+          Math.round(performance.now() - spawnedAt),
+        );
       }
     });
 
@@ -252,6 +259,13 @@ export class FfmpegProcess extends events.EventEmitter<FfmpegEvents> {
         });
       } else {
         this.#processHandle.kill();
+        // ffmpeg only acts on SIGTERM between writes. When nobody reads its
+        // stdout any more (the .ts wrapper after its last client left), it sits
+        // in a full pipe's write() and the signal waits for the 15 s SIGKILL
+        // below. Letting the output flow to nowhere frees the write, and
+        // ffmpeg exits on the SIGTERM within a second.
+        this.#processHandle.stdout.unpipe();
+        this.#processHandle.stdout.resume();
         setTimeout(() => {
           if (this.#running) {
             this.#logger.info(

@@ -72,7 +72,9 @@ export type GetChildLoggerArgs = {
 export function getPrettyStreamOpts(): PrettyOptions {
   return {
     // minimumLevel: logLevel === 'silent' ? undefined : logLevel,
-    translateTime: "SYS:yyyy-mm-dd'T'HH:MM:ss.l'Z'",
+    // Local time (SYS) with its real offset; the old format printed local
+    // time with a literal 'Z', which read as UTC.
+    translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l o',
     singleLine: true,
     ignore: 'pid,hostname',
     customLevels: {
