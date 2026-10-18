@@ -44,6 +44,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   number, and the name again last (Jellyfin's XMLTV reader keeps the last). Channel ids are unchanged, so a guide
   reload is enough; no channel-map change (which would end playing streams).
 - **Tests:** `XmlTvWriter.test.ts`: the display-names of a written channel come in that order.
+
 ### Console log times carry their real offset (2026-10-18)
 
 - **What you saw:** `2026-10-18T09:50:49.131Z` in the console log for an event that happened at 14:50:49 UTC: the
