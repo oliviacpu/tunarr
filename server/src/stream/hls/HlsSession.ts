@@ -555,6 +555,13 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
           ...this.settingsDB.ffmpegSettings().hdhrCaptionAppearance,
           alignment: this.settingsDB.ffmpegSettings().hdhrCaptionAlignment,
         },
+        // A transcode has a keyframe at every segment start (HlsOutputFormat's
+        // -force_key_frames), where a player tuning in starts decoding. Copied
+        // video keeps the source's, which aren't known here.
+        keyframeIntervalMs:
+          this.sessionType === 'hls_direct_v2'
+            ? undefined
+            : this.getHlsOptions().hlsTime * 1000,
       },
     );
     this.#captionTimeline = [
