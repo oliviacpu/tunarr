@@ -382,6 +382,7 @@ export class FfmpegStreamFactory {
     // Subtitles are still processed as WebVTT sidecar when available.
     const isPassthrough =
       isRemux || outputFormat.type === OutputFormatTypes.HlsDirectV2;
+    const captionsOn = !isPassthrough && this.captionsOn(streamMode);
     const playbackParams = isPassthrough
       ? null
       : new FfmpegPlaybackParamsCalculator(
@@ -390,7 +391,7 @@ export class FfmpegStreamFactory {
         ).calculateForStream(streamDetails, {
           // Captions are laid out one pair per output frame, so the output's
           // rate must be known exactly
-          pinFrameRate: this.captionsOn(streamMode),
+          pinFrameRate: captionsOn,
           deinterlaceFilter: this.ffmpegSettings.deinterlaceFilter,
           infiniteLoop: lineupItem.infiniteLoop,
         });
@@ -421,7 +422,7 @@ export class FfmpegStreamFactory {
         streamDetails,
         lineupItem,
         playbackParams!,
-        { duration, startTime, streamMode, watermark },
+        { duration, startTime, streamMode, watermark, captionsOn },
       ));
     } else {
       ({ subtitleSource, subtitleRendition } =
@@ -574,6 +575,8 @@ export class FfmpegStreamFactory {
       startTime: Duration;
       streamMode: ChannelStreamMode;
       watermark?: Watermark;
+      // This program gets HDHomeRun closed captions (see `captionsOn`)
+      captionsOn: boolean;
     },
   ): Promise<{
     audioInput: Nullable<AudioInputSource>;
@@ -582,8 +585,7 @@ export class FfmpegStreamFactory {
     watermarkSource: Nullable<WatermarkInputSource>;
     captions: ProgramCaptions | undefined;
   }> {
-    const { duration, startTime, streamMode, watermark } = options;
-    const captionsOn = this.captionsOn(streamMode);
+    const { duration, startTime, streamMode, watermark, captionsOn } = options;
     let captions: ProgramCaptions | undefined;
 
     const audioState = this.createAudioState(
@@ -804,13 +806,28 @@ export class FfmpegStreamFactory {
   }
 
   // Captions go into the .ts stream HDHomeRun clients read, which wraps an
-  // HLS session; other modes keep today's subtitles
+  // HLS session; other modes keep today's subtitles. Captions can only be added
+  // to H.264 video, so a transcode config with another video format keeps
+  // today's subtitles too, rather than losing both them and the captions.
   private captionsOn(streamMode: ChannelStreamMode | undefined): boolean {
-    return (
-      this.ffmpegSettings.hdhrClosedCaptions &&
-      streamMode === ChannelStreamModes.Hls &&
-      !!this.channel.subtitlesEnabled
-    );
+    if (
+      !this.ffmpegSettings.hdhrClosedCaptions ||
+      streamMode !== ChannelStreamModes.Hls ||
+      !this.channel.subtitlesEnabled
+    ) {
+      return false;
+    }
+    // The format an HLS program is encoded in (FfmpegPlaybackParamsCalculator)
+    const videoFormat = this.transcodeConfig.videoFormat;
+    if (videoFormat !== VideoFormats.H264) {
+      this.logger.info(
+        'Transcode config "%s" outputs %s video, and closed captions need H.264; this program gets its subtitles as with captions off',
+        this.transcodeConfig.name,
+        videoFormat,
+      );
+      return false;
+    }
+    return true;
   }
 
   // A subtitle track's cues on the program's clock, for captions laid out at
