@@ -96,6 +96,9 @@ export type OfflineStreamLineupItem = BaseStreamLineupItem & {
   backgroundMusic?: {
     program: StreamLineupProgram;
     fillerListId: string;
+    // The track's artist, drawn with its title over the offline picture. From
+    // the track's artist, which the stream program doesn't load.
+    artist?: string;
   };
 };
 

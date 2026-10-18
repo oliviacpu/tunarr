@@ -97,6 +97,7 @@ import { WatermarkInputSource } from './builder/input/WatermarkInputSource.ts';
 import type { Pipeline } from './builder/pipeline/Pipeline.ts';
 import type { PipelineBuilderFactory } from './builder/pipeline/PipelineBuilderFactory.ts';
 import { GapMusicLoudnorm } from './builder/filter/LoudnormFilter.ts';
+import { NowPlayingTextFilter } from './builder/filter/NowPlayingTextFilter.ts';
 import type { AudioFades } from './builder/state/AudioState.ts';
 import { AudioState } from './builder/state/AudioState.ts';
 import type {
@@ -112,6 +113,7 @@ import { FrameSize } from './builder/types.ts';
 import type {
   ConcatOptions,
   OfflineBackgroundMusic,
+  OfflineNowPlaying,
   PlaceholderSessionOpts,
   StreamSessionCreateArgs,
   TranscodeSessionResult,
@@ -1004,6 +1006,7 @@ export class FfmpegStreamFactory {
         opts.backgroundMusic,
         opts.isFirstTranscode,
         opts.picture,
+        opts.nowPlaying,
       );
     }
 
@@ -1144,6 +1147,7 @@ export class FfmpegStreamFactory {
     backgroundMusic?: OfflineBackgroundMusic,
     isFirstTranscode?: boolean,
     picture?: FileStreamSource,
+    nowPlaying?: OfflineNowPlaying,
   ): Promise<Maybe<FfmpegTranscodeSession>> {
     const realtime = this.paceStillImage(requestedRealtime);
     const offlineInput = VideoInputSource.withStream(
@@ -1164,6 +1168,20 @@ export class FfmpegStreamFactory {
         colorFormat: ColorFormat.unknown,
       }),
     );
+
+    // First in the chain, while the picture is still a software frame at its
+    // own size, before any pipeline scales it or uploads it to a GPU
+    if (nowPlaying) {
+      if (await this.ffmpegInfo.hasFilter('drawtext')) {
+        offlineInput.addFilter(
+          new NowPlayingTextFilter(nowPlaying.text, nowPlaying.fontFile),
+        );
+      } else {
+        this.logger.debug(
+          "ffmpeg has no drawtext filter, so gap music's title isn't drawn",
+        );
+      }
+    }
 
     const calculator = new FfmpegPlaybackParamsCalculator(
       this.transcodeConfig,

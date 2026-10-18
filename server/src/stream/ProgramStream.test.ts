@@ -16,9 +16,10 @@ import type {
   PlaceholderSessionOpts,
   TranscodeSessionResult,
 } from '../ffmpeg/types.ts';
+import { NowPlayingFontFileName } from '../ffmpeg/nowPlayingText.ts';
 import { setGlobalOptionsUnchecked } from '../globals.ts';
 import type { CacheImageService } from '../services/cacheImageService.ts';
-import type { Result } from '../types/result.ts';
+import { Result } from '../types/result.ts';
 import { uploadVersion, uploadsDirectory } from '../util/iconUtil.ts';
 import { PlayerContext } from './PlayerStreamContext.ts';
 import { ProgramStream } from './ProgramStream.ts';
@@ -80,7 +81,18 @@ describe('ProgramStream', () => {
 
     function setUp(
       lineupItem: StreamLineupItem,
-      { realtime, picture }: { realtime: boolean; picture?: string },
+      {
+        realtime,
+        picture,
+        showNowPlaying,
+        musicPlays = true,
+      }: {
+        realtime: boolean;
+        picture?: string;
+        showNowPlaying?: boolean;
+        // whether the gap music track's stream resolves
+        musicPlays?: boolean;
+      },
     ) {
       const createPlaceholderSession = vi.fn(
         (_opts: PlaceholderSessionOpts) => {
@@ -93,16 +105,35 @@ describe('ProgramStream', () => {
       const channel = {
         uuid: 'channel',
         number: 6,
-        offline: { mode: 'pic', picture },
+        offline: { mode: 'pic', picture, showNowPlaying },
       } as unknown as ChannelOrm;
+      const mediaSourceDB = {
+        getById: vi.fn(() => Promise.resolve({ uuid: 'music-source' })),
+      } as unknown as MediaSourceDB;
+      const programStreamDetails = {
+        getStream: vi.fn(() =>
+          Promise.resolve(
+            musicPlays
+              ? Result.success({
+                  streamDetails: {
+                    audioDetails: [{ index: 0, codec: 'flac', channels: 2 }],
+                  },
+                  streamSource: new FileStreamSource(
+                    '/music/les-exemples/08.flac',
+                  ),
+                })
+              : Result.failure(new Error('gone')),
+          ),
+        ),
+      } as unknown as ProgramStreamDetailsFetcher;
       const stream = new ProgramStream(
         {} as ISettingsDB,
         {} as CacheImageService,
         (() => ({
           createPlaceholderSession,
         })) as unknown as FFmpegAssistedFactory,
-        {} as MediaSourceDB,
-        {} as ProgramStreamDetailsFetcher,
+        mediaSourceDB,
+        programStreamDetails,
         [],
         new PlayerContext(
           lineupItem,
@@ -160,6 +191,72 @@ describe('ProgramStream', () => {
           path.join(uploadsDirectory(databaseDirectory), 'card.png'),
         ),
       );
+    });
+
+    const gapWithMusic: StreamLineupItem = {
+      ...gap,
+      type: 'offline',
+      backgroundMusic: {
+        program: {
+          uuid: 'track',
+          title: 'Le matin à Paris',
+          duration: 60_000,
+          mediaSourceId: 'music-source',
+        } as never,
+        fillerListId: 'music-list',
+        artist: 'Les Exemples',
+      },
+    };
+
+    it("draws the gap music's artist and title, with a font ffmpeg can read", async () => {
+      const { stream, createPlaceholderSession } = setUp(gapWithMusic, {
+        realtime: false,
+      });
+
+      await stream.setup();
+
+      const opts = createPlaceholderSession.mock.calls[0]?.[0];
+      const fontFile = path.join(
+        databaseDirectory,
+        'fonts',
+        NowPlayingFontFileName,
+      );
+      expect(opts?.kind === 'offline' && opts.nowPlaying).toEqual({
+        text: '♪  Les Exemples — Le matin à Paris',
+        fontFile,
+      });
+      expect((await fs.stat(fontFile)).size).toBeGreaterThan(0);
+    });
+
+    it('copies the font again if it went missing', async () => {
+      const fontFile = path.join(
+        databaseDirectory,
+        'fonts',
+        NowPlayingFontFileName,
+      );
+      await setUp(gapWithMusic, { realtime: false }).stream.setup();
+      await fs.rm(fontFile);
+
+      await setUp(gapWithMusic, { realtime: false }).stream.setup();
+
+      expect((await fs.stat(fontFile)).size).toBeGreaterThan(0);
+    });
+
+    it.each([
+      ['the channel turned it off', { showNowPlaying: false }],
+      ["the track doesn't play", { musicPlays: false }],
+    ])('draws no title when %s', async (_, opts) => {
+      const { stream, createPlaceholderSession } = setUp(gapWithMusic, {
+        realtime: false,
+        ...opts,
+      });
+
+      await stream.setup();
+
+      const sessionOpts = createPlaceholderSession.mock.calls[0]?.[0];
+      expect(
+        sessionOpts?.kind === 'offline' && sessionOpts.nowPlaying,
+      ).toBeUndefined();
     });
 
     it.each([

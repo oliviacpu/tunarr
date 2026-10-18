@@ -127,6 +127,7 @@ export class StreamProgramCalculator {
       return {
         program: { ...program, mediaSourceId: program.mediaSourceId },
         fillerListId: musicListId,
+        artist: track.artist?.title ?? track.artistName ?? undefined,
       };
     } catch (err) {
       this.logger.warn(

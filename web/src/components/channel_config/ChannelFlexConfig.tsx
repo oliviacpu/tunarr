@@ -56,9 +56,10 @@ export function ChannelFlexConfig() {
   });
   const channelFillerLists = collectionControls.fields;
 
-  const [offlineMode, offlinePicture] = watch([
+  const [offlineMode, offlinePicture, musicListId] = watch([
     'offline.mode',
     'offline.picture',
+    'offline.musicListId',
   ]);
 
   const offlinePictureSrc = isNonEmptyString(offlinePicture)
@@ -503,6 +504,25 @@ export function ChannelFlexConfig() {
                         list under Filler by adding artists, albums or tracks
                         from your music library. Don't also add it as filler
                         above, or its tracks play as programs.
+                      </Trans>
+                    </FormHelperText>
+                  </FormControl>
+                )}
+              />
+              <Controller
+                name="offline.showNowPlaying"
+                control={control}
+                render={({ field }) => (
+                  <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControlLabel
+                      control={<Checkbox {...field} checked={field.value} />}
+                      disabled={!isNonEmptyString(musicListId)}
+                      label={t`Show the artist and title`}
+                    />
+                    <FormHelperText sx={{ mt: 0 }}>
+                      <Trans>
+                        Shows the track that's playing in a dark strip along the
+                        bottom of the image, in the same place on every channel.
                       </Trans>
                     </FormHelperText>
                   </FormControl>

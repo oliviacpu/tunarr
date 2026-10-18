@@ -30,6 +30,14 @@ export type OfflineBackgroundMusic = {
   trackDurationMs: number;
 };
 
+// Gap music's artist and title, drawn along the bottom of the offline picture
+export type OfflineNowPlaying = {
+  // the line to draw, already cut to fit
+  text: string;
+  // a font file ffmpeg can read, with a glyph for every character of text
+  fontFile: string;
+};
+
 export type PlaceholderSessionOpts = {
   duration: Duration;
   outputFormat: OutputFormat;
@@ -47,6 +55,7 @@ export type PlaceholderSessionOpts = {
       // Otherwise the channel's offline picture URL, or the generic screen, is
       // fetched over HTTP.
       picture?: FileStreamSource;
+      nowPlaying?: OfflineNowPlaying;
     }
 );
 

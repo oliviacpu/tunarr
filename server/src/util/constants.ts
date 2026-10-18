@@ -13,5 +13,8 @@ export const ImagesFolderName = 'images';
 export const PublicMediaFolderName = 'media';
 export const PublicArtworkFolderName = 'artwork';
 export const ChannelLineupsFolderName = 'channel-lineups';
+// Fonts copied out of the server's resources for ffmpeg. Outside the cache
+// folder, which backups include.
+export const FontsFolderName = 'fonts';
 export const SearchSnapshotsFolderName = 'ms-snapshots';
 export const TroubleshootSessionFolderName = 'tunarr-troubleshoot';
