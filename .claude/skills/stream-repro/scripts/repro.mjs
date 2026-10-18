@@ -37,6 +37,7 @@ const { values: opt } = parseArgs({
     'offline-picture': { type: 'string' },
     'ffmpeg-setting': { type: 'string', multiple: true, default: [] },
     'channel-setting': { type: 'string', multiple: true, default: [] },
+    'run-task': { type: 'string', multiple: true, default: [] },
     resolution: { type: 'string' },
     hwaccel: { type: 'string' },
     'vaapi-device': { type: 'string' },
@@ -1104,6 +1105,13 @@ try {
   }
   report.server = server.base;
   report.channel = channel;
+  // --run-task: server tasks to run to completion before the capture, such as SubtitleExtractorTask, which extracts
+  // the embedded text subtitles of programs airing within the hour (burn-in and captions read the extracted copy)
+  for (const task of opt['run-task']) {
+    log('running task', task);
+    await api(server.base, 'POST', `/api/tasks/${encodeURIComponent(task)}/run?background=false`, {});
+  }
+  if (opt['run-task'].length) report.tasksRun = opt['run-task'];
   if (seconds === 0) {
     log('--seconds 0: skipping the stream capture');
     throw new SkipCapture();
