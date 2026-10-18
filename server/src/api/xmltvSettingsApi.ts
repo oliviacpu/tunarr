@@ -4,6 +4,7 @@ import { GlobalScheduler } from '@/services/Scheduler.js';
 import { UpdateXmlTvTask } from '@/tasks/UpdateXmlTvTask.js';
 import type { RouterPluginCallback } from '@/types/serverType.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
+import { xmlTvRefreshCrontab } from '@/util/schedulingUtil.js';
 import { BaseErrorSchema } from '@tunarr/types/api';
 import { XmlTvSettingsSchema } from '@tunarr/types/schemas';
 import { isError, isUndefined } from 'lodash-es';
@@ -23,11 +24,23 @@ import { z } from 'zod/v4';
 const UpdateXmlTvSettingsRequestSchema = z.object({
   programmingHours: z.number().optional(),
   refreshHours: z.number().optional(),
+  refreshStartHour: z.number().int().min(0).max(23).optional(),
   outputPath: z.string().optional(),
   enableImageCache: z.boolean().optional(),
   useShowPoster: z.boolean().optional(),
   publicUrl: z.url().or(z.literal('')).optional(),
 });
+
+// The schedule is built at startup; a save moves it to the new refresh hours
+// and start hour, then rebuilds the guide once, now, as a save always has
+async function rescheduleAndRebuild(settings: {
+  refreshHours: number;
+  refreshStartHour: number;
+}) {
+  const job = GlobalScheduler.getScheduledJob(UpdateXmlTvTask.ID);
+  job.reschedule(xmlTvRefreshCrontab(settings));
+  await job.runNow(false);
+}
 
 export const xmlTvSettingsRouter: RouterPluginCallback = (
   fastify,
@@ -85,6 +98,7 @@ export const xmlTvSettingsRouter: RouterPluginCallback = (
           refreshHours: isUndefined(settings.refreshHours)
             ? xmltv.refreshHours
             : Math.max(1, settings.refreshHours),
+          refreshStartHour: settings.refreshStartHour ?? xmltv.refreshStartHour,
           enableImageCache: settings.enableImageCache ?? xmltv.enableImageCache,
           outputPath: xmltv.outputPath,
           programmingHours: settings.programmingHours ?? xmltv.programmingHours,
@@ -101,7 +115,7 @@ export const xmlTvSettingsRouter: RouterPluginCallback = (
           },
           level: 'success',
         });
-        await GlobalScheduler.getScheduledJob(UpdateXmlTvTask.ID).runNow(false);
+        await rescheduleAndRebuild(xmltv);
         return res.send(xmltv);
       } catch (err) {
         logger.error(err);
@@ -148,7 +162,7 @@ export const xmlTvSettingsRouter: RouterPluginCallback = (
           level: 'warning',
         });
 
-        await GlobalScheduler.getScheduledJob(UpdateXmlTvTask.ID).runNow(false);
+        await rescheduleAndRebuild(xmltv);
         return res.send(xmltv);
       } catch (err) {
         logger.error(err);

@@ -13,6 +13,7 @@ import { SyncCustomShowsTask } from '../../tasks/SyncCustomShowsTask.ts';
 import { UpdateXmlTvTask } from '../../tasks/UpdateXmlTvTask.ts';
 import { autoFactoryKey, KEYS } from '../../types/inject.ts';
 import { InjectLogger } from '../../util/inject.ts';
+import { xmlTvRefreshCrontab } from '../../util/schedulingUtil.ts';
 import type { Logger } from '../../util/logging/LoggerFactory.ts';
 import { LoggerFactory } from '../../util/logging/LoggerFactory.ts';
 import {
@@ -42,7 +43,7 @@ export class ScheduleJobsStartupTask extends SimpleStartupTask {
       UpdateXmlTvTask.ID,
       new ScheduledTask(
         UpdateXmlTvTask,
-        hoursCrontab(xmlTvSettings.refreshHours),
+        xmlTvRefreshCrontab(xmlTvSettings),
         container.get<() => UpdateXmlTvTask>(KEYS.UpdateXmlTvTaskFactory),
         {},
       ),

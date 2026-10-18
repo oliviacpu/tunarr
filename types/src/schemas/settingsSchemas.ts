@@ -5,6 +5,10 @@ import { ScheduleSchema } from './utilSchemas.js';
 export const XmlTvSettingsSchema = z.object({
   programmingHours: z.number().default(12),
   refreshHours: z.number().default(4),
+  // The hour of the day (server time, 0-23) the scheduled full rebuild starts
+  // from: it runs then and every refreshHours after it until midnight, so 24
+  // hours from 3 is once a day at 03:00
+  refreshStartHour: z.number().int().min(0).max(23).default(0),
   outputPath: z.string().default(''),
   enableImageCache: z.boolean().default(false),
   // If true, episodes will use the poster for their show in

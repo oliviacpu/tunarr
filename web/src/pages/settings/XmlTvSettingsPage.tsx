@@ -8,13 +8,14 @@ import {
   FormControl,
   FormControlLabel,
   FormHelperText,
+  MenuItem,
   Stack,
   TextField,
 } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { XmlTvSettings } from '@tunarr/types';
 import { defaultXmlTvSettings } from '@tunarr/types';
-import { isEmpty, isEqual } from 'lodash-es';
+import { isEmpty, isEqual, range } from 'lodash-es';
 import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
 import type { SubmitHandler } from 'react-hook-form';
@@ -140,6 +141,27 @@ export default function XmlTvSettingsPage() {
             label: t`Refresh Timer (Hours)`,
             helperText: t`How often the XMLTV file is regenerated`,
           }}
+        />
+        <Controller
+          control={control}
+          name="refreshStartHour"
+          render={({ field }) => (
+            <TextField
+              select
+              id="refresh-start-hour"
+              label={t`First Refresh of the Day`}
+              helperText={t`The hour (server time) the refresh timer counts from. With a 24 hour timer, the only refresh each day.`}
+              sx={{ minWidth: 200 }}
+              {...field}
+              onChange={(e) => field.onChange(Number(e.target.value))}
+            >
+              {range(0, 24).map((hour) => (
+                <MenuItem key={hour} value={hour}>
+                  {`${hour.toString().padStart(2, '0')}:00`}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
         />
       </Stack>
       <FormControl fullWidth sx={{ mb: 2 }}>

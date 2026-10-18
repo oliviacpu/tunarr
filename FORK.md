@@ -35,6 +35,28 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The guide's full rebuild can run at a chosen hour (2026-10-18)
+
+- **What you saw:** the scheduled full guide rebuild could only run at midnight and every refresh interval after it
+  (00:00, 04:00, 08:00… local), so on a deployment where a full rebuild pauses Live TV there was no way to move it to a
+  quiet hour such as 03:00.
+- **Cause:** `hoursCrontab(refreshHours)` gave `0 0 */N * * *`, which always counts from hour 0, and the schedule was
+  built only at startup, so changing the refresh timer took effect at the next restart.
+- **Fix:**
+  - New XMLTV setting `refreshStartHour` (0-23, default 0, so nothing changes until it's set). The rebuild runs at that
+    hour and every `refreshHours` after it until midnight: `hoursFromCrontab` in `util/schedulingUtil.ts` lists the
+    hours (`0 0 3,7,11,15,19,23 * * *` for 4 hours from 3, `0 0 3 * * *` for 24 hours from 3); from 0 it runs at the
+    same hours as before.
+  - `PUT /api/xmltv-settings` takes it, keeping the stored value when it is left out; a save (and a reset) moves the
+    scheduled task to the new hours (`ScheduledTask.reschedule`) before the rebuild a save already ran, so neither
+    waits for a restart and no extra rebuild runs.
+  - Settings > XMLTV gets a **First Refresh of the Day** field.
+- **Tests:** `schedulingUtil.test.ts` (crontabs for 24/3, 4/3, 1/0, 6/23 and their next runs in Central time; from 0
+  the same runs as the old crontab), `xmltvSettingsApi.test.ts` (kept on a partial update, refused outside 0-23,
+  reschedule before the one rebuild), `ScheduleJobsStartupTask.test.ts` (startup uses it) and
+  `ScheduledTask.test.ts` (reschedule, kept by `runNow`).
+- **Upstream:** not sent.
+
 ### Forced subtitles inside a video file are read as forced (2026-10-18)
 
 - **What you saw:** on a channel whose subtitle selection burns in forced English subtitles under English audio, an

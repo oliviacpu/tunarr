@@ -10772,6 +10772,7 @@ export type GetApiXmltvSettingsResponses = {
     200: {
         programmingHours: number;
         refreshHours: number;
+        refreshStartHour: number;
         outputPath: string;
         enableImageCache: boolean;
         useShowPoster: boolean;
@@ -10804,6 +10805,7 @@ export type PostApiXmltvSettingsResponses = {
     200: {
         programmingHours: number;
         refreshHours: number;
+        refreshStartHour: number;
         outputPath: string;
         enableImageCache: boolean;
         useShowPoster: boolean;
@@ -10817,6 +10819,7 @@ export type PutApiXmltvSettingsData = {
     body?: {
         programmingHours?: number;
         refreshHours?: number;
+        refreshStartHour?: number;
         outputPath?: string;
         enableImageCache?: boolean;
         useShowPoster?: boolean;
@@ -10845,6 +10848,7 @@ export type PutApiXmltvSettingsResponses = {
     200: {
         programmingHours: number;
         refreshHours: number;
+        refreshStartHour: number;
         outputPath: string;
         enableImageCache: boolean;
         useShowPoster: boolean;

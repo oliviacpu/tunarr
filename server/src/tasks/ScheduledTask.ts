@@ -29,7 +29,7 @@ export class ScheduledTask<TaskInputSchemaT extends z.ZodType, OutputT> {
   protected scheduledJob: schedule.Job;
 
   private factory: () => Task2<TaskInputSchemaT, OutputT>;
-  public readonly schedule: ScheduleRule;
+  #schedule: ScheduleRule;
 
   public running: boolean = false;
   public runAtStartup = false;
@@ -53,7 +53,7 @@ export class ScheduledTask<TaskInputSchemaT extends z.ZodType, OutputT> {
       className: this.constructor.name,
       caller: import.meta,
     });
-    this.schedule = scheduleRule;
+    this.#schedule = scheduleRule;
     this.factory = taskFactory;
     this.scheduledJob = schedule.scheduleJob(jobName, scheduleRule, () =>
       this.run(),
@@ -74,6 +74,17 @@ export class ScheduledTask<TaskInputSchemaT extends z.ZodType, OutputT> {
 
   get name() {
     return this.scheduledJob.name;
+  }
+
+  get schedule(): ScheduleRule {
+    return this.#schedule;
+  }
+
+  // Moves the job to a new schedule from now on; a run under way finishes.
+  // runNow reschedules on it too.
+  reschedule(scheduleRule: ScheduleRule) {
+    this.#schedule = scheduleRule;
+    this.scheduledJob.reschedule(scheduleRule);
   }
 
   // ScheduledTasks overrides can reimplement this.

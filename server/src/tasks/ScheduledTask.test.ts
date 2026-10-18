@@ -96,4 +96,23 @@ describe('ScheduledTask', () => {
       { channelId: 'call-2' },
     ]);
   });
+
+  test('reschedule moves the job to the new schedule, and runNow keeps it', async () => {
+    const received: TestTaskRequest[] = [];
+    const task = new ScheduledTask<typeof TestTaskRequest, void>(
+      'rescheduled',
+      '0 0 0 * * *',
+      () => new RecordingTask(received),
+      {},
+    );
+    scheduled.push(task);
+
+    task.reschedule('0 0 3 * * *');
+    expect(task.schedule).toBe('0 0 3 * * *');
+    expect(dayjs(task.nextExecution()).hour()).toBe(3);
+
+    await task.runNow(false);
+    expect(received).toHaveLength(1);
+    expect(dayjs(task.nextExecution()).hour()).toBe(3);
+  });
 });

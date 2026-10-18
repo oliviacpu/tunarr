@@ -14,7 +14,12 @@ The full URL is also available in the Tunarr web UI under **Settings > HDHR / M3
 
 ### When the guide is updated
 
-- **The whole guide** is rebuilt on the schedule in **Settings > XMLTV** (every few hours) and when you refresh it there.
+- **The whole guide** is rebuilt on the schedule in **Settings > XMLTV** and when you refresh it there. The schedule is
+  the **Refresh Timer** counted from the **First Refresh of the Day** (server time): a 4 hour timer from 03:00 rebuilds
+  at 03:00, 07:00, 11:00, 15:00, 19:00 and 23:00, and a 24 hour timer from 03:00 once a day at 03:00. The defaults,
+  every 4 hours from 00:00, rebuild at midnight and every 4 hours after. A full rebuild reads every program in the
+  guide window, so on a busy server pick an hour when nobody watches. Saving these settings moves the schedule at once
+  and rebuilds the guide straight away.
 - **Saving a channel** updates that channel's entries straight away. The other channels keep the entries they already had, so a change to a program's details since then, from a library scan for example, appears at the next scheduled rebuild. Rebuilding every channel on each save made Live TV pause while channels were saved.
 - **Changing an XMLTV setting** updates every channel at the next write.
 
