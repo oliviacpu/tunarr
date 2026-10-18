@@ -6,6 +6,7 @@ import { inject, injectable } from 'inversify';
 import type { Kysely } from 'kysely';
 import { chunk, isEmpty, uniq } from 'lodash-es';
 import { throttledAccumulate, throttledLoop } from '../../util/seq.ts';
+import { databaseFileWarmer } from '../databaseFileWarmer.ts';
 import type { ProgramExternalId } from '../schema/ProgramExternalId.ts';
 import { ProgramGroupingType } from '../schema/ProgramGrouping.ts';
 import type { DB } from '../schema/db.ts';
@@ -25,6 +26,22 @@ import {
   ProgramStreamRelations,
   StreamProgramRelations,
 } from './programRelations.ts';
+
+// Programs per guide query. One query is one synchronous slice of the event
+// loop, and its cost is the database pages it reads: the 811 programs of the
+// shared server's 72-hour guide read about 6,000 pages, 400 to 2,500 per query
+// of 200, which took 12 to 76 s per query at that disk's 30 ms per read. A
+// quarter of that bounds the slice when the file cache is cold anyway, and
+// costs nothing measurable when it is warm.
+export const GuideFetchBatchSize = 50;
+
+export type GuideProgramsFetchOptions = {
+  includeCreditArtwork: boolean;
+  // Read the database file into the operating system's file cache first (see
+  // databaseFileWarmer), so the queries never wait on the disk. Guide builds
+  // set it; it runs at most once per cooldown.
+  readDatabaseIntoFileCache?: boolean;
+};
 
 @injectable()
 export class BasicProgramRepository {
@@ -116,11 +133,19 @@ export class BasicProgramRepository {
 
   async getGuideProgramsByIds(
     ids: string[] | readonly string[],
-    { includeCreditArtwork }: { includeCreditArtwork: boolean },
-    batchSize: number = 200,
+    {
+      includeCreditArtwork,
+      readDatabaseIntoFileCache = false,
+    }: GuideProgramsFetchOptions,
+    batchSize: number = GuideFetchBatchSize,
   ): Promise<ProgramWithRelationsOrm[]> {
     // better-sqlite3 is synchronous, so awaiting a query never lets other
     // requests in. Yield between chunks so the load runs as short slices.
+    // Each slice is only short while the database's pages are in memory:
+    // reading them in first keeps them from becoming disk waits.
+    if (readDatabaseIntoFileCache && ids.length > 0) {
+      await databaseFileWarmer.warm();
+    }
     const programs: Omit<ProgramWithRelationsOrm, 'show'>[] = [];
     await throttledLoop(chunk(uniq(ids), batchSize), async (idChunk) => {
       const res = includeCreditArtwork

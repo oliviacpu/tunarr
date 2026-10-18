@@ -35,6 +35,47 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A guide refresh no longer freezes Tunarr on a cold disk (2026-10-18)
+
+- **What you saw:** at the four-hourly guide refresh Tunarr stopped answering: 8 to 54 s on most refreshes, and 219 s
+  at 21:00 UTC on 2026-10-18, when the dashboard couldn't reach Tunarr from 21:00:22 to 21:03:21. A viewer's Live TV
+  stream ended during it. Guide writes after a channel save took 0.4 to 2 s.
+- **Cause:**
+  - A refresh re-renders every channel, so it fetches every program in the window: 811 programs for the 72-hour guide
+    on the deployment, with their credits, credit headshots, artwork, genres and tags (`getGuideProgramsByIds`).
+  - better-sqlite3 runs each query synchronously, and the fetch yielded only between its queries of 200 programs.
+  - The main connection's page cache empties whenever another connection writes (the hourly library scans), and the
+    shared server's file cache had dropped the database. So the pages came from the disk: about 6,000 of them, 400 to
+    2,500 per query (counted with `sqlite3 .stats` on a copy of the deployment's database, cold).
+  - At that disk's 30 ms per random read under load (IO pressure 22 to 40% all day), that is 12 to 76 s per query
+    with nothing else served in between, about 180 s in all.
+  - The same refresh on a warm copy takes 0.3 s (fetch 90 ms), so the cost is all disk waits.
+- **Fix:**
+  - Before a guide fetch, `getGuideProgramsByIds` reads `db.db` and `db.db-wal` into the file cache front to back
+    with `readIntoFileCache` (the startup fix below), on the libuv thread pool, so the event loop keeps running and
+    the queries after it find every page in memory (`db/databaseFileWarmer.ts`). On the deployment that read took 1.6 s
+    for 148 MB. Unlike the startup read it has no 512 MiB cap, since the queries can read any page.
+  - A read that finished within the last 10 minutes is trusted, so a burst of channel saves reads once, and callers
+    asking during a read share it. A failed read only means slower queries.
+  - Guide queries take 50 programs instead of 200 (`GuideFetchBatchSize`). Should the file cache drop the database
+    anyway, the longest blocking query reads 1,300 pages instead of 2,500, and most read 100 to 250.
+  - The XMLTV output is unchanged.
+- **Numbers**, on a copy of the deployment's database (7 channels, 72 hours), 3 full refreshes each, a probe
+  requesting `/api/version` back to back:
+  - Before: refresh 304 to 334 ms, longest probe wait 44 to 50 ms, longest fetch query 23 to 28 ms.
+  - After: refresh 348 to 392 ms, longest probe wait 29 to 43 ms, longest fetch query 9 to 12 ms.
+  - The XMLTV matched byte for byte apart from the last programmes of the window, which depend on the minute the
+    refresh ran.
+- **Tests:**
+  - `databaseFileWarmer.test.ts`: the provider's files are read; callers share a read in progress; a read within the
+    cooldown is skipped and the next one after it runs; a failed read and a missing database path never throw; the
+    real read is asked for every byte (fails with the startup cap); the event loop keeps turning while 16 MB are read.
+  - `BasicProgramRepository.test.ts`: the file is read before the first query when asked, not otherwise or with
+    nothing to fetch; 120 programs take 3 queries, with event loop turns between them. The first and last fail on the
+    old code.
+  - `TvGuideService.test.ts`: a full build and a channel save both ask for the read.
+- **Upstream:** not sent.
+
 ### Plex is asked to reload the guide once per change, and only when it can download it (2026-10-18)
 
 - **What you saw:** Plex showed yesterday's lineup, or half of today's, for hours after a change. After every
