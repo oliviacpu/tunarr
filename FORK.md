@@ -48,6 +48,7 @@ ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a 
   the stream so the response's own piping is untouched.
 - **Tests:** `TuneInTimer.test.ts`: marks, rounding, summary; the counting stream counts and reports the first chunk
   once.
+
 ### Forced subtitles inside a video file are read as forced (2026-10-18)
 
 - **What you saw:** on a channel whose subtitle selection burns in forced English subtitles under English audio, an
@@ -105,7 +106,7 @@ ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a 
       same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms.
     - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms.
     - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
-      frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
 - **Tests:** `Cea608Encoder.keyframes.test.ts`: a load that would cross a keyframe goes before it, on time; one
   that fits nowhere on time shows up to 300 ms late, else crosses as before; generated dialogue at 23.976, 25, 29.97
   and 59.94 fps leaves no fragment at any keyframe with pauses between lines, and at most a quarter of them back to
