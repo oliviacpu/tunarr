@@ -4,10 +4,14 @@ import { ExternalSubtitleStream, SubtitleMethods } from '../MediaStream.ts';
 import { escapeFilterOptionValue } from './escapeFilterValue.ts';
 import { SubtitleFilter } from './SubtitleFilter.ts';
 
+// What av_get_token trims (WHITESPACES in libavutil/avstring.c), and what
+// av_isspace counts, for a stricter reader
+const AvGetTokenWhitespace = ' \n\t\r';
+const AvIsSpaceWhitespace = ' \f\n\r\t\v';
+
 // av_get_token from FFmpeg's libavutil/avstring.c, step for step: the reader
 // the escaping is written for
-function avGetToken(buf: string, term: string) {
-  const ws = ' \n\t\r';
+function avGetToken(buf: string, term: string, ws = AvGetTokenWhitespace) {
   let p = 0;
   while (p < buf.length && ws.includes(buf[p] ?? '')) {
     p++;
@@ -39,12 +43,17 @@ function avGetToken(buf: string, term: string) {
 
 // What a filtergraph holding just `name=args` hands the filter: the graph
 // pass (parse_filter) and then the option pass (av_opt_get_key_value)
-function readOptionValue(filter: string, name: string, key: string) {
+function readOptionValue(
+  filter: string,
+  name: string,
+  key: string,
+  ws = AvGetTokenWhitespace,
+) {
   expect(filter.startsWith(`${name}=`)).toBe(true);
-  const graph = avGetToken(filter.slice(name.length + 1), '[],;');
+  const graph = avGetToken(filter.slice(name.length + 1), '[],;', ws);
   expect(graph.rest).toBe('');
   expect(graph.token.startsWith(`${key}=`)).toBe(true);
-  const option = avGetToken(graph.token.slice(key.length + 1), ':');
+  const option = avGetToken(graph.token.slice(key.length + 1), ':', ws);
   expect(option.rest).toBe('');
   return option.token;
 }
@@ -60,6 +69,8 @@ const awkward = [
   '/media/ünïcödé 日本語/字幕.ass',
   '  /leading and trailing spaces/x.srt  ',
   '/media/tab\there/new\nline.srt',
+  '\t\r\n/every edge whitespace/x.srt \n\r\t',
+  '\f/form feed and vertical tab/x.srt\v',
   'C:\\Users\\viewer\\Videos\\Show\\ep.srt',
   'http://127.0.0.1:8096/Videos/abc/Subtitles/3/0/Stream.srt?api_key=k:v&x=[1]',
 ];
@@ -80,6 +91,16 @@ describe('escapeFilterOptionValue', () => {
     const filter = `subtitles=filename=${escapeFilterOptionValue(value)}`;
     expect(readOptionValue(filter, 'subtitles', 'filename')).toBe(value);
   });
+
+  test.each(awkward)(
+    'a reader trimming every av_isspace character reads back exactly %j',
+    (value) => {
+      const filter = `subtitles=filename=${escapeFilterOptionValue(value)}`;
+      expect(
+        readOptionValue(filter, 'subtitles', 'filename', AvIsSpaceWhitespace),
+      ).toBe(value);
+    },
+  );
 
   test('leaves ordinary path characters as they are', () => {
     expect(escapeFilterOptionValue('/media/tv/Show (1992)/a-b_c.d.srt')).toBe(

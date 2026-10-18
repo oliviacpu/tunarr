@@ -16,7 +16,16 @@ const GraphSpecials: ReadonlySet<string> = new Set([
   ',',
   ';',
 ]);
-const Whitespace: ReadonlySet<string> = new Set([' ', '\t', '\n', '\r']);
+// av_get_token trims " \n\t\r"; \f and \v too, as av_isspace counts them. An
+// escaped character is always read as itself, so escaping extra is harmless.
+const Whitespace: ReadonlySet<string> = new Set([
+  ' ',
+  '\t',
+  '\n',
+  '\r',
+  '\f',
+  '\v',
+]);
 
 function escapeOnePass(value: string, specials: ReadonlySet<string>) {
   const chars = [...value];
