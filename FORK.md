@@ -56,6 +56,116 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   playing streams (it doesn't; a channel-map change does).
 - **Tests:** `PlexGuideNotifier.test.ts` (debounce, waits for listening, retry and give-up, skip without
   `sendGuideUpdates`, flush); `XmlTvWriter.test.ts`: the write leaves no temp file beside the guide.
+### A tune-in's timing is in Tunarr's log (2026-10-18)
+
+- **What you saw:** nothing. How long a tune-in took (and whether it failed before a byte was sent) could only be
+  read off Plex's logs, which show the tuner's side and only at INFO on a lucky day.
+- **Fix:** the `/stream/channels/<id>.ts` route logs `Tune-in: session N ms, first byte N ms` with the channel,
+  token, client address and user agent when the first byte goes out, and `Stream closed after N s, N MB sent` when
+  the request closes (with `(no byte was ever sent)` for a stream that closed before any byte), and `Tune-in failed
+after N ms, no byte was sent: <reason>` when no session could be started. `BaseHlsSession` logs `HLS session
+ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a process writing to stdout (the
+  `.ts` wrapper) sent its first output. `TuneInTimer` holds the marks; `CountingPassThrough` counts the bytes inside
+  the stream so the response's own piping is untouched.
+- **Tests:** `TuneInTimer.test.ts`: marks, rounding, summary; the counting stream counts and reports the first chunk
+  once.
+
+### The .ts wrapper exits when its session ends, instead of 15 s later by SIGKILL (2026-10-18)
+
+- **What you saw:** `channel-N-concat still running after SIGTERM. Sending SIGKILL` at nearly every session end
+  (89 times in 57 hours on the deployment), so each ended stream kept an ffmpeg and its pipe for 15 more seconds.
+- **Cause:** when the last client leaves, nothing reads the wrapper's stdout any more; ffmpeg fills the pipe and
+  blocks in `write()`. It handles SIGTERM only between writes, so the signal waited for the SIGKILL timer in
+  `FfmpegProcess.kill()`.
+- **Fix:** `kill()` unpipes and resumes the child's stdout after sending SIGTERM, so the pending write completes
+  into nowhere and ffmpeg exits on the SIGTERM. The 15 s SIGKILL stays as the backstop.
+- **Tests:** `FfmpegProcess.test.ts`: a shell stand-in that writes 64 KB blocks for ever and acts on SIGTERM only
+  between writes, piped to a reader that never drains, exits within seconds of `kill()` with code 0 (on the old code
+  it is SIGKILLed after 15 s).
+
+### Plex shows "2 Sci-Fi", not "2 2 Sci-Fi" (2026-10-18)
+
+- **What you saw:** every channel in Plex's guide carried its number twice.
+- **Cause:** Plex titles a channel `<number> <first display-name>`, and the first `display-name` was already
+  `<number> <name>`.
+- **Fix:** `XmlTvWriter.makeXmlTvChannel` writes the name first (Plex uses the first), then `<number> <name>`, the
+  number, and the name again last (Jellyfin's XMLTV reader keeps the last). Channel ids are unchanged, so a guide
+  reload is enough; no channel-map change (which would end playing streams).
+- **Tests:** `XmlTvWriter.test.ts`: the display-names of a written channel come in that order.
+
+### Console log times carry their real offset (2026-10-18)
+
+- **What you saw:** `2026-10-18T09:50:49.131Z` in the console log for an event that happened at 14:50:49 UTC: the
+  time was local (TZ=America/Chicago) but ended in `Z`, so every reading against Plex's UTC log was 5 hours off.
+- **Cause:** `getPrettyStreamOpts` used `SYS:yyyy-mm-dd'T'HH:MM:ss.l'Z'`: the system zone with a literal `Z`.
+- **Fix:** `SYS:yyyy-mm-dd HH:MM:ss.l o`, local time with its offset (`-05:00`).
+- **Tests:** `LoggerFactory.test.ts`: the pretty-stream time format has no literal `Z` and prints an offset.
+
+### Forced subtitles inside a video file are read as forced (2026-10-18)
+
+- **What you saw:** on a channel whose subtitle selection burns in forced English subtitles under English audio, an
+  English-dubbed anime's "Signs & Songs" track was never burned in, and its captions came from that sparse track
+  (about 25 lines an episode) instead of "Full" (about 240).
+- **Cause:** `ProgramMinter.mintVersions` never copied a stream's forced flag (`//TODO: forced`), so every embedded
+  subtitle stream was stored as not forced. Its `program_subtitles` row, minted from the same scan, had the flag, but
+  stream selection reads the stream rows: a forced-only rule found nothing, and the caption fallback (full text tracks
+  only) took the forced track first. On the deployment, no stream row of any kind was forced, while 381 embedded
+  subtitle rows were.
+- **Fix:**
+  - `ProgramMinter` copies the flag (`forced: stream.forced ?? false`), for Plex, Jellyfin, Emby and local sources.
+  - A startup fixer, `BackfillSubtitleForcedFlagFixer`, marks forced each embedded subtitle stream whose subtitle row
+    (same program, same stream index) is forced, so existing programs heal without a rescan. It changes nothing on a
+    second run.
+  - Checked and unchanged: burn-in reads the extracted copy of the chosen stream (named by its stream index), never the
+    video file's first subtitle track, and image subtitles are overlaid by their own stream index.
+  - `stream-repro` gains `--run-task NAME`, to run a task such as `SubtitleExtractorTask` before the capture.
+- **Evidence:** `stream-repro --mode hdhr` on a clip with the same tracks as the anime (two PGS tracks, then text
+  "Signs & Songs" default and forced, then text "Full"), a forced-English subtitle preference and extraction run first.
+  Before: nothing burned in, and the captions were the 2 sign cues in 40 s. After: the sign burned in from the text
+  track's extracted copy, and the captions were the 13 "Full" cues.
+- **Tests:** `ProgramMinter.test.ts` (the flag on each stream; fails on the old code) and
+  `BackfillSubtitleForcedFlagFixer.test.ts` (only matching embedded rows change; a sidecar, another program and an
+  audio stream with the same index don't; a second run changes nothing).
+- **Upstream:** not sent.
+
+### Tuning in no longer puts the rest of a loading caption on screen (2026-10-18)
+
+- **What you saw:** right after tuning in to a captioned channel, the end of a caption flashed up on its own ("ng the
+  soup" for "Are you eating the soup?"), sometimes for seconds, before the captions settled.
+- **Cause:** a player that starts reading partway into the stream can only decode from the next keyframe. Plex logs
+  `non-existing PPS 0 referenced` and `no frame!` for the frames before it, and FFmpeg's H.264 decoder only hands
+  over caption data for frames it decodes. Tunarr's transcodes put a keyframe at every segment start (and libx264
+  one more on the frame before). FFmpeg's caption decoder, which Plex's comes from, starts in roll-up mode
+  (`ccaption_dec.c`: `ctx->mode = CCMODE_ROLLUP`). So when a pop-on caption was still loading into hidden memory at
+  that keyframe, the rest of its characters were drawn on screen at once. Tunarr loads each caption just before its
+  start frame, so in dialogue a load spanned a keyframe at about a third of them.
+- **Fix:** `buildCaptionSchedule` takes `keyframeIntervalMs` and loads each pop-on caption between two keyframes: in
+  the latest stretch before its start frame that holds the whole load, else from the next keyframe, showing it up to
+  300 ms late (`MaxKeyframeDelayMs`). Only when even that isn't enough does it load across one, as before. `HlsSession`
+  passes the segment length for transcoded sessions; HLS Direct v2 copies the video, whose keyframes aren't known.
+  Paint-on and roll-up are unchanged: they draw text as it arrives.
+  - Whole episodes of back-to-back sitcom dialogue (two subtitle files, about 30 cues a minute), 2 s segments,
+    counting a keyframe as bad when a decoder starting there shows text the continuous decoder doesn't:
+    - 29.97 fps: 27-34% of keyframes before, 1.5-1.8% after; 3-4% of captions later, median 133 ms, at most 267 ms.
+    - 23.976 fps: 35-40% before, 6.1-6.5% after; 4-7% later, median 167-209 ms, at most 292 ms.
+    - 59.94 fps: 12-17% before, none after; no caption moves.
+    - 1 s segments: about 5% (29.97) to 18% (23.976) after, as fewer loads fit between keyframes, and one late
+      caption can make the next late too (up to 0.6 s). 15 fps: 60% before, 35% after, since a two-line caption
+      needs more than 2 s of frames.
+  - End to end with `stream-repro --mode hdhr` and the same subtitles on a synthetic clip, 2 s segments, the capture
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+    frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+- **Tests:** `Cea608Encoder.keyframes.test.ts`: a load that would cross a keyframe goes before it, on time; one
+  that fits nowhere on time shows up to 300 ms late, else crosses as before; generated dialogue at 23.976, 25, 29.97
+  and 59.94 fps leaves no fragment at any keyframe with pauses between lines, and at most a quarter of them back to
+  back, with every caption shown and none more than 300 ms later. `Cea608TestDecoder` can start like FFmpeg's decoder
+  partway into a stream. The golden snapshot is unchanged: without keyframes nothing changes.
 - **Upstream:** not sent.
 
 ### The .ts stream starts when a second audio track is a few seconds late (2026-10-17)

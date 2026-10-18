@@ -1547,6 +1547,7 @@ describe('XmlTvWriter reused programmes', () => {
   }
 
   test('the write leaves only the guide beside it (written to a temp file, then renamed)', async () => {
+  test("a channel's display-names start with its name, so Plex shows one number", async () => {
     await withOutput(async (outputPath) => {
       const writer = new XmlTvWriter(
         inMemorySettingsDB({ settings: { xmltv: { outputPath } } }),
@@ -1556,6 +1557,17 @@ describe('XmlTvWriter reused programmes', () => {
       const left = await fs.readdir(path.dirname(outputPath));
       expect(left).toEqual([path.basename(outputPath)]);
       expect(await fs.readFile(outputPath, 'utf-8')).toContain('<channel ');
+      const guide = channelGuide(2, [makeProgram({})]);
+      guide.channel.name = 'Sci-Fi';
+      await writer.write([guide]);
+      const { channels } = parseXmltv(await fs.readFile(outputPath, 'utf-8'));
+      // First for Plex (it prefixes the number), last for Jellyfin (it keeps the last one)
+      expect(channels?.[0]?.displayName.map((d) => d._value)).toEqual([
+        'Sci-Fi',
+        '2 Sci-Fi',
+        '2',
+        'Sci-Fi',
+      ]);
     });
   });
 

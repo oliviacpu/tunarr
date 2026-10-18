@@ -932,6 +932,14 @@ const MinIntervalMs = 1000;
 const MinTailMs = 1000;
 // Lines of overlapping subtitles stacked in one block, the newest kept
 const MaxStackedLines = 4;
+// How much later a pop-on caption may show so its whole load fits between two
+// keyframes (CaptionScheduleOptions.keyframeIntervalMs), than loading across
+// one would show it: short enough to go unnoticed. Two sitcom episodes of
+// back-to-back dialogue at 23.976 fps with 2 s keyframes: 4-7% of captions
+// show later (170-210 ms at the median), and a decoder starting at a keyframe
+// meets a load under way at 6% of them, against 35-40% before. At 29.97 fps,
+// 3-4% later and under 2% of keyframes; at 59.94 fps, none and none.
+const MaxKeyframeDelayMs = 300;
 
 // How many frames a pop-on caption takes to load
 function loadFrames(
@@ -1205,6 +1213,14 @@ export type CaptionScheduleOptions = {
   endMs?: number;
   // How the captions look; a cue's own appearance overrides it
   appearance?: Partial<CaptionAppearance>;
+  // Where a decoder can start reading: the video's keyframes, on the first
+  // frame and then on the first frame at or after each multiple of this many
+  // ms (Tunarr's HLS transcodes force one at every segment start). A player
+  // tuning in starts at one, and FFmpeg's decoder (Plex's too) starts in
+  // roll-up mode, so the rest of a pop-on caption still loading there went
+  // straight on screen as a fragment. Each caption's load is kept between two
+  // keyframes instead. Undefined when they aren't known.
+  keyframeIntervalMs?: number;
 };
 
 /**
@@ -1443,6 +1459,70 @@ export function buildCaptionSchedule(
   const clearFrom = (slot: number) =>
     take(firstFreeFrom(slot), EraseDisplayedMemory);
 
+  // The keyframes: the first frame at or after each multiple of the interval,
+  // where -force_key_frames expr:gte(t,n_forced*T) puts one, and mostly the
+  // frame before it too (libx264 at 23.976 to 59.94 fps, measured with
+  // Tunarr's options and any seek), so both count
+  const intervalMs = options.keyframeIntervalMs;
+  const keyframeSlot = (k: number) =>
+    Math.ceil((k * (intervalMs ?? 0)) / frameMs - 1e-6);
+  // The keyframes either side of a slot: [the one at or before, the next)
+  const spanOf = (slot: number): [number, number] => {
+    if (intervalMs === undefined || !(intervalMs > 0)) {
+      return [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY];
+    }
+    let k = Math.max(0, Math.floor((slot * frameMs) / intervalMs));
+    while (k > 0 && keyframeSlot(k) > slot) {
+      k--;
+    }
+    while (keyframeSlot(k + 1) <= slot) {
+      k++;
+    }
+    const next = keyframeSlot(k + 1);
+    return slot === next - 1 ? [next - 1, next] : [keyframeSlot(k), next - 1];
+  };
+  // placeBefore, with every atom between the same two keyframes: in the
+  // latest span that holds them, from the one ending at `endSlot` back to
+  // `minSlot`
+  const placeBeforeKeyframe = (
+    atoms: CcPair[][],
+    endSlot: number,
+    minSlot: number,
+    placement?: { groups?: readonly (number | undefined)[]; dryRun?: boolean },
+  ) => {
+    let end = endSlot;
+    while (end > minSlot) {
+      const [spanStart] = spanOf(end - 1);
+      if (placeBefore(atoms, end, Math.max(minSlot, spanStart), placement)) {
+        return true;
+      }
+      end = spanStart;
+    }
+    return false;
+  };
+  // Where placeFrom should start so every atom is between the same two
+  // keyframes: `startSlot`, or the first keyframe after it whose span holds
+  // them. A load longer than a span can't be, and starts at `startSlot`.
+  const keyframeSafeStart = (
+    atoms: CcPair[][],
+    startSlot: number,
+    groups?: readonly (number | undefined)[],
+  ) => {
+    // The fewest frames between two keyframes
+    const shortestSpan = Math.floor((intervalMs ?? 0) / frameMs) - 1;
+    if (atoms.flat().length > shortestSpan) {
+      return startSlot;
+    }
+    let from = startSlot;
+    for (;;) {
+      const [, spanEnd] = spanOf(from);
+      if (placeFrom(atoms, from, { dryRun: true, groups }) <= spanEnd) {
+        return from;
+      }
+      from = spanEnd;
+    }
+  };
+
   // The next caption's pairs go after this slot: pop-on's hidden memory can
   // only be reloaded once the previous caption is on screen, and paint-on and
   // roll-up text must all arrive before the mode changes
@@ -1492,30 +1572,65 @@ export function buildCaptionSchedule(
         caption.blocks,
         appearance,
       );
+      // The whole load goes between two keyframes: on time where it can, else
+      // as soon as it can if that is at most MaxKeyframeDelayMs later than
+      // loading it across one, as without keyframes, would show it.
       const boxed = lineGroups.some((g) => g !== undefined);
+      const onTime = (keyframeSafe: boolean, dryRun = false) => {
+        const place = keyframeSafe ? placeBeforeKeyframe : placeBefore;
+        return (
+          (boxed &&
+            place(load, wanted, loadAfter, { groups: lineGroups, dryRun })) ||
+          place(load, wanted, loadAfter, { dryRun })
+        );
+      };
+      const lateStart = (
+        keyframeSafe: boolean,
+        groups?: readonly (number | undefined)[],
+      ) =>
+        keyframeSafe ? keyframeSafeStart(load, loadAfter, groups) : loadAfter;
+      const lateShow = (
+        keyframeSafe: boolean,
+        groups?: readonly (number | undefined)[],
+      ) =>
+        firstFreeFrom(
+          Math.max(
+            wanted,
+            placeFrom(load, lateStart(keyframeSafe, groups), {
+              dryRun: true,
+              groups,
+            }),
+          ),
+        );
+      const placeLate = (keyframeSafe: boolean, showAt: number) => {
+        const groups =
+          boxed && lateShow(keyframeSafe, lineGroups) === showAt
+            ? lineGroups
+            : undefined;
+        placeFrom(load, lateStart(keyframeSafe, groups), { groups });
+      };
+
       let showAt = wanted;
-      if (
-        boxed &&
-        placeBefore(load, wanted, loadAfter, { groups: lineGroups })
-      ) {
-        // On time, each boxed line on one side of any clear
-      } else if (!placeBefore(load, wanted, loadAfter)) {
-        const lateShow = (groups?: (number | undefined)[]) =>
-          firstFreeFrom(
-            Math.max(
-              wanted,
-              placeFrom(load, loadAfter, { dryRun: true, groups }),
-            ),
-          );
-        showAt = lateShow();
-        if (tooLateToShow(caption, showAt)) {
-          leaveOut();
-          continue;
+      if (!onTime(true)) {
+        const acrossOnTime = onTime(false, true);
+        const acrossShowAt = acrossOnTime ? wanted : lateShow(false);
+        const safeShowAt = lateShow(true);
+        if (
+          (safeShowAt - acrossShowAt) * frameMs <= MaxKeyframeDelayMs &&
+          !tooLateToShow(caption, safeShowAt)
+        ) {
+          showAt = safeShowAt;
+          placeLate(true, showAt);
+        } else if (acrossOnTime) {
+          onTime(false);
+        } else {
+          showAt = acrossShowAt;
+          if (tooLateToShow(caption, showAt)) {
+            leaveOut();
+            continue;
+          }
+          placeLate(false, showAt);
         }
-        placeFrom(load, loadAfter, {
-          groups:
-            boxed && lateShow(lineGroups) === showAt ? lineGroups : undefined,
-        });
       }
       showAt = firstFreeFrom(showAt);
       take(showAt, EndOfCaption);
