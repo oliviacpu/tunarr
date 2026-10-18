@@ -35,6 +35,15 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Console log times carry their real offset (2026-10-18)
+
+- **What you saw:** `2026-10-18T09:50:49.131Z` in the console log for an event that happened at 14:50:49 UTC: the
+  time was local (TZ=America/Chicago) but ended in `Z`, so every reading against Plex's UTC log was 5 hours off.
+- **Cause:** `getPrettyStreamOpts` used `SYS:yyyy-mm-dd'T'HH:MM:ss.l'Z'`: the system zone with a literal `Z`.
+- **Fix:** `SYS:yyyy-mm-dd HH:MM:ss.l o`, local time with its offset (`-05:00`).
+- **Tests:** `LoggerFactory.test.ts`: the pretty-stream time format has no literal `Z` and prints an offset.
+- **Upstream:** not sent.
+
 ### The .ts stream starts when a second audio track is a few seconds late (2026-10-17)
 
 - **What you saw:** a cold tune of a channel with two audio tracks (Audio tracks `eng, jpn`, loudness levelling on)
