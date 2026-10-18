@@ -97,3 +97,31 @@ export function scheduleRuleToCronString(schedule: EverySchedule) {
     })
     .stringify();
 }
+
+/**
+ * A crontab that runs at `startHour` (server time) and every `everyHours` after
+ * it until midnight: every 4 hours from 3 is 3, 7, 11, 15, 19 and 23, and every
+ * 24 hours (or more) from 3 is once a day at 3. The hours are listed rather
+ * than stepped (`3-23/4`), so any interval works, including one past 23.
+ */
+export function hoursFromCrontab(
+  everyHours: number,
+  startHour = 0,
+  minute = 0,
+): string {
+  const step = Math.max(1, Math.round(everyHours));
+  const start = Math.min(23, Math.max(0, Math.round(startHour)));
+  const hours: number[] = [];
+  for (let hour = start; hour < 24; hour += step) {
+    hours.push(hour);
+  }
+  return `0 ${minute} ${hours.join(',')} * * *`;
+}
+
+/** When the scheduled full guide rebuild (UpdateXmlTvTask) runs */
+export function xmlTvRefreshCrontab(settings: {
+  refreshHours: number;
+  refreshStartHour: number;
+}): string {
+  return hoursFromCrontab(settings.refreshHours, settings.refreshStartHour);
+}
