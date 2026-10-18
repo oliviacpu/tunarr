@@ -1295,6 +1295,8 @@ describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
     );
     const fetchedIds = (call: number) =>
       [...(mockGetProgramsByIds.mock.calls[call]?.[0] as string[])].sort();
+    const fetchOptions = (call: number): unknown =>
+      mockGetProgramsByIds.mock.calls[call]?.[1];
     const reused = (call: number) => [
       ...(
         (mockWrite.mock.calls[call]?.[1]?.reuse ?? new Map()) as Map<
@@ -1309,6 +1311,7 @@ describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
       channelB,
       mockWrite,
       fetchedIds,
+      fetchOptions,
       reused,
       changeSettings: () => {
         xmltvSettings = { ...xmltvSettings, useShowPoster: true };
@@ -1389,6 +1392,21 @@ describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
     expect(t.reused(1)).toEqual([
       [t.channelB.channel.uuid, '<programmes of Channel B>'],
     ]);
+  });
+
+  // The fetch's synchronous queries must find the database in memory, not on
+  // a busy disk (BasicProgramRepository.getGuideProgramsByIds)
+  it('a guide build reads the database into the file cache before fetching', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    await t.service.updateCachedChannel(t.channelA.channel.uuid);
+
+    for (const call of [0, 1]) {
+      expect(t.fetchOptions(call)).toEqual({
+        includeCreditArtwork: false,
+        readDatabaseIntoFileCache: true,
+      });
+    }
   });
 
   it('a guide rebuild or a settings change renders every channel again', async () => {

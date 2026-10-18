@@ -1500,6 +1500,12 @@ export class TVGuideService {
         {
           includeCreditArtwork:
             this.settingsDB.featureFlags().xmltvCreditImagesEnabled,
+          // The scheduled refresh reads every program in the window, hours
+          // after anything last held the database in the file cache. Read
+          // straight from a busy disk, those synchronous queries kept Tunarr
+          // from answering for up to 219 s on a shared server and ended a
+          // viewer's Live TV stream (2026-10-18).
+          readDatabaseIntoFileCache: true,
         },
       ),
       (prg) => prg.uuid,

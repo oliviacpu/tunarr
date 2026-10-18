@@ -28,6 +28,7 @@ import type {
 } from '@/db/schema/derivedTypes.js';
 import type { Maybe, Nullable, PagedResult } from '@/types/util.js';
 import type { Dictionary, MarkOptional, StrictExclude } from 'ts-essentials';
+import type { GuideProgramsFetchOptions } from '../program/BasicProgramRepository.ts';
 import type { NewArtwork } from '../schema/Artwork.ts';
 import type { NewGenre } from '../schema/Genre.ts';
 import type { ProgramGroupingType } from '../schema/ProgramGrouping.ts';
@@ -86,7 +87,7 @@ export interface IProgramDB {
    */
   getGuideProgramsByIds(
     ids: string[] | readonly string[],
-    opts: { includeCreditArtwork: boolean },
+    opts: GuideProgramsFetchOptions,
     batchSize?: number,
   ): Promise<ProgramWithRelationsOrm[]>;
 
