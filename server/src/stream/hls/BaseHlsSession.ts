@@ -196,6 +196,8 @@ export abstract class BaseHlsSession<
 
   protected override async waitForStreamReady(): Promise<Result<void>> {
     // Wait for the stream to become ready
+    const waitStart = performance.now();
+    let segmentsSeen = 0;
     try {
       this.logger.debug('Waiting for HLS stream session to be ready...');
       await retry(
@@ -232,6 +234,7 @@ export abstract class BaseHlsSession<
             const ext = extname(f);
             return ext === '.ts' || ext === '.mp4';
           }).length;
+          segmentsSeen = numSegments;
 
           const playlistExists = some(
             workingDirectoryFiles.get(),
@@ -269,7 +272,11 @@ export abstract class BaseHlsSession<
         },
       );
 
-      this.logger.debug('Stream successfully started!');
+      this.logger.info(
+        'HLS session ready after %d ms (%d segments on disk)',
+        Math.round(performance.now() - waitStart),
+        segmentsSeen,
+      );
 
       return Result.success(void 0);
     } catch (e) {

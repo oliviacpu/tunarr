@@ -35,6 +35,20 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A tune-in's timing is in Tunarr's log (2026-10-18)
+
+- **What you saw:** nothing. How long a tune-in took (and whether it failed before a byte was sent) could only be
+  read off Plex's logs, which show the tuner's side and only at INFO on a lucky day.
+- **Fix:** the `/stream/channels/<id>.ts` route logs `Tune-in: session N ms, first byte N ms` with the channel,
+  token, client address and user agent when the first byte goes out, and `Stream closed after N s, N MB sent` when
+  the request closes (with `(no byte was ever sent)` for a tune-in that failed). `BaseHlsSession` logs `HLS session
+  ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a process writing to stdout (the
+  `.ts` wrapper) sent its first output. `TuneInTimer` holds the marks; `CountingPassThrough` counts the bytes inside
+  the stream so the response's own piping is untouched.
+- **Tests:** `TuneInTimer.test.ts`: marks, rounding, summary; the counting stream counts and reports the first chunk
+  once.
+- **Upstream:** not sent.
+
 ### The .ts stream starts when a second audio track is a few seconds late (2026-10-17)
 
 - **What you saw:** a cold tune of a channel with two audio tracks (Audio tracks `eng, jpn`, loudness levelling on)
