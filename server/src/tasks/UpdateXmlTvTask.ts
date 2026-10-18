@@ -1,20 +1,18 @@
 import { defaultXmlTvSettings } from '@/db/SettingsDB.js';
 import type { IChannelDB } from '@/db/interfaces/IChannelDB.js';
 import type { ISettingsDB } from '@/db/interfaces/ISettingsDB.js';
-import { MediaSourceDB } from '@/db/mediaSourceDB.js';
-import { MediaSourceApiFactory } from '@/external/MediaSourceApiFactory.js';
 import { globalOptions } from '@/globals.js';
 import { TVGuideService } from '@/services/TvGuideService.js';
 import { KEYS } from '@/types/inject.js';
 import { fileExists } from '@/util/fsUtil.js';
-import { isNonEmptyString, mapAsyncSeq } from '@/util/index.js';
+import { isNonEmptyString } from '@/util/index.js';
 import { InjectLogger } from '@/util/inject.js';
 import type { Logger } from '@/util/logging/LoggerFactory.js';
-import type { PlexDvr } from '@tunarr/types/plex';
 import dayjs from 'dayjs';
-import { inject, injectable, LazyServiceIdentifier } from 'inversify';
+import { inject, injectable } from 'inversify';
 import z from 'zod';
 import { EventService } from '../services/EventService.ts';
+import { PlexGuideNotifier } from '../services/PlexGuideNotifier.ts';
 import { GlobalScheduler } from '../services/Scheduler.ts';
 import type { Maybe } from '../types/util.ts';
 import { SubtitleExtractorTask } from './SubtitleExtractorTask.ts';
@@ -44,9 +42,7 @@ export class UpdateXmlTvTask extends Task2<typeof UpdateXmlTvTaskRequest> {
   constructor(
     @inject(KEYS.SettingsDB) private settingsDB: ISettingsDB,
     @inject(TVGuideService) private guideService: TVGuideService,
-    @inject(MediaSourceDB) private mediaSourceDB: MediaSourceDB,
-    @inject(new LazyServiceIdentifier(() => MediaSourceApiFactory))
-    private mediaSourceApiFactory: MediaSourceApiFactory,
+    @inject(PlexGuideNotifier) private plexGuideNotifier: PlexGuideNotifier,
     @inject(EventService) private eventService: EventService,
     @inject(KEYS.ChannelDB) private channelDB: IChannelDB,
   ) {
@@ -63,6 +59,16 @@ export class UpdateXmlTvTask extends Task2<typeof UpdateXmlTvTaskRequest> {
   }
 
   private async updateXmlTv(channelId?: string) {
+    // Lets POST /api/xmltv/flush wait for a write a channel save started without awaiting it.
+    this.plexGuideNotifier.writeStarted();
+    try {
+      await this.writeGuide(channelId);
+    } finally {
+      this.plexGuideNotifier.writeFinished();
+    }
+  }
+
+  private async writeGuide(channelId?: string) {
     try {
       let xmltvSettings = this.settingsDB.xmlTvSettings();
       if (!(await fileExists(xmltvSettings.outputPath))) {
@@ -138,43 +144,7 @@ export class UpdateXmlTvTask extends Task2<typeof UpdateXmlTvTaskRequest> {
       return;
     }
 
-    const allMediaSources = await this.mediaSourceDB.findByType('plex');
-
-    await mapAsyncSeq(allMediaSources, async (plexServer) => {
-      const plex =
-        await this.mediaSourceApiFactory.getPlexApiClientForMediaSource(
-          plexServer,
-        );
-      let dvrs: PlexDvr[] = [];
-
-      if (!plexServer.sendGuideUpdates) {
-        return;
-      }
-
-      try {
-        dvrs = await plex.getDvrs(); // Refresh guide and channel mappings
-      } catch (err) {
-        this.logger.error(
-          err,
-          `Couldn't get DVRS list from ${plexServer.name}. This error will prevent 'refresh guide' or 'refresh channels' from working for this Plex server. But it is NOT related to playback issues.`,
-        );
-        return;
-      }
-
-      if (dvrs.length === 0) {
-        return;
-      }
-
-      if (plexServer.sendGuideUpdates) {
-        try {
-          await plex.refreshGuide(dvrs);
-        } catch (err) {
-          this.logger.error(
-            err,
-            `Couldn't tell Plex ${plexServer.name} to refresh guide for some reason. This error will prevent 'refresh guide' from working for this Plex server. But it is NOT related to playback issues.`,
-          );
-        }
-      }
-    });
+    // One ask per burst of writes, only once the server listens (PlexGuideNotifier).
+    this.plexGuideNotifier.requestRefresh();
   }
 }

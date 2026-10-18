@@ -52,6 +52,7 @@ import { ScheduleJobsStartupTask } from './services/startup/ScheduleJobsStartupT
 import { SeedFfmpegInfoCache } from './services/startup/SeedFfmpegInfoCache.ts';
 import { SeedSystemDevicesStartupTask } from './services/startup/SeedSystemDevicesStartupTask.ts';
 import { FixerRunner } from './tasks/fixers/FixerRunner.ts';
+import { PlexGuideNotifier } from './services/PlexGuideNotifier.ts';
 import { ChildProcessHelper } from './util/ChildProcessHelper.ts';
 import { Timer } from './util/Timer.ts';
 import { getBooleanEnvVar, USE_WORKER_POOL_ENV_VAR } from './util/env.ts';
@@ -65,6 +66,7 @@ const RootModule = new ContainerModule(({ bind }) => {
   bind<ITimer>(KEYS.Timer).to(Timer);
 
   bind(SettingsDBFactory).toSelf().inSingletonScope();
+  bind(PlexGuideNotifier).toSelf().inSingletonScope();
 
   bind<Factory<ISettingsDB>>('Factory<ISettingsDB>').toFactory((context) => {
     const inst = context.get(SettingsDBFactory);
