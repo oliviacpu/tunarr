@@ -47,6 +47,23 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Tests:** `FfmpegProcess.test.ts`: a shell stand-in that writes 64 KB blocks for ever and acts on SIGTERM only
   between writes, piped to a reader that never drains, exits within seconds of `kill()` with code 0 (on the old code
   it is SIGKILLed after 15 s).
+### Plex shows "2 Sci-Fi", not "2 2 Sci-Fi" (2026-10-18)
+
+- **What you saw:** every channel in Plex's guide carried its number twice.
+- **Cause:** Plex titles a channel `<number> <first display-name>`, and the first `display-name` was already
+  `<number> <name>`.
+- **Fix:** `XmlTvWriter.makeXmlTvChannel` writes the name first (Plex uses the first), then `<number> <name>`, the
+  number, and the name again last (Jellyfin's XMLTV reader keeps the last). Channel ids are unchanged, so a guide
+  reload is enough; no channel-map change (which would end playing streams).
+- **Tests:** `XmlTvWriter.test.ts`: the display-names of a written channel come in that order.
+
+### Console log times carry their real offset (2026-10-18)
+
+- **What you saw:** `2026-10-18T09:50:49.131Z` in the console log for an event that happened at 14:50:49 UTC: the
+  time was local (TZ=America/Chicago) but ended in `Z`, so every reading against Plex's UTC log was 5 hours off.
+- **Cause:** `getPrettyStreamOpts` used `SYS:yyyy-mm-dd'T'HH:MM:ss.l'Z'`: the system zone with a literal `Z`.
+- **Fix:** `SYS:yyyy-mm-dd HH:MM:ss.l o`, local time with its offset (`-05:00`).
+- **Tests:** `LoggerFactory.test.ts`: the pretty-stream time format has no literal `Z` and prints an offset.
 
 ### Forced subtitles inside a video file are read as forced (2026-10-18)
 
@@ -105,6 +122,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
       same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms.
     - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms.
     - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
 frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
 - **Tests:** `Cea608Encoder.keyframes.test.ts`: a load that would cross a keyframe goes before it, on time; one
   that fits nowhere on time shows up to 300 ms late, else crosses as before; generated dialogue at 23.976, 25, 29.97
