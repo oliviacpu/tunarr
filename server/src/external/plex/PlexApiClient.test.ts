@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it, vi } from 'vitest';
+import { QueryError } from '@/external/BaseApiClient.js';
 import { Result } from '@/types/result.js';
 import { PlexApiClient } from './PlexApiClient.js';
 
@@ -538,6 +539,41 @@ describe('PlexApiClient', () => {
         expect.anything(),
         expect.anything(),
       );
+    });
+  });
+
+  describe('getDvrs', () => {
+    it('rejects when the lookup failed, so a caller can retry', async () => {
+      // A 503 or a timeout used to come back as an empty list, indistinguishable from a Plex with no DVR, and
+      // the guide notifier gave up on its first try instead of asking again.
+      const { client } = makeMinimalPlexClient();
+      vi.spyOn(client, 'doGetResult' as never).mockResolvedValue(
+        Result.failure(
+          QueryError.genericQueryError('503 Maintenance'),
+        ) as never,
+      );
+
+      await expect(client.getDvrs()).rejects.toMatchObject({
+        type: 'generic_request_error',
+      });
+    });
+
+    it('answers no DVRs for a Plex without Live TV', async () => {
+      const { client } = makeMinimalPlexClient();
+      vi.spyOn(client, 'doGetResult' as never).mockResolvedValue(
+        Result.failure(QueryError.create('not_found', 'Not found')) as never,
+      );
+
+      await expect(client.getDvrs()).resolves.toEqual([]);
+    });
+
+    it('lists the DVRs Plex answers with', async () => {
+      const { client } = makeMinimalPlexClient();
+      vi.spyOn(client, 'doGetResult' as never).mockResolvedValue(
+        Result.success({ size: 1, Dvr: [{ key: '4' }] }) as never,
+      );
+
+      await expect(client.getDvrs()).resolves.toEqual([{ key: '4' }]);
     });
   });
 });

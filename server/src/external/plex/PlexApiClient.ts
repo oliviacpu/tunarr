@@ -1178,14 +1178,22 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
     });
   }
 
-  async getDvrs() {
-    try {
-      const result = await this.doGetPath<PlexDvrsResponse>('/livetv/dvrs');
-      return result?.Dvr ?? [];
-    } catch (err) {
-      this.logger.error(err, 'GET /livetv/drs failed');
-      throw err;
+  /**
+   * The server's DVRs. A lookup Plex could not answer (a 503 while it runs
+   * maintenance, a timeout) rejects: it is not an empty list, and a caller
+   * that retries (PlexGuideNotifier) relies on the difference. A 404 is a
+   * Plex without Live TV, which has no DVRs.
+   */
+  async getDvrs(): Promise<PlexDvr[]> {
+    const result = await this.doGetResult<PlexDvrsResponse>('/livetv/dvrs');
+    if (result.isFailure()) {
+      if (result.error.type === 'not_found') {
+        return [];
+      }
+      this.logger.error(result.error, 'GET /livetv/dvrs failed');
+      throw result.error;
     }
+    return result.get().Dvr ?? [];
   }
 
   async refreshGuide(_dvrs?: PlexDvr[]) {

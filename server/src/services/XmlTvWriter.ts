@@ -17,7 +17,7 @@ import { Mutex } from 'async-mutex';
 import { inject, injectable, optional } from 'inversify';
 import throttle from '@/util/throttle.js';
 import { chunk, compact, escape, flatMap, isNil, map, round } from 'lodash-es';
-import { writeFile } from 'node:fs/promises';
+import { rename, writeFile } from 'node:fs/promises';
 import { match } from 'ts-pattern';
 import { type ArtworkType } from '../db/schema/Artwork.ts';
 import type { ProgramWithRelationsOrm } from '../db/schema/derivedTypes.ts';
@@ -158,13 +158,20 @@ export class XmlTvWriter {
       programmes.push(rendered);
     }
 
-    return await writeFile(
-      this.settingsDB.xmlTvSettings().outputPath,
+    // Written beside the final name, then renamed over it: a reader (Plex
+    // downloads this file through /api/xmltv.xml) never sees a half-written
+    // guide. Before this, Plex twice logged "malformed data detected in
+    // XMLTV file" after downloading mid-write.
+    const outputPath = this.settingsDB.xmlTvSettings().outputPath;
+    const tmpPath = `${outputPath}.${process.pid}.tmp`;
+    await writeFile(
+      tmpPath,
       this.assemble(
         channels.map(({ channel }) => channel),
         programmes,
       ),
     );
+    await rename(tmpPath, outputPath);
   }
 
   /**
