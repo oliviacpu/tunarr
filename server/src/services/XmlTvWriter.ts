@@ -275,7 +275,14 @@ export class XmlTvWriter {
   ): XmltvChannel {
     const partial: XmltvChannel = {
       id: xmlChannelId,
+      // Plex titles a channel "<number> <first display-name>", so the name
+      // comes first ("2 2 Sci-Fi" was what "<number> <name>" first produced).
+      // Jellyfin's XMLTV reader keeps the last display-name as the channel
+      // name, so the plain name comes last as well.
       displayName: [
+        {
+          _value: escape(channel.name),
+        },
         {
           _value: `${channel.number} ${escape(channel.name)}`,
         },
