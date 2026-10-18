@@ -59,6 +59,16 @@ export class UpdateXmlTvTask extends Task2<typeof UpdateXmlTvTaskRequest> {
   }
 
   private async updateXmlTv(channelId?: string) {
+    // Lets POST /api/xmltv/flush wait for a write a channel save started without awaiting it.
+    this.plexGuideNotifier.writeStarted();
+    try {
+      await this.writeGuide(channelId);
+    } finally {
+      this.plexGuideNotifier.writeFinished();
+    }
+  }
+
+  private async writeGuide(channelId?: string) {
     try {
       let xmltvSettings = this.settingsDB.xmlTvSettings();
       if (!(await fileExists(xmltvSettings.outputPath))) {

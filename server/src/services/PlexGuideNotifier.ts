@@ -34,6 +34,7 @@ export class PlexGuideNotifier {
 
   #listening = false;
   #pending = false;
+  #writes = 0;
   #timer?: NodeJS.Timeout;
   #inFlight?: Promise<void>;
   #waiters: (() => void)[] = [];
@@ -62,9 +63,27 @@ export class PlexGuideNotifier {
     this.#schedule(PlexGuideNotifier.DebounceMs);
   }
 
-  /** Resolves once no ask is pending or running (at once when there is none). */
+  /**
+   * A guide write is under way (UpdateXmlTvTask). A channel save starts that
+   * task without awaiting it, so a flush right after the save must wait for
+   * the write, and then for the ask the write ends with.
+   */
+  writeStarted() {
+    this.#writes++;
+  }
+
+  writeFinished() {
+    this.#writes = Math.max(0, this.#writes - 1);
+    this.#settle();
+  }
+
+  get idle() {
+    return this.#writes === 0 && !this.#pending && !this.#inFlight;
+  }
+
+  /** Resolves once no guide write, pending ask or running ask is left (at once when there is none). */
   flush(): Promise<void> {
-    if (!this.#pending && !this.#inFlight) {
+    if (this.idle) {
       return Promise.resolve();
     }
     if (this.#pending && this.#timer && this.#listening) {
@@ -72,6 +91,15 @@ export class PlexGuideNotifier {
       this.#schedule(0);
     }
     return new Promise((resolve) => this.#waiters.push(resolve));
+  }
+
+  #settle() {
+    if (!this.idle) {
+      return;
+    }
+    const waiters = this.#waiters;
+    this.#waiters = [];
+    for (const w of waiters) w();
   }
 
   #schedule(ms: number) {
@@ -102,11 +130,7 @@ export class PlexGuideNotifier {
       .catch((err) => this.logger.error(err, 'Plex guide notify failed'))
       .finally(() => {
         this.#inFlight = undefined;
-        if (!this.#pending) {
-          const waiters = this.#waiters;
-          this.#waiters = [];
-          for (const w of waiters) w();
-        }
+        this.#settle();
       });
   }
 

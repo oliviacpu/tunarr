@@ -273,9 +273,10 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
     return res.status(200).send();
   });
 
-  // Resolves once every pending guide write has been followed by the ask to
-  // Plex (or at once when nothing is pending). A script that saved several
-  // channels can wait here before checking Plex's guide.
+  // Resolves once every guide write under way (a channel save starts one
+  // without awaiting it) has finished and been followed by the ask to Plex,
+  // or at once when nothing is pending. A script that saved several channels
+  // waits here, after its saves have returned, before checking Plex's guide.
   fastify.post('/xmltv/flush', async (_, res) => {
     await container.get(PlexGuideNotifier).flush();
     return res.status(200).send();

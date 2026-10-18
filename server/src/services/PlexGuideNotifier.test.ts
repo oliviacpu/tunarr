@@ -123,6 +123,27 @@ describe('PlexGuideNotifier', () => {
     expect(calls.refreshGuide).toBe(1);
   });
 
+  test('flush waits for a guide write under way, then for the ask it ends with', async () => {
+    const { calls, notifier } = setup();
+    notifier.markListening();
+    notifier.writeStarted();
+    let flushed = false;
+    const flushing = notifier.flush().then(() => {
+      flushed = true;
+    });
+    await vi.advanceTimersByTimeAsync(PlexGuideNotifier.DebounceMs * 2);
+    await settle();
+    expect(flushed).toBe(false);
+    expect(calls.refreshGuide).toBe(0);
+    notifier.requestRefresh();
+    notifier.writeFinished();
+    await vi.advanceTimersByTimeAsync(PlexGuideNotifier.DebounceMs);
+    await settle();
+    await flushing;
+    expect(flushed).toBe(true);
+    expect(calls.refreshGuide).toBe(1);
+  });
+
   test('flush resolves at once when nothing is pending', async () => {
     const { notifier } = setup();
     await expect(notifier.flush()).resolves.toBeUndefined();
