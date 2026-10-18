@@ -1,8 +1,8 @@
 import { head } from 'lodash-es';
-import { isWindows } from '../../../util/index.ts';
 import type { SubtitlesInputSource } from '../input/SubtitlesInputSource.ts';
 import type { FrameState } from '../state/FrameState.ts';
 import { FrameDataLocation } from '../types.ts';
+import { escapeFilterOptionValue } from './escapeFilterValue.ts';
 import { FilterOption } from './FilterOption.ts';
 
 export class SubtitleFilter extends FilterOption {
@@ -16,22 +16,9 @@ export class SubtitleFilter extends FilterOption {
       return '';
     }
 
-    let path = this.subtitleInputSource.path;
-
-    if (isWindows()) {
-      path = path.replaceAll('\\', '/\\');
-    }
-
-    if (!path.startsWith('http')) {
-      path = path.replaceAll(':/', '\\\\:/');
-    }
-
-    path = path
-      .replaceAll('[', '\\[')
-      .replaceAll(']', '\\]')
-      .replaceAll(':', '\\:');
-
-    return `subtitles=${path}`;
+    // Named, not positional: a path with '=' after a run of option-name
+    // characters would otherwise be read as option=value
+    return `subtitles=filename=${escapeFilterOptionValue(this.subtitleInputSource.path)}`;
   }
 
   nextState(currentState: FrameState): FrameState {

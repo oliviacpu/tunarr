@@ -69,6 +69,40 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   packets for every length up to 600 and every extra up to 15, keeping every byte. `HlsOutputFormat.test.ts` and
   `HlsDirectOutputFormat.test.ts`: a later program passes the flag through `-hls_segment_options` (fails on the old
   code).
+
+### A burned-in subtitle's path can hold any character (2026-10-17)
+
+- **What you saw:** a program with a forced subtitle never started. ffmpeg said `No option name near
+  '2]aresample=…'` and `Error parsing filterchain '[0:0]pad=…,subtitles=…'`. The subtitle file's name had an
+  apostrophe in it (`… - Kid's Final Test.en.forced.srt`).
+- **Cause:** FFmpeg reads a filter option's value twice, first when it splits the filtergraph into filters and
+  then when it splits a filter's arguments into options (`av_get_token` both times). `SubtitleFilter` escaped the
+  path once, and only for `[`, `]` and `:`.
+  - **Apostrophe:** an apostrophe opened a quote that swallowed the rest of the graph.
+  - **Comma and semicolon:** ended the filter early.
+  - **Colon:** lost its single backslash at the graph level, then split the path into options.
+  - **Equals sign:** the positional form could also read a path with `=` as `option=value`.
+- **Fix:**
+  - **`escapeFilterOptionValue`** (`filter/escapeFilterValue.ts`) escapes a literal value for both levels, as in
+    FFmpeg's "Notes on filtergraph escaping": `\ ' :` for the option, then `\ ' [ ] , ;` for the graph, plus
+    whitespace at either end, which `av_get_token` trims.
+  - **`SubtitleFilter`** uses it with the named option, `subtitles=filename=…`, in every pipeline (software,
+    NVIDIA, QSV, VAAPI). Windows and HTTP paths need no special cases any more.
+  - **No other filter takes a path:** watermarks and images are `-i` inputs, and the drawtext titles are fixed
+    strings.
+- **Test:**
+  - **`escapeFilterValue.test.ts`:** a port of `av_get_token` reads every escaped value back exactly, across
+    apostrophes, colons, commas, semicolons, brackets, `=`, `%`, backslashes, leading and trailing spaces, tabs,
+    newlines, unicode, a Windows path and an HTTP URL. It also matches the two-level example in FFmpeg's
+    documentation, and the burned-in filter no longer swallows the chain after it. Old code: 13 of the 27 fail.
+  - **`SoftwarePipeline.local.test.ts`:** real ffmpeg burns in a sidecar under such a name.
+  - **stream-repro (`--keep-names`):**
+    - before: the program's transcode failed on every start ("Unable to parse 'original_size' option value
+      '1]aresample…'"), the HLS session restarted, and 4 segments came through in 30 s;
+    - after: 8 segments came through with the subtitle burned in.
+- **Reach:** on one library, 77 forced text tracks on 71 programs had such a path: 62 sidecars, and 15 embedded
+  tracks in 13 videos. Forced tracks are the ones burned in even with captions on. With captions off, any burned
+  text subtitle counts: 3,737 tracks on 1,012 programs, 784 of them with an apostrophe.
 - **Upstream:** not sent.
 
 ### A source reporting a frame rate that isn't standard keeps all its frames (2026-10-17)
