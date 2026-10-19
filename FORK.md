@@ -26,7 +26,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### Reloading or closing a clean editor no longer asks "Leave site?" (2026-10-19)
+### Reloading or closing a clean editor no longer asks "Leave site?" (2026-10-19, PR #91)
 
 - **What you saw:** the browser's "Leave site?" dialog on reload or tab close with nothing changed, on every page that
   warns about unsaved changes: the channel editor, the programming page, both slot editors, and the FFmpeg, XMLTV
