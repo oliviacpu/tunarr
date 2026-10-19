@@ -35,6 +35,16 @@ describe('redactSecrets', () => {
       '/Subtitles/0/Stream.srt?api_key=ghi789',
       '/Subtitles/0/Stream.srt?api_key=REDACTED',
     ],
+    [
+      'quoted query value',
+      '/Items?api_key="k:v;tail"',
+      '/Items?api_key="REDACTED"',
+    ],
+    [
+      'single quoted query value',
+      "/Items?api_key='k:v;tail'",
+      "/Items?api_key='REDACTED'",
+    ],
     ['Jellyfin ApiKey', '/Items?ApiKey=ghi789', '/Items?ApiKey=REDACTED'],
     [
       'bare token query parameter',
@@ -96,6 +106,44 @@ describe('redactSecrets', () => {
     expect(redactSecrets('?X-Plex-Token=a.b~c%2Bd/e+f=g&x=1')).toBe(
       '?X-Plex-Token=REDACTED&x=1',
     );
+  });
+
+  test.each([
+    'X-Plex-Token',
+    'X-Emby-Token',
+    'X-MediaBrowser-Token',
+    'api_key',
+    'ApiKey',
+    'token',
+  ])('redacts punctuation throughout a %s query credential', (key) => {
+    const url = `http://media.example/stream?${key}=k:v;tail,(part)<end>'suffix%26encoded&static=true#fragment`;
+    expect(redactSecrets(url)).toBe(
+      `http://media.example/stream?${key}=REDACTED&static=true#fragment`,
+    );
+  });
+
+  test('redacts punctuation in quoted stderr URLs and command arguments', () => {
+    const url = 'http://media.example/stream?api_key=k:v;tail,(part)';
+    expect(redactSecrets(`Input #0 from '${url}':\n-i "${url}"`)).toBe(
+      `Input #0 from 'http://media.example/stream?api_key=REDACTED':\n-i "http://media.example/stream?api_key=REDACTED"`,
+    );
+  });
+
+  test.each([
+    ["X-Plex-Token: prefix'suffix", 'X-Plex-Token: REDACTED'],
+    ['X-Plex-Token: prefix"suffix', 'X-Plex-Token: REDACTED'],
+    [
+      "X-Plex-Token: prefix'with\"both'suffix next",
+      'X-Plex-Token: REDACTED next',
+    ],
+    ['X-Plex-Token: k:v;tail,(part)&more#end', 'X-Plex-Token: REDACTED'],
+    ['X-Emby-Token: "k:v;tail,(part)&more#end"', 'X-Emby-Token: "REDACTED"'],
+    [
+      'Authorization: MediaBrowser Token="k:v;tail,(part)", Client="Tunarr"',
+      'Authorization: MediaBrowser Token="REDACTED", Client="Tunarr"',
+    ],
+  ])('redacts header punctuation in %s', (input, expected) => {
+    expect(redactSecrets(input)).toBe(expected);
   });
 
   test('leaves text without secrets unchanged', () => {
@@ -184,6 +232,15 @@ describe('RedactSecretsStream', () => {
     ]);
 
     expect(output).toBe('GET /stream?X-Emby-Token=REDACTED&static=true\n');
+  });
+
+  test('redacts punctuation and apostrophes across stderr chunks', async () => {
+    const { output } = await streamThrough([
+      "Input #0 from 'http://h/stream?api_key=k:",
+      "v;tail,(part)'suffix",
+      "':\n",
+    ]);
+    expect(output).toBe("Input #0 from 'http://h/stream?api_key=REDACTED':\n");
   });
 
   test('passes finished lines on at once and holds only the unfinished one', async () => {

@@ -4,7 +4,7 @@ import { ChildProcessHelper } from './ChildProcessHelper.ts';
 
 // A made-up token in the URL a media server would hand ffprobe or ffmpeg.
 const InputUrl =
-  'http://media.example:32400/library/parts/1/a.mkv?X-Plex-Token=abc';
+  'http://media.example:32400/library/parts/1/a.mkv?X-Plex-Token=abc:tail;part,(suffix)';
 const RedactedUrl =
   'http://media.example:32400/library/parts/1/a.mkv?X-Plex-Token=REDACTED';
 
@@ -55,7 +55,7 @@ describe('ChildProcessHelper.getStdout', () => {
       });
       expect(
         `${error.message}${error.stack}${JSON.stringify(error)}`,
-      ).not.toContain('abc');
+      ).not.toMatch(/abc|tail|suffix/);
 
       const debugged = JSON.stringify(logger.debug.mock.calls);
       expect(debugged).toContain(RedactedUrl);

@@ -55,7 +55,7 @@ describe('FfmpegProcess.kill', () => {
 
 // A made-up token in the URL a media server would hand ffmpeg.
 const InputUrl =
-  'http://media.example:32400/library/parts/1/file.mkv?X-Plex-Token=abc';
+  'http://media.example:32400/library/parts/1/file.mkv?X-Plex-Token=abc:tail;part,(suffix)';
 const RedactedUrl =
   'http://media.example:32400/library/parts/1/file.mkv?X-Plex-Token=REDACTED';
 
@@ -139,7 +139,7 @@ describe('FfmpegProcess logging', () => {
       expect(errorLogs).toContain('X-Plex-Token=REDACTED for reading');
       // The last line, still unfinished when ffmpeg exited.
       expect(errorLogs).toContain(`Error opening input file ${RedactedUrl}"`);
-      expect(errorLogs).not.toContain('abc');
+      expect(errorLogs).not.toMatch(/abc|tail|suffix/);
 
       const errorFile = await vi.waitFor(async () => {
         const [name] = await fs.readdir(logDirectory);
@@ -152,14 +152,14 @@ describe('FfmpegProcess logging', () => {
       expect(errorFile).toContain(`${RedactedUrl}: Server returned 401`);
       expect(errorFile).toContain(`Error opening input file ${RedactedUrl}\n`);
       expect(errorFile).toContain(`Original command: -c`);
-      expect(errorFile).not.toContain('abc');
+      expect(errorFile).not.toMatch(/abc|tail|suffix/);
 
       const printed = stderrWrites.join('');
       // Once from the live pipe, once in the dump at exit.
       expect(printed.split(`${RedactedUrl}: Server returned 401`)).toHaveLength(
         3,
       );
-      expect(printed).not.toContain('abc');
+      expect(printed).not.toMatch(/abc|tail|suffix/);
 
       expect(cmd).toContain(RedactedUrl);
       // The args lines (debug at start, info at exit) are redacted too.

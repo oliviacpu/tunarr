@@ -2,36 +2,44 @@ import type { TransformCallback } from 'node:stream';
 import { Transform } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 
-// Media-server credentials as they appear in URLs, HTTP headers, ffmpeg
-// arguments and ffmpeg's own output. Servers read these names without regard
-// to case, so the match ignores it too.
-const SecretKeys = [
-  // Plex and Emby/Jellyfin tokens: query (X-Plex-Token=…) and header
-  // (X-Emby-Token: …) forms, also quoted as in a JSON dump of headers.
-  String.raw`X-(?:Plex|Emby|MediaBrowser)-Token["']?(?:=|:[ \t]*)`,
-  // Jellyfin and Emby query keys: api_key=… and ApiKey=….
-  String.raw`api_?key=`,
-  // A bare token query parameter.
-  String.raw`[?&]token=`,
-  // The token in a Jellyfin/Emby "MediaBrowser … Token="…"" Authorization
-  // header.
-  String.raw`\bToken="`,
-];
+const TokenHeaderKey = String.raw`X-(?:Plex|Emby|MediaBrowser)-Token`;
+const QueryKey = String.raw`(?:${TokenHeaderKey}|api_?key|[?&]token)`;
 
-// A value runs to the next delimiter rather than being a fixed alphabet, so a
-// token with unexpected characters is still hidden whole.
-const SecretValueChar = String.raw`[^\s"'&#;:,()<>]`;
+// Query values end at URL delimiters. Punctuation such as commas, colons and
+// semicolons can belong to the credential, unlike separators in header dumps.
+// A closing ffmpeg quote or the colon before its diagnostic is kept when it
+// borders whitespace or the end of the line.
+const QueryPattern = new RegExp(
+  String.raw`(${QueryKey}=["']?)([^\s&#"]+?)(?='(?=:(?:\s|$)|\s|$)|:(?=\s)|[\s&#"]|$)`,
+  'gi',
+);
 
-// $1 is the key, its separator and any opening quote, which stay; the value
-// becomes REDACTED.
-const SecretPattern = new RegExp(
-  `((?:${SecretKeys.join('|')})["']?)${SecretValueChar}+`,
+const HeaderPattern = new RegExp(
+  String.raw`((?:${TokenHeaderKey}["']?:[ \t]*|\bToken=(?=["'])))(?:("[^"\r\n]*")|('[^'\r\n]*')|([^\s"'][^\s]*?)(?=["'](?:\s|$)|\s|$))`,
   'gi',
 );
 
 /** Replaces each media-server token or API key in `text` with REDACTED. */
 export function redactSecrets(text: string): string {
-  return text.replace(SecretPattern, '$1REDACTED');
+  return text
+    .replace(QueryPattern, '$1REDACTED')
+    .replace(
+      HeaderPattern,
+      (
+        _match,
+        key: string,
+        doubleQuoted: string | undefined,
+        singleQuoted: string | undefined,
+      ) => {
+        const quote =
+          doubleQuoted !== undefined
+            ? '"'
+            : singleQuoted !== undefined
+              ? "'"
+              : '';
+        return `${key}${quote}REDACTED${quote}`;
+      },
+    );
 }
 
 /**
