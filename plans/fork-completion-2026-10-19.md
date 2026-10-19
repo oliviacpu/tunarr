@@ -121,7 +121,6 @@ CI after their parents land and they are retargeted to main.
 | [#73](https://github.com/oliviacpu/tunarr/pull/73) | Runtime validation and release tooling | main |
 | [#74](https://github.com/oliviacpu/tunarr/pull/74) | Subtitle encoding and matching | #65 |
 | [#75](https://github.com/oliviacpu/tunarr/pull/75) | Pipeline frame rate and rendering | #74 |
-
 | [#77](https://github.com/oliviacpu/tunarr/pull/77) | Session/caption integration and read-ahead controls | #75 |
 
 The session/caption integration is #77. This documentation PR describes the
