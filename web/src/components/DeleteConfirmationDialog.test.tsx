@@ -45,6 +45,29 @@ describe('DeleteConfirmationDialog', () => {
     );
   });
 
+  test('confirm button reads confirmLabel when given', async () => {
+    const onConfirm = vi.fn();
+
+    const { user } = renderWithProviders(
+      <DeleteConfirmationDialog
+        open={true}
+        title="Empty the trash?"
+        confirmLabel="Empty trash"
+        onConfirm={onConfirm}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Delete' }),
+    ).not.toBeInTheDocument();
+    const confirmButton = screen.getByRole('button', { name: 'Empty trash' });
+    expect(confirmButton).toHaveClass('MuiButton-colorError');
+    await user.click(confirmButton);
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
   test('cancel button calls onCancel (if provided) then onClose', async () => {
     const onCancel = vi.fn();
     const onClose = vi.fn();
