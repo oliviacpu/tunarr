@@ -88,14 +88,14 @@ create two files distinguished only by case; it still runs on Linux.
   [PR #77](https://github.com/oliviacpu/tunarr/pull/77) as `4c4d8568b2624d50f001db6e3b2de54825b25904`, passed
   [Build run 39294342810](https://github.com/oliviacpu/tunarr/actions/runs/39294342810):
   **3,706 passed, 2 skipped** (server 3,308; web 256; shared 142), generated-contract
-  reproducibility, and server/web production builds. These are final-source CI results,
+  reproducibility, server type checks, and the web production build. These are final-source CI results,
   separate from the historical local candidate totals above.
 - The same final head passed [native Linux runtime run 39294334278](https://github.com/oliviacpu/tunarr/actions/runs/39294334278):
   **39 passed, 60 GPU-dependent cases skipped** (6 files passed, 3 skipped), plus
   **14/14 packaged-worker checks**. This exercises shipped FFmpeg/ffprobe, real
   Meilisearch, subtitle/rendering cases, and the packaged linux-x64 worker lifecycle.
   It does not establish GPU playback, ARM64 execution, or actual Plex/Apple TV behavior.
-- Production build: all five tasks passed. API specification and generated client are byte-for-byte reproducible on a second generation.
+- Historical candidate production build: all five tasks passed. API specification and generated client are byte-for-byte reproducible on a second generation.
 
 ## Release and remaining work
 
