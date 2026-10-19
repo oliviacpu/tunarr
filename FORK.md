@@ -15,6 +15,8 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   every fork commit on top of upstream. To roll back, deploy an older release's `:<tag>` image.
 - The version Tunarr reports is `<upstream version>-<tag>`, e.g. `2026.10.2-oliviacpu-2026.10.13`.
 - Upstream updates come in with `git fetch upstream && git merge upstream/main`.
+- The `Dockerfile` copies `.pnpmfile.cjs` next to the lockfile. Since upstream's TypeScript 7 upgrade the lockfile
+  records the pnpmfile's checksum, so without it `pnpm install --frozen-lockfile` fails in the image build.
 - **ffmpeg:** the image's `/usr/bin/ffmpeg` and `/usr/bin/ffprobe` are jellyfin-ffmpeg (see below). The base image's
   ErsatzTV ffmpeg 7.1.1 stays at `/usr/local/bin/ffmpeg`. To fall back to it without a new image, set the FFmpeg paths
   to `/usr/local/bin/ffmpeg` and `/usr/local/bin/ffprobe`. The settings page hides them in a container, so use the API
