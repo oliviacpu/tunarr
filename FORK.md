@@ -57,6 +57,16 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **What changed:** HLS and transport-stream sessions share their caption decision, subtitle planning returns one cohesive result, and read-ahead encoding has a configurable thread limit. Playback uses the final pipeline output rate for captions.
 - **Fix:** session types carry explicit caption capability; the factory keeps subtitle conversion, burn-in and caption fallback together. HLS session buffering, playlist mutation and transcode-speed monitoring use the candidate's completed playback lifecycle handling.
 - **Validation:** targeted playback and session regressions, source-based typechecks, and freshly generated API/client contracts on this branch.
+- **Review round 2 (follow-up to #77, after it merged):**
+  - Caption refusals warn once per kind (`CaptionRefusalKind` from `insertCaptions`), not once per reason text, which named a byte offset or a continuity counter and so warned on every segment.
+  - Decomposed (NFD) subtitle text is composed to NFC before CEA-608 encoding and the 10% unrepresentable-cue check, so `café` keeps its accent and is not burned in for it.
+  - A `.ts` stream that inherits captions off from a running HLS session logs that, instead of blaming its H.264 video.
+  - The slow-transcode warning names read-ahead threads only when read-ahead raised the count.
+  - The missing-drawtext warning is given again after switching ffmpeg back, and its warn-once state resets between tests.
+  - `SessionManager.sessionCaptionsEnabled` takes a `ChannelStreamMode`.
+  - A captioned external subtitle file is read and decoded once per program (`decodeSubtitleFile` returns the text and ffmpeg's charset).
+  - Docs: the Read-ahead Thread Limit row in the FFmpeg settings table, and when subtitles that can't become captions are burned in even with the WebVTT sidecar flag on.
+  - Kept: the `captionsEnabled ?? hdhrCaptionsEnabled(...)` fallbacks in `HlsSession` and `ConcatStream`. `SessionManager` always supplies the decision, but the ConcatStream and HlsSession suites build streams without it and test the rule through the fallback.
 - **Upstream:** not sent; personal fork integration stacked on the pipeline-output-rate and subtitle-text-reliability PRs.
 
 ### Narrow gap-music lookup and deleted-list cleanup (2026-10-19)
@@ -1165,7 +1175,7 @@ sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --second
   plans/test-channel-99.md) needs its own.
 - **Change:** a channel setting, **Captions for this channel**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.captions`, `{ testPattern?, alignment?, appearance? }`, stored in the new column
-    `captions` (migration 0054). Only what the channel sets is saved; the rest follows the global settings, so a later
+    `captions` (migration 0055). Only what the channel sets is saved; the rest follows the global settings, so a later
     global change still reaches it. The appearance fields have no defaults (`CaptionAppearanceOverridesSchema`), or an
     override would fill in every field.
   - **Test pattern on this channel:** the numbered samples on this channel only. The global switch still shows them on
@@ -1362,7 +1372,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
     restarts, so the tracks can't change from program to program.
 - **Change:** a channel setting, **Audio tracks**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.audioTracks`, up to four ISO 639-2 codes in order, stored in the new column
-    `audio_tracks` (migration 0053).
+    `audio_tracks` (migration 0054).
   - **Effect:** every program, commercial, gap (offline picture, with gap music or silence) and error screen on the
     channel outputs exactly those tracks, in that order, tagged with their languages.
   - **Filling a slot:**

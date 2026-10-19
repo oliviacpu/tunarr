@@ -32,8 +32,19 @@ export function decodeWindows1252(bytes: Buffer): string {
     );
 }
 
+// The charset ffmpeg must be told to read a subtitle file in: only
+// Windows-1252, since it reads byte order marks and UTF-8 on its own
+export type SubtitleCharacterEncoding = 'WINDOWS-1252';
+
+export type DecodedSubtitleFile = {
+  text: string;
+  // Set when the text was read as Windows-1252, for ffmpeg's `charenc`
+  characterEncoding: SubtitleCharacterEncoding | undefined;
+};
+
 /**
- * A subtitle file's text, from its bytes:
+ * A subtitle file's text, from its bytes, and the charset ffmpeg needs to
+ * read the same file (for burn-in or WebVTT) the same way:
  *
  * - A byte order mark says the encoding: UTF-8, UTF-16 LE or UTF-16 BE.
  * - Otherwise UTF-8 when the bytes are valid UTF-8, which includes plain
@@ -49,25 +60,35 @@ export function decodeWindows1252(bytes: Buffer): string {
  *   UTF-8.
  *
  * ffmpeg's subtitle decoder, which burn-in uses, reads byte order marks too,
- * but without a `charenc` it drops any cue that isn't valid UTF-8.
+ * but without a `charenc` it drops any cue that isn't valid UTF-8. So the
+ * charset is set only when the file is read as Windows-1252.
  */
-export function decodeSubtitleText(bytes: Buffer): string {
+export function decodeSubtitleFile(bytes: Buffer): DecodedSubtitleFile {
   if (startsWith(bytes, Utf8Bom)) {
-    return bytes.toString('utf8', Utf8Bom.length);
+    return {
+      text: bytes.toString('utf8', Utf8Bom.length),
+      characterEncoding: undefined,
+    };
   }
   if (startsWith(bytes, Utf16LeBom)) {
-    return bytes.toString('utf16le', Utf16LeBom.length);
+    return {
+      text: bytes.toString('utf16le', Utf16LeBom.length),
+      characterEncoding: undefined,
+    };
   }
   if (startsWith(bytes, Utf16BeBom)) {
     // Swapped to little-endian, which Node decodes without ICU; a trailing
     // odd byte is dropped, as utf16le drops it
     const end = bytes.length - ((bytes.length - Utf16BeBom.length) % 2);
-    return Buffer.from(bytes.subarray(Utf16BeBom.length, end))
-      .swap16()
-      .toString('utf16le');
+    return {
+      text: Buffer.from(bytes.subarray(Utf16BeBom.length, end))
+        .swap16()
+        .toString('utf16le'),
+      characterEncoding: undefined,
+    };
   }
   try {
-    return StrictUtf8.decode(bytes);
+    return { text: StrictUtf8.decode(bytes), characterEncoding: undefined };
   } catch {
     // Not all valid UTF-8; see which it mostly is
   }
@@ -81,25 +102,23 @@ export function decodeSubtitleText(bytes: Buffer): string {
       nonAscii++;
     }
   }
-  return nonAscii >= broken ? lossy : decodeWindows1252(bytes);
+  return nonAscii >= broken
+    ? { text: lossy, characterEncoding: undefined }
+    : { text: decodeWindows1252(bytes), characterEncoding: 'WINDOWS-1252' };
 }
 
-/** A charset override only when the file decoder selects Windows-1252. BOMs are handled by FFmpeg. */
+/** A subtitle file's text, from its bytes ({@link decodeSubtitleFile}). */
+export function decodeSubtitleText(bytes: Buffer): string {
+  return decodeSubtitleFile(bytes).text;
+}
+
+/**
+ * The charset ffmpeg needs for a subtitle file: Windows-1252 when
+ * {@link decodeSubtitleFile} reads it as Windows-1252. BOMs and UTF-8 are
+ * handled by FFmpeg.
+ */
 export function subtitleCharacterEncoding(
   bytes: Buffer,
-): 'WINDOWS-1252' | undefined {
-  if (
-    startsWith(bytes, Utf8Bom) ||
-    startsWith(bytes, Utf16LeBom) ||
-    startsWith(bytes, Utf16BeBom)
-  )
-    return;
-  try {
-    StrictUtf8.decode(bytes);
-    return;
-  } catch {
-    return decodeSubtitleText(bytes) === decodeWindows1252(bytes)
-      ? 'WINDOWS-1252'
-      : undefined;
-  }
+): SubtitleCharacterEncoding | undefined {
+  return decodeSubtitleFile(bytes).characterEncoding;
 }

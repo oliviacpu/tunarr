@@ -301,8 +301,8 @@ export class SessionManager {
 
   private sessionCaptionsEnabled(
     channel: ChannelOrmWithTranscodeConfig,
-    streamMode: string,
-  ) {
+    streamMode: ChannelStreamMode,
+  ): boolean {
     if (streamMode !== 'hls') return false;
     const sessions: ((CaptionSession & Session) | undefined)[] = [
       this.getHlsSession(channel.uuid),

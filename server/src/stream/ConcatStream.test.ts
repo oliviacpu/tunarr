@@ -142,6 +142,24 @@ describe('ConcatStream captions', () => {
     expect(info).not.toHaveBeenCalled();
   });
 
+  test('an H.264 channel joining a session started with captions off says so, not that its video is wrong', async () => {
+    const { url, sink, info } = await wrap({
+      subtitlesEnabled: true,
+      hdhrClosedCaptions: true,
+      videoFormat: 'h264',
+      // Inherited from an HLS session started before captions were turned on
+      captionsEnabled: false,
+    });
+
+    expect(url.searchParams.has('captions')).toBe(false);
+    expect(sink).toBeUndefined();
+    expect(info).toHaveBeenCalledTimes(1);
+    const [message, channelNumber] = info.mock.calls[0] ?? [];
+    expect(message).not.toContain('H.264');
+    expect(message).toContain('started with closed captions off');
+    expect(channelNumber).toBe(7);
+  });
+
   // Captions can only be written into H.264 video, and the transcode doesn't
   // try with other formats. The wrapper used to ask for captioned segments
   // anyway: each one was parsed and refused, and the PMT offered a caption

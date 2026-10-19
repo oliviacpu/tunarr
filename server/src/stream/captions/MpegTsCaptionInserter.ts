@@ -28,9 +28,25 @@ export type InsertCaptionsOptions = {
   language: string | ((pts90k: readonly number[]) => string);
 };
 
+// Why a segment can't be captioned, stable across segments: the reason text
+// can carry per-segment detail (a byte offset, a continuity counter), so a
+// session that warns once per refusal keys on this instead
+export type CaptionRefusalKind =
+  | 'not-whole-packets'
+  | 'lost-sync'
+  | 'no-pmt'
+  | 'no-video-stream'
+  | 'not-h264'
+  | 'no-video-pes'
+  | 'no-start-code'
+  | 'no-pts'
+  | 'already-captioned'
+  | 'no-slice'
+  | 'continuity-mismatch';
+
 export type InsertCaptionsResult =
   | { ok: true; segment: Buffer; framesCaptioned: number }
-  | { ok: false; reason: string };
+  | { ok: false; kind: CaptionRefusalKind; reason: string };
 
 type TsPacket = {
   offset: number;
@@ -397,12 +413,20 @@ export function insertCaptions(
   options: InsertCaptionsOptions,
 ): InsertCaptionsResult {
   if (segment.length === 0 || segment.length % PacketSize !== 0) {
-    return { ok: false, reason: 'not a whole number of TS packets' };
+    return {
+      ok: false,
+      kind: 'not-whole-packets',
+      reason: 'not a whole number of TS packets',
+    };
   }
   const packets: TsPacket[] = [];
   for (let offset = 0; offset < segment.length; offset += PacketSize) {
     if (segment[offset] !== SyncByte) {
-      return { ok: false, reason: `lost TS sync at byte ${offset}` };
+      return {
+        ok: false,
+        kind: 'lost-sync',
+        reason: `lost TS sync at byte ${offset}`,
+      };
     }
     packets.push(readPacket(segment, offset));
   }
@@ -413,15 +437,20 @@ export function insertCaptions(
       ? undefined
       : packets.find((p) => p.pid === pmtPid && p.pusi);
   if (!pmt) {
-    return { ok: false, reason: 'no PAT/PMT in the segment' };
+    return { ok: false, kind: 'no-pmt', reason: 'no PAT/PMT in the segment' };
   }
   const video = findVideo(segment, pmt);
   if (!video) {
-    return { ok: false, reason: 'no video stream in the PMT' };
+    return {
+      ok: false,
+      kind: 'no-video-stream',
+      reason: 'no video stream in the PMT',
+    };
   }
   if (video.streamType !== StreamTypeH264) {
     return {
       ok: false,
+      kind: 'not-h264',
       reason: `video stream type ${video.streamType} is not H.264`,
     };
   }
@@ -446,7 +475,7 @@ export function insertCaptions(
     }
   }
   if (pesList.length === 0) {
-    return { ok: false, reason: 'no video PES' };
+    return { ok: false, kind: 'no-video-pes', reason: 'no video PES' };
   }
   const packetAt = (index: number): TsPacket => {
     const packet = packets[index];
@@ -478,20 +507,36 @@ export function insertCaptions(
       }),
     );
     if (data[0] !== 0 || data[1] !== 0 || data[2] !== 1) {
-      return { ok: false, reason: 'video PES without a start code' };
+      return {
+        ok: false,
+        kind: 'no-start-code',
+        reason: 'video PES without a start code',
+      };
     }
     const headerLength = 9 + data.readUInt8(8);
     const pts = readPts(data);
     if (pts === undefined) {
-      return { ok: false, reason: 'video PES without a PTS' };
+      return {
+        ok: false,
+        kind: 'no-pts',
+        reason: 'video PES without a PTS',
+      };
     }
     const es = data.subarray(headerLength);
     const scan = scanNals(es);
     if (scan.hasA53Captions) {
-      return { ok: false, reason: 'the video already carries captions' };
+      return {
+        ok: false,
+        kind: 'already-captioned',
+        reason: 'the video already carries captions',
+      };
     }
     if (scan.firstSliceStart === undefined) {
-      return { ok: false, reason: 'video PES without a slice' };
+      return {
+        ok: false,
+        kind: 'no-slice',
+        reason: 'video PES without a slice',
+      };
     }
     frames.push({
       firstIndex,
@@ -674,6 +719,7 @@ export function insertCaptions(
   if (originalLastCc !== undefined && cc !== originalLastCc) {
     return {
       ok: false,
+      kind: 'continuity-mismatch',
       reason: `captioned video would end on continuity counter ${cc}, not ${originalLastCc}`,
     };
   }

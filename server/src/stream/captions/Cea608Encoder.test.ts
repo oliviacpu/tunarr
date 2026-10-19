@@ -5,6 +5,7 @@ import type {
 } from './Cea608Encoder.ts';
 import {
   buildCaptionSchedule,
+  droppedCaptionCharacters,
   layoutCaption,
   PaddingPair,
 } from './Cea608Encoder.ts';
@@ -206,6 +207,28 @@ describe('layoutCaption', () => {
     expect(texts(layoutCaption('First line\nSecond line'))).toEqual([
       ['First line', 'Second line'],
     ]);
+  });
+});
+
+describe('decomposed (NFD) text', () => {
+  // "Café ñandú" with each accent a separate combining mark, as macOS tools
+  // write subtitle files
+  const decomposed = 'Cafe\u0301 n\u0303andu\u0301';
+  const composed = 'Caf\u00e9 \u00f1and\u00fa';
+
+  test('encodes the same as the composed text', () => {
+    expect(decomposed).not.toBe(composed);
+    expect(
+      framePairs([{ startMs: 2000, endMs: 4000, text: decomposed }], 150),
+    ).toEqual(
+      framePairs([{ startMs: 2000, endMs: 4000, text: composed }], 150),
+    );
+    expect(texts(layoutCaption(decomposed))).toEqual([[composed]]);
+  });
+
+  test('counts no accent as a dropped character', () => {
+    expect(droppedCaptionCharacters(decomposed)).toBe(0);
+    expect(droppedCaptionCharacters(composed)).toBe(0);
   });
 });
 

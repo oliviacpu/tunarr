@@ -165,6 +165,35 @@ describe('describeTranscodeSpeedEvent', () => {
     expect(line).toContain('read-ahead is active with 16 threads');
   });
 
+  test('names no read-ahead threads when the read-ahead limit is 0', () => {
+    // transcodeConfigFor leaves the count as configured
+    const line = describeTranscodeSpeedEvent(
+      { type: 'behind', speed: 0.5 },
+      {
+        ...details,
+        configuredThreadCount: 4,
+        realtime: false,
+        transcodeConfig: { name: 'Default', threadCount: 4 },
+      },
+    );
+    expect(line).toContain('has thread count 4');
+    expect(line).not.toContain('read-ahead');
+  });
+
+  test('names no read-ahead threads for an automatic thread count', () => {
+    const line = describeTranscodeSpeedEvent(
+      { type: 'behind', speed: 0.5 },
+      {
+        ...details,
+        configuredThreadCount: 0,
+        realtime: false,
+        transcodeConfig: { name: 'Default', threadCount: 0 },
+      },
+    );
+    expect(line).toContain('thread count 0 (automatic)');
+    expect(line).not.toContain('read-ahead');
+  });
+
   test('marks an automatic thread count', () => {
     const line = describeTranscodeSpeedEvent(
       { type: 'behind', speed: 0.9 },

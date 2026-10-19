@@ -39,6 +39,7 @@ import { InfiniteLoopInputOption } from '@/ffmpeg/builder/options/input/Infinite
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
 import fs from 'node:fs';
+import fsPromises from 'node:fs/promises';
 import path from 'node:path';
 import tmp from 'tmp';
 import type { NonEmptyArray } from 'ts-essentials';
@@ -715,7 +716,16 @@ describe('FfmpegStreamFactory', () => {
   });
 
   describe('gap music under the offline picture', () => {
-    function makeSut(ffmpegFilters: string[] = []) {
+    // The missing-drawtext warning is given once per ffmpeg for the whole
+    // process; each test starts as if none had been given
+    beforeEach(() => {
+      FfmpegStreamFactory.resetMissingDrawtextWarning();
+    });
+
+    function makeSut(
+      ffmpegFilters: string[] = [],
+      ffmpegExecutablePath = '/usr/bin/ffmpeg',
+    ) {
       const config = makeTranscodeConfig({
         hardwareAccelerationMode: 'none',
         videoFormat: 'h264',
@@ -723,7 +733,7 @@ describe('FfmpegStreamFactory', () => {
       const capture = createCapturingPipelineBuilderFactory();
       const sut = new FfmpegStreamFactory(
         makeMockFfmpegInfo(ffmpegFilters),
-        makeMockSettingsDB(makeFfmpegSettings()),
+        makeMockSettingsDB({ ...makeFfmpegSettings(), ffmpegExecutablePath }),
         capture.factory,
         makeMockChannelDB(),
         makeMockFeatureFlagService(),
@@ -828,6 +838,28 @@ describe('FfmpegStreamFactory', () => {
         nowPlaying,
       });
       expect(warn).toHaveBeenCalledOnce();
+    });
+
+    test('warns again after switching to an ffmpeg with drawtext and back', async () => {
+      const warn = vi.fn();
+      const placeholder = async (filters: string[], ffmpegPath: string) => {
+        const { sut } = makeSut(filters, ffmpegPath);
+        (sut as unknown as { logger: Logger }).logger = {
+          warn,
+        } as unknown as Logger;
+        await sut.createPlaceholderSession({
+          kind: 'offline',
+          duration: dayjs.duration({ seconds: 90 }),
+          outputFormat: MpegTsOutputFormat,
+          nowPlaying,
+        });
+      };
+
+      await placeholder([], '/opt/ffmpeg-without-drawtext');
+      await placeholder(['drawtext'], '/usr/lib/jellyfin-ffmpeg/ffmpeg');
+      await placeholder([], '/opt/ffmpeg-without-drawtext');
+
+      expect(warn).toHaveBeenCalledTimes(2);
     });
 
     test('leaves the picture alone without a title to draw', async () => {
@@ -1979,6 +2011,8 @@ describe('FfmpegStreamFactory', () => {
         });
         return {
           method: capturing.getCapturedSubtitleInput()?.method,
+          characterEncoding:
+            capturing.getCapturedSubtitleInput()?.characterEncoding,
           captions: result?.renditions.captions,
           outputFrameRate: capturing.getCapturedFrameState()?.frameRate,
         };
@@ -2135,6 +2169,56 @@ describe('FfmpegStreamFactory', () => {
         expect(Number(readMs)).toBeGreaterThanOrEqual(0);
         // The cue before the 10 s seek is not in this program
         expect(cues).toBe(1);
+      });
+
+      // Also on the tune-in path: the file gives both the captions and the
+      // charset ffmpeg reads it in
+      describe('reads the selected subtitle file once', () => {
+        async function readsOf(file: string, run: () => Promise<unknown>) {
+          const readFile = vi.spyOn(fsPromises, 'readFile');
+          try {
+            await run();
+            return readFile.mock.calls.filter(([path]) => path === file).length;
+          } finally {
+            readFile.mockRestore();
+          }
+        }
+
+        test('when it becomes captions', async () => {
+          expect(
+            await readsOf(fullSubs, () => run({ selected: fullTrack() })),
+          ).toBe(1);
+        });
+
+        test('when it is burned in instead, with captions off', async () => {
+          expect(
+            await readsOf(fullSubs, () =>
+              run({ selected: fullTrack(), hdhrClosedCaptions: false }),
+            ),
+          ).toBe(1);
+        });
+
+        test('telling ffmpeg the charset of a Windows-1252 file', async () => {
+          const legacy = path.join(dir.name, 'legacy.srt');
+          fs.writeFileSync(
+            legacy,
+            Buffer.from(
+              '1\n00:00:12,000 --> 00:00:14,500\nUn caf\u00e9\n',
+              'latin1',
+            ),
+          );
+          const track = { ...textSubtitleStream, path: legacy };
+          let result: Awaited<ReturnType<typeof run>> | undefined;
+          const reads = await readsOf(legacy, async () => {
+            result = await run({ selected: track, subtitles: [track] });
+          });
+
+          expect(reads).toBe(1);
+          expect(result?.characterEncoding).toBe('WINDOWS-1252');
+          expect(result?.captions?.cues).toEqual([
+            { startMs: 2000, endMs: 4500, text: 'Un caf\u00e9' },
+          ]);
+        });
       });
 
       test('keeps forced subtitles burned in and captions the full track', async () => {

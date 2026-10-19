@@ -1,7 +1,8 @@
 import { droppedCaptionCharacters } from '../stream/captions/Cea608Encoder.ts';
 import { streamMatchesLanguage } from './StreamSelectionEvaluator.ts';
 import fs from 'node:fs/promises';
-import { subtitleCharacterEncoding } from '../stream/captions/decodeSubtitleText.ts';
+import type { DecodedSubtitleFile } from '../stream/captions/decodeSubtitleText.ts';
+import { decodeSubtitleFile } from '../stream/captions/decodeSubtitleText.ts';
 import type {
   ISettingsDB,
   ReadableFfmpegSettings,
@@ -149,7 +150,16 @@ export function gapMusicFades(itemMs: number, trackMs: number): AudioFades {
 export class FfmpegStreamFactory {
   @InjectLogger() declare private readonly logger: Logger;
 
-  private static readonly missingDrawtextWarnings = new Set<string>();
+  // The ffmpeg executable last found without a drawtext filter, so the
+  // warning is given once per executable rather than per placeholder. Cleared
+  // when an ffmpeg with drawtext is used, so switching to another ffmpeg and
+  // back to this one warns again.
+  private static missingDrawtextWarnedFor: string | undefined;
+
+  /** Forgets which ffmpeg the missing-drawtext warning was given for. */
+  static resetMissingDrawtextWarning(): void {
+    FfmpegStreamFactory.missingDrawtextWarnedFor = undefined;
+  }
 
   private readonly ffmpegSettings: ReadableFfmpegSettings;
 
@@ -740,13 +750,23 @@ export class FfmpegStreamFactory {
       // If they can't be read as captions, they're burned in as before.
       const captionCandidate =
         captionsOn && canUseSidecar && !subtitleStream.forced;
+      // The file as read for captions, so finding its charset for ffmpeg
+      // below doesn't read it again
+      let subtitleFile: DecodedSubtitleFile | undefined;
       if (captionCandidate) {
         if (subtitleStream.path) attemptedCaptionPaths.add(subtitleStream.path);
-        captions = await this.loadCaptions(subtitleStream, frameRate, {
+        const loaded = await this.loadCaptions(subtitleStream, frameRate, {
           startTime,
           duration,
         });
+        captions = loaded.captions;
+        subtitleFile = loaded.file;
       }
+      // A caption candidate that didn't load as captions (no frame rate, a
+      // read error, or more than 10% of its cues beyond CEA-608) is burned in,
+      // even with the WebVTT sidecar flag on: as WebVTT alone it would reach
+      // Tunarr's own HLS players, but HDHomeRun viewers (Plex) would get no
+      // subtitles at all. This is deliberate.
       const useSidecar =
         ((sidecarEnabled && !captionCandidate) || captions !== undefined) &&
         canUseSidecar;
@@ -778,11 +798,13 @@ export class FfmpegStreamFactory {
       if (stream) {
         subtitleSource = new SubtitlesInputSource(source, [stream], method);
         if (isExternal && canUseSidecar && subtitleStream.path) {
-          const bytes = await fs
+          // Read here only when captions didn't already read it
+          subtitleFile ??= await fs
             .readFile(subtitleStream.path)
-            .catch(() => undefined);
-          if (bytes)
-            subtitleSource.characterEncoding = subtitleCharacterEncoding(bytes);
+            .then(decodeSubtitleFile, () => undefined);
+          if (subtitleFile) {
+            subtitleSource.characterEncoding = subtitleFile.characterEncoding;
+          }
         }
 
         if (useSidecar) {
@@ -817,10 +839,12 @@ export class FfmpegStreamFactory {
         }
         if (attemptedCaptionPaths.has(track.path)) continue;
         attemptedCaptionPaths.add(track.path);
-        captions = await this.loadCaptions(track, frameRate, {
-          startTime,
-          duration,
-        });
+        captions = (
+          await this.loadCaptions(track, frameRate, {
+            startTime,
+            duration,
+          })
+        ).captions;
         if (captions) {
           break;
         }
@@ -889,28 +913,40 @@ export class FfmpegStreamFactory {
   }
 
   // A subtitle track's cues on the program's clock, for captions laid out at
-  // the output's frame rate (pinned whenever captions are on)
+  // the output's frame rate (pinned whenever captions are on), and the
+  // track's file as read and decoded, for the caller to reuse
   private async loadCaptions(
     track: SubtitleStreamDetails | undefined,
     frameRate: number | undefined,
     program: { startTime: Duration; duration: Duration },
-  ): Promise<ProgramCaptions | undefined> {
+  ): Promise<{
+    captions: ProgramCaptions | undefined;
+    file: DecodedSubtitleFile | undefined;
+  }> {
     if (!track) {
-      return;
+      return { captions: undefined, file: undefined };
     }
     if (frameRate === undefined) {
       this.logger.debug('No frame rate for this program; no captions');
-      return;
+      return { captions: undefined, file: undefined };
     }
     // Read and parsed before the program's ffmpeg starts, so a viewer tuning
     // in waits for it
     const readStart = performance.now();
+    let file: DecodedSubtitleFile | undefined;
     try {
-      const captions = await loadProgramCaptions(track, {
-        seekMs: program.startTime.asMilliseconds(),
-        durationMs: program.duration.asMilliseconds(),
-        frameRate,
-      });
+      if (track.path !== undefined) {
+        file = decodeSubtitleFile(await fs.readFile(track.path));
+      }
+      const captions = await loadProgramCaptions(
+        track,
+        {
+          seekMs: program.startTime.asMilliseconds(),
+          durationMs: program.duration.asMilliseconds(),
+          frameRate,
+        },
+        file,
+      );
       if (captions && captions.cues.length > 0) {
         const losses = captions.cues.map((cue) =>
           droppedCaptionCharacters(cue.text),
@@ -928,7 +964,7 @@ export class FfmpegStreamFactory {
             },
             'CEA-608 cannot represent more than 10% of this track’s cues; keeping subtitles for burn-in instead',
           );
-          return;
+          return { captions: undefined, file };
         }
       }
       if (track.path !== undefined) {
@@ -939,14 +975,14 @@ export class FfmpegStreamFactory {
           captions?.cues.length ?? 0,
         );
       }
-      return captions;
+      return { captions, file };
     } catch (e) {
       this.logger.warn(
         e,
         'Could not read subtitles %s for captions',
         track.path,
       );
-      return;
+      return { captions: undefined, file };
     }
   }
 
@@ -1279,18 +1315,14 @@ export class FfmpegStreamFactory {
     // First in the chain, while the picture is still a software frame at its
     // own size, before any pipeline scales it or uploads it to a GPU
     if (nowPlaying) {
+      const ffmpegPath = this.ffmpegSettings.ffmpegExecutablePath;
       if (await this.ffmpegInfo.hasFilter('drawtext')) {
+        FfmpegStreamFactory.missingDrawtextWarnedFor = undefined;
         offlineInput.addFilter(
           new NowPlayingTextFilter(nowPlaying.text, nowPlaying.fontFile),
         );
-      } else if (
-        !FfmpegStreamFactory.missingDrawtextWarnings.has(
-          this.ffmpegSettings.ffmpegExecutablePath,
-        )
-      ) {
-        FfmpegStreamFactory.missingDrawtextWarnings.add(
-          this.ffmpegSettings.ffmpegExecutablePath,
-        );
+      } else if (FfmpegStreamFactory.missingDrawtextWarnedFor !== ffmpegPath) {
+        FfmpegStreamFactory.missingDrawtextWarnedFor = ffmpegPath;
         this.logger.warn(
           'FFmpeg has no drawtext filter; gap music titles cannot be displayed. Use a build with drawtext support.',
         );

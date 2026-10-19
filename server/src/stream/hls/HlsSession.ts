@@ -23,6 +23,7 @@ import {
   EraseDisplayedMemory,
   PaddingPair,
 } from '@/stream/captions/Cea608Encoder.js';
+import type { CaptionRefusalKind } from '@/stream/captions/MpegTsCaptionInserter.js';
 import { insertCaptions } from '@/stream/captions/MpegTsCaptionInserter.js';
 import type { ProgramCaptions } from '@/stream/captions/ProgramCaptions.js';
 import { pairsForFrames } from '@/stream/captions/pairsForFrames.js';
@@ -148,7 +149,7 @@ export class HlsSession
   // Time spent adding captions to served segments, summed up when the session
   // ends: numbers to decide whether caching captioned segments is worth it
   #captionRewrites = { count: 0, totalMs: 0, maxMs: 0 };
-  #captionRefusals = new Set<string>();
+  #captionRefusals = new Set<CaptionRefusalKind>();
 
   constructor(
     channel: ChannelOrmWithTranscodeConfig,
@@ -712,8 +713,10 @@ export class HlsSession
     });
     const rewriteMs = performance.now() - rewriteStart;
     if (!captioned.ok) {
-      if (!this.#captionRefusals.has(captioned.reason)) {
-        this.#captionRefusals.add(captioned.reason);
+      // Once per kind of refusal: the reason can name a byte offset or a
+      // counter that differs from segment to segment
+      if (!this.#captionRefusals.has(captioned.kind)) {
+        this.#captionRefusals.add(captioned.kind);
         this.logger.warn(
           'Serving segment %s without captions: %s',
           file,
