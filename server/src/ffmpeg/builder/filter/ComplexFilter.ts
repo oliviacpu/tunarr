@@ -32,7 +32,7 @@ export class ComplexFilter implements FilterOptionPipelineStep {
   }
 
   options(): string[] {
-    let audioLabel = '0:a';
+    const audioLabel = '0:a';
     let videoLabel = '0:v';
     let watermarkLabel: Nullable<string> = null;
     let subtitleLabel: Nullable<string> = null;
@@ -151,9 +151,10 @@ export class ComplexFilter implements FilterOptionPipelineStep {
       watermarkOverlayFilterComplex += videoLabel;
     }
 
-    // One label per output audio track. Several streams (a channel's fixed
-    // audio track layout) each get their own filter chain and map, in order;
-    // ffmpeg feeds a source stream used twice from a single decode.
+    // One label per output audio track, mapped in order. Several streams (a
+    // channel's fixed audio track layout) get one filter chain per source
+    // stream: slots that repeat a source stream share its chain, split after
+    // the filters, so loudnorm and fades run once per source.
     const audioLabels: string[] = [];
     ifDefined(this.audioInputSource, (audioInput) => {
       const audioInputIndex = distinctPaths.indexOf(audioInput.path);
@@ -161,22 +162,32 @@ export class ComplexFilter implements FilterOptionPipelineStep {
         return;
       }
 
+      const filters = collectAndJoinSteps(audioInput.filterSteps);
       const several = audioInput.streams.length > 1;
-      const chains: string[] = [];
+      // Output labels by source stream index, in order of first use
+      const labelsBySource = new Map<number, string[]>();
       forEach(audioInput.streams, (stream, i) => {
-        const index = stream.index;
-        audioLabel = `${audioInputIndex}:${index}`;
-        if (
-          some(audioInput.filterSteps, (step) => isNonEmptyString(step.filter))
-        ) {
-          audioLabel = several ? `[a${i}]` : '[a]';
-          chains.push(
-            `[${audioInputIndex}:${index}]${collectAndJoinSteps(audioInput.filterSteps)}${audioLabel}`,
-          );
+        if (!isNonEmptyString(filters)) {
+          audioLabels.push(`${audioInputIndex}:${stream.index}`);
+          return;
         }
-        audioLabels.push(audioLabel);
+        const label = several ? `[a${i}]` : '[a]';
+        audioLabels.push(label);
+        const labels = labelsBySource.get(stream.index);
+        if (labels === undefined) {
+          labelsBySource.set(stream.index, [label]);
+        } else {
+          labels.push(label);
+        }
       });
-      audioFilterComplex = chains.join(';');
+
+      audioFilterComplex = Array.from(
+        labelsBySource,
+        ([index, labels]) =>
+          `[${audioInputIndex}:${index}]${filters}${
+            labels.length > 1 ? `,asplit=${labels.length}` : ''
+          }${labels.join('')}`,
+      ).join(';');
     });
 
     let pixelFormatFilterComplex = '';

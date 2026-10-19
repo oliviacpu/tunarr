@@ -55,14 +55,16 @@ Each output track is tagged with its slot's language.
 
 ### Pipeline builder
 
-- **`ComplexFilter`:** with one audio stream, the output is unchanged (`[a]`, one `-map`). With several, each stream
-  gets its own chain and label (`[a0]`, `[a1]`, …, filters repeated per chain) and its own `-map`, in order. A source
-  stream used twice is fine: ffmpeg feeds both chains from one decode.
+- **`ComplexFilter`:** with one audio stream, the output is unchanged (`[a]`, one `-map`). With several, each slot
+  gets its own label (`[a0]`, `[a1]`, …) and its own `-map`, in order, and each source stream gets one filter chain.
+  Slots that repeat a source stream share its chain, split after the filters (`…,asplit=2[a0][a1]`), so loudnorm and
+  fades run once per source (2026-10-19: two chains on one source cost 5% of the process's CPU with stereo output and
+  16% with 5.1).
 - **Language tags:** per output track (`-metadata:s:a:<i> language=<code>`); the single-track tag stays as it is.
 - **Channels:** with several tracks, `-ac` is set whenever any track's source differs from the target, so every track
   comes out with the configured channel count.
 - **Encoding:** every track uses the channel's transcode config (codec, bitrate, channels, sample rate, loudnorm).
-  CPU cost is one encode per track; decoding happens once per source stream.
+  CPU cost is one encode per track; decoding and filtering happen once per source stream.
 
 ## Tests
 

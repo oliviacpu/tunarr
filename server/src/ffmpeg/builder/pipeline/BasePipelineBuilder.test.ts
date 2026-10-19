@@ -24,6 +24,7 @@ import {
   SubtitleMethods,
   VideoStream,
 } from '../MediaStream.ts';
+import type { AudioStateFields } from '../state/AudioState.ts';
 import { AudioState } from '../state/AudioState.ts';
 import { DefaultPipelineOptions, FfmpegState } from '../state/FfmpegState.ts';
 import { FrameState } from '../state/FrameState.ts';
@@ -498,7 +499,7 @@ describe('BasePipelineBuilder', () => {
   describe('several output audio tracks (a fixed audio track layout)', () => {
     function argsForTracks(
       streams: { index: number; channels: number; language: string }[],
-      audioVolume = 100,
+      audioState: Partial<AudioStateFields> = {},
     ) {
       const audio = new AudioInputSource(
         new FileStreamSource('/path/to/movie.mkv'),
@@ -508,7 +509,8 @@ describe('BasePipelineBuilder', () => {
           audioBitrate: 192,
           audioBufferSize: 384,
           audioChannels: 2,
-          audioVolume,
+          audioVolume: 100,
+          ...audioState,
         }),
       );
 
@@ -541,16 +543,81 @@ describe('BasePipelineBuilder', () => {
       expect(graph).toMatch(/\[1:2\]aresample=async=1[^;]*\[a1\]/);
     });
 
-    test('a source track repeated into a second slot gets its own chain', () => {
-      // A program without the second language repeats its main track there
-      const args = argsForTracks([
-        { index: 1, channels: 2, language: 'eng' },
-        { index: 1, channels: 2, language: 'jpn' },
-      ]);
+    test('distinct source tracks with loudness normalization keep one full chain each', () => {
+      const args = argsForTracks(
+        [
+          { index: 1, channels: 2, language: 'eng' },
+          { index: 2, channels: 2, language: 'jpn' },
+        ],
+        { loudnormConfig: { i: -24, lra: 7, tp: -2 } },
+      );
+      const chain =
+        'aresample=async=1,loudnorm=I=-24:LRA=7:TP=-2,aresample=48000';
+
+      expect(args[args.indexOf('-filter_complex') + 1]).toBe(
+        `[1:1]${chain}[a0];[1:2]${chain}[a1]`,
+      );
+      expect(maps(args)).toEqual(['0:0', '[a0]', '[a1]']);
+    });
+
+    test('a source track repeated into a second slot is filtered once and split', () => {
+      // A program without the second language repeats its main track there.
+      // Volume, padding, loudness normalization and fades run once, before
+      // the split.
+      const args = argsForTracks(
+        [
+          { index: 1, channels: 2, language: 'eng' },
+          { index: 1, channels: 2, language: 'jpn' },
+        ],
+        {
+          audioVolume: 150,
+          audioDuration: 90_000,
+          loudnormConfig: { i: -24, lra: 7, tp: -2 },
+          fades: {
+            fadeInMs: 1000,
+            fadeOut: { startMs: 87_000, durationMs: 3000 },
+          },
+        },
+      );
       const graph = args[args.indexOf('-filter_complex') + 1] ?? '';
 
+      expect(graph).toBe(
+        '[1:1]volume=1.500,aresample=async=1,apad,' +
+          'loudnorm=I=-24:LRA=7:TP=-2,aresample=48000,' +
+          'afade=t=in:st=0.000:d=1.000,afade=t=out:st=87.000:d=3.000,' +
+          'asplit=2[a0][a1]',
+      );
+      expect(graph.match(/loudnorm=/g)).toHaveLength(1);
       expect(maps(args)).toEqual(['0:0', '[a0]', '[a1]']);
-      expect(graph.match(/\[1:1\]/g)).toHaveLength(2);
+      expect(args[args.indexOf('-metadata:s:a:0') + 1]).toBe('language=eng');
+      expect(args[args.indexOf('-metadata:s:a:1') + 1]).toBe('language=jpn');
+    });
+
+    test('only the slots that share a source track are split, and the output order holds', () => {
+      const args = argsForTracks([
+        { index: 1, channels: 2, language: 'eng' },
+        { index: 2, channels: 2, language: 'jpn' },
+        { index: 1, channels: 2, language: 'spa' },
+      ]);
+
+      expect(args[args.indexOf('-filter_complex') + 1]).toBe(
+        '[1:1]aresample=async=1,asplit=2[a0][a2];[1:2]aresample=async=1[a1]',
+      );
+      expect(maps(args)).toEqual(['0:0', '[a0]', '[a1]', '[a2]']);
+      expect(args[args.indexOf('-metadata:s:a:2') + 1]).toBe('language=spa');
+    });
+
+    test('a repeated source track with the audio copied maps the stream twice', () => {
+      const args = argsForTracks(
+        [
+          { index: 1, channels: 2, language: 'eng' },
+          { index: 1, channels: 2, language: 'jpn' },
+        ],
+        { audioEncoder: 'copy' },
+      );
+
+      expect(args).not.toContain('-filter_complex');
+      expect(maps(args)).toEqual(['0:0', '1:1', '1:1']);
     });
 
     test('tags each track with its own language', () => {
