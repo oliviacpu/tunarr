@@ -2182,6 +2182,30 @@ describe('FfmpegStreamFactory', () => {
 
             expect(outputFrameRate).toBe(24000 / 1001);
           });
+
+          // A session makes a factory per program, so a line here came once
+          // per program. The .ts wrapper says it once per tune-in instead
+          // (ConcatStream).
+          test('says nothing at info, program after program', async () => {
+            const logger = {
+              debug: vi.fn(),
+              trace: vi.fn(),
+              info: vi.fn(),
+              warn: vi.fn(),
+              error: vi.fn(),
+            };
+            for (const _program of [1, 2]) {
+              const { method, captions } = await run({
+                selected: fullTrack(),
+                transcodeConfig,
+                logger: logger as unknown as Logger,
+              });
+              expect(method).toBe(SubtitleMethods.Burn);
+              expect(captions).toBeUndefined();
+            }
+
+            expect(logger.info).not.toHaveBeenCalled();
+          });
         },
       );
 
