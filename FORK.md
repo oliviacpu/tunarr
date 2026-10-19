@@ -26,6 +26,21 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Dead delete dialogs and settings hooks removed from the web app (2026-10-19)
+
+- **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
+- **Cause:**
+  - The channels page had its own channel delete dialog, but its open state was only ever set back to empty, so it
+    never opened. Deleting a channel goes through `ChannelOptionsMenu` and `ChannelDeleteDialog`.
+  - The FFmpeg settings page had a transcode config delete mutation and confirmation dialog that nothing opened.
+    `TranscodeConfigsTable` has its own. Its `restoreTunarrDefaults` flag was never set to true.
+  - `usePlexStreamSettings` and `usePlexSettings` in `web/src/hooks/settingsHooks.ts` had no callers.
+- **Fix:** all of the above removed (`ChannelsPage.tsx`, `FfmpegSettingsPage.tsx`, `settingsHooks.ts`). The FFmpeg
+  page's Save and Reset Changes buttons now depend on `isDirty` alone, which is what they already did. No behaviour
+  changes. Locale catalogs are left to the post-merge `lingui extract` job.
+- **Tests:** none added; removal only. The web suite, `pnpm turbo typecheck` and `pnpm lint-changed` pass.
+- **Upstream:** not sent; upstream `main` has the same dead code.
+
 ### The Live TV playlist reader keeps the session's history itself (2026-10-19, PR #84)
 
 - **What you saw:** nothing yet. This prepares the fix for `stream.m3u8` growing for as long as a session runs
