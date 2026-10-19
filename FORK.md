@@ -26,6 +26,10 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### batch publication lookups and clean stale temporary files (2026-10-19)
+
+- **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
+
 ### expose memory tuning and index library pagination (2026-10-19)
 
 - **Change:** Adds opt-in SQLite cache, mmap and warmup controls, preserving existing cache defaults. Migration 0056 indexes library pagination after EXPLAIN showed a temporary sort. Adds an explicit-transaction policy check.
