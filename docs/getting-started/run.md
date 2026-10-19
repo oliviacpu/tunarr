@@ -311,3 +311,20 @@ From now on, to update tunarr, we will first have to stop the service.
 
 If you are converting from a previously used Tunarr, please note that the main Tunarr folder will now be moved to another location, so the new Tunarr that starts will actually behave as if it were a new installation. To restore the entire configuration, you will need to copy the contents of the Tunarr folder in the path usually used by the program `%appdata%\ tunarr` and paste it into the following location: `C:\Windows\System32\config\systemprofile\AppData\Roaming\tunarr`
 This will be the new location for the database, channels, and everything else (obviously, this must be done after stopping the tunarr service and then restarting it as explained above).
+
+### SQLite tuning
+
+These optional environment overrides apply on restart:
+
+| Variable | Effect when set | Default when unset |
+| --- | --- | --- |
+| `TUNARR_SQLITE_CACHE_KIB` | Nonnegative per-connection cache size in KiB | Main thread: 262144 KiB; workers: 10000 pages |
+| `TUNARR_SQLITE_MMAP_BYTES` | Nonnegative memory-map limit in bytes; 0 disables mapping | Main thread: 0; workers: 268435456 bytes |
+| `TUNARR_DB_WARMUP_MAX_BYTES` | Cap for database file warm-up; 0 disables it | Startup: 512 MiB; guide refresh: whole database and WAL |
+
+With an explicit warm-up cap, startup reads at most that many bytes, and guide
+warm-up skips databases whose database and WAL together exceed the cap. Skips are
+logged at debug level. Invalid values use the defaults. These settings bound memory
+and I/O work; changing them requires measurements on your workload. Another
+connection's commit invalidates SQLite's private page cache, so increasing that
+cache is not a substitute for measuring scan-time latency.
