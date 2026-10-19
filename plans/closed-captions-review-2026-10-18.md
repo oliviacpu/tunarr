@@ -240,7 +240,8 @@ user asks), in this order:
 6. Merge live `upstream/main` and resolve the `0053` migration collision with the `resolve-drizzle-migrations` skill.
 7. Copy this file to `plans/closed-captions-review-2026-10-18.md` as the point-in-time record.
 
-**Status (2026-10-18):** items 1-3 are done: item 1 in #53, item 2 in #55, item 3 in #54. Items 4 and 7 are #57.
+**Status (2026-10-18):** items 1-3 are done: item 1 in #53, item 2 in #55, item 3 in #54. Items 4 and 7 are #57. Timing instrumentation is #56; the upstream merge and
+migration reconciliation are #58.
 
 Waiting on the user, not code: watch the test pattern on the Apple TV and Plex Mac and record the per-sample result
 in `docs/configure/ffmpeg/index.md`; then the CC2/CC3 experiment and step 2 of the appearance plan (labels and
