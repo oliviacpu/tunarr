@@ -715,7 +715,16 @@ describe('FfmpegStreamFactory', () => {
   });
 
   describe('gap music under the offline picture', () => {
-    function makeSut(ffmpegFilters: string[] = []) {
+    // The missing-drawtext warning is given once per ffmpeg for the whole
+    // process; each test starts as if none had been given
+    beforeEach(() => {
+      FfmpegStreamFactory.resetMissingDrawtextWarning();
+    });
+
+    function makeSut(
+      ffmpegFilters: string[] = [],
+      ffmpegExecutablePath = '/usr/bin/ffmpeg',
+    ) {
       const config = makeTranscodeConfig({
         hardwareAccelerationMode: 'none',
         videoFormat: 'h264',
@@ -723,7 +732,7 @@ describe('FfmpegStreamFactory', () => {
       const capture = createCapturingPipelineBuilderFactory();
       const sut = new FfmpegStreamFactory(
         makeMockFfmpegInfo(ffmpegFilters),
-        makeMockSettingsDB(makeFfmpegSettings()),
+        makeMockSettingsDB({ ...makeFfmpegSettings(), ffmpegExecutablePath }),
         capture.factory,
         makeMockChannelDB(),
         makeMockFeatureFlagService(),
@@ -828,6 +837,28 @@ describe('FfmpegStreamFactory', () => {
         nowPlaying,
       });
       expect(warn).toHaveBeenCalledOnce();
+    });
+
+    test('warns again after switching to an ffmpeg with drawtext and back', async () => {
+      const warn = vi.fn();
+      const placeholder = async (filters: string[], ffmpegPath: string) => {
+        const { sut } = makeSut(filters, ffmpegPath);
+        (sut as unknown as { logger: Logger }).logger = {
+          warn,
+        } as unknown as Logger;
+        await sut.createPlaceholderSession({
+          kind: 'offline',
+          duration: dayjs.duration({ seconds: 90 }),
+          outputFormat: MpegTsOutputFormat,
+          nowPlaying,
+        });
+      };
+
+      await placeholder([], '/opt/ffmpeg-without-drawtext');
+      await placeholder(['drawtext'], '/usr/lib/jellyfin-ffmpeg/ffmpeg');
+      await placeholder([], '/opt/ffmpeg-without-drawtext');
+
+      expect(warn).toHaveBeenCalledTimes(2);
     });
 
     test('leaves the picture alone without a title to draw', async () => {

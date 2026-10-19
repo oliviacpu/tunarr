@@ -149,7 +149,16 @@ export function gapMusicFades(itemMs: number, trackMs: number): AudioFades {
 export class FfmpegStreamFactory {
   @InjectLogger() declare private readonly logger: Logger;
 
-  private static readonly missingDrawtextWarnings = new Set<string>();
+  // The ffmpeg executable last found without a drawtext filter, so the
+  // warning is given once per executable rather than per placeholder. Cleared
+  // when an ffmpeg with drawtext is used, so switching to another ffmpeg and
+  // back to this one warns again.
+  private static missingDrawtextWarnedFor: string | undefined;
+
+  /** Forgets which ffmpeg the missing-drawtext warning was given for. */
+  static resetMissingDrawtextWarning(): void {
+    FfmpegStreamFactory.missingDrawtextWarnedFor = undefined;
+  }
 
   private readonly ffmpegSettings: ReadableFfmpegSettings;
 
@@ -1279,18 +1288,14 @@ export class FfmpegStreamFactory {
     // First in the chain, while the picture is still a software frame at its
     // own size, before any pipeline scales it or uploads it to a GPU
     if (nowPlaying) {
+      const ffmpegPath = this.ffmpegSettings.ffmpegExecutablePath;
       if (await this.ffmpegInfo.hasFilter('drawtext')) {
+        FfmpegStreamFactory.missingDrawtextWarnedFor = undefined;
         offlineInput.addFilter(
           new NowPlayingTextFilter(nowPlaying.text, nowPlaying.fontFile),
         );
-      } else if (
-        !FfmpegStreamFactory.missingDrawtextWarnings.has(
-          this.ffmpegSettings.ffmpegExecutablePath,
-        )
-      ) {
-        FfmpegStreamFactory.missingDrawtextWarnings.add(
-          this.ffmpegSettings.ffmpegExecutablePath,
-        );
+      } else if (FfmpegStreamFactory.missingDrawtextWarnedFor !== ffmpegPath) {
+        FfmpegStreamFactory.missingDrawtextWarnedFor = ffmpegPath;
         this.logger.warn(
           'FFmpeg has no drawtext filter; gap music titles cannot be displayed. Use a build with drawtext support.',
         );
