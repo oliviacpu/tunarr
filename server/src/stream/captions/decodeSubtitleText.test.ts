@@ -78,6 +78,11 @@ describe('decodeSubtitleText', () => {
     );
   });
 
+  test('reads a UTF-8 file with as many stray bytes as accents as UTF-8', () => {
+    // A cut-off last character, and one accent: still UTF-8
+    expect(decodeSubtitleText(bytes('Un café', [0xc3]))).toBe('Un café\ufffd');
+  });
+
   test('reads a Windows-1252 file as Windows-1252 even with a UTF-8-looking pair', () => {
     // 'Ã©' (0xc3 0xa9) happens to be valid UTF-8 for 'é'; the rest isn't UTF-8
     expect(

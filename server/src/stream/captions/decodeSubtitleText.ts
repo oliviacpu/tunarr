@@ -27,9 +27,8 @@ function startsWith(bytes: Buffer, prefix: readonly number[]): boolean {
 export function decodeWindows1252(bytes: Buffer): string {
   return bytes
     .toString('latin1')
-    .replace(
-      /[\u0080-\u009f]/g,
-      (c) => Windows1252C1.charAt(c.charCodeAt(0) - 0x80) || c,
+    .replace(/[\u0080-\u009f]/g, (c) =>
+      Windows1252C1.charAt(c.charCodeAt(0) - 0x80),
     );
 }
 
@@ -42,10 +41,12 @@ export function decodeWindows1252(bytes: Buffer): string {
  * - Otherwise Windows-1252, the Western European code page older subtitle
  *   files were saved in. It reads Latin-1 (ISO 8859-1) files too: the two
  *   have the same printable characters outside 0x80-0x9f.
- * - Except a file that is mostly UTF-8, with more valid non-ASCII characters
- *   than broken sequences (a stray byte, a character cut in two). That stays
- *   UTF-8, the broken sequences becoming U+FFFD, rather than turning every
- *   accented letter into two Windows-1252 ones (é as Ã©).
+ * - Except a file that is mostly UTF-8, with at least as many valid non-ASCII
+ *   characters as broken sequences (a stray byte, a character cut in two).
+ *   That stays UTF-8, the broken sequences becoming U+FFFD, rather than
+ *   turning every accented letter into two Windows-1252 ones (é as Ã©).
+ *   Windows-1252 text seldom makes a valid UTF-8 sequence, so a tie goes to
+ *   UTF-8.
  *
  * ffmpeg's subtitle decoder, which burn-in uses, reads byte order marks too,
  * but without a `charenc` it drops any cue that isn't valid UTF-8.
@@ -80,5 +81,5 @@ export function decodeSubtitleText(bytes: Buffer): string {
       nonAscii++;
     }
   }
-  return nonAscii > broken ? lossy : decodeWindows1252(bytes);
+  return nonAscii >= broken ? lossy : decodeWindows1252(bytes);
 }
