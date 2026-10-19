@@ -32,20 +32,28 @@ export class LocalSubtitlesService {
     const files = (await fs.readdir(directory, { withFileTypes: true })).filter(
       (dirent) => dirent.isFile(),
     );
-    // Other videos whose names extend this one's ("Movie.part2" beside "Movie"):
-    // a subtitle that starts with one of those names is that video's.
-    const longerVideoNames = files
+    const videoNames = files
       .filter((dirent) =>
         KnownVideoFileExtensions.has(extname(dirent.name).toLowerCase()),
       )
-      .map((dirent) =>
-        basename(dirent.name, extname(dirent.name)).toLowerCase(),
-      )
-      .filter((name) => name.startsWith(`${itemName.toLowerCase()}.`));
+      .map((dirent) => basename(dirent.name, extname(dirent.name)));
+    const foldedItemName = itemName.toLowerCase();
+    const hasCaseDistinctSibling = videoNames.some(
+      (name) => name !== itemName && name.toLowerCase() === foldedItemName,
+    );
+    // Other videos whose names extend this one's ("Movie.part2" beside "Movie"):
+    // a subtitle that starts with one of those names is that video's.
+    const longerVideoNames = videoNames
+      .map((name) => name.toLowerCase())
+      .filter((name) => name.startsWith(`${foldedItemName}.`));
 
     for (const dirent of files) {
       // "Episode 1." so that "Episode 10.en.srt" isn't taken for episode 1's
       if (!dirent.name.toLowerCase().startsWith(`${itemName.toLowerCase()}.`)) {
+        continue;
+      }
+
+      if (hasCaseDistinctSibling && !dirent.name.startsWith(`${itemName}.`)) {
         continue;
       }
 

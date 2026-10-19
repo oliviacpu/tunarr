@@ -137,6 +137,29 @@ describe('LocalSubtitlesService', () => {
       }
     }
 
+    test('keeps case-distinct video basenames and their sidecars separate', async () => {
+      await touch(
+        'Movie.mkv',
+        'movie.mp4',
+        'Movie.en.srt',
+        'movie.fr.srt',
+        'MOVIE.de.srt',
+      );
+      const service = new LocalSubtitlesService();
+      const upper = await service.findExternalSubtitles(
+        path.join(dir, 'Movie.mkv'),
+      );
+      const lower = await service.findExternalSubtitles(
+        path.join(dir, 'movie.mp4'),
+      );
+      expect(upper.map((subtitle) => subtitle.path)).toEqual([
+        path.join(dir, 'Movie.en.srt'),
+      ]);
+      expect(lower.map((subtitle) => subtitle.path)).toEqual([
+        path.join(dir, 'movie.fr.srt'),
+      ]);
+    });
+
     test('finds the subtitle files next to a video, with their full paths', async () => {
       await touch(
         'The Player (1992).mkv',
