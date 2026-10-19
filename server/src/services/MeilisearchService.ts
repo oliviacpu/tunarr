@@ -38,12 +38,12 @@ import type {
   Task,
 } from 'meilisearch';
 import { MeiliSearch, MeiliSearchApiError } from 'meilisearch';
-import { randomBytes } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { isMainThread } from 'node:worker_threads';
+import { loadSearchMasterKey } from './searchMasterKey.ts';
 import type { MarkRequired, Paths } from 'ts-essentials';
 import { match, P } from 'ts-pattern';
 import serverPackage from '../../package.json' with { type: 'json' };
@@ -642,22 +642,11 @@ export class MeilisearchService implements ISearchService {
    * workers read the same file.
    */
   private async loadMasterKey(): Promise<string> {
-    const existing = await fs
-      .readFile(this.masterKeyPath, 'utf-8')
-      .then((key) => key.trim())
-      .catch(() => '');
-    // Meilisearch requires at least 16 bytes
-    if (existing.length >= 16) {
-      return existing;
-    }
-    if (!isMainThread) {
-      throw new Error(
-        `No Meilisearch key at ${this.masterKeyPath}; the main thread creates it`,
-      );
-    }
-    const key = randomBytes(32).toString('hex');
-    await fs.writeFile(this.masterKeyPath, key, { mode: 0o600 });
-    this.logger.info('Created a key for the search server');
+    const { key, created } = await loadSearchMasterKey(
+      this.masterKeyPath,
+      isMainThread,
+    );
+    if (created) this.logger.info('Created a key for the search server');
     return key;
   }
 

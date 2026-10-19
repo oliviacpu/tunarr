@@ -38,12 +38,35 @@ describe.skipIf(!(await fileExists(binary)))(
     });
 
     afterEach(async () => {
-      for (const service of services) {
-        service.stop();
+      for (const service of [...services]) {
+        await stopService(service);
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
       await dir.cleanup();
     });
+
+    async function stopService(service: MeilisearchService) {
+      const pid = Number(
+        await fs
+          .readFile(path.join(dir.path, 'meilisearch.pid'), 'utf8')
+          .catch(() => '0'),
+      );
+      service.stop();
+      services = services.filter((candidate) => candidate !== service);
+      if (pid > 0) {
+        await vi.waitFor(
+          () => {
+            let running = true;
+            try {
+              process.kill(pid, 0);
+            } catch {
+              running = false;
+            }
+            expect(running).toBe(false);
+          },
+          { timeout: 10_000, interval: 50 },
+        );
+      }
+    }
 
     function makeService() {
       const options = { databaseDirectory: dir.path } as ServerOptions;
@@ -69,6 +92,27 @@ describe.skipIf(!(await fileExists(binary)))(
       return service;
     }
 
+    test('adds a key to an existing index without losing indexed data', async () => {
+      const first = makeService();
+      await first.start();
+      const task = await first
+        .client()
+        .index('upgrade-probe')
+        .addDocuments([{ id: 'retained', title: 'Example' }]);
+      await first.client().tasks.waitForTask(task.taskUid);
+      await stopService(first);
+      await fs.unlink(path.join(dir.path, 'meilisearch-master-key'));
+
+      const second = makeService();
+      await second.start();
+      expect(
+        await second.client().index('upgrade-probe').getDocument('retained'),
+      ).toMatchObject({ title: 'Example' });
+      expect(
+        (await fetch(`http://localhost:${second.getPort()}/indexes`)).status,
+      ).toBe(401);
+    });
+
     test('refuses requests without its key, and keeps the key across restarts', async () => {
       const first = makeService();
       await first.start();
@@ -88,8 +132,7 @@ describe.skipIf(!(await fileExists(binary)))(
       // Tunarr's own client sends the key
       await expect(first.client().getIndexes()).resolves.toBeDefined();
 
-      first.stop();
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await stopService(first);
 
       const second = makeService();
       await second.start();
