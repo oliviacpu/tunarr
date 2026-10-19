@@ -26,6 +26,10 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### batch publication lookups and clean stale temporary files (2026-10-19)
+
+- **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
+
 ### expose memory tuning and index library pagination (2026-10-19)
 
 - **Change:** Adds opt-in SQLite cache, mmap and warmup controls, preserving existing cache defaults. Migration 0056 indexes library pagination after EXPLAIN showed a temporary sort. Adds an explicit-transaction policy check.
@@ -51,66 +55,60 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
-### The guide rebuild hours carry on past midnight, so the guide no longer runs out (2026-10-19)
+### A program's captions end where the next item starts, and each segment names its own program's language (2026-10-19)
 
-- **What you saw:** nothing on the deployment yet; the fork review of 2026-10-19 found it. With a start hour other than
-  00:00 (fork PR #50, "The guide's full rebuild can run at a chosen hour" below), the scheduled rebuilds stopped at
-  midnight: every 4 hours from 12:00 rebuilt at 12:00, 16:00 and 20:00, then not until 12:00 the next day, and every
-  6 hours from 23:00 rebuilt once a day. Each rebuild writes EPG (Hours) of guide (12 by default), so Plex would show
-  an empty guide for hours every day.
+- **What you saw:** found in code review, not on the deployment.
+  - When a program's video stopped before its scheduled end (ffmpeg exited early, or the file is shorter than its
+    recorded duration) and the next item had no captions of its own (flex time, an error screen, filler without
+    subtitles), that item carried the rest of the earlier program's dialogue, up to the earlier program's scheduled end.
+  - A captioned HLS segment's PMT named the language of the newest program's captions, so a client still fetching one
+    program's last segments after the next one started got the next program's language on them. The `.ts` stream for
+    HDHomeRun clients was not affected: `CaptionLanguageStream` relabels its PMT with the first language preference.
 - **Cause:**
-  - `hoursFromCrontab` listed the hours from the start hour up to 23 and stopped there, on purpose, and its test
-    locked in "every 6 hours from 23 runs once a day".
-  - Nothing adds to the guide between rebuilds: `UpdateXmlTvTask` writes `programmingHours` from the rebuild, and
-    `TvGuideService.getChannelLineup` only logs a warning when asked past the end.
-  - Nothing stopped a refresh timer the guide can't last either, which runs out the same way at any start hour.
+  - `HlsSession.transcode` advances `transcodedUntil` by the program's planned length before ffmpeg runs, and
+    `addCaptions` lays the program's captions out over that planned length. The next program starts where the last
+    segment's video ended (`getPtsOffset`), which is inside the earlier window when ffmpeg stopped early. Only a
+    program with captions added an entry to the caption timeline, so for an item without any, `captionEntryAt` found
+    the earlier program's entry and `captionPairs` sent its schedule.
+  - `captionedSegment` took the language from `#captionTimeline.at(-1)`, the newest entry, whichever program the
+    segment belonged to.
 - **Fix:**
-  - `hoursFromCrontab` (`util/schedulingUtil.ts`) lists `(start + k × interval) mod 24` for each k with
-    `k × interval` under 24, sorted. Every 4 hours from 12 is 0, 4, 8, 12, 16 and 20; every 6 hours from 23 is 5, 11,
-    17 and 23. From 00:00, and with 24 hours or more, the hours are the same as before.
-  - An interval that doesn't divide 24 starts again at the start hour each day, so the day's one short gap comes just
-    before it: every 5 hours from 4 is 0, 4, 9, 14 and 19. Counting on until the hours repeat would land on every hour
-    that steps of the interval reach (every 5 hours would run every hour) and change the hours from 00:00.
-  - Daylight saving time is node-schedule's (cron-parser 4.9): on the day the clocks go forward, an hour that doesn't
-    exist (02:00 in the US) runs at 03:00, once even when 03:00 is listed too; on the day they go back, a repeated
-    hour runs once, so the wait across the change is an hour longer in real time. Kept as it is: no run is lost, and
-    the guide length rule below covers the longer wait.
-  - The rule, in `@tunarr/shared/util` (`xmlTvRefresh.ts`) for the server and the settings page: the time between
-    rebuilds is the timer rounded, from 1 to 24 hours (a longer timer rebuilds once a day), and EPG (Hours) has to be
-    at least an hour longer than it.
-  - `PUT /api/xmltv-settings` refuses a shorter guide with a 400 and the reason, when the request sets the timer or
-    EPG (Hours). Settings saved before the check can still have their other fields changed.
-  - Those settings are rebuilt often enough anyway: `xmlTvRefreshCrontab` shortens the interval to an hour less than
-    the guide (a 24 hour timer with a 12-hour guide rebuilds every 11 hours), and startup logs a warning saying so.
-  - Settings > XMLTV flags the timer on the field (also when EPG (Hours) is lowered under it, and when the page opens
-    on settings saved before the check) and shows the server's reason if a save is refused. A value that isn't a
-    number is left to the numeric check. The start hour field is now **Refresh Timer Starts At**, since it's no longer
-    always the day's first rebuild.
-  - `NumericFormController` spread the caller's rules over the merged `validate`, so a field with its own `validate`
-    lost the "should be numeric" check. The merged one now goes last, with the caller's checks first so their
-    messages are unchanged.
-  - On upgrade, a start hour other than 00:00 with a timer under 24 hours rebuilds around the clock, so more often
-    than before: every 6 hours from 18:00 was once a day and is now four times. For once a day, set 24.
-  - `docs/configure/channels/epg.md` describes the hours, the guide length rule, daylight saving time and the upgrade.
-- **Tests:**
-  - `schedulingUtil.test.ts`: every 6 hours from 23 is `0 0 5,11,17,23 * * *`; every 4 hours from 12 carries on to 0,
-    4 and 8; for every start hour 0-23 and interval 1-24 no gap is longer than the interval, the start hour is in the
-    list, and there are no more runs than the interval needs; from 00:00 the same runs as `*/N`; start hour 2 in
-    Central time on 2026-11-01 (02:00 once, a 5-hour wait for a 4-hour timer) and 2027-03-14 (03:00 instead, no
-    longer wait); the crontab is shortened for a guide too short for its timer.
-  - `xmlTvRefresh.test.ts` (shared): the interval, the minimum guide, the shortened interval, and that the schedule is
-    shortened exactly when the API would refuse.
-  - `xmltvSettingsApi.test.ts`: a timer the guide can't last, a guide too short for the saved timer, and both at once
-    are refused and nothing is saved or rescheduled; a guide an hour longer is saved; a 48 hour timer with a 25-hour
-    guide is saved; old settings can have their start hour changed and are rescheduled every 11 hours.
-  - `ScheduleJobsStartupTask.test.ts`: old settings are scheduled every 11 hours, with one warning.
-  - `XmlTvSettingsPage.test.tsx`: the field is flagged and Save disabled, also on opening old settings; a longer guide
-    clears it and both are sent; an hour longer is fine; an empty guide isn't compared; a non-number is still flagged
-    as one; a refused save shows the server's reason.
-  - `TypedController.test.tsx`: with its own `validate`, a field still checks for a number, runs the caller's check,
-    and shows the caller's message when both fail. The first fails on the old code.
-  - 12 server and 6 web tests fail on the old code.
-- **Upstream:** not sent (the start hour is fork-only).
+  - At every program start, with captions or without, `HlsSession.endCaptionsAt` cuts each timeline entry's window at
+    the new program's start PTS (on the 33-bit clock). Only frames from the new start on change, and those belong to
+    the new program, so a program keeps its own frames' captions. A captioned next program's frames resolve to its own
+    entry as before. A program whose video ends a frame short of its plan counts as cut too, which only adds the
+    erase below.
+  - Where a window was cut, the first two frames within a second after the cut that no program's captions cover carry
+    Erase Displayed Memory instead of padding, so a caption showing when the program stopped doesn't stay up over the
+    next item.
+  - When the last segment can't be read (ffmpeg left it empty), the next program starts again at `SessionStartPts`,
+    under programs that already played. Those that start inside its planned span are emptied, so none of their
+    captions go out over it. A program it won't reach keeps its captions for the segments viewers are still fetching.
+  - An entry cut to nothing leaves the timeline, so a run of programs that fail at once can't push out a program whose
+    segments are still being served.
+  - `insertCaptions` (`MpegTsCaptionInserter.ts`) can take the language as a function of the segment's frames, asked
+    after `pairsForFrames`. `captionedSegment` passes one that looks up the entry for the segment's first frame
+    (`captionLanguage`), and falls back to the first language preference only when no entry covers it.
+  - Still open: when the item after an early stop has captions of its own, a caption the stopped program left on
+    screen stays up until that item's first caption replaces it, as before. Erasing there would mean adding an erase
+    to the start of the next program's schedule in `Cea608Encoder`.
+- **Tests:** `HlsSession.test.ts`, "captionedSegment > across programs", with programs run through the session's own
+  loop:
+  - The first program has a line every 2 s for 30 s and its video ends 10 s in; the next has no captions. A segment
+    4 s into the first keeps its captions. The next item's first two frames erase the screen and the rest are padding.
+    A segment 12 s after the first program started is padding only.
+  - After the clock goes back, a segment inside an earlier program's window is padding only. When the program the
+    clock went back to is planned short of that earlier program, the earlier one keeps its captions.
+  - After ten programs that each fail at once, the first program's segment still has its caption.
+  - A program in `jpn` whose video ends early, then one in `eng`: the first one's last segment has `jpn` in its ISO
+    639 and caption service descriptors, the next one's `eng`. A segment past every program's window gets the first
+    language preference.
+  - Five of these fail on the old code. The sixth (the earlier program kept) passes there, and fails if the clock
+    check empties every later program. Taking out the erase, the clock check or the pruning fails its own test.
+    `MpegTsCaptionInserter.test.ts`: the language function gets the frames' PTS in presentation order. The other
+    caption tests and the golden snapshot are unchanged.
+- **Upstream:** not sent.
+
 ### Search key replacement and backup guidance (2026-10-19)
 
 - **Cause:** replacing a missing or invalid key wrote directly to the destination, read failures were treated as missing keys, and reused files could retain broad permissions.
@@ -436,6 +434,74 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   semicolons, `%` and backslashes draw literally, Japanese titles draw, and the strip's centre measured at 94.6% of the
   height.
 - **Upstream:** not sent.
+
+### The guide rebuild hours carry on past midnight, so the guide no longer runs out (2026-10-19)
+
+- **What you saw:** nothing on the deployment yet; the fork review of 2026-10-19 found it. With a start hour other than
+  00:00 (fork PR #50, "The guide's full rebuild can run at a chosen hour" below), the scheduled rebuilds stopped at
+  midnight: every 4 hours from 12:00 rebuilt at 12:00, 16:00 and 20:00, then not until 12:00 the next day, and every
+  6 hours from 23:00 rebuilt once a day. Each rebuild writes EPG (Hours) of guide (12 by default), so Plex would show
+  an empty guide for hours every day.
+- **Cause:**
+  - `hoursFromCrontab` listed the hours from the start hour up to 23 and stopped there, on purpose, and its test
+    locked in "every 6 hours from 23 runs once a day".
+  - Nothing adds to the guide between rebuilds: `UpdateXmlTvTask` writes `programmingHours` from the rebuild, and
+    `TvGuideService.getChannelLineup` only logs a warning when asked past the end.
+  - Nothing stopped a refresh timer the guide can't last either, which runs out the same way at any start hour.
+- **Fix:**
+  - `hoursFromCrontab` (`util/schedulingUtil.ts`) lists `(start + k × interval) mod 24` for each k with
+    `k × interval` under 24, sorted. Every 4 hours from 12 is 0, 4, 8, 12, 16 and 20; every 6 hours from 23 is 5, 11,
+    17 and 23. From 00:00, and with 24 hours or more, the hours are the same as before.
+  - An interval that doesn't divide 24 starts again at the start hour each day, so the day's one short gap comes just
+    before it: every 5 hours from 4 is 0, 4, 9, 14 and 19. Counting on until the hours repeat would land on every hour
+    that steps of the interval reach (every 5 hours would run every hour) and change the hours from 00:00.
+  - Daylight saving time is node-schedule's (cron-parser 4.9): on the day the clocks go forward, an hour that doesn't
+    exist (02:00 in the US) runs at 03:00, once even when 03:00 is listed too; on the day they go back, a repeated
+    hour runs once, so the wait across the change is an hour longer in real time. Kept as it is: no run is lost, and
+    the guide length rule below covers the longer wait.
+  - The rule, in `@tunarr/shared/util` (`xmlTvRefresh.ts`) for the server and the settings page: the time between
+    rebuilds is the timer rounded, from 1 to 24 hours (a longer timer rebuilds once a day), and EPG (Hours) has to be
+    at least two hours longer than it, covering two-hour seasonal rollbacks.
+  - `PUT /api/xmltv-settings` refuses a shorter guide with a 400 and the reason, when the request sets the timer or
+    EPG (Hours). Settings saved before the check can still have their other fields changed.
+  - Those settings are rebuilt often enough anyway: `xmlTvRefreshCrontab` shortens the interval to an hour less than
+    the guide (a 24 hour timer with a 12-hour guide rebuilds every 10 hours), and startup logs a warning saying so.
+  - Settings > XMLTV flags the timer on the field (also when EPG (Hours) is lowered under it, and when the page opens
+    on settings saved before the check) and shows the server's reason if a save is refused. A value that isn't a
+    number is left to the numeric check. The start hour field is now **Refresh Timer Starts At**, since it's no longer
+    always the day's first rebuild.
+  - `NumericFormController` spread the caller's rules over the merged `validate`, so a field with its own `validate`
+    lost the "should be numeric" check. The merged one now goes last, with the caller's checks first so their
+    messages are unchanged.
+  - On upgrade, a start hour other than 00:00 with a timer under 24 hours rebuilds around the clock, so more often
+    than before: every 6 hours from 18:00 was once a day and is now four times. For once a day, set 24.
+  - `docs/configure/channels/epg.md` describes the hours, the guide length rule, daylight saving time and the upgrade.
+- **Tests:**
+  - `schedulingUtil.test.ts`: every 6 hours from 23 is `0 0 5,11,17,23 * * *`; every 4 hours from 12 carries on to 0,
+    4 and 8; for every start hour 0-23 and interval 1-24 no gap is longer than the interval, the start hour is in the
+    list, and there are no more runs than the interval needs; from 00:00 the same runs as `*/N`; start hour 2 in
+    Central time on 2026-11-01 (02:00 once, a 5-hour wait for a 4-hour timer) and 2027-03-14 (03:00 instead, no
+    longer wait); the crontab is shortened for a guide too short for its timer.
+  - `xmlTvRefresh.test.ts` (shared): the interval, the minimum guide, the shortened interval, and that the schedule is
+    shortened exactly when the API would refuse.
+  - `xmltvSettingsApi.test.ts`: a timer the guide can't last, a guide too short for the saved timer, and both at once
+    are refused and nothing is saved or rescheduled; a guide an hour longer is saved; a 48 hour timer with a 26-hour
+    guide is saved; old settings can have their start hour changed and are rescheduled every 10 hours.
+  - `ScheduleJobsStartupTask.test.ts`: old settings are scheduled every 10 hours, with one warning.
+  - `XmlTvSettingsPage.test.tsx`: the field is flagged and Save disabled, also on opening old settings; a longer guide
+    clears it and both are sent; an hour longer is fine; an empty guide isn't compared; a non-number is still flagged
+    as one; a refused save shows the server's reason.
+  - `TypedController.test.tsx`: with its own `validate`, a field still checks for a number, runs the caller's check,
+    and shows the caller's message when both fail. The first fails on the old code.
+  - 12 server and 6 web tests fail on the old code.
+- **Upstream:** not sent (the start hour is fork-only).
+
+### XMLTV review follow-up
+
+Guide coverage now conservatively allows two-hour seasonal clock rollbacks,
+including Antarctica/Troll. Existing guides shorter than three hours use three
+hours at runtime, without changing the saved setting, so the hourly scheduling
+floor can cover them. Shared rules, API/UI messages, and regressions agree.
 
 ### The guide's full rebuild can run at a chosen hour (2026-10-18)
 
@@ -2421,9 +2487,3 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 - **Upstream:** not sent. Related: upstream PR #1559 (an unconditional `-pix_fmt yuv420p`) was closed on the grounds
   that the pipeline builder already forces 8-bit output; on the software path it didn't.
 
-### XMLTV review follow-up
-
-Guide coverage now conservatively allows two-hour seasonal clock rollbacks,
-including Antarctica/Troll. Existing guides shorter than three hours use three
-hours at runtime, without changing the saved setting, so the hourly scheduling
-floor can cover them. Shared rules, API/UI messages, and regressions agree.
