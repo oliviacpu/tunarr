@@ -41,6 +41,45 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   route tree at `/settings` and `/settings/` and lands on `/settings/general`. Both fail without the fix.
 - **Upstream:** not sent. Both defects are in upstream's code.
 
+### Reloading or closing a clean editor no longer asks "Leave site?" (2026-10-19, PR #91)
+
+- **What you saw:** the browser's "Leave site?" dialog on reload or tab close with nothing changed, on every page that
+  warns about unsaved changes: the channel editor, the programming page, both slot editors, and the FFmpeg, XMLTV
+  and HDHR settings pages.
+- **Cause:** `UnsavedNavigationAlert` called TanStack Router's `useBlocker` without `enableBeforeUnload`, which
+  defaults to on. The browser-level handler in `@tanstack/history` reads only that option and never calls
+  `shouldBlockFn`, so the dirty check guarded in-app navigation but not reload or close.
+- **Fix:** `UnsavedNavigationAlert.tsx` passes `enableBeforeUnload: isDirty`, so the browser dialog follows the same
+  dirty state as the in-app one. In-app blocking and `exceptTargetPaths` are unchanged.
+- **Tests:** `UnsavedNavigationAlert.test.tsx` mocks `useBlocker`: the browser prompt is off for a clean form, on for
+  a dirty one, and follows `isDirty` across re-renders; `shouldBlockFn` blocks only a dirty form and lets it reach an
+  exempt path.
+### The top bar's dark mode button works the first time on a light OS (2026-10-19)
+
+- **What you saw:** until a mode was picked in settings, the first click on the top bar's moon icon did nothing on a
+  computer set to light. A second click turned dark mode on.
+- **Cause:** with no mode chosen, MUI's mode is `system`. `DarkModeButton` set `mode === 'light' ? 'dark' : 'light'`,
+  so from `system` it always set `light`, which looked the same as a light OS.
+- **Fix:** `nextColorMode(mode, resolved)` in `useTunarrTheme.ts` flips a chosen light or dark mode, and under
+  `system` flips the scheme on screen (`useColorScheme().colorScheme`). The unused `theme.themePreference` store field
+  is gone, with the load-time step that wrote it. `store/index.ts` drops the key from a stored theme on load, so it
+  is not saved again.
+- **Tests:** `useTunarrTheme.test.ts`: light to dark, dark to light, system on a light OS to dark, system on a dark OS
+  to light. `DarkModeButton.test.tsx`: with the OS scheme stubbed, one click from `system` changes the scheme both
+  ways (on the old code a light OS needed two). `store/index.test.ts`: a stored theme with `themePreference`, or from
+  before it, hydrates without it, logs no error, and is written back without it.
+- **Upstream:** not sent.
+### Every channel form field marks its tab when it has an error (2026-10-19)
+
+- **What you saw:** nothing yet. The channel editor puts a red dot on the tab (Properties, Flex, EPG, Streaming) that
+  holds a field with an error. Its hand-written field lists left out `startTime`, `onDemand`, `transcodeConfigId`,
+  `disableFillerOverlay`, `id` and `duration`. None of these has a validation rule today, so no dot is missing yet.
+  A rule added to one of them later would leave Save disabled with no dot on any tab.
+- **Fix:** `channelFieldTabs.ts` maps each field to its tab as a `Record<keyof SaveableChannel, EditChannelTabs>`, so
+  a new channel field without a tab fails to compile. `EditChannelForm.tsx` marks tabs from it. `id` and `duration` are
+  not inputs on any tab and go to Properties. Test: `channelFieldTabs.test.ts` checks the map against
+  `SaveableChannelSchema.shape` and checks that an error marks the right tab.
+- **Upstream:** not sent; upstream `main`'s field lists have the same gaps.
 ### Dead delete dialogs and settings hooks removed from the web app (2026-10-19, PR #86)
 
 - **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
