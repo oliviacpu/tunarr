@@ -282,3 +282,9 @@ The web app uses a generated API client (`generated/`) created from the server's
 - Web builds static assets with Vite
 - macOS app bundle support in `macos/` directory
 - Docker images available (`chrisbenincasa/tunarr`)
+
+Database transactions that read and then write must acquire an IMMEDIATE lock. Use
+the configured Drizzle connection (`withImmediateTransactions`), or explicitly
+select IMMEDIATE when using raw SQLite. Do not introduce an unqualified Kysely
+`transaction().execute(...)` for read/write work: WAL readers cannot upgrade a stale
+snapshot after another connection commits.

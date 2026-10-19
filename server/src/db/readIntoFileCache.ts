@@ -1,3 +1,4 @@
+import { databaseTuning } from './databaseTuning.ts';
 import fs from 'node:fs/promises';
 
 // One reusable buffer per call; big enough for the kernel's readahead to keep
@@ -30,7 +31,7 @@ export type FileCacheReadResult = {
  */
 export async function readIntoFileCache(
   filePaths: string[],
-  maxBytes: number = DefaultMaxBytes,
+  maxBytes: number = databaseTuning().warmupMaxBytes ?? DefaultMaxBytes,
 ): Promise<FileCacheReadResult> {
   const started = performance.now();
   const buffer = Buffer.allocUnsafe(ChunkBytes);

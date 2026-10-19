@@ -1,0 +1,1 @@
+CREATE INDEX `program_library_uuid_index` ON `program` (`library_id`,`uuid`);

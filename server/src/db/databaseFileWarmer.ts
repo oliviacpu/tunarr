@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import { databaseTuning } from './databaseTuning.ts';
 // LoggerFactory before defaults: defaults imports LoggerFactory, whose module
 // calls back into defaults while it initializes.
 import { LoggerFactory } from '../util/logging/LoggerFactory.ts';
@@ -16,8 +18,25 @@ export const WarmCooldownMs = 10 * 60 * 1000;
  * start quick; a guide refresh's queries can read any page, and with the cap a
  * database past 512 MiB would leave its end, and its WAL, uncached.
  */
-export function readEntireFiles(files: string[]) {
-  return readIntoFileCache(files, Number.POSITIVE_INFINITY);
+export async function readEntireFiles(files: string[]) {
+  const cap = databaseTuning().warmupMaxBytes;
+  if (cap !== undefined) {
+    const sizes = await Promise.all(
+      files.map((file) =>
+        fs
+          .stat(file)
+          .then((stat) => stat.size)
+          .catch(() => 0),
+      ),
+    );
+    if (cap === 0 || sizes.reduce((total, size) => total + size, 0) > cap) {
+      LoggerFactory.child({ className: DatabaseFileWarmer.name }).debug(
+        'Skipping database warm-up: disabled or database exceeds configured byte limit',
+      );
+      return { bytes: 0, ms: 0 };
+    }
+  }
+  return readIntoFileCache(files, cap ?? Number.POSITIVE_INFINITY);
 }
 
 /**
