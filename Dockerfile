@@ -63,7 +63,7 @@ CMD [ "server" ]
 # Add Tunarr sources
 FROM ffmpeg-base AS sources
 WORKDIR /tunarr
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .pnpmfile.cjs ./
 COPY scripts ./scripts
 COPY server/ ./server
 COPY shared/ ./shared
@@ -87,6 +87,7 @@ COPY package.json package.json
 COPY pnpm-lock.yaml pnpm-lock.yaml
 COPY pnpm-workspace.yaml pnpm-workspace.yaml
 COPY turbo.json turbo.json
+COPY .pnpmfile.cjs .pnpmfile.cjs
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo clean
