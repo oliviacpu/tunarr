@@ -21,6 +21,7 @@ import { InjectLogger } from '../../util/inject.ts';
 import { xmlTvRefreshCrontab } from '../../util/schedulingUtil.ts';
 import type { Logger } from '../../util/logging/LoggerFactory.ts';
 import { LoggerFactory } from '../../util/logging/LoggerFactory.ts';
+import { rescanSyncCrontab, scanLibrariesCrontab } from '../rescanSchedule.ts';
 import {
   GlobalScheduler,
   hoursCrontab,
@@ -118,16 +119,15 @@ export class ScheduleJobsStartupTask extends SimpleStartupTask {
       ),
     );
 
+    // Saving the Scanner settings moves these three to the new interval
+    // (rescheduleRescanJobs)
+    const { rescanIntervalHours } = this.settingsDB.globalMediaSourceSettings();
+
     GlobalScheduler.scheduleTask(
       ScanLibrariesTask.ID,
       new ScheduledTask(
         ScanLibrariesTask,
-        // Offset from the hourly library refresh so scans never start while
-        // library availability is being updated.
-        hoursCrontab(
-          this.settingsDB.globalMediaSourceSettings().rescanIntervalHours,
-          30,
-        ),
+        scanLibrariesCrontab(rescanIntervalHours),
         container.get<() => ScanLibrariesTask>(ScanLibrariesTask.KEY),
         undefined,
       ),
@@ -137,9 +137,7 @@ export class ScheduleJobsStartupTask extends SimpleStartupTask {
       SyncCollectionsTask.ID,
       new ScheduledTask(
         SyncCollectionsTask,
-        hoursCrontab(
-          this.settingsDB.globalMediaSourceSettings().rescanIntervalHours,
-        ),
+        rescanSyncCrontab(rescanIntervalHours),
         container.get<() => SyncCollectionsTask>(SyncCollectionsTask.KEY),
         undefined,
       ),
@@ -149,9 +147,7 @@ export class ScheduleJobsStartupTask extends SimpleStartupTask {
       SyncCustomShowsTask.ID,
       new ScheduledTask(
         SyncCustomShowsTask,
-        hoursCrontab(
-          this.settingsDB.globalMediaSourceSettings().rescanIntervalHours,
-        ),
+        rescanSyncCrontab(rescanIntervalHours),
         container.get<() => SyncCustomShowsTask>(SyncCustomShowsTask.KEY),
         undefined,
       ),

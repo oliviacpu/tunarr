@@ -7,7 +7,6 @@ dayjs.extend(duration);
 
 export interface ThemeEditorStateInner {
   darkMode?: boolean | undefined;
-  themePreference?: 'light' | 'dark' | 'system';
   showWelcome: boolean;
   guideDuration: number;
   programmingSelectorView: ProgramSelectorViewType;
@@ -22,7 +21,6 @@ export const initialThemeEditorState: ThemeEditorState = {
     darkMode: undefined,
     showWelcome: true,
     guideDuration: dayjs.duration(2, 'hour').asMilliseconds(),
-    themePreference: 'system',
     programmingSelectorView: 'grid',
   },
 };

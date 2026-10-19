@@ -1,6 +1,7 @@
 import PaddedPaper from '@/components/base/PaddedPaper.tsx';
 import Breadcrumbs from '@/components/Breadcrumbs.tsx';
-import { Trans } from '@lingui/react/macro';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
+import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Delete,
   Movie,
@@ -25,7 +26,9 @@ import { LibraryProgramGrid } from '../../components/library/LibraryProgramGrid.
 import { useEmptyTrash } from '../../hooks/useEmptyTrash.ts';
 
 export const TrashPage = () => {
+  const { t } = useLingui();
   const [itemTypes, setItemTypes] = useState<ProgramType[]>([]);
+  const [confirmingEmpty, setConfirmingEmpty] = useState(false);
   const { status, isDraining, emptyTrash, isStarting, cancel, isCancelling } =
     useEmptyTrash();
 
@@ -124,7 +127,7 @@ export const TrashPage = () => {
           )}
           <Button
             disabled={isStarting || isDraining}
-            onClick={emptyTrash}
+            onClick={() => setConfirmingEmpty(true)}
             startIcon={<Delete />}
             variant="contained"
             color="error"
@@ -151,6 +154,14 @@ export const TrashPage = () => {
         )}
         <LibraryProgramGrid searchRequest={request} />
       </PaddedPaper>
+      <DeleteConfirmationDialog
+        open={confirmingEmpty}
+        onClose={() => setConfirmingEmpty(false)}
+        onConfirm={emptyTrash}
+        title={t`Empty the trash?`}
+        body={t`This permanently deletes all trashed items. Channel lineup slots that reference them will be replaced with flex. This cannot be undone.`}
+        confirmLabel={t`Empty trash`}
+      />
     </Stack>
   );
 };
