@@ -26,6 +26,10 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### batch publication lookups and clean stale temporary files (2026-10-19)
+
+- **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
+
 ### expose memory tuning and index library pagination (2026-10-19)
 
 - **Change:** Adds opt-in SQLite cache, mmap and warmup controls, preserving existing cache defaults. Migration 0056 indexes library pagination after EXPLAIN showed a temporary sort. Adds an explicit-transaction policy check.
@@ -51,49 +55,60 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
-### The Plex guide ask stops on a refused token, backs off, and can't hold up other servers or a flush (2026-10-19)
+### A program's captions end where the next item starts, and each segment names its own program's language (2026-10-19)
 
-- **What you saw:** nothing yet. A review of `PlexGuideNotifier` (`plans/fork-review-2026-10-19.md`, section 11)
-  found five ways it could misbehave.
+- **What you saw:** found in code review, not on the deployment.
+  - When a program's video stopped before its scheduled end (ffmpeg exited early, or the file is shorter than its
+    recorded duration) and the next item had no captions of its own (flex time, an error screen, filler without
+    subtitles), that item carried the rest of the earlier program's dialogue, up to the earlier program's scheduled end.
+  - A captioned HLS segment's PMT named the language of the newest program's captions, so a client still fetching one
+    program's last segments after the next one started got the next program's language on them. The `.ts` stream for
+    HDHomeRun clients was not affected: `CaptionLanguageStream` relabels its PMT with the first language preference.
 - **Cause:**
-  - A 401 or 403 from Plex was retried like a 503, so a token that can't work got three tries and three log lines.
-    The Plex client also reported a refused token on `GET /livetv/dvrs` as a generic failure, and the reload's as
-    a raw `AxiosError`, so the notifier couldn't tell it apart. A media source with no token was retried too.
-  - The wait between tries was a fixed 5 s, so a restarting Plex got all three tries within ten seconds.
-  - If making the client for one Plex server threw, the whole ask ended and every server after it was skipped.
-    Servers were also asked one after another, so one that didn't answer held up the rest for minutes.
-  - `flush()` had no time limit. A Plex that never answered held `POST /api/xmltv/flush` for up to about six minutes
-    per server (60 s request timeout × 2 calls × 3 tries).
-  - The retry wait was a plain `setTimeout`. It kept the process alive, and nothing cancelled it at shutdown.
+  - `HlsSession.transcode` advances `transcodedUntil` by the program's planned length before ffmpeg runs, and
+    `addCaptions` lays the program's captions out over that planned length. The next program starts where the last
+    segment's video ended (`getPtsOffset`), which is inside the earlier window when ffmpeg stopped early. Only a
+    program with captions added an entry to the caption timeline, so for an item without any, `captionEntryAt` found
+    the earlier program's entry and `captionPairs` sent its schedule.
+  - `captionedSegment` took the language from `#captionTimeline.at(-1)`, the newest entry, whichever program the
+    segment belonged to.
 - **Fix:**
-  - The Plex client's `getDvrs` and `refreshGuide` both reject with an error classified by the base client's
-    `requestErrorResult`: 401/403 is `auth_error`, and 404 stays `not_found`. `getDvrs` logs its failure at debug,
-    since its one caller reports it. The notifier's `isPlexAuthError` checks only for `auth_error`. That server's
-    ask stops at once with a warning to check its Plex token. A media source with no token gets the same warning
-    without a try.
-  - Each wait is three times the last: 5 s, then 15 s (`retryDelayMs`, capped at 45 s). There are still three tries.
-  - Every server is asked at the same time, each with its own retry wait. Any failure is logged with the server's
-    name and leaves the others alone.
-    Server names are log arguments, not part of the format string.
-  - `flush()` answers after 30 s at the latest (`FlushTimeoutMs`) with `{ done, servers: [{ name, outcome }] }` and
-    logs what was still left. The outcomes are `reloaded`, `no_live_tv`, `auth_failed`, `failed` and `pending`.
-    `POST /api/xmltv/flush` returns that answer: 200 when everything finished, as before, and 202 when it stopped
-    waiting. The OpenAPI document and the web client were regenerated.
-  - The retry timer is unref'd. `stop()`, called from the server's graceful shutdown, clears the debounce and retry
-    timers and ends a retry wait without another try. It also answers a waiting flush with `done: false` and keeps
-    later requests from scheduling anything.
-  - `docs/configure/clients/plex.md` documents the ask, the retries and the flush route.
-- **Tests:** each new one fails on the old code.
-  - `PlexGuideNotifier.test.ts`: a 401 or 403 from either call gets no retry and one warning, and the next server
-    is asked at once.
-  - Two failures then a success, with the waits growing (5 s, then 15 s), plus the wait formula itself.
-  - One server's client lookup throws, has no token, or never answers, and the other server is still asked at once.
-  - A flush with a server that never answers resolves after 30 s, naming it `pending` and the other `reloaded`. One
-    that runs out before any server is reached logs "an ask under way". The route's status is 200 or 202.
-  - After `stop()`, a waiting retry never fires and no timer is left. The retry timer was unref'd. A try that fails
-    after `stop()` starts no retry timer.
-  - `PlexApiClient.test.ts`: `getDvrs` rejects with `auth_error` on 401 and 403 without an error line;
-    `refreshGuide` rejects with `auth_error` on 401 and 403, and `generic_request_error` on 503.
+  - At every program start, with captions or without, `HlsSession.endCaptionsAt` cuts each timeline entry's window at
+    the new program's start PTS (on the 33-bit clock). Only frames from the new start on change, and those belong to
+    the new program, so a program keeps its own frames' captions. A captioned next program's frames resolve to its own
+    entry as before. A program whose video ends a frame short of its plan counts as cut too, which only adds the
+    erase below.
+  - Where a window was cut, the first two frames within a second after the cut that no program's captions cover carry
+    Erase Displayed Memory instead of padding, so a caption showing when the program stopped doesn't stay up over the
+    next item.
+  - When the last segment can't be read (ffmpeg left it empty), the next program starts again at `SessionStartPts`,
+    under programs that already played. Those that start inside its planned span are emptied, so none of their
+    captions go out over it. A program it won't reach keeps its captions for the segments viewers are still fetching.
+  - An entry cut to nothing leaves the timeline, so a run of programs that fail at once can't push out a program whose
+    segments are still being served.
+  - `insertCaptions` (`MpegTsCaptionInserter.ts`) can take the language as a function of the segment's frames, asked
+    after `pairsForFrames`. `captionedSegment` passes one that looks up the entry for the segment's first frame
+    (`captionLanguage`), and falls back to the first language preference only when no entry covers it.
+  - Still open: when the item after an early stop has captions of its own, a caption the stopped program left on
+    screen stays up until that item's first caption replaces it, as before. Erasing there would mean adding an erase
+    to the start of the next program's schedule in `Cea608Encoder`.
+- **Tests:** `HlsSession.test.ts`, "captionedSegment > across programs", with programs run through the session's own
+  loop:
+  - The first program has a line every 2 s for 30 s and its video ends 10 s in; the next has no captions. A segment
+    4 s into the first keeps its captions. The next item's first two frames erase the screen and the rest are padding.
+    A segment 12 s after the first program started is padding only.
+  - After the clock goes back, a segment inside an earlier program's window is padding only. When the program the
+    clock went back to is planned short of that earlier program, the earlier one keeps its captions.
+  - After ten programs that each fail at once, the first program's segment still has its caption.
+  - A program in `jpn` whose video ends early, then one in `eng`: the first one's last segment has `jpn` in its ISO
+    639 and caption service descriptors, the next one's `eng`. A segment past every program's window gets the first
+    language preference.
+  - Five of these fail on the old code. The sixth (the earlier program kept) passes there, and fails if the clock
+    check empties every later program. Taking out the erase, the clock check or the pruning fails its own test.
+    `MpegTsCaptionInserter.test.ts`: the language function gets the frames' PTS in presentation order. The other
+    caption tests and the golden snapshot are unchanged.
+- **Upstream:** not sent.
+
 ### Search key replacement and backup guidance (2026-10-19)
 
 - **Cause:** replacing a missing or invalid key wrote directly to the destination, read failures were treated as missing keys, and reused files could retain broad permissions.
@@ -481,6 +496,50 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     old code.
   - `TvGuideService.test.ts`: a full build and a channel save both ask for the read.
 - **Upstream:** not sent.
+
+### The Plex guide ask stops on a refused token, backs off, and can't hold up other servers or a flush (2026-10-19)
+
+- **What you saw:** nothing yet. A review of `PlexGuideNotifier` (`plans/fork-review-2026-10-19.md`, section 11)
+  found five ways it could misbehave.
+- **Cause:**
+  - A 401 or 403 from Plex was retried like a 503, so a token that can't work got three tries and three log lines.
+    The Plex client also reported a refused token on `GET /livetv/dvrs` as a generic failure, and the reload's as
+    a raw `AxiosError`, so the notifier couldn't tell it apart. A media source with no token was retried too.
+  - The wait between tries was a fixed 5 s, so a restarting Plex got all three tries within ten seconds.
+  - If making the client for one Plex server threw, the whole ask ended and every server after it was skipped.
+    Servers were also asked one after another, so one that didn't answer held up the rest for minutes.
+  - `flush()` had no time limit. A Plex that never answered held `POST /api/xmltv/flush` for up to about six minutes
+    per server (60 s request timeout × 2 calls × 3 tries).
+  - The retry wait was a plain `setTimeout`. It kept the process alive, and nothing cancelled it at shutdown.
+- **Fix:**
+  - The Plex client's `getDvrs` and `refreshGuide` both reject with an error classified by the base client's
+    `requestErrorResult`: 401/403 is `auth_error`, and 404 stays `not_found`. `getDvrs` logs its failure at debug,
+    since its one caller reports it. The notifier's `isPlexAuthError` checks only for `auth_error`. That server's
+    ask stops at once with a warning to check its Plex token. A media source with no token gets the same warning
+    without a try.
+  - Each wait is three times the last: 5 s, then 15 s (`retryDelayMs`, capped at 45 s). There are still three tries.
+  - Every server is asked at the same time, each with its own retry wait. Any failure is logged with the server's
+    name and leaves the others alone.
+    Server names are log arguments, not part of the format string.
+  - `flush()` answers after 30 s at the latest (`FlushTimeoutMs`) with `{ done, servers: [{ name, outcome }] }` and
+    logs what was still left. The outcomes are `reloaded`, `no_live_tv`, `auth_failed`, `failed` and `pending`.
+    `POST /api/xmltv/flush` returns that answer: 200 when everything finished, as before, and 202 when it stopped
+    waiting. The OpenAPI document and the web client were regenerated.
+  - The retry timer is unref'd. `stop()`, called from the server's graceful shutdown, clears the debounce and retry
+    timers and ends a retry wait without another try. It also answers a waiting flush with `done: false` and keeps
+    later requests from scheduling anything.
+  - `docs/configure/clients/plex.md` documents the ask, the retries and the flush route.
+- **Tests:** each new one fails on the old code.
+  - `PlexGuideNotifier.test.ts`: a 401 or 403 from either call gets no retry and one warning, and the next server
+    is asked at once.
+  - Two failures then a success, with the waits growing (5 s, then 15 s), plus the wait formula itself.
+  - One server's client lookup throws, has no token, or never answers, and the other server is still asked at once.
+  - A flush with a server that never answers resolves after 30 s, naming it `pending` and the other `reloaded`. One
+    that runs out before any server is reached logs "an ask under way". The route's status is 200 or 202.
+  - After `stop()`, a waiting retry never fires and no timer is left. The retry timer was unref'd. A try that fails
+    after `stop()` starts no retry timer.
+  - `PlexApiClient.test.ts`: `getDvrs` rejects with `auth_error` on 401 and 403 without an error line;
+    `refreshGuide` rejects with `auth_error` on 401 and 403, and `generic_request_error` on 503.
 
 ### Plex is asked to reload the guide once per change, and only when it can download it (2026-10-18)
 
