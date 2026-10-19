@@ -125,12 +125,21 @@ RUN NODE_OPTIONS=--max-old-space-size=32768 pnpm turbo bundle --filter=@tunarr/w
 RUN echo "Building target: ${exec_target}"
 RUN pnpm turbo make-bin -- --target ${exec_target} --no-include-version
 
+# Exercise the shipped FFmpeg, Meilisearch and packaged worker entry point.
+# Kept as an explicit target so nightly validation uses the release build.
+FROM build-full-stack AS runtime-tests
+ENV TUNARR_TEST_FFMPEG=/usr/bin/ffmpeg
+ENV TUNARR_TEST_FFPROBE=/usr/bin/ffprobe
+ENV TUNARR_MEILISEARCH_PATH=/tunarr/server/bin/meilisearch-linux-x64
+RUN pnpm --filter @tunarr/server test:local
+RUN pnpm --filter @tunarr/server test:worker-smoke -- --binary /tunarr/server/bin/tunarr-linux-x64
+
 ### Full stack ###
 FROM ffmpeg-base AS full-stack
 WORKDIR /tunarr
 ARG exec_target=linux-x64
 COPY --from=build-full-stack /tunarr/.env /tunarr/.env
-COPY --from=build-full-stack /tunarr/server/bin /tunarr/server/bin
+COPY --from=runtime-tests /tunarr/server/bin /tunarr/server/bin
 # Create a symlink to the executable in /tunarr. This simplifies things for the
 # user, such as volume mapping their legacy DBs, while not interrupting the
 # other assumptions that Tunarr makes about its working directory

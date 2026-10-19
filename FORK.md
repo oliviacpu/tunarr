@@ -26,6 +26,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### validate packaged binaries and make fork releases rerunnable (2026-10-19)
+
+- **Change:** Requires real-binary and packaged-worker tests before the final image is assembled, adds nightly/manual native Linux validation, repairs temporary paths in API generation, restores the upstream latest spec, and updates existing release notes on reruns. Release serialization remains in place.
+- **Tests:** covered by the local completion candidate; this branch is independently checked in CI.
+- **Upstream:** not submitted; personal fork.
+
+
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 
