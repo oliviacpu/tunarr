@@ -194,7 +194,7 @@ function makeLineupItem(): ContentBackedStreamLineupItem {
  * Creates a mock PipelineBuilderFactory that intercepts PipelineBuilder.build()
  * to capture the FrameState for assertion.
  */
-function createCapturingPipelineBuilderFactory(): {
+function createCapturingPipelineBuilderFactory(outputFrameRate?: number): {
   factory: PipelineBuilderFactory;
   getCapturedFrameState: () => FrameState | undefined;
   getCapturedFfmpegState: () => FfmpegState | undefined;
@@ -241,6 +241,7 @@ function createCapturingPipelineBuilderFactory(): {
     });
 
     const pipelineStub = () => ({
+      outputFrameRate,
       getCommandArgs: () => [],
       getCommandEnvironment: () => ({}),
       inputs: {},
@@ -1882,6 +1883,7 @@ describe('FfmpegStreamFactory', () => {
       async function run(opts: {
         selected: SubtitleStreamDetails | null;
         hdhrClosedCaptions?: boolean;
+        pipelineOutputFrameRate?: number;
         streamMode?: 'hls' | 'mpegts';
         // The program's subtitle tracks, both files by default; null for
         // none, which the stream details leave undefined
@@ -1896,7 +1898,9 @@ describe('FfmpegStreamFactory', () => {
         // Stands in for the factory's own logger
         logger?: Logger;
       }) {
-        const capturing = createCapturingPipelineBuilderFactory();
+        const capturing = createCapturingPipelineBuilderFactory(
+          opts.pipelineOutputFrameRate,
+        );
         const details = makeStreamDetails();
         const [video] = details.videoDetails ?? [];
         if (video && opts.framerate !== undefined) {
@@ -1946,6 +1950,16 @@ describe('FfmpegStreamFactory', () => {
       }
 
       describe('frame rate', () => {
+        test('lays captions out at the final pipeline rate after deinterlacing', async () => {
+          const { captions, outputFrameRate } = await run({
+            selected: fullTrack(),
+            framerate: 30,
+            pipelineOutputFrameRate: 60,
+          });
+          expect(outputFrameRate).toBe(30);
+          expect(captions?.frameRate).toBe(60);
+        });
+
         test('pins the output to the source rate, and lays captions out at it', async () => {
           const { captions, outputFrameRate } = await run({
             selected: fullTrack(),

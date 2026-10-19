@@ -2,7 +2,7 @@ import { ffmpegFrameRate } from '../../../outputFrameRate.ts';
 import { OutputOption } from '../OutputOption.ts';
 
 export class FrameRateOutputOption extends OutputOption {
-  constructor(private frameRate: number) {
+  constructor(readonly frameRate: number) {
     super();
   }
 

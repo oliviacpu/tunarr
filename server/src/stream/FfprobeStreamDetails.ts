@@ -1,3 +1,4 @@
+import { preferredSourceFrameRate } from '../ffmpeg/outputFrameRate.ts';
 import { FfmpegInfo } from '@/ffmpeg/ffmpegInfo.js';
 import type {
   FfprobeAudioStream,
@@ -77,7 +78,10 @@ export class FfprobeStreamDetails
               : 'unknown',
         width: videoStream.width,
         height: videoStream.height,
-        framerate: videoStream.r_frame_rate ?? undefined,
+        framerate: preferredSourceFrameRate(
+          videoStream.avg_frame_rate,
+          videoStream.r_frame_rate,
+        ),
         displayAspectRatio,
         // chapters
         anamorphic: extractIsAnamorphic(

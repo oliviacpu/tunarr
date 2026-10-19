@@ -19,10 +19,7 @@ import {
 import type { PixelFormat } from './builder/format/PixelFormat.ts';
 import { PixelFormatYuv420P } from './builder/format/PixelFormat.ts';
 import { FrameSize } from './builder/types.ts';
-import {
-  deinterlacerDoublesFrameRate,
-  outputFrameRate,
-} from './outputFrameRate.ts';
+import { outputFrameRate } from './outputFrameRate.ts';
 
 const KnownVideoPresets: ReadonlySet<string> = new Set(
   Object.values(VideoPresets),
@@ -42,10 +39,6 @@ function softwareVideoPreset(configured: string | null): VideoPreset {
 export type StreamPlaybackOptions = {
   // The output's frame rate must be known exactly: CEA-608 captions are laid out one pair per frame
   pinFrameRate?: boolean;
-  // ffmpeg settings' software deinterlace filter, to tell whether deinterlacing doubles the frame rate
-  deinterlaceFilter?: string;
-  // The item loops (a filler clip shorter than its slot), which CUDA decodes in software
-  infiniteLoop?: boolean;
 };
 
 export class FfmpegPlaybackParamsCalculator {
@@ -139,7 +132,7 @@ export class FfmpegPlaybackParamsCalculator {
       //   about 24 a second lost one in six, and the CEA-608 caption pairs they carried.
       // - "Normalize Frame Rate": the source's own rate (the pipeline before #1349 used an fps filter for this).
       // - captions: the source's own rate, so the caption schedule and the video agree frame for frame.
-      // A software field-rate deinterlacer outputs a frame per field, so the rate is doubled to keep them all.
+      // The selected pipeline adjusts this rate for its actual deinterlacer.
       const output = outputFrameRate(videoStream.framerate);
       if (
         output &&
@@ -147,10 +140,7 @@ export class FfmpegPlaybackParamsCalculator {
           this.transcodeConfig.normalizeFrameRate ||
           options.pinFrameRate)
       ) {
-        const fieldRate =
-          params.deinterlace &&
-          this.deinterlacerDoublesRate(videoStream, options);
-        params.frameRate = output.rate * (fieldRate ? 2 : 1);
+        params.frameRate = output.rate;
       }
 
       params.videoTrackTimeScale = 90000;
@@ -164,40 +154,6 @@ export class FfmpegPlaybackParamsCalculator {
     }
 
     return params;
-  }
-
-  // Whether the pipeline's deinterlacer outputs a frame per field, doubling the frame rate, as far as the transcode
-  // config and source tell. The software filter (DeinterlaceFilter) does with a field-rate setting; the pipelines use
-  // it always without hardware acceleration and with VideoToolbox (whose pipeline is the software one's), with QSV when
-  // hardware filters are off, and with VAAPI and CUDA when hardware decoding is off, as their frames are then in
-  // system memory; CUDA also always decodes interlaced MPEG-2 and looping items in software (NvidiaPipelineBuilder). QSV's own
-  // deinterlace_qsv always outputs at field rate (FFmpeg sets field_rate in its preinit); deinterlace_vaapi and
-  // yadif_cuda output at frame rate by default. VAAPI and CUDA also fall back to software when the GPU can't decode
-  // the source, which only the pipeline knows; there a field-rate filter's extra frames are dropped back to the
-  // source rate.
-  private deinterlacerDoublesRate(
-    videoStream: VideoStreamDetails,
-    options: StreamPlaybackOptions,
-  ) {
-    const software = deinterlacerDoublesFrameRate(options.deinterlaceFilter);
-    switch (this.transcodeConfig.hardwareAccelerationMode) {
-      case HardwareAccelerationMode.None:
-      case HardwareAccelerationMode.Videotoolbox:
-        return software;
-      case HardwareAccelerationMode.Qsv:
-        return this.transcodeConfig.disableHardwareFilters ? software : true;
-      case HardwareAccelerationMode.Vaapi:
-        return !!this.transcodeConfig.disableHardwareDecoder && software;
-      case HardwareAccelerationMode.Cuda:
-        return (
-          (!!this.transcodeConfig.disableHardwareDecoder ||
-            videoStream.codec === VideoFormats.Mpeg2Video ||
-            !!options.infiniteLoop) &&
-          software
-        );
-      default:
-        return false;
-    }
   }
 
   calculateForErrorStream(

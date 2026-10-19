@@ -1,3 +1,4 @@
+import { FilterOption } from '../filter/FilterOption.ts';
 import {
   HardwareAccelerationMode,
   TranscodeAudioOutputFormat,
@@ -86,7 +87,6 @@ import { Libx265Encoder } from '../encoder/Libx265Encoder.ts';
 import { Mpeg2VideoEncoder } from '../encoder/Mpeg2VideoEncoder.ts';
 import { RawVideoEncoder } from '../encoder/RawVideoEncoder.ts';
 import { AudioVolumeFilter } from '../filter/AudioVolumeFilter.ts';
-import type { FilterOption } from '../filter/FilterOption.ts';
 import { AudioFadeFilter } from '../filter/AudioFadeFilter.ts';
 import { LoudnormFilter } from '../filter/LoudnormFilter.ts';
 import { StreamSeekFilter } from '../filter/StreamSeekFilter.ts';
@@ -659,15 +659,6 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
       this.audioInputSource?.addOption(new InfiniteLoopInputOption());
     }
 
-    if (
-      this.desiredState.videoFormat !== VideoFormats.Copy &&
-      this.desiredState.frameRate
-    ) {
-      this.pipelineSteps.push(
-        new FrameRateOutputOption(this.desiredState.frameRate),
-      );
-    }
-
     ifDefined(this.desiredState.videoTrackTimescale, (ts) =>
       this.pipelineSteps.push(VideoTrackTimescaleOutputOption(ts)),
     );
@@ -683,6 +674,22 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
     }
 
     this.setupVideoFilters();
+
+    if (
+      this.desiredState.videoFormat !== VideoFormats.Copy &&
+      this.desiredState.frameRate
+    ) {
+      const outputState = this.filterChain.videoFilterSteps.reduce(
+        (state, filter) =>
+          filter instanceof FilterOption ? filter.nextState(state) : state,
+        this.desiredState,
+      );
+      if (outputState.frameRate) {
+        this.pipelineSteps.push(
+          new FrameRateOutputOption(outputState.frameRate),
+        );
+      }
+    }
   }
 
   protected buildAudioPipeline() {
@@ -840,6 +847,7 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
           new Libx265Encoder(
             currentState.updateFrameLocation(FrameDataLocation.Software),
             this.desiredState.videoPreset,
+            this.ffmpegState.threadCount ?? 0,
           ),
       )
       .with(
