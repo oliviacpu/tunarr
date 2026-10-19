@@ -24,7 +24,7 @@ import { DefaultPipelineOptions, FfmpegState } from '../state/FfmpegState.ts';
 import { FrameState } from '../state/FrameState.ts';
 import { FrameSize } from '../types.ts';
 import type { FfmpegVersionResult } from '../../ffmpegInfo.ts';
-import type { StreamSource } from '../../../stream/types.ts';
+import type { StreamSource } from '../input/InputSource.ts';
 
 // A full-screen block of text, so a burned frame differs clearly from the
 // baseline in the bottom of the picture.
