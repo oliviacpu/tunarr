@@ -32,9 +32,11 @@ import type { Maybe, Nilable } from '../types/util.ts';
 import { caseWhen } from './DrizzleSqlCaseWhen.ts';
 import type {
   FillerShowWithContent,
+  GapMusicProgram,
   IFillerListDB,
 } from './interfaces/IFillerListDB.ts';
 import { createPendingProgramIndexMap } from './programHelpers.ts';
+import { Channel } from './schema/Channel.ts';
 import { ChannelFillerShow } from './schema/ChannelFillerShow.ts';
 import type { NewFillerShow } from './schema/FillerShow.ts';
 import { FillerShow } from './schema/FillerShow.ts';
@@ -282,6 +284,10 @@ export class FillerDB implements IFillerListDB {
         tx.update(ChannelFillerShow).set({ weight: cases }).run();
       }
 
+      tx.update(Channel)
+        .set({ offline: sql`json_remove(${Channel.offline}, '$.musicListId')` })
+        .where(sql`json_extract(${Channel.offline}, '$.musicListId') = ${id}`)
+        .run();
       tx.delete(FillerShow).where(eq(FillerShow.uuid, id)).run();
     });
 
@@ -324,6 +330,26 @@ export class FillerDB implements IFillerListDB {
       .groupBy('fillerShow.uuid')
       .orderBy('fillerShow.name asc')
       .execute();
+  }
+
+  async getGapMusicPrograms(id: string): Promise<GapMusicProgram[]> {
+    const content = await this.drizzle.query.fillerShowContent.findMany({
+      columns: {},
+      where: (fields, { eq }) => eq(fields.fillerShowUuid, id),
+      with: {
+        program: {
+          columns: {
+            uuid: true,
+            type: true,
+            duration: true,
+            state: true,
+            artistName: true,
+          },
+          with: { artist: { columns: { title: true } } },
+        },
+      },
+    });
+    return seq.collect(content, ({ program }) => program);
   }
 
   async getFillerPrograms(id: string): Promise<ProgramOrmWithExternalIds[]> {

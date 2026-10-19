@@ -105,6 +105,49 @@ describe('PublicMediaService', () => {
     await fs.rm(sourceDir, { recursive: true, force: true });
   });
 
+  test('lists the artwork directory at most twice for a batch of new pictures', async () => {
+    const picture = await source('batch.png', Png);
+    const refs = Array.from({ length: 100 }, (_, i) => poster(`batch-${i}`));
+    for (let i = 0; i < 100; i++)
+      results.set(`batch-${i}`, {
+        kind: 'file',
+        path: picture,
+        artworkType: 'poster',
+      });
+    const listing = vi.spyOn(fs, 'readdir');
+    try {
+      expect((await service.publish(refs)).size).toBe(100);
+      expect(
+        listing.mock.calls.filter(
+          ([dir]) => dir === path.join(dbDir, 'media', 'artwork'),
+        ).length,
+      ).toBeLessThanOrEqual(2);
+    } finally {
+      listing.mockRestore();
+    }
+  });
+
+  test('cleans abandoned temporary files without removing recent writes', async () => {
+    const media = path.join(dbDir, 'media');
+    await fs.mkdir(media);
+    const old = path.join(media, '.11111111-1111-1111-1111-111111111111.tmp');
+    const recent = path.join(
+      media,
+      '.22222222-2222-2222-2222-222222222222.tmp',
+    );
+    await fs.writeFile(old, 'old');
+    await fs.writeFile(recent, 'recent');
+    await fs.utimes(
+      old,
+      new Date(Start - 2 * 60 * 60 * 1000),
+      new Date(Start - 2 * 60 * 60 * 1000),
+    );
+    await fs.utimes(recent, new Date(Start), new Date(Start));
+    await service.publish([]);
+    await expect(fs.stat(old)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await fs.readFile(recent, 'utf8')).toBe('recent');
+  });
+
   test('publishes a picture as a file whose version is the second it was saved', async () => {
     results.set('show', {
       kind: 'file',
