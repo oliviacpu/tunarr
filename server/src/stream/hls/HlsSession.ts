@@ -1,3 +1,5 @@
+import type { CaptionSession } from '../Session.ts';
+import { hdhrCaptionsEnabled } from '../captions/hdhrCaptionsEnabled.ts';
 import type { ISettingsDB } from '@/db/interfaces/ISettingsDB.js';
 import type { ChannelOrmWithTranscodeConfig } from '@/db/schema/derivedTypes.js';
 import type { FfmpegTranscodeSession } from '@/ffmpeg/FfmpegTrancodeSession.js';
@@ -107,6 +109,7 @@ const EmptySubtitlePlaylist = [
 const PlaylistSegmentCount = 20;
 
 export interface HlsSessionOptions extends BaseHlsSessionOptions {
+  captionsEnabled?: boolean;
   streamMode: 'hls' | 'hls_direct_v2';
   // Segment length in hls mode, fixed for the session's lifetime so the
   // playlist's target duration stays true. hls_direct_v2 always uses 4 s.
@@ -117,7 +120,11 @@ export interface HlsSessionOptions extends BaseHlsSessionOptions {
  * Initializes an ffmpeg process that concatenates via the /playlist
  * endpoint and outputs an HLS format + segments
  */
-export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
+export class HlsSession
+  extends BaseHlsSession<HlsSessionOptions>
+  implements CaptionSession
+{
+  readonly captionsEnabled: boolean;
   #playlistStart?: Dayjs;
   #hlsPlaylistMutator: HlsPlaylistMutator = new HlsPlaylistMutator();
   // Parses only what ffmpeg appended to stream.m3u8 since the last request
@@ -141,6 +148,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   // Time spent adding captions to served segments, summed up when the session
   // ends: numbers to decide whether caching captioned segments is worth it
   #captionRewrites = { count: 0, totalMs: 0, maxMs: 0 };
+  #captionRefusals = new Set<string>();
 
   constructor(
     channel: ChannelOrmWithTranscodeConfig,
@@ -151,6 +159,14 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     private programStreamFactory: ProgramStreamFactory,
   ) {
     super(channel, options);
+    this.captionsEnabled =
+      options.captionsEnabled ??
+      hdhrCaptionsEnabled({
+        hdhrClosedCaptions: settingsDB.ffmpegSettings().hdhrClosedCaptions,
+        streamMode: options.streamMode,
+        subtitlesEnabled: channel.subtitlesEnabled,
+        videoFormat: channel.transcodeConfig.videoFormat,
+      });
     this.#playlistReader = new MediaPlaylistReader(this._m3u8PlaylistPath);
   }
 
@@ -398,6 +414,8 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     const transcodeConfig = transcodeConfigFor(
       this.channel.transcodeConfig,
       realtime,
+      undefined,
+      this.settingsDB.ffmpegSettings().hlsReadAheadMaxThreads,
     );
 
     const transcodeResult = await lineupItemResult.mapAsync(async (result) => {
@@ -529,6 +547,8 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
           channel: this.channel,
           item: context.lineupItem,
           transcodeConfig: context.transcodeConfig,
+          configuredThreadCount: this.channel.transcodeConfig.threadCount,
+          realtime: context.realtime,
         });
         if (event.type === 'behind') {
           this.logger.warn(message);
@@ -662,7 +682,9 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   }
 
   private captionEntryAt(pts: number) {
-    for (const entry of this.#captionTimeline.toReversed()) {
+    for (let i = this.#captionTimeline.length - 1; i >= 0; i--) {
+      const entry = this.#captionTimeline[i];
+      if (!entry) continue;
       const offset = ptsSince(entry.startPts, pts);
       if (offset < entry.durationPts) {
         return { entry, timeMs: (entry.startPts + offset) / 90 };
@@ -690,11 +712,14 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     });
     const rewriteMs = performance.now() - rewriteStart;
     if (!captioned.ok) {
-      this.logger.debug(
-        'Serving segment %s without captions: %s',
-        file,
-        captioned.reason,
-      );
+      if (!this.#captionRefusals.has(captioned.reason)) {
+        this.#captionRefusals.add(captioned.reason);
+        this.logger.warn(
+          'Serving segment %s without captions: %s',
+          file,
+          captioned.reason,
+        );
+      }
       return;
     }
     this.#captionRewrites = {
@@ -741,10 +766,12 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     ptsInOrder.forEach((pts, index) => {
       const hit = this.captionEntryAt(pts);
       if (hit) {
-        byEntry.set(hit.entry, [
-          ...(byEntry.get(hit.entry) ?? []),
-          { index, pts, timeMs: hit.timeMs },
-        ]);
+        let frames = byEntry.get(hit.entry);
+        if (!frames) {
+          frames = [];
+          byEntry.set(hit.entry, frames);
+        }
+        frames.push({ index, pts, timeMs: hit.timeMs });
       } else {
         uncovered.push({ index, pts });
       }
@@ -831,6 +858,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     return this.programStreamFactory(context, outputFormat, {
       ptsOffset,
       isFirstTranscode: this.#isFirstTranscode,
+      captionsEnabled: this.captionsEnabled,
       subtitleSegmentStartNumber,
     });
   }

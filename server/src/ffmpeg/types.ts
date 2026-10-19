@@ -93,6 +93,8 @@ export type StreamSessionCreateArgs = {
 export type StreamEncoding = { mode: 'transcode' } | { mode: 'remux' };
 
 export type StreamOptions = {
+  /** Eligibility fixed by the owning HLS session until it restarts. */
+  captionsEnabled?: boolean;
   startTime: Duration;
   duration: Duration;
   watermark?: Watermark;

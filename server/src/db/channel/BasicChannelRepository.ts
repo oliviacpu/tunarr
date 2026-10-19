@@ -1,3 +1,4 @@
+import { normalizeChannelCaptions } from '@tunarr/shared/util';
 import { CacheImageService } from '@/services/cacheImageService.js';
 import { ChannelNotFoundError } from '@/types/errors.js';
 import { KEYS } from '@/types/inject.js';
@@ -13,7 +14,7 @@ import type {
 import { desc, eq, sql } from 'drizzle-orm';
 import { inject, injectable } from 'inversify';
 import type { Kysely } from 'kysely';
-import { isEmpty, isNil, isUndefined, map, omitBy, sum } from 'lodash-es';
+import { isEmpty, isNil, isUndefined, map, sum } from 'lodash-es';
 import type { MarkRequired } from 'ts-essentials';
 import { v4 } from 'uuid';
 import { isDefined, isNonEmptyString } from '../../util/index.ts';
@@ -133,21 +134,7 @@ export function audioTracksToColumn(
 export function captionsToColumn(
   captions: ChannelCaptions | null | undefined,
 ): ChannelCaptions | null {
-  if (!captions) {
-    return null;
-  }
-  const stored: ChannelCaptions = {};
-  if (captions.testPattern === true) {
-    stored.testPattern = true;
-  }
-  if (captions.alignment !== undefined) {
-    stored.alignment = captions.alignment;
-  }
-  const appearance = omitBy(captions.appearance ?? {}, isUndefined);
-  if (!isEmpty(appearance)) {
-    stored.appearance = appearance;
-  }
-  return isEmpty(stored) ? null : stored;
+  return normalizeChannelCaptions(captions);
 }
 
 @injectable()

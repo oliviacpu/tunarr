@@ -151,6 +151,20 @@ describe('describeTranscodeSpeedEvent', () => {
     expect(line).toContain('lower output resolution');
   });
 
+  test('distinguishes configured threads from active read-ahead threads', () => {
+    const line = describeTranscodeSpeedEvent(
+      { type: 'behind', speed: 0.5 },
+      {
+        ...details,
+        configuredThreadCount: 4,
+        realtime: false,
+        transcodeConfig: { name: 'Default', threadCount: 16 },
+      },
+    );
+    expect(line).toContain('has thread count 4');
+    expect(line).toContain('read-ahead is active with 16 threads');
+  });
+
   test('marks an automatic thread count', () => {
     const line = describeTranscodeSpeedEvent(
       { type: 'behind', speed: 0.9 },

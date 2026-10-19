@@ -9984,6 +9984,7 @@ export type GetApiFfmpegSettingsResponses = {
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
         tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
+        hlsReadAheadMaxThreads: number;
         hlsSegmentSeconds: number;
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
@@ -10051,6 +10052,7 @@ export type PostApiFfmpegSettingsResponses = {
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
         tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
+        hlsReadAheadMaxThreads: number;
         hlsSegmentSeconds: number;
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;
@@ -10097,6 +10099,7 @@ export type PutApiFfmpegSettingsData = {
         deinterlaceFilter?: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat?: 'mkv' | 'mpegts' | 'mp4';
         tonemapAlgorithm?: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
+        hlsReadAheadMaxThreads?: number;
         hlsSegmentSeconds?: number;
         hlsInitialSegmentCount?: number;
         hlsTsInitialBurstSeconds?: number;
@@ -10160,6 +10163,7 @@ export type PutApiFfmpegSettingsResponses = {
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
         hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
         tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
+        hlsReadAheadMaxThreads: number;
         hlsSegmentSeconds: number;
         hlsInitialSegmentCount: number;
         hlsTsInitialBurstSeconds: number;

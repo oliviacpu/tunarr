@@ -5,9 +5,10 @@ import { isEmpty } from 'lodash-es';
 import type { PassThrough } from 'node:stream';
 import type { ConcatStreamFactory } from './ConcatStream.ts';
 import { DirectStreamSession } from './DirectStreamSession.js';
-import type { SessionOptions } from './Session.js';
+import type { CaptionSession, SessionOptions } from './Session.js';
 
 export type ConcatSessionOptions = SessionOptions & {
+  captionsEnabled?: boolean;
   sessionType: ChannelConcatStreamMode;
   audioOnly: boolean;
 };
@@ -17,7 +18,10 @@ export type ConcatSessionFactory = (
   options: ConcatSessionOptions,
 ) => ConcatSession;
 
-export class ConcatSession extends DirectStreamSession<ConcatSessionOptions> {
+export class ConcatSession
+  extends DirectStreamSession<ConcatSessionOptions>
+  implements CaptionSession
+{
   #transcodeSession?: FfmpegTranscodeSession;
   #outputSink?: PassThrough;
 
@@ -34,6 +38,10 @@ export class ConcatSession extends DirectStreamSession<ConcatSessionOptions> {
     });
   }
 
+  get captionsEnabled() {
+    return this.sessionOptions.captionsEnabled;
+  }
+
   isStale(): boolean {
     return isEmpty(this.connections());
   }
@@ -46,6 +54,7 @@ export class ConcatSession extends DirectStreamSession<ConcatSessionOptions> {
     const concatStream = this.concatStreamFactory(
       this.channel,
       this.sessionOptions.sessionType,
+      this.captionsEnabled,
     );
     this.#outputSink = concatStream.outputSink();
     this.#transcodeSession = await concatStream.createSession();

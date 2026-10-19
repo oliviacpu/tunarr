@@ -202,6 +202,10 @@ export abstract class BaseHlsSession<
       this.logger.debug('Waiting for HLS stream session to be ready...');
       await retry(
         async (bail, attempt) => {
+          if (this.stoppingOrStopped) {
+            bail(new Error('Session stopped before its stream became ready'));
+            return;
+          }
           if (this.hasError) {
             this.logger.error(
               this.error,
@@ -223,7 +227,11 @@ export abstract class BaseHlsSession<
           if (workingDirectoryFiles.isFailure()) {
             const e = workingDirectoryFiles.error;
             if (e.nodeErrorCode() === 'ENOENT') {
-              this.logger.debug("Session working directory doesn't exist yet!");
+              if ((attempt - 1) % ReadyLogEvery === 0) {
+                this.logger.debug(
+                  "Session working directory doesn't exist yet!",
+                );
+              }
               throw e; // Retry
             } else if (this.state === 'error') {
               bail(e);
@@ -280,8 +288,10 @@ export abstract class BaseHlsSession<
 
       return Result.success(void 0);
     } catch (e) {
-      this.logger.error(e, 'Error starting stream after retrying');
-      this.state = 'error';
+      if (!this.stoppingOrStopped) {
+        this.logger.error(e, 'Error starting stream after retrying');
+        this.state = 'error';
+      }
       return Result.forError(
         isError(e) ? e : new Error(isString(e) ? e : 'Unknown error'),
       );
