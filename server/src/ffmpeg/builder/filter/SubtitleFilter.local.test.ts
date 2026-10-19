@@ -1,3 +1,4 @@
+import { subtitleCharacterEncoding } from '../../../stream/captions/decodeSubtitleText.ts';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import http from 'node:http';
@@ -126,6 +127,7 @@ describe.skipIf(!binaries)('SubtitleFilter burn-in with real ffmpeg', () => {
     subtitleSource: StreamSource | null,
     capabilities: FfmpegCapabilities,
     version: FfmpegVersionResult,
+    characterEncoding?: string,
   ) {
     const subtitles = subtitleSource
       ? new SubtitlesInputSource(
@@ -134,6 +136,8 @@ describe.skipIf(!binaries)('SubtitleFilter burn-in with real ffmpeg', () => {
           SubtitleMethods.Burn,
         )
       : null;
+
+    if (subtitles) subtitles.characterEncoding = characterEncoding;
 
     const builder = new SoftwarePipelineBuilder(
       makeVideoInput(),
@@ -206,6 +210,42 @@ describe.skipIf(!binaries)('SubtitleFilter burn-in with real ffmpeg', () => {
   });
 
   afterAll(() => cleanup());
+
+  ffmpegTest(
+    'burns Windows-1252 with the same pixels as UTF-8',
+    async ({ binaryCapabilities, ffmpegVersion }) => {
+      const text = '1\n00:00:00,000 --> 00:00:10,000\ncafé niño déjà vu\n';
+      const legacy = Buffer.from(text, 'latin1');
+      const legacyPath = path.join(workdir, 'legacy.srt');
+      const utf8Path = path.join(workdir, 'utf8.srt');
+      await fs.writeFile(legacyPath, legacy);
+      await fs.writeFile(utf8Path, text);
+      const actual = await transcode(
+        'legacy.ts',
+        new FileStreamSource(legacyPath),
+        binaryCapabilities,
+        ffmpegVersion,
+        subtitleCharacterEncoding(legacy),
+      );
+      const expected = await transcode(
+        'utf8.ts',
+        new FileStreamSource(utf8Path),
+        binaryCapabilities,
+        ffmpegVersion,
+      );
+      expect(actual.code, actual.stderr).toBe(0);
+      expect(expected.code, expected.stderr).toBe(0);
+      const actualFrame = await grabGrayFrame(ffmpegPath(), actual.outputPath);
+      expect(actualFrame).toEqual(
+        await grabGrayFrame(ffmpegPath(), expected.outputPath),
+      );
+      const baselineFrame = await getBaselineFrame(
+        binaryCapabilities,
+        ffmpegVersion,
+      );
+      expect(actualFrame.equals(baselineFrame)).toBe(false);
+    },
+  );
 
   // Each case is [label, directory name, file name]. The directory and the
   // file both carry the awkward characters, as real library paths do.

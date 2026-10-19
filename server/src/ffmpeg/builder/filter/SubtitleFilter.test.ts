@@ -13,6 +13,23 @@ function makeFilter(path: string) {
 }
 
 describe('SubtitleFilter', () => {
+  test('passes the detected encoding to burn-in and conversion', () => {
+    const source = new SubtitlesInputSource(
+      new FileStreamSource('/media/subtitle.srt'),
+      [new ExternalSubtitleStream('subrip', SubtitleMethods.Burn)],
+      SubtitleMethods.Burn,
+    );
+    source.characterEncoding = 'WINDOWS-1252';
+    expect(new SubtitleFilter(source).filter).toContain(
+      ':charenc=WINDOWS-1252',
+    );
+    expect(source.getInputOptions()).not.toContain('-sub_charenc');
+    source.method = SubtitleMethods.Convert;
+    expect(source.getInputOptions()).toEqual(
+      expect.arrayContaining(['-sub_charenc', 'WINDOWS-1252']),
+    );
+  });
+
   // The path is the named filename option, so an '=' in it is part of the
   // value and needs no escape. escapeFilterValue.test.ts reads each of these
   // back the way FFmpeg does.

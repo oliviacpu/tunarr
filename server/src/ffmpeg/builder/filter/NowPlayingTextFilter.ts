@@ -1,13 +1,12 @@
 import { FilterOption } from './FilterOption.ts';
+import { escapeFilterOptionValue } from './escapeFilterValue.ts';
 
 /**
  * Escapes a drawtext option value for a filter graph. ffmpeg unescapes it
  * twice: first the graph parser (where \ ' [ ] , ; are special), then the
  * filter's option parser (where \ ' : are special).
  */
-export function escapeDrawtextValue(value: string) {
-  return value.replaceAll(/[\\':]/g, '\\$&').replaceAll(/[\\'[\],;]/g, '\\$&');
-}
+export const escapeDrawtextValue = escapeFilterOptionValue;
 
 /**
  * Gap music's artist and title, drawn in a dark strip along the bottom of the
@@ -31,7 +30,7 @@ export class NowPlayingTextFilter extends FilterOption {
       // the text is shown as is: no %{...} expansion
       'expansion=none',
       `text=${escapeDrawtextValue(this.text)}`,
-      'fontsize=h/30',
+      'fontsize=min(h/30\\,max(1\\,(w-52)/34))',
       'fontcolor=0xF5F0E4',
       'box=1',
       'boxcolor=black@0.6',

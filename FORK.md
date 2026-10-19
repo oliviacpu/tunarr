@@ -2345,3 +2345,15 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
   `SoftwarePipelineBuilder.test.ts` (a 10-bit source gets `-pix_fmt yuv420p`; an 8-bit source gets no conversion).
 - **Upstream:** not sent. Related: upstream PR #1559 (an unconditional `-pix_fmt yuv420p`) was closed on the grounds
   that the pipeline builder already forces 8-bit output; on the software path it didn't.
+
+### Pipeline output rate and text rendering
+
+Pipeline filters expose the frame rate they produce, including deinterlacing, so
+FFmpeg output options retain the selected rate. Source probing prefers a valid
+average frame rate. x265 pools follow the configured thread limit. Subtitle inputs
+and burn-in filters accept an explicit character encoding, while now-playing text
+sizes account for picture width and share filter-value escaping.
+
+This follow-up stacks on the subtitle text reliability branch and caption timeline
+PR #65. Factory integration and caption timing use of the resolved rate follow in
+a separate change.

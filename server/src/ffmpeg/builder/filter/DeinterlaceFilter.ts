@@ -1,3 +1,4 @@
+import { deinterlacerDoublesFrameRate } from '../../outputFrameRate.ts';
 import type { FfmpegState } from '@/ffmpeg/builder/state/FfmpegState.js';
 import type { FrameState } from '@/ffmpeg/builder/state/FrameState.js';
 import { FilterOption } from './FilterOption.ts';
@@ -18,6 +19,15 @@ export class DeinterlaceFilter extends FilterOption {
   nextState(currentState: FrameState): FrameState {
     return currentState.update({
       deinterlace: false,
+      frameRate:
+        currentState.frameRate === null
+          ? null
+          : currentState.frameRate *
+            (deinterlacerDoublesFrameRate(
+              this.ffmpegState.softwareDeinterlaceFilter,
+            )
+              ? 2
+              : 1),
       frameDataLocation: 'software',
     });
   }

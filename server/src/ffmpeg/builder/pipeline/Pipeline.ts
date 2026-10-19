@@ -1,3 +1,4 @@
+import { FrameRateOutputOption } from '../options/output/FrameRateOutputOption.ts';
 import { FfmpegCommandGenerator } from '@/ffmpeg/builder/FfmpegCommandGenerator.js';
 import type { PipelineStep } from '@/ffmpeg/builder/types/PipelineStep.js';
 import type { Dictionary } from 'ts-essentials';
@@ -15,6 +16,11 @@ export class Pipeline {
     public steps: PipelineStep[],
     public inputs: PipelineInputs,
   ) {}
+
+  get outputFrameRate(): number | undefined {
+    return this.steps.find((step) => step instanceof FrameRateOutputOption)
+      ?.frameRate;
+  }
 
   getCommandArgs(): string[] {
     return this.#commandGenerator.generateArgs(

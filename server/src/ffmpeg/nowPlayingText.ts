@@ -12,8 +12,8 @@ import { readFontMetrics } from './fontMetrics.ts';
 // drawtext draws with one font and can't fall back to another
 export const NowPlayingFontFileName = 'MPLUSRounded1c-Bold.ttf';
 
-// The widest line, in ems at the drawn size (a 30th of the picture's height):
-// about 60% of a 16:9 picture's width, which keeps it clear of most cards' corner art
+// The widest line, in ems. NowPlayingTextFilter limits the font size by both
+// picture dimensions, leaving room for the strip's horizontal padding.
 export const MaxNowPlayingEms = 32;
 
 // Three periods: this font draws U+2026 at mid-height, the Japanese way

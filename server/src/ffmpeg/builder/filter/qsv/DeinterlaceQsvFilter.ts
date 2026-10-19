@@ -16,6 +16,8 @@ export class DeinterlaceQsvFilter extends FilterOption {
   nextState(currentState: FrameState): FrameState {
     return currentState.update({
       deinterlace: false,
+      frameRate:
+        currentState.frameRate === null ? null : currentState.frameRate * 2,
       frameDataLocation: FrameDataLocation.Hardware,
     });
   }
