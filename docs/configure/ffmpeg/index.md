@@ -47,6 +47,12 @@ These settings trade a little efficiency for a faster tune-in on channels that u
 
 For example, when the encoder runs near real time, 2 s segments with a 10 s burst send a cold channel's first byte in about half the time of the defaults (4 s instead of 8 s), and fill the client's buffer faster after that.
 
+The served HLS window contains 20 segments, with 10 segments of history retained
+before the playback point. At the default four seconds this is an 80-second window
+and 40-second history; changing segment length changes these durations. This
+setting applies to HLS and Direct v2. Alternate HLS retains its fixed four-second
+segment configuration.
+
 ### FFmpeg Transcode Path
 
 Configure the path where FFmpeg writes HLS segments for a channel's stream. For instance, if running the standalone Linux binary, Tunarr can write transcoded segments to RAM by setting this option to `/dev/shm`. 
@@ -116,6 +122,12 @@ When using the **HLS Direct v2** stream mode, text-based subtitles (embedded or 
 ### Closed Captions for HDHomeRun Clients
 
 Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. That stream can't carry a selectable subtitle track, so Tunarr normally burns subtitles into the picture. With **Closed captions for HDHomeRun clients (Plex)** turned on, Tunarr sends them as CEA-608 closed captions instead. Viewers switch them on and off with their player's subtitles or CC button.
+
+When more than 10% of a subtitle track's cues contain characters CEA-608 cannot
+represent, Tunarr keeps that track for burn-in rather than presenting partial or
+empty captions. A warning reports the affected cue and character counts. CEA-608
+cannot represent Japanese and many other scripts; WebVTT and burn-in do not have
+that character restriction.
 
 - **Which subtitles:** the program's full text subtitles become captions. If the channel's subtitle selection picks forced subtitles (for example, only the foreign-language lines of an English program), those stay burned in, and the program's full subtitles in your preferred language become the captions. Before 2026-10-18, Tunarr read every subtitle track inside a video file as not forced: subtitle selection that asks for forced subtitles never found one, and a forced track (an English dub's "Signs & Songs", say) could become the captions instead of the full one. Tunarr now keeps the flag the media server (or, for a local library, the file) reports, and corrects programs scanned before when it starts.
 - **No longer burned in:** full text subtitles that would have been burned in for the whole program are sent as captions instead, so viewers who want them must turn captions on. Tunarr's own players get them as selectable WebVTT subtitles.
@@ -189,14 +201,3 @@ Currently, language preferences can only be configured globally. Use this settin
 
 !!! note
     ISO 639-2 gives 20 languages two different three-letter codes — German is both `ger` and `deu`, French both `fre` and `fra` — and media servers and files use them interchangeably. Tunarr treats the two codes for a language as equivalent, so a preference matches a track regardless of which code the file or media server reports.
-When more than 10% of a subtitle track's cues contain characters CEA-608 cannot
-represent, Tunarr keeps that track for burn-in rather than presenting partial or
-empty captions. A warning reports the affected cue and character counts. CEA-608
-cannot represent Japanese and many other scripts; WebVTT and burn-in do not have
-that character restriction.
-
-The served HLS window contains 20 segments, with 10 segments of history retained
-before the playback point. At the default four seconds this is an 80-second window
-and 40-second history; changing segment length changes these durations. This
-setting applies to HLS and Direct v2. Alternate HLS retains its fixed four-second
-segment configuration.

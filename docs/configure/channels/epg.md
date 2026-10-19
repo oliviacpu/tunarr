@@ -36,6 +36,9 @@ The full URL is also available in the Tunarr web UI under **Settings > HDHR / M3
 - **Saving a channel** updates that channel's entries straight away. The other channels keep the entries they already had, so a change to a program's details since then, from a library scan for example, appears at the next scheduled rebuild. Rebuilding every channel on each save made Live TV pause while channels were saved.
 - **Changing an XMLTV setting** updates every channel at the next write.
 
+The authenticated `POST /api/xmltv/flush` endpoint waits up to 30 seconds for queued Plex guide notifications
+to finish. It returns 200 when done or 202 while work remains.
+
 ## Program Metadata
 
 Tunarr populates the XMLTV output with program metadata sourced from your media libraries, including:
@@ -49,6 +52,3 @@ Tunarr populates the XMLTV output with program metadata sourced from your media 
 
 !!! info
     Genre data is only available for programs that have genre metadata in the originating media source. If a program's entry in your media server has no genres attached, the `<category>` tag will not be present for that program in the XMLTV output.
-The authenticated `POST /api/xmltv/flush` endpoint waits up to 30 seconds for queued Plex guide notifications
-to finish. It returns 200 when done or 202 while work remains. Public artwork publishing lists the artwork directory once per batch
-plus garbage collection, and removes abandoned temporary writes older than an hour.

@@ -15,6 +15,16 @@ Transcode Configurations provide Tunarr with a set of parameters to produce a no
 - **Thread Count** — CPU threads available to FFmpeg for software encoding and decoding. Set to `0` for automatic selection. Real-time transcodes use this count; HLS can temporarily increase it while preparing video ahead of playback (see [Read-ahead threads](#read-ahead-threads)). Hardware pipelines can still use CPU threads for software filters and fallback encoding.
 - **Disable Channel Overlay** — When enabled, suppresses the channel watermark/logo overlay for streams using this configuration. Useful if you want a clean output without branding.
 
+### Read-ahead threads
+
+FFmpeg settings include **Read-ahead Thread Limit** (default 16). HLS may raise the
+configured thread count up to this limit while preparing video ahead of playback,
+subject to available CPU cores. It never lowers the transcode configuration's own
+count. Set the limit to 0 to disable this increase; a configuration using automatic
+threads remains automatic. Changes apply from the next program. The limit is useful
+for controlling the temporary increase; it does not cap FFmpeg’s total thread usage. Software HEVC encoding also passes the
+chosen count to x265's worker pool.
+
 ---
 
 ## Video
@@ -241,13 +251,3 @@ Controls what audio plays during a transcoding error:
 
 !!! info "Automatic Retry"
     Tunarr automatically retries loading the errored video item every **60 seconds**. If the issue resolves (e.g., the media server comes back online), playback will resume on the next retry.
-
-### Read-ahead threads
-
-FFmpeg settings include **Read-ahead Thread Limit** (default 16). HLS may raise the
-configured thread count up to this limit while preparing video ahead of playback,
-subject to available CPU cores. It never lowers the transcode configuration's own
-count. Set the limit to 0 to disable this increase; a configuration using automatic
-threads remains automatic. Changes apply from the next program. The limit is useful
-for controlling the temporary increase; it does not cap FFmpeg’s total thread usage. Software HEVC encoding also passes the
-chosen count to x265's worker pool.
