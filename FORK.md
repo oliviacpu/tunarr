@@ -44,6 +44,70 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A stuck or garbled scan worker no longer blocks the scan queue (2026-10-19)
+
+- **What you saw:** nothing yet. The fork review of 2026-10-19 (`plans/fork-review-2026-10-19.md`, section 9) found
+  ways a scan worker could leave every later scan and custom show sync waiting until restart, with nothing in the log.
+- **Cause:**
+  - `WorkerScanJobRunner` logged and ignored a worker message that failed validation. If that was the job's
+    `scan-done` or `scan-failed`, the job never ended, and the coordinator's one-at-a-time queue waited on it
+    forever. Nothing limited how long a job could run.
+  - Worker messages carried no protocol version, so nothing caught a worker and main thread that disagree on the
+    messages (a bundle replaced on disk while the server runs, with a protocol change in it, say).
+  - `TunarrSubprocessService` set the worker's role only when the caller passed no `workerData`. A worker started
+    with `workerData` came up as a pool worker, which says it started and then ignores the scan it is sent.
+  - After a job, the runner removed its `error` listener. An error as the worker exited reached only the process's
+    uncaught exception handler, which writes to `console.error`, not the log file.
+  - A scan or sync that was already queued was logged at error as "Could not acquire lock". The nightly collection
+    sync does this routinely.
+- **Fix:**
+  - **Malformed messages** (`WorkerScanJobRunner.ts`): a message from the job's worker that fails validation stops
+    the worker, and the job fails with the validation error once the worker has exited. The coordinator then
+    releases its lock as for any failed job. The wait means the next job can't start while the old worker may still
+    hold the database's write lock. A malformed progress update or event is still only logged, since neither ends a
+    job. A job canceled meanwhile still ends as canceled.
+  - **Workers that can't be stopped:** Node's `terminate()` only takes effect once a thread returns to JavaScript, so
+    a thread stuck in native code (a long SQLite statement, a hung mount) never reports that it exited. Once a
+    worker has been told to stop (malformed message, time limit, or a cancel it ignored), its job ends at most
+    `exitGraceMs` (5 s; 10 s after a graceful stop) later regardless, and the error is logged.
+  - **Protocol version** (`types/worker_schemas.ts`): `ScanWorkerProtocolVersion` (1) goes to the worker in
+    `workerData`, and the scan worker sends its own in its `started` event. Bump it when the scan worker messages
+    change incompatibly. A worker whose version differs, or that sends none (a pool worker), fails to start. Every
+    later worker would run the same code, so scans stay on the main thread until restart, logged once at error.
+    The worker also logs a warning when the main thread's version differs from its own.
+  - **Role** (`TunarrSubprocessService.ts`): `workerStartData` keeps the caller's `workerData` and always sets the
+    role and version. `start-worker` reads both through the `WorkerStartData` schema.
+  - **Late errors:** each scan worker has an `error` listener for its whole life. While it starts or runs a job, the
+    error fails that, as before. At any other time it is logged at error through Tunarr's logger.
+  - **Job time limit:** `TUNARR_SCAN_JOB_TIMEOUT_MINUTES` (default unset: no limit). A job in a worker that runs
+    longer is logged, its worker terminated (its open transaction rolls back), and the job fails once the worker
+    has exited. Scans on the main thread aren't limited. The limit is logged at startup. A value that isn't a whole
+    number of minutes (`90s`, `0.5`) is ignored with a warning, and one past what a timer can wait (35,791 minutes) is
+    capped. Documented in `docs/getting-started/run.md`.
+  - **Already queued** (`MediaSourceScanCoordinator.ts`): logged at info as "Not queuing … it is already queued or
+    running".
+- **Tests:**
+  - `WorkerScanJobRunner.test.ts`:
+    - Malformed messages: a malformed `scan-done` or `scan-failed` fails the job, but only after the worker has
+      exited. A worker that can't be stopped fails it anyway. A canceled job still ends as canceled. Malformed
+      progress or events don't fail the job. With the real coordinator, the library's lock is released and its next
+      scan runs.
+    - Protocol version: a worker that starts with another version, or none, runs the job on the main thread. After
+      one mismatch, no more workers start.
+    - Errors: an error after the job is logged. One during the job fails it and isn't logged twice.
+    - Stuck workers: a canceled job whose worker can't be stopped still ends.
+    - Time limit: with a 50 ms limit, a job that never ends is terminated and fails, also when its worker can't be
+      stopped. A job that ends in time isn't touched. Without a limit, a long job runs to the end.
+    - `scanJobTimeoutMs` reads whole minutes and logs them. It is quiet when unset or 0, warns on negative, `90s`,
+      `0.5` and non-numbers, and caps at the longest timer delay.
+  - `ScanWorkerRoundTrip.test.ts`: a worker started with its own `workerData` still starts as a scan worker and
+    runs the job.
+  - `TunarrSubprocessService.test.ts`: `workerStartData` keeps the caller's data and options and sets role and
+    version; `WorkerStartData` reads a missing or unknown role as `pool`.
+  - `ScanWorker.test.ts`: `started` carries the version; a different main-thread version is logged.
+  - `MediaSourceScanCoordinator.test.ts`: an already-queued sync is logged at info, not error.
+  - Each new test fails with its fix reverted.
+- **Upstream:** not sent.
 ### Search key replacement and backup guidance (2026-10-19)
 
 - **Cause:** replacing a missing or invalid key wrote directly to the destination, read failures were treated as missing keys, and reused files could retain broad permissions.

@@ -97,6 +97,7 @@ Tunarr has various command line / environment variables for configuration. These
 | `TUNARR_USE_WORKER_POOL` | N/A | `true` | Runs heavy background work (slot schedule generation, library scans) in worker threads so it doesn't slow down streaming. Set to `false` to run everything on the main thread. |
 | `TUNARR_WORKER_POOL_SIZE` | N/A | (CPU count, at most 8) | Number of worker threads in the pool, which generates slot schedules. Recommended: no more than the number of CPUs on the host. |
 | `TUNARR_SCAN_IN_WORKER` | N/A | `true` | Runs each library scan, collection sync and custom show playlist sync in its own worker thread, so its database work can't pause live streams. Needs `TUNARR_USE_WORKER_POOL`. Set to `false` to run them on the main thread. |
+| `TUNARR_SCAN_JOB_TIMEOUT_MINUTES` | N/A | (no limit) | The longest a scan or sync may run in its worker thread, in whole minutes. Past it, the worker is stopped (its unfinished database transaction is rolled back), the job is logged as failed, and the next queued scan starts. Only scans in a worker thread are limited. A value that isn't a whole number of minutes is ignored, with a warning in the log. Set it well above your longest full library scan. |
 
 ### Debug
 

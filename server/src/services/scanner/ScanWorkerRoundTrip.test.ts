@@ -3,13 +3,17 @@ import type { MessagePort } from 'node:worker_threads';
 import { MessageChannel } from 'node:worker_threads';
 import { describe, expect, test, vi } from 'vitest';
 import type { MediaSourceDB } from '../../db/mediaSourceDB.ts';
+import type { ServerOptions } from '../../globals.ts';
 import type {
   ScanJob,
   ScanOutcome,
   ScanWorkerRequest,
+  WorkerEvent,
 } from '../../types/worker_schemas.ts';
+import { WorkerStartData } from '../../types/worker_schemas.ts';
 import type { CustomShowSyncService } from '../CustomShowSyncService.ts';
 import { ScanWorker } from '../ScanWorker.ts';
+import { workerStartData } from '../TunarrSubprocessService.ts';
 import type { GenericExternalCollectionScanner } from './ExternalCollectionScanner.ts';
 import type { GenericLocalMediaSourceScannerFactory } from './FileSystemScanner.ts';
 import { MediaSourceProgressService } from './MediaSourceProgressService.ts';
@@ -94,6 +98,58 @@ describe('scan worker round trip', () => {
     expect(fallback.run).not.toHaveBeenCalled();
     // The worker exits on its own once the job is done
     expect(await exited).toBe(0);
+  });
+
+  test('a worker started with its own workerData still starts as a scan worker', async () => {
+    const executor = {
+      run: vi.fn(() => Promise.resolve<ScanOutcome>('completed')),
+    };
+    const createWorker = () => {
+      // What createWorker(opts, 'scan') hands the thread, from a caller that
+      // passed workerData of its own; a Worker clones it across
+      const workerData = structuredClone(
+        workerStartData(
+          { note: 'from the caller' },
+          'scan',
+          () =>
+            ({
+              port: 8000,
+            }) as unknown as ServerOptions,
+        ),
+      );
+      const { port1, port2 } = new MessageChannel();
+      const worker = new PortWorker(port2);
+      // As start-worker does
+      if (WorkerStartData.parse(workerData).role === 'scan') {
+        new ScanWorker(
+          executor as unknown as ScanJobExecutor,
+          new MediaSourceProgressService(),
+        ).start(port1, { exit: (code) => worker.exit(code) });
+      } else {
+        // A pool worker says it started and ignores a scan
+        port1.postMessage({
+          type: 'event',
+          eventType: 'started',
+        } satisfies WorkerEvent);
+      }
+      return worker;
+    };
+    const fallback: ScanJobRunner = {
+      run: vi.fn(() => Promise.resolve<ScanOutcome>('completed')),
+      shutdown: () => Promise.resolve(),
+    };
+    const runner = new WorkerScanJobRunner(
+      createWorker,
+      fallback,
+      new MediaSourceProgressService(),
+      { bootTimeoutMs: 1_000 },
+    );
+
+    expect(await runner.run(job, new AbortController().signal)).toBe(
+      'completed',
+    );
+    expect(executor.run).toHaveBeenCalledWith(job, expect.any(AbortSignal));
+    expect(fallback.run).not.toHaveBeenCalled();
   });
 
   describe('custom show sync', () => {
