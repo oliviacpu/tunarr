@@ -277,6 +277,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   info line about captions over two programs. The wrapper, log and factory tests fail on the old code.
 - **Upstream:** not sent.
 
+### validate packaged binaries and make fork releases rerunnable (2026-10-19)
+
+- **Change:** Requires real-binary and packaged-worker tests before the final image is assembled, adds nightly/manual native Linux validation, repairs temporary paths in API generation, restores the upstream latest spec, and updates existing release notes on reruns. Release serialization remains in place.
+
 ### Captions keep the accented letters of Windows-1252 subtitle files (2026-10-19)
 
 - **What you saw:** nothing reported; found in the 2026-10-19 fork review. A subtitle file saved in Windows-1252 or
