@@ -1,6 +1,4 @@
 import Box from '@mui/material/Box';
-import type { SaveableChannel } from '@tunarr/types';
-import type { FieldPath } from 'react-hook-form';
 
 export function EditChannelTabPanel(props: EditChannelTabPanelProps) {
   const { children, value, currentValue, ...other } = props;
@@ -27,5 +25,4 @@ export type EditChannelTabs = 'properties' | 'flex' | 'epg' | 'ffmpeg';
 export type EditChannelTabProps = {
   value: EditChannelTabs;
   description: string;
-  fields: FieldPath<SaveableChannel>[];
 };
