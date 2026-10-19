@@ -26,7 +26,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### Live TV's `stream.m3u8` keeps 15 minutes of segments (2026-10-19)
+### Live TV's `stream.m3u8` keeps 15 minutes of segments (2026-10-19, PR #96)
 
 - **What you saw:** nothing on screen yet. The cost grew with a session's age. `stream.m3u8` listed every segment since
   the session started (`hls_list_size 0` with `append_list`). ffmpeg rewrote all of it after each segment, and each
