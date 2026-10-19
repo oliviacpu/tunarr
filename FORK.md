@@ -26,6 +26,26 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Resetting the HDHomeRun settings gives 2 tuners, and a tuner count below 1 is refused (2026-10-19)
+
+- **What you saw:** not reported from the deployment. The fork review of 2026-10-19 (B6) found that the settings
+  page's "Restore Default Settings" and a fresh install give 2 tuners, but the server's reset (`POST
+  /api/hdhr-settings`) saved 1. Any number was accepted as the tuner count, so 0, -1 or 1.5 could be saved and
+  reported to Plex as the device's `TunerCount`.
+- **Cause:** the reset route wrote a hand-written `{ tunerCount: 1, autoDiscoveryEnabled: true }` instead of the
+  schema's defaults, and `HdhrSettingsSchema.tunerCount` was a plain `z.number()`.
+- **Fix:**
+  - `hdhrSettingsApi.ts` resets to `HdhrSettingsSchema.parse({})`, so the reset and the page's defaults can't drift.
+  - `tunerCount` is `z.number().int().min(1)` (`settingsSchemas.ts`), so `PUT /api/hdhr-settings` answers 400 for 0,
+    a negative or a fraction. The OpenAPI spec now says `integer`, `minimum: 1`; the generated web client is
+    unchanged.
+  - The settings page checks `min: 1` on the field ("Tuner Count must be >= 1") instead of waiting for the 400.
+  - A settings file saved before this can hold such a value, and a value the file schema refuses makes the server
+    start on defaults for every setting. `SettingsDB.ts` reads an old one as a whole number of at least 1 (0 or
+    -3 → 1, 2.5 → 2).
+  - Tests: `hdhrSettingsApi.test.ts`, `SettingsDB.test.ts`, `HdhrSettingsPage.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
 ### The Live TV playlist reader keeps the session's history itself (2026-10-19, PR #84)
 
 - **What you saw:** nothing yet. This prepares the fix for `stream.m3u8` growing for as long as a session runs

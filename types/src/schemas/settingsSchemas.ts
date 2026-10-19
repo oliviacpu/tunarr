@@ -372,7 +372,9 @@ export const PlexStreamSettingsSchema = z.object({
 
 export const HdhrSettingsSchema = z.object({
   autoDiscoveryEnabled: z.boolean().default(true),
-  tunerCount: z.number().default(2),
+  // The TunerCount the HDHomeRun device reports: how many channels a
+  // client such as Plex lets its users watch at once
+  tunerCount: z.number().int().min(1).default(2),
 });
 
 export const GlobalMediaSourceSettingsSchema = z.object({

@@ -60,7 +60,17 @@ export const defaultXmlTvSettings = (dbBasePath: string): XmlTvSettings => ({
 
 export const SettingsSchema = z.object({
   clientId: z.string(),
-  hdhr: HdhrSettingsSchema,
+  // tunerCount had no minimum before, so an older settings file can hold 0, a
+  // negative or a fraction. A value the file schema refuses fails the whole
+  // file, and the server then starts on defaults and loses every other
+  // setting, so an old value is brought up to a whole number of at least 1
+  // here. The API still refuses one.
+  hdhr: HdhrSettingsSchema.extend({
+    tunerCount: z
+      .number()
+      .transform((count) => Math.max(1, Math.floor(count)))
+      .default(defaultHdhrSettings.tunerCount),
+  }),
   xmltv: XmlTvSettingsSchema,
   plexStream: PlexStreamSettingsSchema,
   ffmpeg: FfmpegSettingsSchema,

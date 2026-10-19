@@ -68,3 +68,36 @@ describe('legacy XMLTV guide coverage', () => {
     },
   );
 });
+
+describe('legacy HDHR tuner count', () => {
+  test.each([
+    [0, 1],
+    [-3, 1],
+    [2.5, 2],
+  ])(
+    'reads an old tuner count of %s as %s and keeps the rest of the file',
+    (tunerCount, expected) => {
+      const file = defaultSettings('/tmp/tunarr-test');
+      file.settings.hdhr = { autoDiscoveryEnabled: false, tunerCount };
+      file.settings.xmltv.programmingHours = 36;
+
+      const parsed = SettingsFileSchema.parse(file);
+
+      expect(parsed.settings.hdhr).toEqual({
+        autoDiscoveryEnabled: false,
+        tunerCount: expected,
+      });
+      expect(parsed.settings.xmltv.programmingHours).toBe(36);
+    },
+  );
+
+  test('a file without a tuner count gets the default', () => {
+    const file = defaultSettings('/tmp/tunarr-test');
+    const parsed = SettingsFileSchema.parse({
+      ...file,
+      settings: { ...file.settings, hdhr: { autoDiscoveryEnabled: true } },
+    });
+
+    expect(parsed.settings.hdhr.tunerCount).toBe(2);
+  });
+});
