@@ -82,6 +82,58 @@ describe('migrateExistingDatabase - downgrade guard', () => {
   });
 });
 
+// The fork's audio tracks and captions migrations were released as 0053 and
+// 0054 under these keys, before upstream added its own 0053 (an index on
+// program_grouping). The upstream merge renumbered the files but kept the keys.
+const ReleasedForkMigrations = ['migration1792160617', 'migration1792181517'];
+const Upstream0053 = 'migration1791321608';
+const Upstream0053Index =
+  'program_grouping_media_source_library_external_key_index';
+
+describe('migrateExistingDatabase - fork migrations renumbered', () => {
+  test('a database from before upstream 0053 runs only 0053', async ({
+    dbDir,
+  }) => {
+    const dbPath = path.join(dbDir, 'db.db');
+    const conn = DBAccess.instance.getOrCreateConnection(dbPath);
+
+    // What such a database holds: the fork's columns and their migrations
+    // under the released keys, but neither upstream's migration nor its index
+    conn.sqlite
+      .prepare('DELETE FROM migrations WHERE name IN (?, ?, ?)')
+      .run(Upstream0053, ...ReleasedForkMigrations);
+    conn.sqlite.exec(`DROP INDEX ${Upstream0053Index}`);
+    for (const name of ReleasedForkMigrations) {
+      recordMigration(dbPath, name);
+    }
+
+    await expect(
+      DBAccess.instance.migrateExistingDatabase(dbPath),
+    ).resolves.toBeUndefined();
+
+    const sqlite = DBAccess.instance.getOrCreateConnection(dbPath).sqlite;
+    const names = (
+      sqlite.prepare('SELECT name FROM migrations').all() as { name: string }[]
+    ).map(({ name }) => name);
+    for (const name of [Upstream0053, ...ReleasedForkMigrations]) {
+      expect(names.filter((n) => n === name)).toHaveLength(1);
+    }
+    expect(
+      sqlite
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+        )
+        .get(Upstream0053Index),
+    ).toBeDefined();
+    const columns = (
+      sqlite.prepare('PRAGMA table_info(channel)').all() as { name: string }[]
+    ).map(({ name }) => name);
+    expect(columns).toEqual(
+      expect.arrayContaining(['audio_tracks', 'captions']),
+    );
+  });
+});
+
 describe('database backup rotation', () => {
   test('keeps the newest three of each backup pool', async ({ dbDir }) => {
     const plant = async (name: string) =>
