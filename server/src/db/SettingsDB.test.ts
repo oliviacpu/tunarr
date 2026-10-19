@@ -1,3 +1,4 @@
+import { HdhrSettingsSchema } from '@tunarr/types/schemas';
 import { Low, Memory } from 'lowdb';
 import type { SettingsFile } from './SettingsDB.ts';
 import {
@@ -74,6 +75,8 @@ describe('legacy HDHR tuner count', () => {
     [0, 1],
     [-3, 1],
     [2.5, 2],
+    [Number.MAX_SAFE_INTEGER + 2, Number.MAX_SAFE_INTEGER],
+    [1e300, Number.MAX_SAFE_INTEGER],
   ])(
     'reads an old tuner count of %s as %s and keeps the rest of the file',
     (tunerCount, expected) => {
@@ -87,6 +90,9 @@ describe('legacy HDHR tuner count', () => {
         autoDiscoveryEnabled: false,
         tunerCount: expected,
       });
+      expect(HdhrSettingsSchema.safeParse(parsed.settings.hdhr).success).toBe(
+        true,
+      );
       expect(parsed.settings.xmltv.programmingHours).toBe(36);
     },
   );

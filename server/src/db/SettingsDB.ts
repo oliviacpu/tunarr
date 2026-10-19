@@ -58,6 +58,11 @@ export const defaultXmlTvSettings = (dbBasePath: string): XmlTvSettings => ({
   outputPath: path.resolve(dbBasePath, 'xmltv.xml'),
 });
 
+// Brings an old tuner count into the range HdhrSettingsSchema accepts: a whole
+// number from 1 to Number.MAX_SAFE_INTEGER.
+const migrateLegacyTunerCount = (count: number) =>
+  Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, Math.floor(count)));
+
 export const SettingsSchema = z.object({
   clientId: z.string(),
   // tunerCount had no minimum before, so an older settings file can hold 0, a
@@ -68,7 +73,7 @@ export const SettingsSchema = z.object({
   hdhr: HdhrSettingsSchema.extend({
     tunerCount: z
       .number()
-      .transform((count) => Math.max(1, Math.floor(count)))
+      .transform(migrateLegacyTunerCount)
       .default(defaultHdhrSettings.tunerCount),
   }),
   xmltv: XmlTvSettingsSchema,
