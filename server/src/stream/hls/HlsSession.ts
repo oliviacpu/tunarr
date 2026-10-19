@@ -126,6 +126,9 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   #currentSubtitleRendition: SubtitleRenditionInfo | undefined;
   #currentAudioRenditions: AudioRenditionInfo[] = [];
   #captionTimeline: CaptionTimelineEntry[] = [];
+  // Time spent adding captions to served segments, summed up when the session
+  // ends: numbers to decide whether caching captioned segments is worth it
+  #captionRewrites = { count: 0, totalMs: 0, maxMs: 0 };
 
   constructor(
     channel: ChannelOrmWithTranscodeConfig,
@@ -337,6 +340,20 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     } catch (e) {
       this.logger.error(e, 'Error while shutting down session');
     }
+    this.logCaptionRewriteSummary();
+  }
+
+  private logCaptionRewriteSummary() {
+    const { count, totalMs, maxMs } = this.#captionRewrites;
+    if (count === 0) {
+      return;
+    }
+    this.logger.info(
+      'Captioned %d segments: mean %s ms, max %s ms',
+      count,
+      (totalMs / count).toFixed(1),
+      maxMs.toFixed(1),
+    );
   }
 
   private async transcode(realtime: boolean) {
@@ -539,6 +556,7 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   // starts the program at `ptsOffset` (the video's -output_ts_offset, 90 kHz)
   private addCaptions(ptsOffset: number, captions: ProgramCaptions) {
     const startMs = ptsOffset / 90;
+    const scheduleStart = performance.now();
     const schedule = buildCaptionSchedule(
       captions.cues.map((cue) => ({
         ...cue,
@@ -563,6 +581,15 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
             ? undefined
             : this.getHlsOptions().hlsTime * 1000,
       },
+    );
+    // Built before the program's ffmpeg starts, so a viewer tuning in waits
+    // for it
+    this.logger.debug(
+      'Laid out %d caption cues for the program at PTS %d (%d s) in %s ms',
+      captions.cues.length,
+      ptsOffset,
+      Math.round(captions.durationMs / 1000),
+      (performance.now() - scheduleStart).toFixed(1),
     );
     this.#captionTimeline = [
       ...this.#captionTimeline,
@@ -594,17 +621,22 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
    * Undefined when the segment can't be captioned; serve it as it is.
    */
   async captionedSegment(file: string): Promise<Buffer | undefined> {
+    const readStart = performance.now();
     const segment = await fs.readFile(path.join(this.workingDirectory, file));
+    const readMs = performance.now() - readStart;
     const language =
       this.#captionTimeline.at(-1)?.language ??
       this.settingsDB.ffmpegSettings().languagePreferences.preferences[0]
         ?.iso6392 ??
       'eng';
 
+    // Synchronous, in the segment request's handler, once per viewer
+    const rewriteStart = performance.now();
     const captioned = insertCaptions(segment, {
       language,
       pairsForFrames: (ptsInOrder) => this.captionPairs(ptsInOrder),
     });
+    const rewriteMs = performance.now() - rewriteStart;
     if (!captioned.ok) {
       this.logger.debug(
         'Serving segment %s without captions: %s',
@@ -613,6 +645,19 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
       );
       return;
     }
+    this.#captionRewrites = {
+      count: this.#captionRewrites.count + 1,
+      totalMs: this.#captionRewrites.totalMs + rewriteMs,
+      maxMs: Math.max(this.#captionRewrites.maxMs, rewriteMs),
+    };
+    this.logger.debug(
+      'Captioned segment %s: %d bytes, %d frames, read %s ms, rewrite %s ms',
+      file,
+      segment.length,
+      captioned.framesCaptioned,
+      readMs.toFixed(1),
+      rewriteMs.toFixed(1),
+    );
     return captioned.segment;
   }
 
