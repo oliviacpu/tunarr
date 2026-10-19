@@ -38,5 +38,6 @@ jobs:
             tunarr_version=runtime-validation
             tunarr_build=${{ github.sha }}
             exec_target=linux-x64
+            runtime_validation_run=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha,scope=fork-runtime
           cache-to: type=gha,mode=max,scope=fork-runtime
