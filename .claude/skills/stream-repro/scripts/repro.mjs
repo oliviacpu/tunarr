@@ -469,20 +469,25 @@ async function applyTranscodeConfig(base, transcodeConfigId) {
   const patch = { ...transcodeFlagOverrides, ...transcodeOverrides };
   if (Object.keys(patch).length === 0) return undefined;
   const tc = await api(base, 'GET', `/api/transcode_configs/${transcodeConfigId}`);
-  await api(base, 'PUT', `/api/transcode_configs/${transcodeConfigId}`, { ...tc, ...patch });
+  // An object value is merged into the saved object, so `resolution={"widthPx":1280}` keeps the saved height.
+  const body = { ...tc };
+  for (const [k, v] of Object.entries(patch)) body[k] = isPlainObject(v) && isPlainObject(tc[k]) ? { ...tc[k], ...v } : v;
+  await api(base, 'PUT', `/api/transcode_configs/${transcodeConfigId}`, body);
   const saved = await api(base, 'GET', `/api/transcode_configs/${transcodeConfigId}`);
   const ignored = Object.keys(patch).filter((k) => !savedMatches(saved[k], patch[k]));
   if (ignored.length) throw new Error(`transcode config not applied: ${ignored.join(', ')}`);
   return patch;
 }
 
-// Whether a saved value took a requested one. An object only has to carry the fields it was given: the server fills
-// in defaults (a loudnorm config given only `i`) and writes keys back in its own order.
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+// Whether a saved value took a requested one. An object only has to carry the fields it was given: the rest come from
+// the saved object or the server's defaults (a loudnorm config given only `i`), and keys come back in its own order.
 function savedMatches(saved, wanted) {
-  if (wanted !== null && typeof wanted === 'object' && !Array.isArray(wanted)) {
-    return (
-      saved !== null && typeof saved === 'object' && Object.keys(wanted).every((k) => savedMatches(saved[k], wanted[k]))
-    );
+  if (isPlainObject(wanted)) {
+    return isPlainObject(saved) && Object.keys(wanted).every((k) => savedMatches(saved[k], wanted[k]));
   }
   return JSON.stringify(saved) === JSON.stringify(wanted);
 }
