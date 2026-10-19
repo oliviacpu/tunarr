@@ -26,6 +26,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### batch publication lookups and clean stale temporary files (2026-10-19)
+
+- **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
+- **Tests:** covered by the local completion candidate; this branch is independently checked in CI.
+- **Upstream:** not submitted; personal fork.
+
+
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 
