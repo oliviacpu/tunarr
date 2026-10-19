@@ -26,8 +26,22 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### expose memory tuning and index library pagination (2026-10-19)
+
+- **Change:** Adds opt-in SQLite cache, mmap and warmup controls, preserving existing cache defaults. Migration 0056 indexes library pagination after EXPLAIN showed a temporary sort. Adds an explicit-transaction policy check.
+- **Tests:** covered by the local completion candidate; this branch is independently checked in CI.
+- **Upstream:** not submitted; personal fork.
+
+
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
+
+### Narrow gap-music lookup and deleted-list cleanup (2026-10-19)
+
+- **What changed:** gap-music selection reads only the program fields it needs, avoiding full filler-list program materialization. Deleting a list clears its channel gap-music references.
+- **Fix:** `FillerListDB.getGapMusicPrograms` selects track identity, playback eligibility and artist display fields; `GapMusicPicker` uses that result. List deletion removes `offline.musicListId` while preserving other offline settings.
+- **Validation:** database tests check the selected fields and deleted-list cleanup; stream-program regressions use the narrower database contract.
+- **Upstream:** not sent; personal fork change.
 
 <!-- Entry format:
 ### Short title (YYYY-MM-DD, commit)
@@ -90,6 +104,14 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     `MpegTsCaptionInserter.test.ts`: the language function gets the frames' PTS in presentation order. The other
     caption tests and the golden snapshot are unchanged.
 - **Upstream:** not sent.
+
+### Search key replacement and backup guidance (2026-10-19)
+
+- **Cause:** replacing a missing or invalid key wrote directly to the destination, read failures were treated as missing keys, and reused files could retain broad permissions.
+- **Fix:** publish a generated key through a private temporary file and atomic rename; preserve existing keys on read/publication failure; tighten reused key files to owner-only permissions on the main thread. Workers only read existing valid keys.
+- **Backups:** the built-in archive omits `meilisearch-master-key`; keep a private copy separately and restore it before startup.
+- **Tests:** `searchMasterKey.test.ts` covers generation/reuse, permissions, worker refusal, rename failure and read failure. Native `MeilisearchService.local.test.ts` covers restart authentication and retained indexed data when a key is regenerated.
+- **Upstream:** not sent. This is hardening for the search authentication change in this personal fork.
 
 ### ffmpeg's and ffprobe's logs no longer carry media-server tokens (2026-10-19)
 
