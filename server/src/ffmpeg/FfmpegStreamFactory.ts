@@ -394,8 +394,6 @@ export class FfmpegStreamFactory {
           // Captions are laid out one pair per output frame, so the output's
           // rate must be known exactly
           pinFrameRate: captionsOn,
-          deinterlaceFilter: this.ffmpegSettings.deinterlaceFilter,
-          infiniteLoop: lineupItem.infiniteLoop,
         });
 
     const { videoStream, videoInputSource } = this.buildVideoInput(
@@ -557,7 +555,13 @@ export class FfmpegStreamFactory {
           subtitleRendition,
           isPassthrough,
         ),
-        captions,
+        captions:
+          captions === undefined
+            ? undefined
+            : {
+                ...captions,
+                frameRate: pipeline.outputFrameRate ?? captions.frameRate,
+              },
       },
     };
   }

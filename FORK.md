@@ -36,6 +36,11 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Validation:** targeted decoding, request, discovery, extraction and stream-details tests cover these paths.
 - **Upstream:** not sent; personal fork change, stacked on caption-boundary PR #65.
 
+### Pipeline output-rate review correction (2026-10-19)
+
+- **Fix:** playback parameters retain the source-based target; the selected pipeline applies its actual deinterlacer once. Caption renditions use the final pipeline rate, preventing doubled field-rate targets.
+- **Validation:** calculator, caption cadence and software/QSV/VAAPI/NVIDIA pipeline unit regressions.
+
 <!-- Entry format:
 ### Short title (YYYY-MM-DD, commit)
 - **What you saw:** the symptom.
@@ -2355,5 +2360,5 @@ and burn-in filters accept an explicit character encoding, while now-playing tex
 sizes account for picture width and share filter-value escaping.
 
 This follow-up stacks on the subtitle text reliability branch and caption timeline
-PR #65. Factory integration and caption timing use of the resolved rate follow in
-a separate change.
+PR #65. Playback parameters keep their source-based target and caption timing uses
+the resolved pipeline rate; broader session integration follows separately.
