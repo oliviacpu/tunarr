@@ -6,8 +6,8 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Builds
 
-- Images are built only for tags named `oliviacpu-…`, by date: `oliviacpu-2026.10.13`, with `.2` for a second one the same
-  day. Pushes to `main` build nothing (`.github/workflows/fork-image.yml`). To release:
+- Images are built only for tags named `oliviacpu-…`, by date: `oliviacpu-2026.10.13`, with a numeric suffix for additional builds on the same
+  day (both `.1` and `.2` tags exist). Pushes to `main` build nothing (`.github/workflows/fork-image.yml`). To release:
   `git tag oliviacpu-2026.10.13 && git push origin oliviacpu-2026.10.13`.
 - Each build pushes `ghcr.io/oliviacpu/tunarr:<tag>`, `:sha-<commit>` and, when its tag is the newest `oliviacpu-` tag,
   `:latest`, for linux/amd64, and creates a GitHub Release for the tag. The deployment runs `:latest`, so pushing a tag
@@ -36,6 +36,39 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:** what changed, with the files.
 - **Upstream:** not sent / issue or PR link.
 -->
+
+### Completion candidate: playback, subtitles, controls and runtime checks (2026-10-19)
+
+- **What changed:** the integration candidate includes PRs #62–#66 (bounded Plex guide notifications,
+  scan-worker protocol/watchdog handling, guide refreshes across midnight, caption boundaries and language,
+  and FFmpeg secret redaction). These PRs have not been merged by this work.
+- **Playback:** the selected pipeline filters determine the emitted frame rate and caption cadence;
+  software, NVIDIA, VAAPI and QSV command-construction regressions cover normal and software-fallback paths.
+  A caption eligibility decision is shared by a channel's HLS session and its transport-stream wrapper.
+- **Subtitles and controls:** downloaded legacy-encoded subtitles retain accents, burn-in/conversion receives
+  a detected Windows-1252 override, embedded SDH flags come from the stored track, and slow/slower/veryslow
+  presets are selectable with accessible labels. Now-playing text is constrained by picture width as well as height.
+- **Further completion work:** configurable read-ahead and SQLite tuning limits, x265 thread pools,
+  average frame-rate selection for variable-rate files, case-insensitive subtitle discovery, per-library
+  scanner notices, parallel gap asset resolution, a narrow gap-track query, cleanup of deleted gap-music
+  references, queued custom-show responses and batched artwork discovery.
+- **Database:** migration `0056_program_library_pagination` adds `(library_id, uuid)` for
+  library paging. A seeded query plan used a temporary sort before the index and an ordered
+  covering index afterward; the migrated-database regression checks that plan.
+- **Operations:** search keys are replaced atomically with private permissions; backup instructions name the
+  separate key file. Missing drawtext and audio-language fallback have explicit diagnostics. API generation
+  retains its temporary database through server initialization; generated contracts are refreshed. Release
+  creation is rerunnable. The runtime-tests Docker target checks real binaries and the packaged scan worker;
+  nightly validation builds that target without publishing.
+- **Readability and redaction follow-up:** subtitle planning returns one result, custom-show syncs
+  expose queue acceptance separately from completion, and caption-capable sessions share an explicit
+  contract. Query and header redaction use separate boundaries so punctuation cannot leave credential
+  suffixes visible. Synthetic regression fixtures cover process errors and saved logs; this does not
+  establish that any real credential was exposed. The logging fix is pushed to PR #66; completion work is split into the PRs listed in the completion record.
+- **Evidence and limits:** see `plans/fork-completion-2026-10-19.md` for commands, results and release gates.
+  Hardware command tests do not establish GPU playback support. Client verification and a deployment soak
+  remain pending. No image is published or deployed by this integration work.
+- **Upstream:** not submitted; this is personal-fork completion work.
 
 ### An HEVC or MPEG-2 channel's .ts stream no longer offers an empty caption track (2026-10-19)
 
@@ -416,7 +449,7 @@ ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a 
   between writes, piped to a reader that never drains, exits within seconds of `kill()` with code 0 (on the old code
   it is SIGKILLed after 15 s).
 
-### Plex shows "2 Sci-Fi", not "2 2 Sci-Fi" (2026-10-18)
+### Plex shows the channel number only once (2026-10-18)
 
 - **What you saw:** every channel in Plex's guide carried its number twice.
 - **Cause:** Plex titles a channel `<number> <first display-name>`, and the first `display-name` was already
@@ -794,7 +827,7 @@ sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --second
   plans/test-channel-99.md) needs its own.
 - **Change:** a channel setting, **Captions for this channel**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.captions`, `{ testPattern?, alignment?, appearance? }`, stored in the new column
-    `captions` (migration 0054). Only what the channel sets is saved; the rest follows the global settings, so a later
+    `captions` (migration 0055). Only what the channel sets is saved; the rest follows the global settings, so a later
     global change still reaches it. The appearance fields have no defaults (`CaptionAppearanceOverridesSchema`), or an
     override would fill in every field.
   - **Test pattern on this channel:** the numbered samples on this channel only. The global switch still shows them on
@@ -882,7 +915,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 ### Saving a channel no longer rewrites every channel's guide entries (2026-10-16)
 
 - **What you saw:** Live TV paused while channels were saved. On the deployment, with the owner watching channel 1,
-  the latency probe saw 6 requests over 250 ms (worst 1.05 s), all while the Sci-Fi channel was being saved. The
+  the latency probe saw 6 requests over 250 ms (worst 1.05 s), all while one channel was being saved. The
   save took 4 s there. Editing channels in the web UI did the same on 2026-10-14.
 - **Cause:**
   - Every save (`PUT /api/channels/:id`) ends with an XMLTV write.
@@ -991,7 +1024,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
     restarts, so the tracks can't change from program to program.
 - **Change:** a channel setting, **Audio tracks**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.audioTracks`, up to four ISO 639-2 codes in order, stored in the new column
-    `audio_tracks` (migration 0053).
+    `audio_tracks` (migration 0054).
   - **Effect:** every program, commercial, gap (offline picture, with gap music or silence) and error screen on the
     channel outputs exactly those tracks, in that order, tagged with their languages.
   - **Filling a slot:**
@@ -1304,7 +1337,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 
 ### The library programs request no longer freezes Tunarr (2026-10-15)
 
-- **What you saw:** Live TV paused while a script ran against Tunarr (`build_grid.py`, even with `--dry-run`). A latency
+- **What you saw:** Live TV paused while a script ran against Tunarr (a scheduling script, even in dry-run mode). A latency
   probe saw two freezes, of 17,061 ms and 17,158 ms, one per run.
 - **Cause:** `GET /api/media-libraries/:libraryId/programs` built its whole response in one go on the main thread,
   which also serves the streams:
@@ -1959,8 +1992,8 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
   `/library/sections/<section>/all?type=9&artist.id=<artist>`, which returns every release by that album artist.
   `PlexMediaSourceMusicScanner.getAlbums` passes `context.library.externalKey`. Without a section key it keeps the
   old listing. Test: `PlexApiClient.test.ts` (`getArtistAlbums` lists EPs and singles through the library section).
-- **Checked** against a real Plex server: the section listing returned all 5 of Foodman's releases (the children
-  listing returned 0), and 7 for Air (the children listing missed the EP _Casanova 70_). Its `totalSize` matches, so
+- **Checked** against a real Plex server: the section listing returned all releases for two test artists, including an EP
+  omitted by the children listing. Its `totalSize` matches, so
   paging is unchanged.
 - **After upgrading:** run a scan of the music library. Scans walk every artist's releases, so the missing ones are
   added.
@@ -2194,7 +2227,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 - **Where to set it:** the channel's Flex settings, **Gap music**, next to the fallback image (any filler list).
   Documented in `docs/configure/channels/flex.md`.
 - **Checked end to end** on a throwaway server (stream-repro, local music library, ffmpeg 9.0.2;
-  the deployed image ships 7.1.1, which has the same `loudnorm` and `afade`): three tracks measuring
+  the current image ships jellyfin-ffmpeg 8.1.3; these measurements were made with the earlier build): three tracks measuring
   -6.2, -22.6 and -47.6 LUFS all came out at -24.0 LUFS. Gap items rotated tracks (never-played first, then the
   oldest), the track cut by the gap's end faded out over its last 3 s, each item faded in over 1 s, and a channel
   without a list still played digital silence.
@@ -2249,7 +2282,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 - **Fix:** the calculator uses the transcode config's preset when it's a known libx264/libx265 preset, and keeps
   `veryfast` when it's empty or unknown, so existing configs behave as before. The transcode config page shows a **Video
   Preset** dropdown (ultrafast to medium) under Video Options when Hardware Acceleration is Software and the format is
-  H.264 or HEVC. A change takes effect when the next ffmpeg process starts; no restart. Hardware encoders are unchanged.
+  H.264 or HEVC. A change takes effect when the channel's stream session next starts; no server restart. Hardware encoders are unchanged.
   Files: `server/src/ffmpeg/FfmpegPlaybackParamsCalculator.ts`, `server/src/ffmpeg/builder/constants.ts`,
   `web/src/components/settings/ffmpeg/TranscodeConfigVideoSettingsForm.tsx`. Tests:
   `FfmpegPlaybackParamsCalculator.test.ts`.

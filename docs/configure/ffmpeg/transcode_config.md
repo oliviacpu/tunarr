@@ -12,7 +12,7 @@ Transcode Configurations provide Tunarr with a set of parameters to produce a no
 ## General Settings
 
 - **Name** — A human-readable label for this configuration. Used to identify the config when assigning it to a channel.
-- **Thread Count** — The number of CPU threads FFmpeg may use for software encoding and decoding. Set to `0` to let FFmpeg choose automatically based on the number of logical CPU cores. Higher values use more CPU resources. This setting is largely irrelevant when hardware acceleration is enabled, since encoding and decoding are offloaded to dedicated hardware. In HLS mode, a transcode that reads ahead of real time (the first one after a viewer tunes in, or one catching up) uses more threads, up to 16 and no more than the CPU cores Tunarr may run on, so the first seconds of video arrive sooner. Real-time transcodes use this count.
+- **Thread Count** — CPU threads available to FFmpeg for software encoding and decoding. Set to `0` for automatic selection. Real-time transcodes use this count; HLS can temporarily increase it while preparing video ahead of playback (see [Read-ahead threads](#read-ahead-threads)). Hardware pipelines can still use CPU threads for software filters and fallback encoding.
 - **Disable Channel Overlay** — When enabled, suppresses the channel watermark/logo overlay for streams using this configuration. Useful if you want a clean output without branding.
 
 ---
@@ -55,6 +55,17 @@ Controls the codec used to encode the output video stream.
 - **H.264 (AVC)** — The most compatible format, supported by virtually all clients and devices. A safe default for most setups.
 - **HEVC (H.265)** — Better compression than H.264 at equivalent quality, meaning lower bitrates for the same visual quality. However, encoding is more computationally expensive, and not all clients support HEVC playback. Recommended only if your clients support it and you have capable hardware.
 - **MPEG-2** — A legacy format with the highest compatibility but the least efficient compression. Only use this if you have specific clients that require it.
+
+### Video Preset
+
+Software H.264 and HEVC encoding offers `ultrafast`, `superfast`, `veryfast`,
+`faster`, `fast`, `medium`, `slow`, `slower`, and `veryslow`. The default is
+`veryfast`. Slower presets spend more CPU time compressing each frame; check
+that the encoder can still keep up with live playback.
+
+HLS and HLS Alt streams keep their starting configuration until everyone stops
+watching and the stream restarts. HLS Direct and MPEG-TS streams pick up a
+changed preset from the next program.
 
 ### Resolution
 
@@ -230,3 +241,13 @@ Controls what audio plays during a transcoding error:
 
 !!! info "Automatic Retry"
     Tunarr automatically retries loading the errored video item every **60 seconds**. If the issue resolves (e.g., the media server comes back online), playback will resume on the next retry.
+
+### Read-ahead threads
+
+FFmpeg settings include **Read-ahead Thread Limit** (default 16). HLS may raise the
+configured thread count up to this limit while preparing video ahead of playback,
+subject to available CPU cores. It never lowers the transcode configuration's own
+count. Set the limit to 0 to disable this increase; a configuration using automatic
+threads remains automatic. Changes apply from the next program. The limit is useful
+for controlling the temporary increase; it does not cap FFmpeg’s total thread usage. Software HEVC encoding also passes the
+chosen count to x265's worker pool.

@@ -139,6 +139,7 @@ Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. T
 - **Tuning in partway through a subtitle:** its caption shows once it has loaded, a fraction of a second in, when at least a second of it is left. A shorter rest is skipped, so the first caption you see is never the end of a line flashing past. Roll-up keeps it, since its lines stay up while the next ones scroll in.
 - **Tuning in while a caption loads:** a player that tunes in (Plex reading the stream partway through) can only start decoding at a keyframe, which Tunarr puts at the start of every segment, and Plex's caption decoder starts in roll-up mode. So when a pop-on caption was still loading at that keyframe, the rest of it went straight on screen as a fragment (the end of a line, such as "ng the soup" for "Are you eating the soup?") and could stay up for seconds. Tunarr now loads each caption between two keyframes: before the keyframe when there's room, otherwise just after it, which shows the caption up to 300 ms late. Only when that isn't enough does a caption still load across a keyframe. With 2 s segments and back-to-back dialogue, about 1 tune-in in 60 at 29.97 fps (1 in 16 at 23.976 fps) still meets a fragment, against 1 in 3 before, and 1 caption in 15 to 30 shows later than it did, by 0.15 to 0.2 s typically and never more than 0.3 s. At 59.94 fps nothing moves and no fragment is left. Shorter segments leave less room between keyframes, so more captions load across one. Paint-on and roll-up draw text as it arrives and are unchanged, and so are captions on copied video (HLS Direct v2), whose keyframes Tunarr doesn't know. Hardware encoders can add keyframes of their own (Intel QSV puts one every second), which this doesn't plan around.
 - **Programs without subtitles:** players offer captions for the whole stream, so a program with no subtitle track shows a short caption, "No captions for this program", from 1 to 5 seconds into the program (or into the stream, if you tune in partway through), a little later for video below 23.976 fps or when the caption appearance makes it slower to load. A viewer who turns captions on can then tell they work. Filler, flex time and music tracks don't show it, and neither does a program whose subtitles can't become captions (image-based ones are burned in instead).
+- **A program that ends early:** when a program's video stops before its scheduled end (FFmpeg exits early, or the file is shorter than its recorded length), its captions stop there too. Before 2026-10-19, an item after it without captions of its own (flex time, an error screen, filler without subtitles) carried the rest of the program's dialogue. A caption still on screen when the program stops is erased where the next item starts. When the next item has captions of its own, the caption stays up until the next item's first caption replaces it.
 - **Language:** the stream labels the captions with the first language in your [Language Preference](#language-preference), so players such as Plex can name the track by language instead of "Unknown".
 
 #### Caption appearance (experimental)
@@ -188,3 +189,14 @@ Currently, language preferences can only be configured globally. Use this settin
 
 !!! note
     ISO 639-2 gives 20 languages two different three-letter codes — German is both `ger` and `deu`, French both `fre` and `fra` — and media servers and files use them interchangeably. Tunarr treats the two codes for a language as equivalent, so a preference matches a track regardless of which code the file or media server reports.
+When more than 10% of a subtitle track's cues contain characters CEA-608 cannot
+represent, Tunarr keeps that track for burn-in rather than presenting partial or
+empty captions. A warning reports the affected cue and character counts. CEA-608
+cannot represent Japanese and many other scripts; WebVTT and burn-in do not have
+that character restriction.
+
+The served HLS window contains 20 segments, with 10 segments of history retained
+before the playback point. At the default four seconds this is an 80-second window
+and 40-second history; changing segment length changes these durations. This
+setting applies to HLS and Direct v2. Alternate HLS retains its fixed four-second
+segment configuration.

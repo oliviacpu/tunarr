@@ -4,15 +4,15 @@
 
 Saving a channel (`PUT /api/channels/:id`) paused the Live TV the server was streaming.
 
-- **2026-10-16, the deployment:** with the owner watching channel 1, the deployment's `interstitials.py apply` saved
+- **2026-10-16, the deployment:** with the owner watching channel 1, a local artwork update saved
   each channel with a new offline picture. The latency probe saw 6 requests over 250 ms, the worst 1.05 s, all while
-  the Sci-Fi channel was being saved (4 s on that server).
+  the affected channel was being saved (4 s on that server).
 - **2026-10-14:** editing channels in the web UI paused Live TV ("Live TV pauses while editing").
 
 ## What a save does on the main thread
 
 Timed with temporary logs per step of the handler, on a copy of the deployment's database (6 channels, a 72 h guide,
-784 guide programs), saving the Sci-Fi channel's offline picture:
+784 guide programs), saving the affected channel's offline picture:
 
 | Step                                             |      ms |
 | ------------------------------------------------ | ------: |
