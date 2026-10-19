@@ -106,6 +106,9 @@ Before a release is accepted:
 The existing work remains in #62 (Plex notifications), #63 (scan workers),
 #64 (XMLTV scheduling), #65 (caption boundaries) and #66 (logging redaction).
 PR #66 now includes the punctuation fix; #64 includes isolated scheduling cases.
+The fork Build workflow currently targets PRs against main, dev or media-scanner.
+Stacked children have independent local checks and commitlint, but require Build
+CI after their parents land and they are retargeted to main.
 
 | PR | Scope | Base / dependency |
 | --- | --- | --- |
@@ -119,7 +122,9 @@ PR #66 now includes the punctuation fix; #64 includes isolated scheduling cases.
 | [#74](https://github.com/oliviacpu/tunarr/pull/74) | Subtitle encoding and matching | #65 |
 | [#75](https://github.com/oliviacpu/tunarr/pull/75) | Pipeline frame rate and rendering | #74 |
 
-The session/caption integration follows #75. This documentation PR describes the
+| [#77](https://github.com/oliviacpu/tunarr/pull/77) | Session/caption integration and read-ahead controls | #75 |
+
+The session/caption integration is #77. This documentation PR describes the
 combined result and should land after the implementation PRs. Parent PRs must land
 before their children are retargeted to main. Resolve FORK.md entries by retaining
 each scoped entry; regenerate API contracts after combining schema-changing PRs.
