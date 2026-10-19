@@ -40,6 +40,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--keep-server` | off | Leave the server running afterward for manual poking |
 | `--rewind N` | | HLS only. After the capture, jump back N segments, then play on (see below) |
 | `--rewind-polls P` | `8` | Playlist polls after the rewind, 2 s apart |
+| `--poll-playlist` | off | HLS only. Check every playlist the capture fetches for continuity, time each request, and count the entries of ffmpeg's `stream.m3u8` (see below) |
 | `--reanalyze DIR` | | Re-score an existing capture without booting a server |
 | `--flex-first MS` | | `synthetic` only. Put an offline (flex) gap of MS milliseconds before the clips |
 | `--offline-picture FILE` | | `synthetic` only. Upload FILE (PNG or JPEG) and make it the channel's offline picture, as channel cards are set up. `report.offlinePicture` records its URL |
@@ -214,12 +215,22 @@ container and its data directory are not touched.
 | `hls_session_restarted` | The HLS session died mid-capture. The reason is in `tunarr.log` near that time. |
 | `rewind_target_missing` | The `--rewind` target was already pruned. Expected when N reaches past the retained window. |
 | `playlist_lists_missing_segment` | A playlist after the rewind listed segments that 404. The playlist points at files pruning deleted. |
+| `playlist_continuity` | `--poll-playlist` only. A served playlist broke what a player relies on across polls; `message` says how. The first 20 are listed. |
 
 `--rewind` tests playlist trimming and pruning. Pruning runs at most every 30 s, so capture long enough
 for it to fire, such as `--seconds 120`. The rewind client uses the capture client's IP, so the server
 treats it as the same viewer. It fetches each newly listed segment once, in order, as a player would.
 `report.rewind` records the target, its status, the total segment 404s, and for each poll the listed
 range and the missing files.
+
+`--poll-playlist` checks each media playlist the capture fetches (about one a second) against the last:
+`#EXT-X-MEDIA-SEQUENCE` equals the first listed segment and never goes back, the discontinuity sequence
+never goes back, a segment's discontinuity number and program date-time never change, and each segment
+starts where the one before it ends. `report.playlistContinuity` records the poll and violation counts,
+the first 50 violations, the media and discontinuity sequence ranges, request latency (median, p95, max),
+and `fileEntriesByMinute`: the most entries ffmpeg's own `stream.m3u8` listed in each minute of the
+capture (found under the run's database directory, so `copy` runs with a transcode directory set get
+none). Use it for long runs that change playlist serving or ffmpeg's HLS options.
 
 Runs are split at discontinuities, so the expected timestamp reset between HLS programs is not flagged.
 MPEG-TS concat captures form a single run. To place a finding in a program, compare its PTS with the lineup
