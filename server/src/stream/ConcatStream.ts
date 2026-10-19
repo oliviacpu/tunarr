@@ -67,16 +67,25 @@ export class ConcatStream {
   async createSession(): Promise<FfmpegTranscodeSession> {
     const gate = this.captionGate;
     const captioned = this.captionsEnabled ?? hdhrCaptionsEnabled(gate);
+    // Once each time the channel's .ts stream starts (ConcatSession), which
+    // all its viewers share. The transcode makes the same choice for every
+    // program without logging it.
     if (!captioned && hdhrCaptionsWanted(gate)) {
-      // Once each time the channel's .ts stream starts (ConcatSession), which
-      // all its viewers share. The transcode makes the same choice for every
-      // program without logging it.
-      this.logger.info(
-        'Channel %d: transcode config "%s" outputs %s video, and closed captions need H.264. Its .ts stream carries no caption track, and its programs get their subtitles as with captions off',
-        this.channel.number,
-        this.channel.transcodeConfig.name,
-        gate.videoFormat,
-      );
+      if (!hdhrCaptionsEnabled(gate)) {
+        this.logger.info(
+          'Channel %d: transcode config "%s" outputs %s video, and closed captions need H.264. Its .ts stream carries no caption track, and its programs get their subtitles as with captions off',
+          this.channel.number,
+          this.channel.transcodeConfig.name,
+          gate.videoFormat,
+        );
+      } else {
+        // The settings want captions now, but this stream joins an HLS
+        // session that was started without them and keeps that decision
+        this.logger.info(
+          'Channel %d: its running HLS session was started with closed captions off, so its .ts stream carries no caption track. It will once that session restarts',
+          this.channel.number,
+        );
+      }
     }
 
     const ffmpeg = this.ffmpegFactory(
