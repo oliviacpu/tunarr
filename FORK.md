@@ -26,10 +26,6 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### expose saved encoder presets with accessible labels (2026-10-19)
-
-- **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
-
 ### batch publication lookups and clean stale temporary files (2026-10-19)
 
 - **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
@@ -170,6 +166,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     warning for output that doesn't parse, are redacted. `types.test.ts`: `ApiKey=` and a lowercase `x-emby-token=`.
   - All of these fail on the old code. The kill test from the `.ts` wrapper fix passes unchanged.
 - **Upstream:** not sent. It's upstream's code, so it could go upstream as a plain bug fix.
+
+### expose saved encoder presets with accessible labels (2026-10-19)
+
+- **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
 
 ### An HEVC or MPEG-2 channel's .ts stream no longer offers an empty caption track (2026-10-19)
 
