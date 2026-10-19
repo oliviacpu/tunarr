@@ -212,11 +212,14 @@ export class PublicMediaService {
 
     await fs.mkdir(this.artworkDirectory, { recursive: true });
     const { index, loaded: indexLoaded } = await this.loadIndex();
+    await this.cleanMediaTemporaryFiles();
+    const artworkFiles = await fs.readdir(this.artworkDirectory);
     const startedAt = Date.now();
     const run = {
       deadline: startedAt + PublishBudgetMs,
       refreshesLeft: MaxRefreshesPerRun,
       changed: false,
+      artworkFiles,
     };
 
     const queue = new PQueue({ concurrency: Concurrency });
@@ -270,7 +273,12 @@ export class PublicMediaService {
     key: string,
     ref: PublicArtworkRef,
     index: Index,
-    run: { deadline: number; refreshesLeft: number; changed: boolean },
+    run: {
+      deadline: number;
+      refreshesLeft: number;
+      changed: boolean;
+      artworkFiles: string[];
+    },
   ): Promise<Maybe<IndexEntry>> {
     const existing = index.entries[key];
     const current = await this.alreadyPublished(existing);
@@ -360,7 +368,7 @@ export class PublicMediaService {
 
     let file: string;
     let version: number;
-    const onDisk = await this.versionsOnDisk(key);
+    const onDisk = this.versionsOnDisk(key, run.artworkFiles);
     const adopted = await this.adoptExistingFile(
       onDisk,
       loaded.extension,
@@ -401,12 +409,24 @@ export class PublicMediaService {
     return entry;
   }
 
+  private async cleanMediaTemporaryFiles() {
+    for (const file of await fs.readdir(this.mediaDirectory)) {
+      if (!/^\.[a-f0-9-]{36}\.tmp$/.test(file)) continue;
+      const full = path.join(this.mediaDirectory, file);
+      const stat = await fs.stat(full).catch(() => undefined);
+      if (stat?.isFile() && Date.now() - stat.mtimeMs > 60 * 60 * 1000) {
+        await fs.rm(full, { force: true });
+      }
+    }
+  }
+
   /** Every version of a picture on disk, newest first. */
-  private async versionsOnDisk(
+  private versionsOnDisk(
     key: string,
-  ): Promise<{ file: string; version: number; extension: string }[]> {
+    files: string[],
+  ): { file: string; version: number; extension: string }[] {
     const versions: { file: string; version: number; extension: string }[] = [];
-    for (const file of await fs.readdir(this.artworkDirectory)) {
+    for (const file of files) {
       const match = DiskNamePattern.exec(file);
       if (match?.[1] === key && match[2] !== undefined && match[3]) {
         versions.push({
