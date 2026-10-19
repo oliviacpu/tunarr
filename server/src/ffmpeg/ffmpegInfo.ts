@@ -26,6 +26,7 @@ import {
 import NodeCache from 'node-cache';
 import { format } from 'node:util';
 import { attempt, isNonEmptyString, parseIntOrNull } from '../util/index.ts';
+import { redactSecrets } from '../util/redactSecrets.ts';
 import { FfmpegCapabilities } from './builder/capabilities/FfmpegCapabilities.ts';
 
 const CacheKeys = {
@@ -344,11 +345,12 @@ export class FfmpegInfo {
     );
 
     if (!result.success) {
+      // A network path, and ffprobe's format.filename, carry the token.
       this.logger.warn(
         result.error,
         'Unable to parse ffprobe output for file %s. Raw output: %s',
-        path,
-        output,
+        redactSecrets(path),
+        redactSecrets(output),
       );
       return;
     }
