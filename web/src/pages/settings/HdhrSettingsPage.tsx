@@ -112,6 +112,8 @@ export default function HdhrSettingsPage() {
         control={control}
         name="tunerCount"
         prettyFieldName={t`Tuner Count`}
+        // The server refuses fewer than 1 tuner
+        rules={{ min: 1 }}
         TextFieldProps={{
           id: 'tuner-count',
           label: t`Tuner Count`,

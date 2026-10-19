@@ -1,0 +1,100 @@
+import { renderWithProviders, screen, waitFor } from '@/test/utils';
+import type { HdhrSettings } from '@tunarr/types';
+import { SnackbarProvider } from 'notistack';
+import { Suspense } from 'react';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type * as Generated from '../../generated/@tanstack/react-query.gen.ts';
+import type * as Sdk from '../../generated/sdk.gen.ts';
+import HdhrSettingsPage from './HdhrSettingsPage.tsx';
+
+const saved: HdhrSettings = { autoDiscoveryEnabled: true, tunerCount: 4 };
+
+const { mockPutHdhrSettings } = vi.hoisted(() => ({
+  mockPutHdhrSettings: vi.fn(
+    (_options: { body: Partial<HdhrSettings> }): Promise<unknown> =>
+      Promise.resolve({ data: {} }),
+  ),
+}));
+
+vi.mock(
+  '../../generated/@tanstack/react-query.gen.ts',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof Generated>()),
+    getApiHdhrSettingsOptions: () => ({
+      queryKey: ['test-hdhr-settings'],
+      queryFn: () => Promise.resolve(saved),
+    }),
+  }),
+);
+
+vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof Sdk>()),
+  putApiHdhrSettings: (options: { body: Partial<HdhrSettings> }) =>
+    mockPutHdhrSettings(options),
+}));
+
+// It blocks navigation through the router, which these tests don't have
+vi.mock('../../components/settings/UnsavedNavigationAlert.tsx', () => ({
+  default: () => null,
+}));
+
+async function renderPage() {
+  const rendered = renderWithProviders(
+    <SnackbarProvider>
+      <Suspense fallback={null}>
+        <HdhrSettingsPage />
+      </Suspense>
+    </SnackbarProvider>,
+  );
+  // The saved settings are in the form. The first render in a run can take
+  // longer than waitFor's default second
+  await waitFor(
+    () => expect(screen.getByLabelText('Tuner Count')).toHaveValue('4'),
+    { timeout: 10_000 },
+  );
+  const { user } = rendered;
+  const tunerCount = () => screen.getByLabelText('Tuner Count');
+  const setTunerCount = async (value: string) => {
+    await user.clear(tunerCount());
+    await user.type(tunerCount(), value);
+    await user.tab();
+  };
+  const saveButton = () => screen.getByRole('button', { name: 'Save' });
+  return { ...rendered, tunerCount, setTunerCount, saveButton };
+}
+
+describe('HdhrSettingsPage', () => {
+  beforeEach(() => {
+    mockPutHdhrSettings.mockReset();
+    mockPutHdhrSettings.mockResolvedValue({ data: saved });
+  });
+
+  test('a tuner count of 0 is flagged and cannot be saved', async () => {
+    const { tunerCount, setTunerCount, saveButton } = await renderPage();
+
+    await setTunerCount('0');
+
+    await waitFor(() =>
+      expect(tunerCount()).toHaveAccessibleDescription(
+        'Tuner Count must be >= 1',
+      ),
+    );
+    expect(tunerCount()).toBeInvalid();
+    expect(saveButton()).toBeDisabled();
+  });
+
+  test('a single tuner is saved', async () => {
+    const { user, tunerCount, setTunerCount, saveButton } = await renderPage();
+
+    await setTunerCount('1');
+
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(tunerCount()).toBeValid();
+    await user.click(saveButton());
+    await waitFor(() => expect(mockPutHdhrSettings).toHaveBeenCalledOnce());
+    expect(mockPutHdhrSettings.mock.calls[0]?.[0].body).toEqual({
+      autoDiscoveryEnabled: true,
+      tunerCount: 1,
+    });
+  });
+});
