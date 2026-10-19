@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
 import { QueryError } from '@/external/BaseApiClient.js';
 import { Result } from '@/types/result.js';
@@ -24,6 +25,17 @@ vi.mock('@/util/logging/LoggerFactory.js', () => ({
 vi.mock('@/util/version.js', () => ({
   getTunarrVersion: () => '1.0.0-test',
 }));
+
+function plexHttpError(status: number) {
+  const config = { headers: new AxiosHeaders() };
+  return new AxiosError(
+    `Request failed with status code ${status}`,
+    'ERR_BAD_REQUEST',
+    config,
+    {},
+    { status, statusText: '', data: undefined, headers: {}, config },
+  );
+}
 
 function makeMinimalPlexClient() {
   const mediaSourceId = faker.string.uuid();
@@ -558,6 +570,24 @@ describe('PlexApiClient', () => {
       });
     });
 
+    it.each([401, 403])(
+      'rejects a refused token (%i) as an auth error, which a caller does not retry',
+      async (status) => {
+        // It came back as a generic failure, so the guide notifier retried a token that can't work.
+        const { client } = makeMinimalPlexClient();
+        vi.spyOn(client, 'doRequest' as never).mockRejectedValue(
+          plexHttpError(status) as never,
+        );
+        fakeLogger.error.mockClear();
+
+        await expect(client.getDvrs()).rejects.toMatchObject({
+          type: 'auth_error',
+        });
+        // The caller reports it, with the server's name: no error line of its own.
+        expect(fakeLogger.error).not.toHaveBeenCalled();
+      },
+    );
+
     it('answers no DVRs for a Plex without Live TV', async () => {
       const { client } = makeMinimalPlexClient();
       vi.spyOn(client, 'doGetResult' as never).mockResolvedValue(
@@ -575,5 +605,26 @@ describe('PlexApiClient', () => {
 
       await expect(client.getDvrs()).resolves.toEqual([{ key: '4' }]);
     });
+  });
+
+  describe('refreshGuide', () => {
+    it.each([
+      [401, 'auth_error'],
+      [403, 'auth_error'],
+      [503, 'generic_request_error'],
+    ])(
+      'rejects a failed reload (%i) with a classified %s, like getDvrs',
+      async (status, type) => {
+        // It rejected with the raw AxiosError, so the guide notifier had to repeat the 401/403 rule.
+        const { client } = makeMinimalPlexClient();
+        vi.spyOn(client, 'doRequest' as never).mockRejectedValue(
+          plexHttpError(status) as never,
+        );
+
+        await expect(
+          client.refreshGuide([{ key: '4' }] as never),
+        ).rejects.toMatchObject({ type });
+      },
+    );
   });
 });

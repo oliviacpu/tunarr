@@ -6,13 +6,12 @@ import { setServerOptionsUnchecked } from '../globals.ts';
 import { MeilisearchService } from '../services/MeilisearchService.ts';
 import { ScanWorker } from '../services/ScanWorker.ts';
 import { TunarrWorker } from '../services/TunarrWorker.ts';
-import { WorkerRole } from '../types/worker_schemas.ts';
+import { WorkerStartData } from '../types/worker_schemas.ts';
 import type { GenerateOpenApiCommandArgs } from './GenerateOpenApiCommand.ts';
 import type { GlobalArgsType } from './types.ts';
 
 type WorkerData = {
   serverOptions: ServerOptions;
-  role?: unknown;
 };
 
 export const StartWorkerCommand: CommandModule<
@@ -32,7 +31,8 @@ export const StartWorkerCommand: CommandModule<
       process.exit(1);
     }
 
-    const { serverOptions, role } = workerData as WorkerData;
+    const { serverOptions } = workerData as WorkerData;
+    const { role, protocolVersion } = WorkerStartData.parse(workerData);
 
     // The global options were already resolved from this worker's argv by the
     // CLI middleware. This applies the server-only fields on top — notably
@@ -52,9 +52,10 @@ export const StartWorkerCommand: CommandModule<
     // they find.
     await container.get<MeilisearchService>(MeilisearchService).start();
 
-    // Workers spawned before roles existed carry none: they're pool workers
-    if (WorkerRole.catch('pool').parse(role) === 'scan') {
-      container.get<ScanWorker>(ScanWorker).start(parentPort);
+    if (role === 'scan') {
+      container
+        .get<ScanWorker>(ScanWorker)
+        .start(parentPort, { mainProtocolVersion: protocolVersion });
     } else {
       container.get<TunarrWorker>(TunarrWorker).start();
     }

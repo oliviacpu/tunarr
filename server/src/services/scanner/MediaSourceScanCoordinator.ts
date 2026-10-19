@@ -280,7 +280,11 @@ export class MediaSourceScanCoordinator {
       releaser = await tryAcquire(await getLock()).acquire();
     } catch (e) {
       if (e === E_ALREADY_LOCKED) {
-        this.logger.error('Could not acquire lock for %s', label);
+        // Routine: the nightly collection sync, say, finds one still queued
+        this.logger.info(
+          'Not queuing %s: it is already queued or running',
+          label,
+        );
       } else {
         this.logger.error(e, 'Error while scheduling scan for %s', label);
       }

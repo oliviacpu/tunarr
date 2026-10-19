@@ -29,6 +29,10 @@ export const USE_WORKER_POOL_ENV_VAR = 'TUNARR_USE_WORKER_POOL';
 export const WORKER_POOL_SIZE_ENV_VAR = 'TUNARR_WORKER_POOL_SIZE';
 // Library scans run in a worker thread (default on; needs the worker pool)
 export const SCAN_IN_WORKER_ENV_VAR = 'TUNARR_SCAN_IN_WORKER';
+// Minutes a scan job may run in its worker before the worker is terminated and
+// the job fails (default: no limit)
+export const SCAN_JOB_TIMEOUT_MINUTES_ENV_VAR =
+  'TUNARR_SCAN_JOB_TIMEOUT_MINUTES';
 const BIND_ADDR_ENV_VAR = 'TUNARR_BIND_ADDR';
 const MOUNT_DEBUG_ENDPOINTS = 'TUNARR_MOUNT_DEBUG_ENDPOINTS';
 const CORS_ORIGINS_ENV_VAR = 'TUNARR_CORS_ORIGINS';
@@ -68,6 +72,7 @@ export const TUNARR_ENV_VARS = {
   USE_WORKER_POOL_ENV_VAR,
   WORKER_POOL_SIZE_ENV_VAR,
   SCAN_IN_WORKER_ENV_VAR,
+  SCAN_JOB_TIMEOUT_MINUTES_ENV_VAR,
   SEARCH_PORT,
   SEARCH_MAX_RAM,
   SEARCH_REDUCE_INDEXER_MEMORY_USAGE,

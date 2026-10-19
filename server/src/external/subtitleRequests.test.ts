@@ -50,6 +50,9 @@ beforeAll(async () => {
     if (url.includes('/missing/')) {
       res.writeHead(404, { 'content-type': 'text/html' });
       res.end('<html><body>404 Not Found</body></html>');
+    } else if (url.includes('/cp1252/')) {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end(Buffer.from('1\ncaf\xe9\n', 'latin1'));
     } else if (url.includes('/broken/')) {
       res.writeHead(500, { 'content-type': 'text/plain' });
       res.end('Internal Server Error');
@@ -122,6 +125,11 @@ const subtitleFetches: [string, () => FetchSubtitle][] = [
 ];
 
 describe.each(subtitleFetches)('%s', (_name, makeFetch) => {
+  test('decodes Windows-1252 before the downloader writes UTF-8', async () => {
+    const result = await makeFetch()('/cp1252/subtitle');
+    expect(result.get()).toBe('1\ncafé\n');
+  });
+
   test('returns the subtitle text', async () => {
     const result = await makeFetch()('/library/streams/1');
 

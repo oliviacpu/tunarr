@@ -1,14 +1,10 @@
+import { decodeSubtitleText } from '../../stream/captions/decodeSubtitleText.ts';
 import { MediaSourceType } from '@/db/schema/base.js';
 import type { MediaSourceLibrary } from '@/db/schema/MediaSourceLibrary.js';
 import type { Nilable, Nullable } from '@/types/util.js';
 import { type Maybe } from '@/types/util.js';
 import dayjs from '@/util/dayjs.js';
-import {
-  caughtErrorToError,
-  isDefined,
-  isNonEmptyString,
-  zipWithIndex,
-} from '@/util/index.js';
+import { isDefined, isNonEmptyString, zipWithIndex } from '@/util/index.js';
 import { getTunarrVersion } from '@/util/version.js';
 import { PlexClientIdentifier } from '@tunarr/shared/constants';
 import { seq } from '@tunarr/shared/util';
@@ -73,11 +69,7 @@ import {
   PlexTvShowMediaContainerResponseSchema,
   PlexUserSchema,
 } from '@tunarr/types/plex';
-import {
-  type AxiosRequestConfig,
-  isAxiosError,
-  type RawAxiosRequestHeaders,
-} from 'axios';
+import type { AxiosRequestConfig, RawAxiosRequestHeaders } from 'axios';
 import { XMLParser } from 'fast-xml-parser';
 import {
   compact,
@@ -207,13 +199,9 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
 
       return this.makeSuccessResult(res?.MediaContainer);
     } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 404) {
-        return this.makeErrorResult('not_found');
-      }
-
-      const error = caughtErrorToError(err);
-
-      return this.makeErrorResult('generic_request_error', error.message);
+      // A 404 is `not_found` and a refused token (401/403) is `auth_error`, so
+      // a caller can tell them from a failure worth retrying.
+      return this.requestErrorResult<T>(err);
     }
   }
 
@@ -1133,12 +1121,12 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
     try {
       // A 404 means Plex no longer has this stream (its file was replaced or
       // removed and the item not rescanned yet); the caller reports that.
-      const subtitlesResult = await this.doGet<string>(
-        { url: key },
+      const subtitlesResult = await this.doGet<Buffer>(
+        { url: key, responseType: 'arraybuffer' },
         { notFoundIsExpected: true },
       );
 
-      return this.makeSuccessResult(subtitlesResult);
+      return this.makeSuccessResult(decodeSubtitleText(subtitlesResult));
     } catch (e) {
       return this.requestErrorResult(e);
     }
@@ -1190,12 +1178,18 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
       if (result.error.type === 'not_found') {
         return [];
       }
-      this.logger.error(result.error, 'GET /livetv/dvrs failed');
+      // The caller (PlexGuideNotifier) reports it, with the server's name and
+      // whether it tries again.
+      this.logger.debug(result.error, 'GET /livetv/dvrs failed');
       throw result.error;
     }
     return result.get().Dvr ?? [];
   }
 
+  /**
+   * Asks Plex to reload each DVR's guide. Rejects with a classified
+   * `QueryError`, like getDvrs: `auth_error` for a refused token (401/403).
+   */
   async refreshGuide(_dvrs?: PlexDvr[]) {
     const dvrs = !isUndefined(_dvrs) ? _dvrs : await this.getDvrs();
     if (!dvrs) {
@@ -1203,7 +1197,15 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
     }
 
     for (const dvr of dvrs) {
-      await this.doPost({ url: `/livetv/dvrs/${dvr.key}/reloadGuide` });
+      try {
+        await this.doPost({ url: `/livetv/dvrs/${dvr.key}/reloadGuide` });
+      } catch (err) {
+        const failure = this.requestErrorResult<void>(err);
+        if (failure.isFailure()) {
+          throw failure.error;
+        }
+        throw err;
+      }
     }
   }
 

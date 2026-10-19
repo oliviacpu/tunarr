@@ -40,6 +40,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 
+### Subtitle text decoding and discovery reliability (2026-10-19)
+
+- **What changed:** subtitle downloads and extraction preserve legacy-encoded text, local subtitle discovery accepts filename extension case variations, and stream details retain stored embedded SDH flags.
+- **Fix:** media-source subtitle requests read bytes and share BOM-aware UTF-8/Windows-1252 decoding. Local subtitle matching and extracted-file reads use the same decoding path.
+- **Validation:** targeted decoding, request, discovery, extraction and stream-details tests cover these paths.
+- **Upstream:** not sent; personal fork change, stacked on caption-boundary PR #65.
+
 ### Narrow gap-music lookup and deleted-list cleanup (2026-10-19)
 
 - **What changed:** gap-music selection reads only the program fields it needs, avoiding full filler-list program materialization. Deleting a list clears its channel gap-music references.
@@ -55,6 +62,70 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### A stuck or garbled scan worker no longer blocks the scan queue (2026-10-19)
+
+- **What you saw:** nothing yet. The fork review of 2026-10-19 (`plans/fork-review-2026-10-19.md`, section 9) found
+  ways a scan worker could leave every later scan and custom show sync waiting until restart, with nothing in the log.
+- **Cause:**
+  - `WorkerScanJobRunner` logged and ignored a worker message that failed validation. If that was the job's
+    `scan-done` or `scan-failed`, the job never ended, and the coordinator's one-at-a-time queue waited on it
+    forever. Nothing limited how long a job could run.
+  - Worker messages carried no protocol version, so nothing caught a worker and main thread that disagree on the
+    messages (a bundle replaced on disk while the server runs, with a protocol change in it, say).
+  - `TunarrSubprocessService` set the worker's role only when the caller passed no `workerData`. A worker started
+    with `workerData` came up as a pool worker, which says it started and then ignores the scan it is sent.
+  - After a job, the runner removed its `error` listener. An error as the worker exited reached only the process's
+    uncaught exception handler, which writes to `console.error`, not the log file.
+  - A scan or sync that was already queued was logged at error as "Could not acquire lock". The nightly collection
+    sync does this routinely.
+- **Fix:**
+  - **Malformed messages** (`WorkerScanJobRunner.ts`): a message from the job's worker that fails validation stops
+    the worker, and the job fails with the validation error once the worker has exited. The coordinator then
+    releases its lock as for any failed job. The wait means the next job can't start while the old worker may still
+    hold the database's write lock. A malformed progress update or event is still only logged, since neither ends a
+    job. A job canceled meanwhile still ends as canceled.
+  - **Workers that can't be stopped:** Node's `terminate()` only takes effect once a thread returns to JavaScript, so
+    a thread stuck in native code (a long SQLite statement, a hung mount) never reports that it exited. Once a
+    worker has been told to stop (malformed message, time limit, or a cancel it ignored), its job ends at most
+    `exitGraceMs` (5 s; 10 s after a graceful stop) later regardless, and the error is logged.
+  - **Protocol version** (`types/worker_schemas.ts`): `ScanWorkerProtocolVersion` (1) goes to the worker in
+    `workerData`, and the scan worker sends its own in its `started` event. Bump it when the scan worker messages
+    change incompatibly. A worker whose version differs, or that sends none (a pool worker), fails to start. Every
+    later worker would run the same code, so scans stay on the main thread until restart, logged once at error.
+    The worker also logs a warning when the main thread's version differs from its own.
+  - **Role** (`TunarrSubprocessService.ts`): `workerStartData` keeps the caller's `workerData` and always sets the
+    role and version. `start-worker` reads both through the `WorkerStartData` schema.
+  - **Late errors:** each scan worker has an `error` listener for its whole life. While it starts or runs a job, the
+    error fails that, as before. At any other time it is logged at error through Tunarr's logger.
+  - **Job time limit:** `TUNARR_SCAN_JOB_TIMEOUT_MINUTES` (default unset: no limit). A job in a worker that runs
+    longer is logged, its worker terminated (its open transaction rolls back), and the job fails once the worker
+    has exited. Scans on the main thread aren't limited. The limit is logged at startup. A value that isn't a whole
+    number of minutes (`90s`, `0.5`) is ignored with a warning, and one past what a timer can wait (35,791 minutes) is
+    capped. Documented in `docs/getting-started/run.md`.
+  - **Already queued** (`MediaSourceScanCoordinator.ts`): logged at info as "Not queuing … it is already queued or
+    running".
+- **Tests:**
+  - `WorkerScanJobRunner.test.ts`:
+    - Malformed messages: a malformed `scan-done` or `scan-failed` fails the job, but only after the worker has
+      exited. A worker that can't be stopped fails it anyway. A canceled job still ends as canceled. Malformed
+      progress or events don't fail the job. With the real coordinator, the library's lock is released and its next
+      scan runs.
+    - Protocol version: a worker that starts with another version, or none, runs the job on the main thread. After
+      one mismatch, no more workers start.
+    - Errors: an error after the job is logged. One during the job fails it and isn't logged twice.
+    - Stuck workers: a canceled job whose worker can't be stopped still ends.
+    - Time limit: with a 50 ms limit, a job that never ends is terminated and fails, also when its worker can't be
+      stopped. A job that ends in time isn't touched. Without a limit, a long job runs to the end.
+    - `scanJobTimeoutMs` reads whole minutes and logs them. It is quiet when unset or 0, warns on negative, `90s`,
+      `0.5` and non-numbers, and caps at the longest timer delay.
+  - `ScanWorkerRoundTrip.test.ts`: a worker started with its own `workerData` still starts as a scan worker and
+    runs the job.
+  - `TunarrSubprocessService.test.ts`: `workerStartData` keeps the caller's data and options and sets role and
+    version; `WorkerStartData` reads a missing or unknown role as `pool`.
+  - `ScanWorker.test.ts`: `started` carries the version; a different main-thread version is logged.
+  - `MediaSourceScanCoordinator.test.ts`: an already-queued sync is logged at info, not error.
+  - Each new test fails with its fix reverted.
+- **Upstream:** not sent.
 ### A program's captions end where the next item starts, and each segment names its own program's language (2026-10-19)
 
 - **What you saw:** found in code review, not on the deployment.
@@ -569,6 +640,50 @@ floor can cover them. Shared rules, API/UI messages, and regressions agree.
   - `TvGuideService.test.ts`: a full build and a channel save both ask for the read.
 - **Upstream:** not sent.
 
+### The Plex guide ask stops on a refused token, backs off, and can't hold up other servers or a flush (2026-10-19)
+
+- **What you saw:** nothing yet. A review of `PlexGuideNotifier` (`plans/fork-review-2026-10-19.md`, section 11)
+  found five ways it could misbehave.
+- **Cause:**
+  - A 401 or 403 from Plex was retried like a 503, so a token that can't work got three tries and three log lines.
+    The Plex client also reported a refused token on `GET /livetv/dvrs` as a generic failure, and the reload's as
+    a raw `AxiosError`, so the notifier couldn't tell it apart. A media source with no token was retried too.
+  - The wait between tries was a fixed 5 s, so a restarting Plex got all three tries within ten seconds.
+  - If making the client for one Plex server threw, the whole ask ended and every server after it was skipped.
+    Servers were also asked one after another, so one that didn't answer held up the rest for minutes.
+  - `flush()` had no time limit. A Plex that never answered held `POST /api/xmltv/flush` for up to about six minutes
+    per server (60 s request timeout × 2 calls × 3 tries).
+  - The retry wait was a plain `setTimeout`. It kept the process alive, and nothing cancelled it at shutdown.
+- **Fix:**
+  - The Plex client's `getDvrs` and `refreshGuide` both reject with an error classified by the base client's
+    `requestErrorResult`: 401/403 is `auth_error`, and 404 stays `not_found`. `getDvrs` logs its failure at debug,
+    since its one caller reports it. The notifier's `isPlexAuthError` checks only for `auth_error`. That server's
+    ask stops at once with a warning to check its Plex token. A media source with no token gets the same warning
+    without a try.
+  - Each wait is three times the last: 5 s, then 15 s (`retryDelayMs`, capped at 45 s). There are still three tries.
+  - Every server is asked at the same time, each with its own retry wait. Any failure is logged with the server's
+    name and leaves the others alone.
+    Server names are log arguments, not part of the format string.
+  - `flush()` answers after 30 s at the latest (`FlushTimeoutMs`) with `{ done, servers: [{ name, outcome }] }` and
+    logs what was still left. The outcomes are `reloaded`, `no_live_tv`, `auth_failed`, `failed` and `pending`.
+    `POST /api/xmltv/flush` returns that answer: 200 when everything finished, as before, and 202 when it stopped
+    waiting. The OpenAPI document and the web client were regenerated.
+  - The retry timer is unref'd. `stop()`, called from the server's graceful shutdown, clears the debounce and retry
+    timers and ends a retry wait without another try. It also answers a waiting flush with `done: false` and keeps
+    later requests from scheduling anything.
+  - `docs/configure/clients/plex.md` documents the ask, the retries and the flush route.
+- **Tests:** each new one fails on the old code.
+  - `PlexGuideNotifier.test.ts`: a 401 or 403 from either call gets no retry and one warning, and the next server
+    is asked at once.
+  - Two failures then a success, with the waits growing (5 s, then 15 s), plus the wait formula itself.
+  - One server's client lookup throws, has no token, or never answers, and the other server is still asked at once.
+  - A flush with a server that never answers resolves after 30 s, naming it `pending` and the other `reloaded`. One
+    that runs out before any server is reached logs "an ask under way". The route's status is 200 or 202.
+  - After `stop()`, a waiting retry never fires and no timer is left. The retry timer was unref'd. A try that fails
+    after `stop()` starts no retry timer.
+  - `PlexApiClient.test.ts`: `getDvrs` rejects with `auth_error` on 401 and 403 without an error line;
+    `refreshGuide` rejects with `auth_error` on 401 and 403, and `generic_request_error` on 503.
+
 ### Plex is asked to reload the guide once per change, and only when it can download it (2026-10-18)
 
 - **What you saw:** Plex showed yesterday's lineup, or half of today's, for hours after a change. After every
@@ -583,7 +698,8 @@ floor can cover them. Shared rules, API/UI messages, and regressions agree.
   with `writeFile`, and `/api/xmltv.xml` serves the same path, so a download during a write got a truncated file.
 - **Fix:** `PlexGuideNotifier` (singleton) takes the asks: a request made before `markListening()` (called by
   `App.start()` after `runServer()`) waits for it; requests within 10 s collapse into one ask after the last; a failed
-  ask is retried 3 times, 5 s apart, then logged once. `POST /api/xmltv/flush` resolves when no guide write is under way (the task reports
+  ask is retried 3 times, 5 s apart, then logged once (since 2026-10-19: 5 s then 15 s, a refused token isn't
+  retried, and a flush answers within 30 s; see above). `POST /api/xmltv/flush` resolves when no guide write is under way (the task reports
   its start and end; a channel save starts one without awaiting it) and no ask is pending or running, for a script
   that saved several channels and wants to check Plex's guide. `XmlTvWriter` writes
   `<outputPath>.<pid>.tmp` and renames it over the guide. The Plex client doc no longer says a guide refresh ends

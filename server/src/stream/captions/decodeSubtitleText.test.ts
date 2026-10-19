@@ -1,4 +1,8 @@
-import { decodeSubtitleText, decodeWindows1252 } from './decodeSubtitleText.ts';
+import {
+  decodeSubtitleText,
+  decodeWindows1252,
+  subtitleCharacterEncoding,
+} from './decodeSubtitleText.ts';
 
 const bytes = (...parts: (string | number[])[]) =>
   Buffer.concat(
@@ -113,5 +117,22 @@ describe('decodeWindows1252', () => {
     expect(decodeWindows1252(Buffer.from(others))).toBe(
       String.fromCharCode(...others),
     );
+  });
+});
+
+describe('subtitleCharacterEncoding', () => {
+  test('only overrides FFmpeg for legacy bytes', () => {
+    expect(subtitleCharacterEncoding(Buffer.from('café', 'latin1'))).toBe(
+      'WINDOWS-1252',
+    );
+    expect(subtitleCharacterEncoding(Buffer.from('café'))).toBeUndefined();
+    expect(
+      subtitleCharacterEncoding(
+        Buffer.concat([
+          Buffer.from([0xff, 0xfe]),
+          Buffer.from('café', 'utf16le'),
+        ]),
+      ),
+    ).toBeUndefined();
   });
 });

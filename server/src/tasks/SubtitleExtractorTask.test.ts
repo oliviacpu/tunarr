@@ -5,7 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MediaSourceId } from '../db/schema/base.ts';
 import { QueryError } from '../external/BaseApiClient.ts';
 import { Result } from '../types/result.ts';
-import { SubtitleExtractorTask } from './SubtitleExtractorTask.ts';
+import {
+  isInsideFolder,
+  SubtitleExtractorTask,
+} from './SubtitleExtractorTask.ts';
+
+describe('subtitle cache path boundaries', () => {
+  it.each([
+    ['/cache/subtitles/movie.srt', true],
+    ['/cache/subtitles/nested/movie.srt', true],
+    ['/cache/subtitles/..movie.srt', true],
+    ['/cache/subtitles', false],
+    ['/cache/subtitles-other/movie.srt', false],
+    ['/cache/subtitles/../movie.srt', false],
+  ])('%s is inside the cache: %s', (file, expected) => {
+    expect(isInsideFolder('/cache/subtitles', file)).toBe(expected);
+  });
+});
 
 vi.mock('@/util/logging/LoggerFactory.js', () => {
   const logger = {

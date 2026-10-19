@@ -58,7 +58,10 @@ import { MediaSourceScanCoordinator } from './scanner/MediaSourceScanCoordinator
 import { ScanJobExecutor } from './scanner/ScanJobExecutor.ts';
 import type { ScanJobRunner } from './scanner/ScanJobRunner.ts';
 import { InProcessScanJobRunner } from './scanner/ScanJobRunner.ts';
-import { WorkerScanJobRunner } from './scanner/WorkerScanJobRunner.ts';
+import {
+  scanJobTimeoutMs,
+  WorkerScanJobRunner,
+} from './scanner/WorkerScanJobRunner.ts';
 import { TunarrSubprocessService } from './TunarrSubprocessService.ts';
 import type {
   GenericMediaSourceScanner,
@@ -257,8 +260,11 @@ export const ServicesModule = new ContainerModule(({ bind }) => {
         () => subprocess.createWorker({}, 'scan'),
         inProcess,
         ctx.get(MediaSourceProgressService),
-        // Dev workers compile the server with tsx before they start
-        isDev ? { bootTimeoutMs: 180_000 } : {},
+        {
+          // Dev workers compile the server with tsx before they start
+          ...(isDev ? { bootTimeoutMs: 180_000 } : {}),
+          jobTimeoutMs: scanJobTimeoutMs(),
+        },
       );
     })
     .inSingletonScope();
