@@ -2,7 +2,7 @@ import type { FfmpegEncoder } from '@/ffmpeg/ffmpegInfo.js';
 import { FfmpegInfo } from '@/ffmpeg/ffmpegInfo.js';
 import { globalOptions, serverOptions } from '@/globals.js';
 import { GlobalScheduler } from '@/services/Scheduler.js';
-import { xmlTvLinkHost } from '@/services/XmlTvWriter.js';
+import { publicLinkOrigin } from '@/util/iconUtil.js';
 import { UpdateXmlTvTask } from '@/tasks/UpdateXmlTvTask.js';
 import type { RouterPluginAsyncCallback } from '@/types/serverType.js';
 import { fileExists } from '@/util/fsUtil.js';
@@ -249,7 +249,7 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
     handler: async (req, res) => {
       try {
         const xmltvSettings = req.serverCtx.settings.xmlTvSettings();
-        const host = xmlTvLinkHost(xmltvSettings.publicUrl, req);
+        const host = publicLinkOrigin(xmltvSettings.publicUrl, req);
         const fileContent = await fsPromises.readFile(
           xmltvSettings.outputPath,
           'utf8',

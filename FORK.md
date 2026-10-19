@@ -30,6 +30,10 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 - **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
 
+### batch publication lookups and clean stale temporary files (2026-10-19)
+
+- **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
+
 ### expose memory tuning and index library pagination (2026-10-19)
 
 - **Change:** Adds opt-in SQLite cache, mmap and warmup controls, preserving existing cache defaults. Migration 0056 indexes library pagination after EXPLAIN showed a temporary sort. Adds an explicit-transaction policy check.
@@ -40,6 +44,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 
+### Narrow gap-music lookup and deleted-list cleanup (2026-10-19)
+
+- **What changed:** gap-music selection reads only the program fields it needs, avoiding full filler-list program materialization. Deleting a list clears its channel gap-music references.
+- **Fix:** `FillerListDB.getGapMusicPrograms` selects track identity, playback eligibility and artist display fields; `GapMusicPicker` uses that result. List deletion removes `offline.musicListId` while preserving other offline settings.
+- **Validation:** database tests check the selected fields and deleted-list cleanup; stream-program regressions use the narrower database contract.
+- **Upstream:** not sent; personal fork change.
+
 <!-- Entry format:
 ### Short title (YYYY-MM-DD, commit)
 - **What you saw:** the symptom.
@@ -47,6 +58,68 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:** what changed, with the files.
 - **Upstream:** not sent / issue or PR link.
 -->
+
+### A program's captions end where the next item starts, and each segment names its own program's language (2026-10-19)
+
+- **What you saw:** found in code review, not on the deployment.
+  - When a program's video stopped before its scheduled end (ffmpeg exited early, or the file is shorter than its
+    recorded duration) and the next item had no captions of its own (flex time, an error screen, filler without
+    subtitles), that item carried the rest of the earlier program's dialogue, up to the earlier program's scheduled end.
+  - A captioned HLS segment's PMT named the language of the newest program's captions, so a client still fetching one
+    program's last segments after the next one started got the next program's language on them. The `.ts` stream for
+    HDHomeRun clients was not affected: `CaptionLanguageStream` relabels its PMT with the first language preference.
+- **Cause:**
+  - `HlsSession.transcode` advances `transcodedUntil` by the program's planned length before ffmpeg runs, and
+    `addCaptions` lays the program's captions out over that planned length. The next program starts where the last
+    segment's video ended (`getPtsOffset`), which is inside the earlier window when ffmpeg stopped early. Only a
+    program with captions added an entry to the caption timeline, so for an item without any, `captionEntryAt` found
+    the earlier program's entry and `captionPairs` sent its schedule.
+  - `captionedSegment` took the language from `#captionTimeline.at(-1)`, the newest entry, whichever program the
+    segment belonged to.
+- **Fix:**
+  - At every program start, with captions or without, `HlsSession.endCaptionsAt` cuts each timeline entry's window at
+    the new program's start PTS (on the 33-bit clock). Only frames from the new start on change, and those belong to
+    the new program, so a program keeps its own frames' captions. A captioned next program's frames resolve to its own
+    entry as before. A program whose video ends a frame short of its plan counts as cut too, which only adds the
+    erase below.
+  - Where a window was cut, the first two frames within a second after the cut that no program's captions cover carry
+    Erase Displayed Memory instead of padding, so a caption showing when the program stopped doesn't stay up over the
+    next item.
+  - When the last segment can't be read (ffmpeg left it empty), the next program starts again at `SessionStartPts`,
+    under programs that already played. Those that start inside its planned span are emptied, so none of their
+    captions go out over it. A program it won't reach keeps its captions for the segments viewers are still fetching.
+  - An entry cut to nothing leaves the timeline, so a run of programs that fail at once can't push out a program whose
+    segments are still being served.
+  - `insertCaptions` (`MpegTsCaptionInserter.ts`) can take the language as a function of the segment's frames, asked
+    after `pairsForFrames`. `captionedSegment` passes one that looks up the entry for the segment's first frame
+    (`captionLanguage`), and falls back to the first language preference only when no entry covers it.
+  - Still open: when the item after an early stop has captions of its own, a caption the stopped program left on
+    screen stays up until that item's first caption replaces it, as before. Erasing there would mean adding an erase
+    to the start of the next program's schedule in `Cea608Encoder`.
+- **Tests:** `HlsSession.test.ts`, "captionedSegment > across programs", with programs run through the session's own
+  loop:
+  - The first program has a line every 2 s for 30 s and its video ends 10 s in; the next has no captions. A segment
+    4 s into the first keeps its captions. The next item's first two frames erase the screen and the rest are padding.
+    A segment 12 s after the first program started is padding only.
+  - After the clock goes back, a segment inside an earlier program's window is padding only. When the program the
+    clock went back to is planned short of that earlier program, the earlier one keeps its captions.
+  - After ten programs that each fail at once, the first program's segment still has its caption.
+  - A program in `jpn` whose video ends early, then one in `eng`: the first one's last segment has `jpn` in its ISO
+    639 and caption service descriptors, the next one's `eng`. A segment past every program's window gets the first
+    language preference.
+  - Five of these fail on the old code. The sixth (the earlier program kept) passes there, and fails if the clock
+    check empties every later program. Taking out the erase, the clock check or the pruning fails its own test.
+    `MpegTsCaptionInserter.test.ts`: the language function gets the frames' PTS in presentation order. The other
+    caption tests and the golden snapshot are unchanged.
+- **Upstream:** not sent.
+
+### Search key replacement and backup guidance (2026-10-19)
+
+- **Cause:** replacing a missing or invalid key wrote directly to the destination, read failures were treated as missing keys, and reused files could retain broad permissions.
+- **Fix:** publish a generated key through a private temporary file and atomic rename; preserve existing keys on read/publication failure; tighten reused key files to owner-only permissions on the main thread. Workers only read existing valid keys.
+- **Backups:** the built-in archive omits `meilisearch-master-key`; keep a private copy separately and restore it before startup.
+- **Tests:** `searchMasterKey.test.ts` covers generation/reuse, permissions, worker refusal, rename failure and read failure. Native `MeilisearchService.local.test.ts` covers restart authentication and retained indexed data when a key is regenerated.
+- **Upstream:** not sent. This is hardening for the search authentication change in this personal fork.
 
 ### ffmpeg's and ffprobe's logs no longer carry media-server tokens (2026-10-19)
 
