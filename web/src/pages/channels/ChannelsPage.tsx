@@ -8,15 +8,9 @@ import AddCircleIcon from '@mui/icons-material/AddCircle';
 import type { BoxProps } from '@mui/material';
 import {
   Box,
-  Button,
   Card,
   CardActionArea,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   IconButton,
   Paper,
   Stack,
@@ -28,7 +22,7 @@ import {
 } from '@mui/material';
 import { green, red, yellow } from '@mui/material/colors';
 import { styled, useTheme } from '@mui/material/styles';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import type { ChannelSession } from '@tunarr/types';
 import {
@@ -54,7 +48,6 @@ import NoChannelsCreated from '../../components/channel_config/NoChannelsCreated
 import { ChannelIconDisplay } from '../../components/channels/ChannelIconDisplay.tsx';
 import { ChannelOptionsMenu } from '../../components/channels/ChannelOptionsMenu.tsx';
 import { ChannelSessionsDialog } from '../../components/channels/ChannelSessionsDialog.tsx';
-import { deleteApiChannelsByIdMutation } from '../../generated/@tanstack/react-query.gen.ts';
 import { useChannelsSuspense } from '../../hooks/useChannels.ts';
 import { useServerEvents } from '../../hooks/useServerEvents.ts';
 import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
@@ -98,9 +91,6 @@ export default function ChannelsPage() {
   const mediumViewport = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [deleteChannelConfirmation, setDeleteChannelConfirmation] = useState<
-    Channel | undefined
-  >(undefined);
   const [sessionDetailDialog, setSessionDetailDialog] =
     useState<Channel | null>(null);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -156,61 +146,6 @@ export default function ChannelsPage() {
       to: `/channels/$channelId`,
       params: { channelId: id },
     }).catch(console.error);
-  };
-
-  const removeChannelMutation = useMutation({
-    ...deleteApiChannelsByIdMutation(),
-    onSuccess: () => {
-      return queryClient.invalidateQueries({
-        predicate: invalidateTaggedQueries('Channels'),
-      });
-    },
-  });
-
-  const removeChannel = (id: string) => {
-    removeChannelMutation.mutate({ path: { id } });
-    setDeleteChannelConfirmation(undefined);
-  };
-
-  const renderConfirmationDialog = () => {
-    return (
-      <Dialog
-        open={!!deleteChannelConfirmation}
-        onClose={() => setDeleteChannelConfirmation(undefined)}
-        aria-labelledby="delete-channel-title"
-        aria-describedby="delete-channel-description"
-      >
-        {deleteChannelConfirmation && (
-          <>
-            <DialogTitle id="delete-channel-title">
-              <Trans>Delete Channel</Trans> "{deleteChannelConfirmation.name}"?
-            </DialogTitle>
-            <DialogContent>
-              <DialogContentText id="delete-channel-description">
-                <Trans>
-                  Deleting a Channel will remove all programming from the
-                  channel. This action cannot be undone.
-                </Trans>
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button
-                onClick={() => setDeleteChannelConfirmation(undefined)}
-                autoFocus
-              >
-                <Trans>Cancel</Trans>
-              </Button>
-              <Button
-                onClick={() => removeChannel(deleteChannelConfirmation.id)}
-                variant="contained"
-              >
-                <Trans>Delete</Trans>
-              </Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
-    );
   };
 
   const renderChannelMenu = (row: ChannelRow) => {
@@ -587,7 +522,6 @@ export default function ChannelsPage() {
   return (
     <div>
       <Box display="flex" mb={2}>
-        {renderConfirmationDialog()}
         <Typography flexGrow={1} variant="h3">
           <Trans>Channels</Trans>
         </Typography>

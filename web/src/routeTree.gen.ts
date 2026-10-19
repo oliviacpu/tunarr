@@ -16,6 +16,7 @@ import { Route as SearchRouteImport } from './routes/search';
 import { Route as GuideRouteImport } from './routes/guide';
 import { Route as IndexRouteImport } from './routes/index';
 import { Route as SystemIndexRouteImport } from './routes/system/index';
+import { Route as SettingsIndexRouteImport } from './routes/settings/index';
 import { Route as Media_sourcesIndexRouteImport } from './routes/media_sources_/index';
 import { Route as LibraryIndexRouteImport } from './routes/library/index';
 import { Route as ChannelsIndexRouteImport } from './routes/channels_/index';
@@ -97,6 +98,11 @@ const SystemIndexRoute = SystemIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => SystemRoute,
+} as any);
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
 } as any);
 const Media_sourcesIndexRoute = Media_sourcesIndexRouteImport.update({
   id: '/media_sources_/',
@@ -375,6 +381,7 @@ export interface FileRoutesByFullPath {
   '/channels': typeof ChannelsIndexRoute;
   '/library': typeof LibraryIndexRoute;
   '/media_sources': typeof Media_sourcesIndexRoute;
+  '/settings/': typeof SettingsIndexRoute;
   '/system/': typeof SystemIndexRoute;
   '/library/custom-shows/$showId': typeof LibraryCustomShowsShowIdRouteRouteWithChildren;
   '/library/custom-shows/new': typeof LibraryCustomShowsNewRouteRouteWithChildren;
@@ -408,7 +415,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute;
   '/guide': typeof GuideRoute;
   '/search': typeof SearchRoute;
-  '/settings': typeof SettingsRouteWithChildren;
   '/welcome': typeof WelcomeRoute;
   '/channels/new': typeof ChannelsNewRoute;
   '/channels/test': typeof ChannelsTestRoute;
@@ -428,6 +434,7 @@ export interface FileRoutesByTo {
   '/channels': typeof ChannelsIndexRoute;
   '/library': typeof LibraryIndexRoute;
   '/media_sources': typeof Media_sourcesIndexRoute;
+  '/settings': typeof SettingsIndexRoute;
   '/system': typeof SystemIndexRoute;
   '/library/custom-shows/$showId': typeof LibraryCustomShowsShowIdRouteRouteWithChildren;
   '/library/fillers/$fillerId': typeof LibraryFillersFillerIdRouteRouteWithChildren;
@@ -482,6 +489,7 @@ export interface FileRoutesById {
   '/channels_/': typeof ChannelsIndexRoute;
   '/library/': typeof LibraryIndexRoute;
   '/media_sources_/': typeof Media_sourcesIndexRoute;
+  '/settings/': typeof SettingsIndexRoute;
   '/system/': typeof SystemIndexRoute;
   '/library/custom-shows_/$showId': typeof LibraryCustomShowsShowIdRouteRouteWithChildren;
   '/library/custom-shows_/new': typeof LibraryCustomShowsNewRouteRouteWithChildren;
@@ -539,6 +547,7 @@ export interface FileRouteTypes {
     | '/channels'
     | '/library'
     | '/media_sources'
+    | '/settings/'
     | '/system/'
     | '/library/custom-shows/$showId'
     | '/library/custom-shows/new'
@@ -572,7 +581,6 @@ export interface FileRouteTypes {
     | '/'
     | '/guide'
     | '/search'
-    | '/settings'
     | '/welcome'
     | '/channels/new'
     | '/channels/test'
@@ -592,6 +600,7 @@ export interface FileRouteTypes {
     | '/channels'
     | '/library'
     | '/media_sources'
+    | '/settings'
     | '/system'
     | '/library/custom-shows/$showId'
     | '/library/fillers/$fillerId'
@@ -645,6 +654,7 @@ export interface FileRouteTypes {
     | '/channels_/'
     | '/library/'
     | '/media_sources_/'
+    | '/settings/'
     | '/system/'
     | '/library/custom-shows_/$showId'
     | '/library/custom-shows_/new'
@@ -752,6 +762,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/system/';
       preLoaderRoute: typeof SystemIndexRouteImport;
       parentRoute: typeof SystemRoute;
+    };
+    '/settings/': {
+      id: '/settings/';
+      path: '/';
+      fullPath: '/settings/';
+      preLoaderRoute: typeof SettingsIndexRouteImport;
+      parentRoute: typeof SettingsRoute;
     };
     '/media_sources_/': {
       id: '/media_sources_/';
@@ -1086,6 +1103,7 @@ interface SettingsRouteChildren {
   SettingsScannerRoute: typeof SettingsScannerRoute;
   SettingsSourcesRoute: typeof SettingsSourcesRoute;
   SettingsXmltvRoute: typeof SettingsXmltvRoute;
+  SettingsIndexRoute: typeof SettingsIndexRoute;
   SettingsFfmpegConfigIdRoute: typeof SettingsFfmpegConfigIdRoute;
   SettingsFfmpegNewRoute: typeof SettingsFfmpegNewRoute;
 }
@@ -1098,6 +1116,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsScannerRoute: SettingsScannerRoute,
   SettingsSourcesRoute: SettingsSourcesRoute,
   SettingsXmltvRoute: SettingsXmltvRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
   SettingsFfmpegConfigIdRoute: SettingsFfmpegConfigIdRoute,
   SettingsFfmpegNewRoute: SettingsFfmpegNewRoute,
 };

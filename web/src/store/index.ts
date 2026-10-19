@@ -1,5 +1,5 @@
 import type { Maybe } from '@/types/util.ts';
-import { get, isNil, isObject, isUndefined, merge } from 'lodash-es';
+import { get, isNil, isObject, merge, omit } from 'lodash-es';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -20,7 +20,6 @@ import {
   SettingsStateInternalSchema,
   createSettingsSlice,
 } from './settings/store.ts';
-import type { ThemeEditorStateInner } from './themeEditor/store.ts';
 import {
   type ThemeEditorState,
   createThemeEditorState,
@@ -89,25 +88,17 @@ const useStore = create<State>()(
               }
             }
 
-            // Migrate to new setting.
-            if (
-              isObject(persistedTheme) &&
-              isUndefined(
-                (persistedTheme as ThemeEditorStateInner).themePreference,
-              )
-            ) {
-              const castedTheme = persistedTheme as ThemeEditorStateInner;
-              castedTheme.themePreference = castedTheme.darkMode
-                ? 'dark'
-                : 'light';
-            }
-
             return {
               ...currentState,
               theme: merge(
                 {},
                 currentState.theme ?? {},
-                isObject(persistedTheme) ? persistedTheme : {},
+                // Older builds stored a themePreference that nothing reads
+                // (MUI keeps the color mode). Drop it so it isn't merged back
+                // into the state and persisted again.
+                isObject(persistedTheme)
+                  ? omit(persistedTheme, 'themePreference')
+                  : {},
               ),
               settings: merge(
                 {},
