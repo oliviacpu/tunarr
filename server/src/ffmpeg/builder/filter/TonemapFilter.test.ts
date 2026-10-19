@@ -27,7 +27,7 @@ describe('TonemapFilter', () => {
 
     expect(filter.filter).to.eq(
       'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,' +
-        'tonemap=tonemap=hable:desat=0:peak=1000,' +
+        'tonemap=tonemap=hable:desat=0:peak=10,' +
         'zscale=t=bt709:m=bt709:r=tv,format=yuv420p,' +
         'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,' +
         'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
@@ -48,7 +48,7 @@ describe('TonemapFilter', () => {
     expect(filter.filter).to.eq(
       'hwdownload,format=p010le|nv12,' +
         'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,' +
-        'tonemap=tonemap=hable:desat=0:peak=1000,' +
+        'tonemap=tonemap=hable:desat=0:peak=10,' +
         'zscale=t=bt709:m=bt709:r=tv,format=yuv420p,' +
         'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,' +
         'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
@@ -82,7 +82,7 @@ describe('TonemapFilter', () => {
 
     const filter = new TonemapFilter(currentState, 'mobius');
 
-    expect(filter.filter).toContain('tonemap=tonemap=mobius:desat=0:peak=1000');
+    expect(filter.filter).toContain('tonemap=tonemap=mobius:desat=0:peak=10,');
   });
 
   test('uses hable for bt2390, which only tonemapx has', () => {
@@ -96,7 +96,7 @@ describe('TonemapFilter', () => {
 
     const filter = new TonemapFilter(currentState, 'bt2390');
 
-    expect(filter.filter).toContain('tonemap=tonemap=hable:desat=0:peak=1000');
+    expect(filter.filter).toContain('tonemap=tonemap=hable:desat=0:peak=10,');
     expect(filter.filter).not.toContain('bt2390');
   });
 

@@ -9,8 +9,8 @@
   "main": "src/index.ts",
   "bin": "dist/bundle.cjs",
   "scripts": {
-    "build-dev": "cross-env NODE_ENV=development NODE_OPTIONS=--max-old-space-size=8192 tsgo -p tsconfig.build.json --noEmit --watch",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsgo -p tsconfig.build.json",
+    "build-dev": "cross-env NODE_ENV=development NODE_OPTIONS=--max-old-space-size=8192 tsc -p tsconfig.build.json --noEmit --watch",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsc -p tsconfig.build.json",
     "bundle": "dotenvx run -- tsx scripts/bundle.ts",
     "make-bin": "dotenvx run -- tsx scripts/make-bin.ts",
     "clean": "rimraf --glob ./build/ ./dist/ ./bin/*",
@@ -34,8 +34,8 @@
     "bench:scan-worker": "cross-env NODE_ENV=development tsx scripts/scan-worker-ab.ts",
     "bench:custom-show-sync": "cross-env NODE_ENV=development tsx scripts/custom-show-sync-ab.ts",
     "tunarr": "dotenv -e .env.development -- tsx src/index.ts",
-    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsgo -p tsconfig.build.json --noEmit --diagnostics && pnpm typecheck:local-tests",
-    "typecheck:local-tests": "tsgo -p tsconfig.local-test.json --noEmit"
+    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsc -p tsconfig.build.json --noEmit --diagnostics && pnpm typecheck:local-tests",
+    "typecheck:local-tests": "tsc -p tsconfig.local-test.json --noEmit"
   },
   "dependencies": {
     "@cospired/i18n-iso-languages": "^4.2.0",
@@ -115,7 +115,6 @@
     "@types/unzip-stream": "^0.3.4",
     "@types/uuid": "^9.0.8",
     "@types/yargs": "^17.0.33",
-    "@typescript/native-preview": "catalog:",
     "@vitest/coverage-v8": "catalog:vitest",
     "@yao-pkg/pkg": "^6.9.0",
     "cross-env": "^7.0.3",

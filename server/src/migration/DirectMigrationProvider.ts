@@ -251,11 +251,18 @@ export class DirectMigrationProvider implements MigrationProvider {
         migration1790271998: makeMigrationFromSqlFile(
           './sql/0052_colorful_ken_ellis.sql',
         ),
+        migration1791321608: makeMigrationFromSqlFile(
+          './sql/0053_real_raza.sql',
+        ),
+        // Fork migrations, renumbered after upstream's 0053 but keeping the keys
+        // they were first released under, so a database that already ran them
+        // (as 0053_flawless_donald_blake and 0054_serious_rattler) still knows
+        // them and does not run them again.
         migration1792160617: makeMigrationFromSqlFile(
-          './sql/0053_flawless_donald_blake.sql',
+          './sql/0054_flawless_donald_blake.sql',
         ),
         migration1792181517: makeMigrationFromSqlFile(
-          './sql/0054_serious_rattler.sql',
+          './sql/0055_serious_rattler.sql',
         ),
       } satisfies Record<string, TunarrDatabaseMigration>,
       wrapWithTransaction,

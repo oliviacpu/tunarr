@@ -7,6 +7,7 @@ import dayjs from '@/util/dayjs.js';
 import type {
   ChannelCaptions,
   SaveableChannel,
+  UpdateChannelRequest,
   Watermark,
 } from '@tunarr/types';
 import { desc, eq, sql } from 'drizzle-orm';
@@ -52,9 +53,10 @@ function roundToMinute(timestamp: number) {
 
 // Duration is left out because it always follows the lineup. A settings form
 // loaded before a lineup change would otherwise write back a stale cycle.
+// startTime is written only when the request carries it, for the same reason.
 
 function updateRequestToChannel(
-  updateReq: SaveableChannel,
+  updateReq: UpdateChannelRequest,
 ): Partial<NewChannelOrm> {
   const sanitizedWatermark = sanitizeChannelWatermark(updateReq.watermark);
 
@@ -65,7 +67,10 @@ function updateRequestToChannel(
     guideMinimumDuration: updateReq.guideMinimumDuration,
     groupTitle: updateReq.groupTitle,
     disableFillerOverlay: updateReq.disableFillerOverlay,
-    startTime: roundToMinute(updateReq.startTime),
+    startTime:
+      updateReq.startTime !== undefined
+        ? roundToMinute(updateReq.startTime)
+        : undefined,
     offline: updateReq.offline,
     name: updateReq.name,
     stealth: updateReq.stealth,
@@ -237,7 +242,7 @@ export class BasicChannelRepository {
 
   async updateChannel(
     id: string,
-    updateReq: SaveableChannel,
+    updateReq: UpdateChannelRequest,
   ): Promise<
     ChannelAndLineup<MarkRequired<ChannelOrmWithRelations, 'fillerShows'>>
   > {

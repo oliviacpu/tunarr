@@ -10,6 +10,7 @@ import type {
   FillerCollectionSchema,
   NewChannelSaveRequestSchema,
   SaveableChannelSchema,
+  UpdateChannelRequestSchema,
   WatermarkSchema,
 } from './schemas/channelSchema.js';
 import {
@@ -38,6 +39,8 @@ export type Channel = z.infer<typeof ChannelSchema>;
 export type ChannelCaptions = z.infer<typeof ChannelCaptionsSchema>;
 
 export type SaveableChannel = z.infer<typeof SaveableChannelSchema>;
+
+export type UpdateChannelRequest = z.infer<typeof UpdateChannelRequestSchema>;
 
 export type NewChannelSaveRequest = z.infer<typeof NewChannelSaveRequestSchema>;
 
