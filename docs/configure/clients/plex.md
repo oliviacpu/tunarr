@@ -28,6 +28,12 @@ Plex should now display your Tunarr channels in the Live TV section. Select "Vie
 
 ![Plex settings view guide](/assets/plex-settings-viewguide.png)
 
+### Guide updates
+
+When a Plex media source has **Send guide updates** on, Tunarr asks that Plex server to reload its guide after each guide write. Writes less than 10 seconds apart, such as saving several channels in a row, lead to one ask, 10 seconds after the last. An ask made while Tunarr starts waits until Plex can download the guide. Every Plex server is asked at the same time, so one that fails or doesn't answer doesn't hold up the others. A failed ask is tried three times, 5 and then 15 seconds apart. If all three fail, Plex keeps its guide until the next guide write. If Plex refuses Tunarr's token (HTTP 401 or 403), or the media source has no token, Tunarr doesn't try again and logs a warning to check that media source's Plex token. The next guide write asks again.
+
+A script that saves channels and then checks Plex's guide can call `POST /api/xmltv/flush` once its saves have returned. It answers when the guide writes those saves started have finished and Plex has been asked, or after 30 seconds at the latest. The status is 200 when everything finished and 202 when it stopped waiting with something still under way. The answer has `done` (`false` if it stopped waiting) and, for each Plex server asked, how the ask ended: `reloaded`, `no_live_tv`, `auth_failed`, `failed`, or `pending` if it hadn't finished. For example: `{"done": true, "servers": [{"name": "Plex", "outcome": "reloaded"}]}`.
+
 ### Posters in the guide
 
 Plex's apps load guide pictures (programme posters, channel logos) themselves, from the addresses in the XMLTV file. Those addresses start with the one Plex used to fetch the guide. If that address only works on the server, such as `http://127.0.0.1:8000`, the apps can't load the pictures and show plain titles instead.

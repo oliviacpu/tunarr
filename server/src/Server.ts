@@ -56,6 +56,7 @@ import { versionedUploadCacheControl } from './util/iconUtil.ts';
 import { type ServerOptions, serverOptions } from './globals.js';
 import type { IWorkerPool } from './interfaces/IWorkerPool.ts';
 import { ServerContext, ServerRequestContext } from './ServerContext.js';
+import { PlexGuideNotifier } from './services/PlexGuideNotifier.ts';
 import { Result } from './types/result.ts';
 import { getEnvVar, TUNARR_ENV_VARS } from './util/env.ts';
 import { filename, isDev, run } from './util/index.js';
@@ -616,6 +617,9 @@ export class Server {
     }
 
     this.serverContext.searchService.stop();
+
+    // Drops a Plex guide ask waiting to retry, and answers a waiting flush.
+    container.get(PlexGuideNotifier).stop();
 
     try {
       this.logger.info('Pausing all on-demand channels');

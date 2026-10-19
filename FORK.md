@@ -568,6 +568,50 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `TvGuideService.test.ts`: a full build and a channel save both ask for the read.
 - **Upstream:** not sent.
 
+### The Plex guide ask stops on a refused token, backs off, and can't hold up other servers or a flush (2026-10-19)
+
+- **What you saw:** nothing yet. A review of `PlexGuideNotifier` (`plans/fork-review-2026-10-19.md`, section 11)
+  found five ways it could misbehave.
+- **Cause:**
+  - A 401 or 403 from Plex was retried like a 503, so a token that can't work got three tries and three log lines.
+    The Plex client also reported a refused token on `GET /livetv/dvrs` as a generic failure, and the reload's as
+    a raw `AxiosError`, so the notifier couldn't tell it apart. A media source with no token was retried too.
+  - The wait between tries was a fixed 5 s, so a restarting Plex got all three tries within ten seconds.
+  - If making the client for one Plex server threw, the whole ask ended and every server after it was skipped.
+    Servers were also asked one after another, so one that didn't answer held up the rest for minutes.
+  - `flush()` had no time limit. A Plex that never answered held `POST /api/xmltv/flush` for up to about six minutes
+    per server (60 s request timeout × 2 calls × 3 tries).
+  - The retry wait was a plain `setTimeout`. It kept the process alive, and nothing cancelled it at shutdown.
+- **Fix:**
+  - The Plex client's `getDvrs` and `refreshGuide` both reject with an error classified by the base client's
+    `requestErrorResult`: 401/403 is `auth_error`, and 404 stays `not_found`. `getDvrs` logs its failure at debug,
+    since its one caller reports it. The notifier's `isPlexAuthError` checks only for `auth_error`. That server's
+    ask stops at once with a warning to check its Plex token. A media source with no token gets the same warning
+    without a try.
+  - Each wait is three times the last: 5 s, then 15 s (`retryDelayMs`, capped at 45 s). There are still three tries.
+  - Every server is asked at the same time, each with its own retry wait. Any failure is logged with the server's
+    name and leaves the others alone.
+    Server names are log arguments, not part of the format string.
+  - `flush()` answers after 30 s at the latest (`FlushTimeoutMs`) with `{ done, servers: [{ name, outcome }] }` and
+    logs what was still left. The outcomes are `reloaded`, `no_live_tv`, `auth_failed`, `failed` and `pending`.
+    `POST /api/xmltv/flush` returns that answer: 200 when everything finished, as before, and 202 when it stopped
+    waiting. The OpenAPI document and the web client were regenerated.
+  - The retry timer is unref'd. `stop()`, called from the server's graceful shutdown, clears the debounce and retry
+    timers and ends a retry wait without another try. It also answers a waiting flush with `done: false` and keeps
+    later requests from scheduling anything.
+  - `docs/configure/clients/plex.md` documents the ask, the retries and the flush route.
+- **Tests:** each new one fails on the old code.
+  - `PlexGuideNotifier.test.ts`: a 401 or 403 from either call gets no retry and one warning, and the next server
+    is asked at once.
+  - Two failures then a success, with the waits growing (5 s, then 15 s), plus the wait formula itself.
+  - One server's client lookup throws, has no token, or never answers, and the other server is still asked at once.
+  - A flush with a server that never answers resolves after 30 s, naming it `pending` and the other `reloaded`. One
+    that runs out before any server is reached logs "an ask under way". The route's status is 200 or 202.
+  - After `stop()`, a waiting retry never fires and no timer is left. The retry timer was unref'd. A try that fails
+    after `stop()` starts no retry timer.
+  - `PlexApiClient.test.ts`: `getDvrs` rejects with `auth_error` on 401 and 403 without an error line;
+    `refreshGuide` rejects with `auth_error` on 401 and 403, and `generic_request_error` on 503.
+
 ### Plex is asked to reload the guide once per change, and only when it can download it (2026-10-18)
 
 - **What you saw:** Plex showed yesterday's lineup, or half of today's, for hours after a change. After every
@@ -582,7 +626,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   with `writeFile`, and `/api/xmltv.xml` serves the same path, so a download during a write got a truncated file.
 - **Fix:** `PlexGuideNotifier` (singleton) takes the asks: a request made before `markListening()` (called by
   `App.start()` after `runServer()`) waits for it; requests within 10 s collapse into one ask after the last; a failed
-  ask is retried 3 times, 5 s apart, then logged once. `POST /api/xmltv/flush` resolves when no guide write is under way (the task reports
+  ask is retried 3 times, 5 s apart, then logged once (since 2026-10-19: 5 s then 15 s, a refused token isn't
+  retried, and a flush answers within 30 s; see above). `POST /api/xmltv/flush` resolves when no guide write is under way (the task reports
   its start and end; a channel save starts one without awaiting it) and no ask is pending or running, for a script
   that saved several channels and wants to check Plex's guide. `XmlTvWriter` writes
   `<outputPath>.<pid>.tmp` and renames it over the guide. The Plex client doc no longer says a guide refresh ends
