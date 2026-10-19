@@ -26,10 +26,6 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### validate packaged binaries and make fork releases rerunnable (2026-10-19)
-
-- **Change:** Requires real-binary and packaged-worker tests before the final image is assembled, adds nightly/manual native Linux validation, repairs temporary paths in API generation, restores the upstream latest spec, and updates existing release notes on reruns. Release serialization remains in place.
-
 ### batch publication lookups and clean stale temporary files (2026-10-19)
 
 - **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
@@ -205,6 +201,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   are unchanged apart from the fixture's format. In `FfmpegStreamFactory.test.ts`, an HEVC or MPEG-2 channel logs no
   info line about captions over two programs. The wrapper, log and factory tests fail on the old code.
 - **Upstream:** not sent.
+
+### validate packaged binaries and make fork releases rerunnable (2026-10-19)
+
+- **Change:** Requires real-binary and packaged-worker tests before the final image is assembled, adds nightly/manual native Linux validation, repairs temporary paths in API generation, restores the upstream latest spec, and updates existing release notes on reruns. Release serialization remains in place.
 
 ### Captions keep the accented letters of Windows-1252 subtitle files (2026-10-19)
 
