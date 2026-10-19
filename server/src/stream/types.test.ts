@@ -21,4 +21,16 @@ describe('HttpStreamSource.redact', () => {
       Accept: 'image/*',
     });
   });
+
+  it('redacts every key form, whatever its case', () => {
+    const source = new HttpStreamSource(
+      'http://jf:8096/Videos/1/stream?ApiKey=abc123&x-emby-token=def456',
+    );
+
+    source.redact();
+
+    expect(source.path).toBe(
+      'http://jf:8096/Videos/1/stream?ApiKey=REDACTED&x-emby-token=REDACTED',
+    );
+  });
 });

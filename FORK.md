@@ -45,6 +45,56 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Tests:** `searchMasterKey.test.ts` covers generation/reuse, permissions, worker refusal, rename failure and read failure. Native `MeilisearchService.local.test.ts` covers restart authentication and retained indexed data when a key is regenerated.
 - **Upstream:** not sent. This is hardening for the search authentication change in this personal fork.
 
+### ffmpeg's and ffprobe's logs no longer carry media-server tokens (2026-10-19)
+
+- **What you saw:** found in a review of the fork's logging on 2026-10-19, not on screen. ffmpeg prints its input URL
+  on stderr (`Input #0, … from 'http://…?X-Plex-Token=…'`, and again when it can't open it), so
+  a failed transcode's error dump put the media server's token in Tunarr's log, in the `ffmpeg-error-log-*.log` file it
+  writes and on the console. A failed ffprobe or subtitle extraction did the same. This is upstream's code; the fork
+  hadn't changed it.
+- **Cause:**
+  - `FfmpegProcess` redacted only its args line, and only `X-Plex-Token=` and the `X-Emby-Token: ` header form. It
+    missed Emby's `?X-Emby-Token=` query form (Emby stream URLs) and `api_key=`. With ffmpeg logging on, stderr went
+    to `process.stderr` raw, and on a failed run its last 25 KiB went to the log at error level, to the error-log file
+    and to `process.stderr`, all unredacted. A failed spawn logged the arguments too, through the error's `spawnargs`.
+  - `ChildProcessHelper.getStdout`, which runs ffprobe and the subtitle extraction, logged the command line at debug.
+    `execFile`'s error holds the command line and stderr in its message and `cmd`, and `SubtitleExtractorTask` logs it
+    at warn. `FfmpegInfo.probeFile` logged the path and ffprobe's raw output, whose `format.filename` is the URL, when
+    the output didn't parse.
+  - The redaction regexes had three copies (`FfmpegProcess`, `HttpStreamSource.redact`, twice in
+    `TroubleshootService`), each with a different set of keys.
+- **Fix:**
+  - `server/src/util/redactSecrets.ts`: `redactSecrets` covers `X-Plex-Token` and `X-Emby-Token` in query (`=`) and
+    header (`: `) form, also quoted, `api_key` and `ApiKey`, a bare `token` query parameter and the
+    `MediaBrowser … Token="…"` header, ignoring case as the servers do. A value runs to the next delimiter, so an odd
+    character can't leave part of it showing. `RedactSecretsStream` applies it to a stream and holds back the
+    unfinished last line, so a token split across two reads is still caught. A line over 64 KiB, which ffmpeg doesn't
+    write, is passed on up to that point with ` [line truncated]` and the rest of it dropped, so a token the cut splits
+    can't leak. `redactErrorSecrets` cleans an error's message, stack, `cmd` and `spawnargs`.
+  - `FfmpegProcess` pipes stderr through `RedactSecretsStream` before the console and the 25 KiB tail read it, so the
+    error-level dump, the error-log file and the console copy are redacted. The dump adds the stream's held line, so a
+    last line ffmpeg hadn't finished when it exited isn't lost. Its args line and spawn errors use the shared function.
+  - `ChildProcessHelper.getStdout` redacts its debug line and the error it rejects with; `FfmpegInfo.probeFile` its
+    warning.
+  - `HttpStreamSource.redact` and the troubleshoot report (stream path, ffmpeg args and the ffmpeg log it returns) call
+    `redactSecrets`.
+  - Not covered: ffmpeg's own report file (`FFREPORT`, written when `enableFileLogging` is on; off by default) starts
+    with the command line, and ffmpeg writes it itself.
+- **Tests:**
+  - `redactSecrets.test.ts`: each key form, mixed case, several in one text, real ffmpeg stderr lines, a value with odd
+    characters, and text without secrets unchanged. For the stream: a key and a value each split across chunks, a
+    multi-byte character split across chunks, finished lines passed on at once, the held line read before the end,
+    and overlong lines cut inside a long value and between a header key and its value.
+  - `FfmpegProcess.test.ts`: a shell stand-in for ffmpeg prints its input URL (one line split inside the key across
+    two writes, and a last line with no line break) and exits 1 while a background process keeps its stderr open. The
+    error-level log, the error-log file and everything written to `process.stderr` have `REDACTED` and never the
+    token, and the dump has the last line; so do the args lines and the `error` event's `cmd`. Spawning a missing
+    binary logs `spawnargs` redacted.
+  - `ChildProcessHelper.test.ts` and `ffmpegInfo.test.ts`: a failing stand-in ffprobe's error and debug line, and the
+    warning for output that doesn't parse, are redacted. `types.test.ts`: `ApiKey=` and a lowercase `x-emby-token=`.
+  - All of these fail on the old code. The kill test from the `.ts` wrapper fix passes unchanged.
+- **Upstream:** not sent. It's upstream's code, so it could go upstream as a plain bug fix.
+
 ### An HEVC or MPEG-2 channel's .ts stream no longer offers an empty caption track (2026-10-19)
 
 - **What you saw:** found in code review, not on the deployment. With closed captions for HDHomeRun clients on, a
