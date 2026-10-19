@@ -45,11 +45,16 @@ export class PlaylistSegment {
         // What basename() threw before segments were numbered once
         throw new TypeError('A playlist entry has no segment URI');
       }
-      const match = basename(this.line).match(SegmentNameRegex)?.[1];
-      this.#number = match ? parseInt(match) : null;
+      this.#number = segmentNumberOf(this.line);
     }
     return this.#number;
   }
+}
+
+/** The number in a segment URI's file name, or null when it has none */
+export function segmentNumberOf(uri: string): number | null {
+  const match = basename(uri).match(SegmentNameRegex)?.[1];
+  return match ? parseInt(match) : null;
 }
 
 export type PlaylistDiscontinuity = {
@@ -64,14 +69,21 @@ export type MediaPlaylistSavepoint = {
   endsWithDiscontinuity: boolean;
   leadingDiscontinuities: number | undefined;
   nextStartMs: number;
+  lastSegment: PlaylistSegment | undefined;
+  nextStartMsAfterLast: number;
 };
 
 /**
- * The entries of an ffmpeg media playlist (`stream.m3u8`), which grows as
- * long as its session runs: every program's ffmpeg appends to it and nothing
- * trims it. Lines can be added as the file grows, so a request parses only
- * what was appended, and segments that can no longer be listed can be
- * dropped, so a long session holds only the recent ones.
+ * The entries of an HLS session's ffmpeg media playlist (`stream.m3u8`): the
+ * session's history, every segment listed so far in order. Every program's
+ * ffmpeg appends to the same file. Lines can be added as the file grows, so
+ * a request parses only what was appended, and segments that can no longer
+ * be listed can be dropped, so a long session holds only the recent ones.
+ *
+ * The file need not list the whole session. When ffmpeg keeps only its
+ * newest entries (a bounded hls_list_size), the index keeps what it already
+ * parsed and is continued from its last segment (rewindToLastSegment), so
+ * the history outlives the file's window.
  *
  * Start times are the parse's start plus every earlier EXTINF duration,
  * truncated to the millisecond at each step, which is what adding each
@@ -93,18 +105,25 @@ export class MediaPlaylistIndex {
   // Discontinuity tags before the first segment, once there is one
   #leadingDiscontinuities: number | undefined;
   #nextStartMs: number;
+  // The last segment parsed, discarded or not, and where the segment after
+  // it starts: where parsing a newer window of the file continues from
+  #lastSegment: PlaylistSegment | undefined;
+  #nextStartMsAfterLast: number;
 
   constructor(readonly start: Dayjs) {
     this.#nextStartMs = start.valueOf();
+    this.#nextStartMsAfterLast = this.#nextStartMs;
   }
 
   /**
    * The index of the first line of the playlist's body, the first line that
    * starts with #EXTINF:, or the line count when there is none. Lines before
-   * it are the header. Its discontinuity tags are ffmpeg artifacts from
-   * process restarts (discont_start), not program boundaries, and its
-   * DISCONTINUITY-SEQUENCE is ignored because with hls_list_size=0 every
-   * program boundary is in the body.
+   * it are the header, and a DISCONTINUITY-SEQUENCE there is ignored: ffmpeg
+   * never writes one. While the file starts at the session's first segment,
+   * the discontinuity tags before its first entry are ffmpeg artifacts from
+   * process restarts (discont_start), not program boundaries. Once ffmpeg
+   * drops old entries, a tag there marks the first listed entry, which only
+   * MediaPlaylistReader can tell is new or already parsed.
    */
   static bodyStart(lines: readonly string[]) {
     let i = 0;
@@ -134,6 +153,11 @@ export class MediaPlaylistIndex {
   /** The kept segments, oldest first */
   get segments(): readonly PlaylistSegment[] {
     return this.#segments;
+  }
+
+  /** The last segment parsed, even when it was discarded */
+  get lastSegment(): PlaylistSegment | undefined {
+    return this.#lastSegment;
   }
 
   get discontinuities() {
@@ -173,6 +197,7 @@ export class MediaPlaylistIndex {
    * be unfinished (the text after the file's last newline), and parsing stops
    * before the first entry that reaches it, so an entry is never parsed from
    * a partial write. Returns the index of the first line not parsed.
+   * findContinuation reads lines the same way.
    */
   parseLines(lines: readonly string[], from: number, final: boolean): number {
     // Lines at or after this one may still grow
@@ -207,23 +232,115 @@ export class MediaPlaylistIndex {
         trimEnd(line.trim(), ',').split(':')[1] ?? '',
       );
       this.#leadingDiscontinuities ??= this.#discontinuities;
-      this.#segments.push(
-        new PlaylistSegment(
-          this.start,
-          this.#nextStartMs,
-          line,
-          lines[i + 2],
-          this.#discontinuities,
-          this.#endsWithDiscontinuity,
-        ),
+      const segment = new PlaylistSegment(
+        this.start,
+        this.#nextStartMs,
+        line,
+        lines[i + 2],
+        this.#discontinuities,
+        this.#endsWithDiscontinuity,
       );
+      this.#segments.push(segment);
       this.#endsWithDiscontinuity = false;
       // What dayjs's add(duration, 'seconds') did at each step: a Date holds
       // whole milliseconds, so the sum is truncated every time.
       this.#nextStartMs = Math.trunc(this.#nextStartMs + duration * 1000);
+      this.#lastSegment = segment;
+      this.#nextStartMsAfterLast = this.#nextStartMs;
       i += 3;
     }
     return i;
+  }
+
+  /**
+   * Where the entries after the last one parsed start in lines read from a
+   * newer version of the file, which may begin anywhere in it. It reads
+   * lines as parseLines does (keep the two in step), without parsing them.
+   *
+   * ffmpeg numbers segments in order, so the entries after the last complete
+   * one numbered `lastNumber` or lower (the boundary) are new: `from` is the
+   * line after the boundary's URI, `boundary` its number, and `next` the
+   * first complete entry after it. Without a boundary, `from` is undefined
+   * and `next` is the first complete entry. Lines from `firstLine` up to the
+   * first #EXTINF line are skipped, and the last line is taken to be
+   * unfinished.
+   */
+  static findContinuation(
+    lines: readonly string[],
+    firstLine: number,
+    lastNumber: number,
+  ): {
+    from: number | undefined;
+    boundary: number | undefined;
+    next: { number: number | null; tagged: boolean } | undefined;
+  } {
+    const unfinished = lines.length - 1;
+    let i = firstLine;
+    while (i < unfinished && !lines[i]?.startsWith('#EXTINF:')) {
+      i++;
+    }
+    let from: number | undefined;
+    let boundary: number | undefined;
+    let next: { number: number | null; tagged: boolean } | undefined;
+    // Whether a discontinuity tag came since the previous entry
+    let tagged = false;
+    while (i < unfinished) {
+      const line = lines[i];
+      if (!isNonEmptyString(line)) {
+        i++;
+        continue;
+      }
+      if (line.startsWith('#EXT-X-DISCONTINUITY')) {
+        tagged = true;
+        i++;
+        continue;
+      }
+      // An EXTINF line, a program date-time line, and the segment URI
+      const uri = lines[i + 2];
+      if (i + 2 >= unfinished || uri === undefined) {
+        break;
+      }
+      const number = segmentNumberOf(uri);
+      if (number !== null && number <= lastNumber) {
+        from = i + 3;
+        boundary = number;
+        next = undefined;
+      } else {
+        next ??= { number, tagged };
+      }
+      tagged = false;
+      i += 3;
+    }
+    return { from, boundary, next };
+  }
+
+  /**
+   * Forgets what was parsed after the last segment (discontinuity tags and
+   * blank lines), so that parsing can continue from the line after that
+   * segment's URI in a newer version of the file.
+   */
+  rewindToLastSegment() {
+    const last = this.#lastSegment;
+    if (last === undefined) {
+      return;
+    }
+    this.#discontinuities = last.discontinuitiesBefore;
+    this.#endsWithDiscontinuity = false;
+    this.#nextStartMs = this.#nextStartMsAfterLast;
+  }
+
+  /** Counts a discontinuity before the next segment, as a tag line does */
+  addDiscontinuity() {
+    this.#discontinuities++;
+    this.#endsWithDiscontinuity = true;
+  }
+
+  /**
+   * Moves the next segment's start on by `ms`, for segments that were never
+   * parsed because the file no longer lists them
+   */
+  skipTime(ms: number) {
+    this.#nextStartMs = Math.trunc(this.#nextStartMs + ms);
   }
 
   /** Marks the current state, to undo parsing past it with rollback() */
@@ -234,6 +351,8 @@ export class MediaPlaylistIndex {
       endsWithDiscontinuity: this.#endsWithDiscontinuity,
       leadingDiscontinuities: this.#leadingDiscontinuities,
       nextStartMs: this.#nextStartMs,
+      lastSegment: this.#lastSegment,
+      nextStartMsAfterLast: this.#nextStartMsAfterLast,
     };
   }
 
@@ -243,6 +362,8 @@ export class MediaPlaylistIndex {
     this.#endsWithDiscontinuity = savepoint.endsWithDiscontinuity;
     this.#leadingDiscontinuities = savepoint.leadingDiscontinuities;
     this.#nextStartMs = savepoint.nextStartMs;
+    this.#lastSegment = savepoint.lastSegment;
+    this.#nextStartMsAfterLast = savepoint.nextStartMsAfterLast;
   }
 
   /**
