@@ -6,6 +6,7 @@ import type {
   ScanOutcome,
   ScanWorkerMessage,
 } from '../types/worker_schemas.ts';
+import { ScanWorkerProtocolVersion } from '../types/worker_schemas.ts';
 import { ScanWorker } from './ScanWorker.ts';
 import { MediaSourceProgressService } from './scanner/MediaSourceProgressService.ts';
 import type { ScanJobExecutor } from './scanner/ScanJobExecutor.ts';
@@ -14,6 +15,7 @@ const job: ScanJob = { kind: 'library', libraryId: 'lib1', force: false };
 
 function makeSut(
   run: (job: ScanJob, signal: AbortSignal) => Promise<ScanOutcome>,
+  { mainProtocolVersion }: { mainProtocolVersion?: number } = {},
 ) {
   const progress = new MediaSourceProgressService();
   const executor = { run: vi.fn(run) };
@@ -21,17 +23,19 @@ function makeSut(
     executor as unknown as ScanJobExecutor,
     progress,
   );
+  const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  Object.defineProperty(worker, 'logger', { value: logger });
   const { port1, port2 } = new MessageChannel();
   const received: ScanWorkerMessage[] = [];
   port2.on('message', (message: ScanWorkerMessage) => received.push(message));
   const exit = vi.fn();
-  worker.start(port1, { exit });
+  worker.start(port1, { exit, mainProtocolVersion });
   const send = (message: unknown) => port2.postMessage(message);
   const close = () => {
     port1.close();
     port2.close();
   };
-  return { progress, executor, received, send, exit, close };
+  return { progress, executor, received, send, exit, close, logger };
 }
 
 const ofType = <T extends ScanWorkerMessage['type']>(
@@ -177,5 +181,41 @@ describe('ScanWorker', () => {
 
     await vi.waitFor(() => expect(sut.exit).toHaveBeenCalledWith(0));
     expect(sut.executor.run).not.toHaveBeenCalled();
+  });
+
+  describe('protocol version', () => {
+    test("says it started with this build's version", async () => {
+      const sut = makeSut(() => Promise.resolve('completed'), {
+        mainProtocolVersion: ScanWorkerProtocolVersion,
+      });
+      close = sut.close;
+
+      await vi.waitFor(() =>
+        expect(sut.received[0]).toMatchObject({
+          type: 'event',
+          eventType: 'started',
+          protocolVersion: ScanWorkerProtocolVersion,
+        }),
+      );
+      expect(sut.logger.warn).not.toHaveBeenCalled();
+    });
+
+    test("says so when the main thread's version differs", async () => {
+      const sut = makeSut(() => Promise.resolve('completed'), {
+        mainProtocolVersion: ScanWorkerProtocolVersion + 1,
+      });
+      close = sut.close;
+
+      await vi.waitFor(() => expect(sut.received).toHaveLength(1));
+      expect(sut.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('protocol'),
+        ScanWorkerProtocolVersion + 1,
+        ScanWorkerProtocolVersion,
+      );
+      // Its own version still goes out; the main thread decides
+      expect(sut.received[0]).toMatchObject({
+        protocolVersion: ScanWorkerProtocolVersion,
+      });
+    });
   });
 });

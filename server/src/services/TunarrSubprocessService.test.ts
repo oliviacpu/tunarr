@@ -1,6 +1,71 @@
 import path from 'node:path';
-import { describe, expect, test } from 'vitest';
-import { workerEntryUrl } from './TunarrSubprocessService.ts';
+import { describe, expect, test, vi } from 'vitest';
+import type { ServerOptions } from '../globals.ts';
+import {
+  ScanWorkerProtocolVersion,
+  WorkerStartData,
+} from '../types/worker_schemas.ts';
+import { workerEntryUrl, workerStartData } from './TunarrSubprocessService.ts';
+
+describe('workerStartData', () => {
+  const defaults = { port: 8000 } as unknown as ServerOptions;
+
+  test('without workerData from the caller: server options, role and version', () => {
+    expect(workerStartData(undefined, 'scan', () => defaults)).toEqual({
+      serverOptions: defaults,
+      role: 'scan',
+      protocolVersion: ScanWorkerProtocolVersion,
+    });
+  });
+
+  test("keeps the caller's workerData, and still sets the role and version", () => {
+    const data = workerStartData(
+      { note: 'from the caller', role: 'pool' },
+      'scan',
+      () => defaults,
+    );
+
+    expect(data).toEqual({
+      note: 'from the caller',
+      serverOptions: defaults,
+      role: 'scan',
+      protocolVersion: ScanWorkerProtocolVersion,
+    });
+    // What start-worker reads from it
+    expect(WorkerStartData.parse(structuredClone(data))).toEqual({
+      role: 'scan',
+      protocolVersion: ScanWorkerProtocolVersion,
+    });
+  });
+
+  test("keeps the caller's own server options", () => {
+    const own = { port: 9000 };
+    const fallback = vi.fn(() => defaults);
+
+    expect(
+      workerStartData({ serverOptions: own }, 'pool', fallback).serverOptions,
+    ).toBe(own);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  test('workerData that is not an object is replaced', () => {
+    expect(workerStartData('scan', 'scan', () => defaults)).toEqual({
+      serverOptions: defaults,
+      role: 'scan',
+      protocolVersion: ScanWorkerProtocolVersion,
+    });
+  });
+});
+
+describe('WorkerStartData', () => {
+  test.each([
+    ['no workerData', undefined],
+    ['no role', { serverOptions: {} }],
+    ['an unknown role', { role: 'transcode' }],
+  ])('a worker started with %s is a pool worker', (_label, workerData) => {
+    expect(WorkerStartData.parse(workerData).role).toBe('pool');
+  });
+});
 
 /**
  * The Windows cases here run on any platform.

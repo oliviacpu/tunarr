@@ -5,7 +5,10 @@ import type {
   ScanWorkerMessage,
   WorkerEvent,
 } from '../types/worker_schemas.ts';
-import { ScanWorkerRequest } from '../types/worker_schemas.ts';
+import {
+  ScanWorkerProtocolVersion,
+  ScanWorkerRequest,
+} from '../types/worker_schemas.ts';
 import { InjectLogger } from '../util/inject.ts';
 import type { Logger } from '../util/logging/LoggerFactory.ts';
 import { LoggerFactory } from '../util/logging/LoggerFactory.ts';
@@ -15,6 +18,8 @@ import { ScanJobExecutor } from './scanner/ScanJobExecutor.ts';
 type ScanWorkerOptions = {
   // Ends the thread after `shutdown`; replaceable in tests
   exit?: (code: number) => void;
+  // The scan protocol version the main thread sent in workerData
+  mainProtocolVersion?: number;
 };
 
 /**
@@ -39,7 +44,10 @@ export class ScanWorker {
 
   start(
     port: MessagePort,
-    { exit = (code) => process.exit(code) }: ScanWorkerOptions = {},
+    {
+      exit = (code) => process.exit(code),
+      mainProtocolVersion,
+    }: ScanWorkerOptions = {},
   ) {
     const post = (message: ScanWorkerMessage) => port.postMessage(message);
 
@@ -88,11 +96,25 @@ export class ScanWorker {
       }
     });
 
+    // The main thread checks the version this worker sends below, and runs
+    // the scan itself on a mismatch; this only says why, from this side
+    if (
+      mainProtocolVersion !== undefined &&
+      mainProtocolVersion !== ScanWorkerProtocolVersion
+    ) {
+      this.logger.warn(
+        'The main thread speaks scan worker protocol v%d and this worker v%d; the main thread will run the scan itself',
+        mainProtocolVersion,
+        ScanWorkerProtocolVersion,
+      );
+    }
+
     this.logger.info('Tunarr scan worker started');
     port.postMessage({
       type: 'event',
       eventType: 'started',
       message: 'Scan worker started',
+      protocolVersion: ScanWorkerProtocolVersion,
     } satisfies WorkerEvent);
   }
 

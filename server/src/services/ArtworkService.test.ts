@@ -1,3 +1,5 @@
+import axios from 'axios';
+import { Readable } from 'node:stream';
 import { tag } from '@tunarr/types';
 import type { FastifyReply } from 'fastify';
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -405,6 +407,14 @@ describe('ArtworkService credential handling', () => {
 });
 
 describe('ArtworkService serveArtwork', () => {
+  beforeEach(() => {
+    vi.spyOn(axios, 'request').mockResolvedValue({
+      data: Readable.from(['image']),
+      headers: { 'content-type': 'image/jpeg' },
+    });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   test('never redirects a credentialed URL, even with proxyArtwork disabled', async () => {
     const redirect = vi.fn();
     const reply = {
@@ -426,6 +436,9 @@ describe('ArtworkService serveArtwork', () => {
     // A redirect would put the token in the Location header, readable by any
     // unauthenticated caller. See GHSA-h3r4-r2f2-qf59 against ErsatzTV.
     expect(redirect).not.toHaveBeenCalled();
+    expect(axios.request).toHaveBeenCalledWith(
+      expect.objectContaining({ responseType: 'stream' }),
+    );
   });
 
   test('still redirects a credential-free URL when proxyArtwork is disabled', async () => {
@@ -470,5 +483,8 @@ describe('ArtworkService serveArtwork', () => {
     // Derived results are credentialed too, so they must not be redirected
     // either.
     expect(redirect).not.toHaveBeenCalled();
+    expect(axios.request).toHaveBeenCalledWith(
+      expect.objectContaining({ responseType: 'stream' }),
+    );
   });
 });
