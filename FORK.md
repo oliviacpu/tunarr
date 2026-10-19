@@ -457,14 +457,14 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     that steps of the interval reach (every 5 hours would run every hour) and change the hours from 00:00.
   - Daylight saving time is node-schedule's (cron-parser 4.9): on the day the clocks go forward, an hour that doesn't
     exist (02:00 in the US) runs at 03:00, once even when 03:00 is listed too; on the day they go back, a repeated
-    hour runs once, so the wait across the change is an hour longer in real time. Kept as it is: no run is lost, and
+    hour runs once, so a one-hour rollback adds an hour of real time. Kept as it is: no run is lost, and
     the guide length rule below covers the longer wait.
   - The rule, in `@tunarr/shared/util` (`xmlTvRefresh.ts`) for the server and the settings page: the time between
     rebuilds is the timer rounded, from 1 to 24 hours (a longer timer rebuilds once a day), and EPG (Hours) has to be
     at least two hours longer than it, covering two-hour seasonal rollbacks.
   - `PUT /api/xmltv-settings` refuses a shorter guide with a 400 and the reason, when the request sets the timer or
     EPG (Hours). Settings saved before the check can still have their other fields changed.
-  - Those settings are rebuilt often enough anyway: `xmlTvRefreshCrontab` shortens the interval to an hour less than
+  - Those settings are rebuilt often enough anyway: `xmlTvRefreshCrontab` shortens the interval to two hours less than
     the guide (a 24 hour timer with a 12-hour guide rebuilds every 10 hours), and startup logs a warning saying so.
   - Settings > XMLTV flags the timer on the field (also when EPG (Hours) is lowered under it, and when the page opens
     on settings saved before the check) and shows the server's reason if a save is refused. A value that isn't a
@@ -485,11 +485,11 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `xmlTvRefresh.test.ts` (shared): the interval, the minimum guide, the shortened interval, and that the schedule is
     shortened exactly when the API would refuse.
   - `xmltvSettingsApi.test.ts`: a timer the guide can't last, a guide too short for the saved timer, and both at once
-    are refused and nothing is saved or rescheduled; a guide an hour longer is saved; a 48 hour timer with a 26-hour
+    are refused and nothing is saved or rescheduled; a guide two hours longer is saved; a 48 hour timer with a 26-hour
     guide is saved; old settings can have their start hour changed and are rescheduled every 10 hours.
   - `ScheduleJobsStartupTask.test.ts`: old settings are scheduled every 10 hours, with one warning.
   - `XmlTvSettingsPage.test.tsx`: the field is flagged and Save disabled, also on opening old settings; a longer guide
-    clears it and both are sent; an hour longer is fine; an empty guide isn't compared; a non-number is still flagged
+    clears it and both are sent; two hours longer is fine; an empty guide isn't compared; a non-number is still flagged
     as one; a refused save shows the server's reason.
   - `TypedController.test.tsx`: with its own `validate`, a field still checks for a number, runs the caller's check,
     and shows the caller's message when both fail. The first fails on the old code.
