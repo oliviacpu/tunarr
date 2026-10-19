@@ -26,7 +26,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### Empty Trash asks before it purges (2026-10-19)
+### Empty Trash asks before it purges (2026-10-19, PR #89)
 
 - **What you saw:** one click on **Empty Trash** started the purge. It can't be undone: trashed programs are deleted
   and the lineup slots that played them become flex.
