@@ -1132,7 +1132,7 @@ sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --second
   plans/test-channel-99.md) needs its own.
 - **Change:** a channel setting, **Captions for this channel**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.captions`, `{ testPattern?, alignment?, appearance? }`, stored in the new column
-    `captions` (migration 0054). Only what the channel sets is saved; the rest follows the global settings, so a later
+    `captions` (migration 0055). Only what the channel sets is saved; the rest follows the global settings, so a later
     global change still reaches it. The appearance fields have no defaults (`CaptionAppearanceOverridesSchema`), or an
     override would fill in every field.
   - **Test pattern on this channel:** the numbered samples on this channel only. The global switch still shows them on
@@ -1329,7 +1329,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
     restarts, so the tracks can't change from program to program.
 - **Change:** a channel setting, **Audio tracks**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.audioTracks`, up to four ISO 639-2 codes in order, stored in the new column
-    `audio_tracks` (migration 0053).
+    `audio_tracks` (migration 0054).
   - **Effect:** every program, commercial, gap (offline picture, with gap music or silence) and error screen on the
     channel outputs exactly those tracks, in that order, tagged with their languages.
   - **Filling a slot:**
