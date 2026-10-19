@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
@@ -64,6 +65,15 @@ export default function HdhrSettingsPage() {
       return queryClient.invalidateQueries({
         queryKey: getApiHdhrSettingsQueryKey(),
       });
+    },
+    onError: (error) => {
+      const message = getApiErrorMessage(error);
+      snackbar.enqueueSnackbar(
+        message !== undefined
+          ? t`Could not save settings. ${message}`
+          : t`Could not save settings`,
+        { variant: 'error' },
+      );
     },
   });
 
