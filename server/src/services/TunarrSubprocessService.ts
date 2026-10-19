@@ -2,8 +2,10 @@ import { injectable } from 'inversify';
 import { pathToFileURL } from 'node:url';
 import { Worker, type WorkerOptions } from 'node:worker_threads';
 import { container } from '../container.ts';
+import type { ServerOptions } from '../globals.ts';
 import { globalOptions, serverOptions } from '../globals.ts';
 import type { WorkerRole } from '../types/worker_schemas.ts';
+import { ScanWorkerProtocolVersion } from '../types/worker_schemas.ts';
 import { isDev } from '../util/index.ts';
 import { MeilisearchService } from './MeilisearchService.ts';
 
@@ -73,21 +75,41 @@ export function workerEntryUrl(entryPath: string): URL {
   return pathToFileURL(entryPath);
 }
 
+/**
+ * The workerData a worker starts with: the caller's, if it passed any, plus the
+ * server options (unless the caller passed its own), the role and the scan
+ * protocol version. The role is always set. A worker without one starts as a
+ * pool worker, which says it started and then ignores the scan it's sent.
+ */
+export function workerStartData(
+  given: unknown,
+  role: WorkerRole,
+  defaultServerOptions: () => ServerOptions,
+): Record<string, unknown> {
+  const base: Record<string, unknown> =
+    typeof given === 'object' && given !== null && !Array.isArray(given)
+      ? { ...given }
+      : {};
+  return {
+    ...base,
+    serverOptions: base.serverOptions ?? defaultServerOptions(),
+    role,
+    protocolVersion: ScanWorkerProtocolVersion,
+  };
+}
+
 class TsWorker extends Worker {
   constructor(
     filename: string,
     options: WorkerOptions = {},
     role: WorkerRole = 'pool',
   ) {
-    options.workerData ??= {
-      serverOptions: {
-        ...serverOptions(),
-        searchPort: container
-          .get<MeilisearchService>(MeilisearchService)
-          .getPort(),
-      },
-      role,
-    };
+    options.workerData = workerStartData(options.workerData, role, () => ({
+      ...serverOptions(),
+      searchPort: container
+        .get<MeilisearchService>(MeilisearchService)
+        .getPort(),
+    }));
 
     if (isDev) {
       super(

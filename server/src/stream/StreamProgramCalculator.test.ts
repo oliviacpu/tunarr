@@ -843,7 +843,7 @@ describe('StreamProgramCalculator', () => {
       when(programDB.getStreamProgramById(trackId)).thenReturn(
         Promise.resolve(track),
       );
-      when(fillerDB.getFillerPrograms(anything())).thenReturn(
+      when(fillerDB.getGapMusicPrograms(anything())).thenReturn(
         Promise.resolve([
           {
             ...track,

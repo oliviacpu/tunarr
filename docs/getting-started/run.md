@@ -97,6 +97,7 @@ Tunarr has various command line / environment variables for configuration. These
 | `TUNARR_USE_WORKER_POOL` | N/A | `true` | Runs heavy background work (slot schedule generation, library scans) in worker threads so it doesn't slow down streaming. Set to `false` to run everything on the main thread. |
 | `TUNARR_WORKER_POOL_SIZE` | N/A | (CPU count, at most 8) | Number of worker threads in the pool, which generates slot schedules. Recommended: no more than the number of CPUs on the host. |
 | `TUNARR_SCAN_IN_WORKER` | N/A | `true` | Runs each library scan, collection sync and custom show playlist sync in its own worker thread, so its database work can't pause live streams. Needs `TUNARR_USE_WORKER_POOL`. Set to `false` to run them on the main thread. |
+| `TUNARR_SCAN_JOB_TIMEOUT_MINUTES` | N/A | (no limit) | The longest a scan or sync may run in its worker thread, in whole minutes. Past it, the worker is stopped (its unfinished database transaction is rolled back), the job is logged as failed, and the next queued scan starts. Only scans in a worker thread are limited. A value that isn't a whole number of minutes is ignored, with a warning in the log. Set it well above your longest full library scan. |
 
 ### Debug
 
@@ -311,3 +312,20 @@ From now on, to update tunarr, we will first have to stop the service.
 
 If you are converting from a previously used Tunarr, please note that the main Tunarr folder will now be moved to another location, so the new Tunarr that starts will actually behave as if it were a new installation. To restore the entire configuration, you will need to copy the contents of the Tunarr folder in the path usually used by the program `%appdata%\ tunarr` and paste it into the following location: `C:\Windows\System32\config\systemprofile\AppData\Roaming\tunarr`
 This will be the new location for the database, channels, and everything else (obviously, this must be done after stopping the tunarr service and then restarting it as explained above).
+
+### SQLite tuning
+
+These optional environment overrides apply on restart:
+
+| Variable | Effect when set | Default when unset |
+| --- | --- | --- |
+| `TUNARR_SQLITE_CACHE_KIB` | Nonnegative per-connection cache size in KiB | Main thread: 262144 KiB; workers: 10000 pages |
+| `TUNARR_SQLITE_MMAP_BYTES` | Nonnegative memory-map limit in bytes; 0 disables mapping | Main thread: 0; workers: 268435456 bytes |
+| `TUNARR_DB_WARMUP_MAX_BYTES` | Cap for database file warm-up; 0 disables it | Startup: 512 MiB; guide refresh: whole database and WAL |
+
+With an explicit warm-up cap, startup reads at most that many bytes, and guide
+warm-up skips databases whose database and WAL together exceed the cap. Skips are
+logged at debug level. Invalid values use the defaults. These settings bound memory
+and I/O work; changing them requires measurements on your workload. Another
+connection's commit invalidates SQLite's private page cache, so increasing that
+cache is not a substitute for measuring scan-time latency.
