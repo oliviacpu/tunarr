@@ -26,7 +26,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### The New Channel page shows its breadcrumbs, and Settings opens on General (2026-10-19)
+### The New Channel page shows its breadcrumbs, and Settings opens on General (2026-10-19, PR #90)
 
 - **What you saw:** the New Channel page had an empty breadcrumb trail. Opening `/settings` showed the tab bar with no
   tab selected over an empty panel, and MUI warned that the Tabs value was invalid.
