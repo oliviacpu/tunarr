@@ -31,6 +31,7 @@ import dayjs from 'dayjs';
 import type { Duration } from 'dayjs/plugin/duration.js';
 import { injectable } from 'inversify';
 import { isUndefined } from 'lodash-es';
+import { basename } from 'node:path';
 import type { DeepReadonly } from 'ts-essentials';
 import { match, P } from 'ts-pattern';
 import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLineup.ts';
@@ -844,12 +845,24 @@ export class FfmpegStreamFactory {
       this.logger.debug('No frame rate for this program; no captions');
       return;
     }
+    // Read and parsed before the program's ffmpeg starts, so a viewer tuning
+    // in waits for it
+    const readStart = performance.now();
     try {
-      return await loadProgramCaptions(track, {
+      const captions = await loadProgramCaptions(track, {
         seekMs: program.startTime.asMilliseconds(),
         durationMs: program.duration.asMilliseconds(),
         frameRate,
       });
+      if (track.path !== undefined) {
+        this.logger.debug(
+          'Read subtitles %s for captions in %s ms: %d cues in this program',
+          basename(track.path),
+          (performance.now() - readStart).toFixed(1),
+          captions?.cues.length ?? 0,
+        );
+      }
+      return captions;
     } catch (e) {
       this.logger.warn(
         e,

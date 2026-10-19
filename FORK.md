@@ -35,6 +35,35 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Caption work is timed in the log, per segment and per program (2026-10-18)
+
+- **What you saw:** nothing. A review of the closed captions found two synchronous steps on hot paths that nothing
+  measured, so there was no way to tell whether either needs a cache.
+- **Cause:**
+  - Each request for a captioned `.ts` segment (`/stream/channels/:id/hls/:file?captions=1`) reads the segment and runs
+    `insertCaptions`, a full MPEG-TS parse and rewrite, inside the request handler, once per viewer per segment, with
+    no cache.
+  - At each program start, `FfmpegStreamFactory.loadCaptions` reads and parses the subtitle file (the fallback over
+    the program's tracks may read several), and `HlsSession.addCaptions` builds the program's whole caption schedule
+    with `buildCaptionSchedule`. Both run before ffmpeg is spawned, so a viewer tuning in waits for them.
+- **Fix:** timings in the log, to get numbers before deciding on a per-segment cache or a deferred schedule build.
+  - `HlsSession.captionedSegment` logs one **debug** line per captioned segment: the file name, bytes in, frames
+    captioned, read ms and rewrite ms.
+  - The session adds up its rewrites and, when it stops, logs one **info** line:
+    `Captioned N segments: mean X ms, max Y ms`. A session that captioned nothing logs no line. Segments that could
+    not be captioned are not counted.
+  - `HlsSession.addCaptions` logs at **debug** the cue count, the program's start PTS and length, and the schedule
+    build ms.
+  - `FfmpegStreamFactory.loadCaptions` logs at **debug** the subtitle file's name (not its path), the read and parse
+    ms, and the program's cue count.
+- **Tests:** in `HlsSession.test.ts`, a captioned segment logs one debug line with its 60 frames and non-negative
+  times; two captioned segments give a summary of 2 with a max equal to the slower one; a session that captioned
+  nothing, or only a segment it could not caption, logs no summary; the schedule line has the cue count. In
+  `FfmpegStreamFactory.test.ts`, reading a track logs its file name and the one cue in the program. On the test's
+  synthetic 60-frame, 45 KB segment, a rewrite took about 2 ms the first time and 0.7 ms the second, and the read
+  0.2 ms. Real segments are much larger.
+- **Upstream:** not sent.
+
 ### The real-ffmpeg caption test runs again, and the typecheck now covers it (2026-10-18)
 
 - **What you saw:** with ffmpeg installed, `pnpm test:local CaptionInsertion` failed all ten tests with

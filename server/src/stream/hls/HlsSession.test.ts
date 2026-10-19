@@ -431,6 +431,105 @@ describe('HlsSession', () => {
 
       expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
     });
+
+    // Numbers from a deployment's log, to decide whether caching captioned
+    // segments or deferring the schedule build is worth it
+    describe('timing', () => {
+      type Internals = {
+        state: string;
+        addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+        logger: { debug: Mock; info: Mock };
+      };
+
+      // A session with one program's captions and `count` 60-frame segments
+      async function sessionWithSegments(count: number) {
+        const ptsOffset = 900_000;
+        const session = makeSession(dir.name);
+        await fs.mkdir(session.workingDirectory, { recursive: true });
+        for (let k = 0; k < count; k++) {
+          await fs.writeFile(
+            path.join(session.workingDirectory, `data00000${k + 1}.ts`),
+            makeTsSegment({ firstPts: ptsOffset + k * 60 * 3003, frames: 60 }),
+          );
+        }
+        const internals = session as unknown as Internals;
+        internals.addCaptions(ptsOffset, captions(30000 / 1001));
+        return { session, internals };
+      }
+
+      const linesStarting = (mock: Mock, start: string) =>
+        mock.mock.calls.filter(
+          ([message]) =>
+            typeof message === 'string' && message.startsWith(start),
+        );
+
+      test('logs one debug line per captioned segment, with its frames and times', async () => {
+        const { session, internals } = await sessionWithSegments(1);
+
+        await session.captionedSegment('data000001.ts');
+
+        const lines = linesStarting(
+          internals.logger.debug,
+          'Captioned segment',
+        );
+        expect(lines).toHaveLength(1);
+        const [, file, bytes, frames, readMs, rewriteMs] = lines[0] ?? [];
+        expect(file).toBe('data000001.ts');
+        expect(bytes).toBeGreaterThan(0);
+        expect(frames).toBe(60);
+        expect(Number(readMs)).toBeGreaterThanOrEqual(0);
+        expect(Number(rewriteMs)).toBeGreaterThanOrEqual(0);
+      });
+
+      test("logs how long laying out a program's captions took", async () => {
+        const { internals } = await sessionWithSegments(0);
+
+        const lines = linesStarting(internals.logger.debug, 'Laid out');
+        expect(lines).toHaveLength(1);
+        const [, cues, startPts, seconds, scheduleMs] = lines[0] ?? [];
+        expect(cues).toBe(1);
+        expect(startPts).toBe(900_000);
+        expect(seconds).toBe(60);
+        expect(Number(scheduleMs)).toBeGreaterThanOrEqual(0);
+      });
+
+      test('sums up the captioned segments when the session ends', async () => {
+        const { session, internals } = await sessionWithSegments(2);
+        await session.captionedSegment('data000001.ts');
+        await session.captionedSegment('data000002.ts');
+        const rewrites = linesStarting(
+          internals.logger.debug,
+          'Captioned segment',
+        ).map((line) => Number(line[5]));
+
+        internals.state = 'started';
+        await session.stop();
+
+        const summaries = linesStarting(internals.logger.info, 'Captioned');
+        expect(summaries).toHaveLength(1);
+        const [message, count, mean, max] = summaries[0] ?? [];
+        expect(message).toBe('Captioned %d segments: mean %s ms, max %s ms');
+        expect(count).toBe(2);
+        expect(Number(max)).toBe(Math.max(...rewrites));
+        expect(Number(mean)).toBeGreaterThanOrEqual(0);
+        expect(Number(mean)).toBeLessThanOrEqual(Number(max));
+      });
+
+      test('logs no summary for a session that captioned nothing', async () => {
+        const { session, internals } = await sessionWithSegments(0);
+        // A segment it cannot caption is served as it is, and not counted
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          'not a transport stream',
+        );
+        expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
+
+        internals.state = 'started';
+        await session.stop();
+
+        expect(linesStarting(internals.logger.info, 'Captioned')).toEqual([]);
+      });
+    });
   });
 
   describe('output clock', () => {

@@ -28,6 +28,7 @@ import type {
   SubtitleStreamDetails,
 } from '@/stream/types.ts';
 import { FileStreamSource, HttpStreamSource } from '@/stream/types.ts';
+import type { Logger } from '@/util/logging/LoggerFactory.ts';
 import type { SubtitlesInputSource } from '@/ffmpeg/builder/input/SubtitlesInputSource.ts';
 import type { VideoInputSource } from '@/ffmpeg/builder/input/VideoInputSource.ts';
 import {
@@ -1892,6 +1893,8 @@ describe('FfmpegStreamFactory', () => {
         transcodeConfig?: Partial<TranscodeConfigOrm>;
         // The source's reported frame rate (24 by default)
         framerate?: number | string;
+        // Stands in for the factory's own logger
+        logger?: Logger;
       }) {
         const capturing = createCapturingPipelineBuilderFactory();
         const details = makeStreamDetails();
@@ -1917,6 +1920,9 @@ describe('FfmpegStreamFactory', () => {
           makeTranscodeConfig(opts.transcodeConfig),
           makeChannel({ subtitlesEnabled: true, ...opts.channel }),
         );
+        if (opts.logger !== undefined) {
+          (sut as unknown as { logger: Logger }).logger = opts.logger;
+        }
         const result = await sut.createStreamSession({
           stream: {
             source: new HttpStreamSource('http://example.com/video.ts'),
@@ -1992,6 +1998,33 @@ describe('FfmpegStreamFactory', () => {
           durationMs: 30000,
           language: 'eng',
         });
+      });
+
+      // Read before the program's ffmpeg starts, so on the tune-in path
+      test('logs how long reading the subtitles took, with the file name and cue count', async () => {
+        const logger = {
+          debug: vi.fn(),
+          trace: vi.fn(),
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        };
+        await run({
+          selected: fullTrack(),
+          logger: logger as unknown as Logger,
+        });
+
+        const lines = logger.debug.mock.calls.filter(
+          ([message]) =>
+            typeof message === 'string' && message.startsWith('Read subtitles'),
+        );
+        expect(lines).toHaveLength(1);
+        const [, file, readMs, cues] = lines[0] ?? [];
+        // The file's name only, not where it lives
+        expect(file).toBe('full.srt');
+        expect(Number(readMs)).toBeGreaterThanOrEqual(0);
+        // The cue before the 10 s seek is not in this program
+        expect(cues).toBe(1);
       });
 
       test('keeps forced subtitles burned in and captions the full track', async () => {
