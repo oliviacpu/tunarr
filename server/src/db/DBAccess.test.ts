@@ -208,6 +208,23 @@ describe('init - connection reuse', () => {
 });
 
 describe('connection settings', () => {
+  test('pages a library in UUID order without a temporary sort', async ({
+    dbDir,
+  }) => {
+    const conn = DBAccess.instance.getOrCreateConnection(
+      path.join(dbDir, 'db.db'),
+    );
+    const plan = conn.sqlite
+      .prepare(
+        'EXPLAIN QUERY PLAN SELECT uuid FROM program WHERE library_id = ? AND uuid > ? ORDER BY uuid LIMIT ?',
+      )
+      .all('library', '', 100) as { detail: string }[];
+    expect(
+      plan.some((row) => row.detail.includes('program_library_uuid_index')),
+    ).toBe(true);
+    expect(plan.some((row) => row.detail.includes('TEMP B-TREE'))).toBe(false);
+  });
+
   // The main thread keeps the database in its own memory: pages mapped from
   // the file live in the shared OS file cache, which other processes evict,
   // and reading them back then stalls the thread that serves the streams.
@@ -222,6 +239,19 @@ describe('connection settings', () => {
     expect(conn.sqlite.pragma('cache_size', { simple: true })).toBe(-262144);
     expect(conn.sqlite.pragma('journal_mode', { simple: true })).toBe('wal');
     expect(conn.sqlite.pragma('foreign_keys', { simple: true })).toBe(1);
+  });
+
+  test('applies explicit cache and mmap limits to both kinds of connection', () => {
+    vi.stubEnv('TUNARR_SQLITE_CACHE_KIB', '65536');
+    vi.stubEnv('TUNARR_SQLITE_MMAP_BYTES', '0');
+    try {
+      for (const main of [true, false])
+        expect(connectionPragmas(main)).toEqual(
+          expect.arrayContaining(['cache_size = -65536', 'mmap_size = 0']),
+        );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test('workers keep the mapped file and the smaller cache', () => {
