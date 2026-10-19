@@ -74,13 +74,16 @@ function FfmpegProbeStatus({ isInContainer }: { isInContainer: boolean }) {
     ...getApiFfmpegInfoOptions(),
   });
 
-  if (ffmpegInfo.isPending) {
+  // Saving invalidates this query but keeps the old data, so a re-probe has to
+  // show as probing too; isFetching covers the first load and refetches
+  if (ffmpegInfo.isFetching) {
     return <Skeleton variant="rounded" height={48} />;
   }
 
   // The server answers with no encoders when it can't run ffmpeg at all
   if (
     ffmpegInfo.isError ||
+    ffmpegInfo.data === undefined ||
     (isEmpty(ffmpegInfo.data.videoEncoders) &&
       isEmpty(ffmpegInfo.data.audioEncoders))
   ) {

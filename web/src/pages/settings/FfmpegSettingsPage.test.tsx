@@ -1,4 +1,6 @@
+import { getApiFfmpegInfoQueryKey } from '../../generated/@tanstack/react-query.gen.ts';
 import { renderWithProviders, screen, waitFor } from '@/test/utils';
+import { QueryClient } from '@tanstack/react-query';
 import type { FfmpegSettings } from '@tunarr/types';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import { AxiosError, AxiosHeaders } from 'axios';
@@ -66,13 +68,14 @@ vi.mock('../../components/settings/ffmpeg/TranscodeConfigsTable.tsx', () => ({
   TranscodeConfigsTable: () => null,
 }));
 
-async function renderPage() {
+async function renderPage(queryClient?: QueryClient) {
   const rendered = renderWithProviders(
     <SnackbarProvider>
       <Suspense fallback={null}>
         <FfmpegSettingsPage />
       </Suspense>
     </SnackbarProvider>,
+    { queryClient },
   );
   // The saved settings are in the form. The page renders every language in
   // its preferences list, which can take a few seconds on a busy runner
@@ -167,5 +170,23 @@ describe('FfmpegSettingsPage', () => {
         'Could not save settings. FFmpeg executable path does not exist',
       ),
     ).toBeInTheDocument();
+  });
+
+  test('a re-probe after a save shows the probing state, not the old result', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    await renderPage(queryClient);
+    expect(await screen.findByText(/FFmpeg is working/)).toBeInTheDocument();
+
+    // The next probe never answers; the cached result is still there
+    server.ffmpegInfo = () => new Promise(() => {});
+    void queryClient.invalidateQueries({
+      queryKey: getApiFfmpegInfoQueryKey(),
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByText(/FFmpeg is working/)).not.toBeInTheDocument(),
+    );
   });
 });
