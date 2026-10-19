@@ -1,6 +1,12 @@
 name: Fork runtime validation
 
 on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/fork-runtime.yml'
+      - 'server/scripts/worker-smoke-test.ts'
+      - 'server/**/*.local.test.ts'
   workflow_dispatch:
   schedule:
     - cron: '17 9 * * *'
