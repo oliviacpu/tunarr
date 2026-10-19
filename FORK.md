@@ -26,6 +26,21 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### The top bar's dark mode button works the first time on a light OS (2026-10-19)
+
+- **What you saw:** until a mode was picked in settings, the first click on the top bar's moon icon did nothing on a
+  computer set to light. A second click turned dark mode on.
+- **Cause:** with no mode chosen, MUI's mode is `system`. `DarkModeButton` set `mode === 'light' ? 'dark' : 'light'`,
+  so from `system` it always set `light`, which looked the same as a light OS.
+- **Fix:** `nextColorMode(mode, resolved)` in `useTunarrTheme.ts` flips a chosen light or dark mode, and under
+  `system` flips the scheme on screen (`useColorScheme().colorScheme`). The unused `theme.themePreference` store field
+  is gone, with the load-time step that wrote it. `store/index.ts` drops the key from a stored theme on load, so it
+  is not saved again.
+- **Tests:** `useTunarrTheme.test.ts`: light to dark, dark to light, system on a light OS to dark, system on a dark OS
+  to light. `DarkModeButton.test.tsx`: with the OS scheme stubbed, one click from `system` changes the scheme both
+  ways (on the old code a light OS needed two). `store/index.test.ts`: a stored theme with `themePreference`, or from
+  before it, hydrates without it, logs no error, and is written back without it.
+- **Upstream:** not sent.
 ### Every channel form field marks its tab when it has an error (2026-10-19)
 
 - **What you saw:** nothing yet. The channel editor puts a red dot on the tab (Properties, Flex, EPG, Streaming) that

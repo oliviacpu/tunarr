@@ -7,7 +7,7 @@ import {
   Tooltip,
   useColorScheme,
 } from '@mui/material';
-import { useIsDarkMode } from '../../hooks/useTunarrTheme.ts';
+import { nextColorMode, useIsDarkMode } from '../../hooks/useTunarrTheme.ts';
 
 type DarkModeProps = {
   iconOnly?: boolean;
@@ -18,7 +18,7 @@ type ThemeMode = 'light' | 'system' | 'dark';
 export default function DarkModeButton(props: DarkModeProps) {
   const { iconOnly } = props;
   const { t } = useLingui();
-  const { mode, setMode } = useColorScheme();
+  const { mode, setMode, colorScheme } = useColorScheme();
   const isDarkMode = useIsDarkMode();
 
   return (
@@ -29,7 +29,7 @@ export default function DarkModeButton(props: DarkModeProps) {
         >
           <IconButton
             color="inherit"
-            onClick={() => setMode(mode === 'light' ? 'dark' : 'light')}
+            onClick={() => setMode(nextColorMode(mode, colorScheme))}
             sx={{ mx: 1 }}
           >
             {isDarkMode ? <LightMode /> : <DarkMode />}
