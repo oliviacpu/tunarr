@@ -14,7 +14,7 @@ import type {
   SaveableChannel,
   SubtitlePreference,
 } from '@tunarr/types';
-import { isEmpty, isNil, keys, map, reject, some } from 'lodash-es';
+import { isEmpty, isNil, keys, map, reject } from 'lodash-es';
 import { useCallback, useState } from 'react';
 import {
   FormProvider,
@@ -32,6 +32,7 @@ import ChannelEpgConfig from './ChannelEpgConfig.tsx';
 import { ChannelFlexConfig } from './ChannelFlexConfig.tsx';
 import { ChannelPropertiesEditor } from './ChannelPropertiesEditor.tsx';
 import ChannelTranscodingConfig from './ChannelTranscodingConfig.tsx';
+import { tabsWithErrors } from './channelFieldTabs.ts';
 import {
   EditChannelTabPanel,
   type EditChannelTabProps,
@@ -103,34 +104,12 @@ function getDefaultFormValues(
   };
 }
 
+// Which fields each tab holds is in ChannelFieldTabs
 const EditChannelTabsProps: EditChannelTabProps[] = [
-  {
-    value: 'properties',
-    description: 'Properties',
-    fields: ['number', 'name', 'groupTitle', 'icon'],
-  },
-  {
-    value: 'flex',
-    description: 'Flex',
-    fields: ['offline', 'fillerCollections', 'fillerRepeatCooldown'],
-  },
-  {
-    value: 'epg',
-    description: 'EPG',
-    fields: ['stealth', 'guideFlexTitle', 'guideMinimumDuration'],
-  },
-  {
-    value: 'ffmpeg',
-    description: 'Streaming',
-    fields: [
-      'watermark',
-      'streamMode',
-      'subtitlesEnabled',
-      'subtitlePreferences',
-      'audioTracks',
-      'captions',
-    ],
-  },
+  { value: 'properties', description: 'Properties' },
+  { value: 'flex', description: 'Flex' },
+  { value: 'epg', description: 'EPG' },
+  { value: 'ffmpeg', description: 'Streaming' },
 ];
 
 export function EditChannelForm({
@@ -184,9 +163,7 @@ export function EditChannelForm({
   });
 
   const formIsValid = formMethods.formState.isValid;
-  const formErrorKeys = keys(
-    formMethods.formState.errors,
-  ) as (keyof SaveableChannel)[];
+  const tabsWithFormErrors = tabsWithErrors(keys(formMethods.formState.errors));
   const formIsDirty = formMethods.formState.isDirty;
 
   const onSubmit: SubmitHandler<SaveableChannel> = (data) => {
@@ -267,7 +244,7 @@ export function EditChannelForm({
   };
 
   const renderTab = (tab: EditChannelTabProps) => {
-    const hasError = some(formErrorKeys, (k) => tab.fields.includes(k));
+    const hasError = tabsWithFormErrors.has(tab.value);
     return (
       <Tab
         key={tab.value}

@@ -40,6 +40,31 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   a dirty one, and follows `isDirty` across re-renders; `shouldBlockFn` blocks only a dirty form and lets it reach an
   exempt path.
 - **Upstream:** not sent.
+### Every channel form field marks its tab when it has an error (2026-10-19)
+
+- **What you saw:** nothing yet. The channel editor puts a red dot on the tab (Properties, Flex, EPG, Streaming) that
+  holds a field with an error. Its hand-written field lists left out `startTime`, `onDemand`, `transcodeConfigId`,
+  `disableFillerOverlay`, `id` and `duration`. None of these has a validation rule today, so no dot is missing yet.
+  A rule added to one of them later would leave Save disabled with no dot on any tab.
+- **Fix:** `channelFieldTabs.ts` maps each field to its tab as a `Record<keyof SaveableChannel, EditChannelTabs>`, so
+  a new channel field without a tab fails to compile. `EditChannelForm.tsx` marks tabs from it. `id` and `duration` are
+  not inputs on any tab and go to Properties. Test: `channelFieldTabs.test.ts` checks the map against
+  `SaveableChannelSchema.shape` and checks that an error marks the right tab.
+- **Upstream:** not sent; upstream `main`'s field lists have the same gaps.
+### Dead delete dialogs and settings hooks removed from the web app (2026-10-19, PR #86)
+
+- **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
+- **Cause:**
+  - The channels page had its own channel delete dialog, but its open state was only ever set back to empty, so it
+    never opened. Deleting a channel goes through `ChannelOptionsMenu` and `ChannelDeleteDialog`.
+  - The FFmpeg settings page had a transcode config delete mutation and confirmation dialog that nothing opened.
+    `TranscodeConfigsTable` has its own. Its `restoreTunarrDefaults` flag was never set to true.
+  - `usePlexStreamSettings` and `usePlexSettings` in `web/src/hooks/settingsHooks.ts` had no callers.
+- **Fix:** all of the above removed (`ChannelsPage.tsx`, `FfmpegSettingsPage.tsx`, `settingsHooks.ts`). The FFmpeg
+  page's Save and Reset Changes buttons now depend on `isDirty` alone, which is what they already did. No behaviour
+  changes. Locale catalogs are left to the post-merge `lingui extract` job.
+- **Tests:** none added; removal only. The web suite, `pnpm turbo typecheck` and `pnpm lint-changed` pass.
+- **Upstream:** not sent; upstream `main` has the same dead code.
 
 ### The Live TV playlist reader keeps the session's history itself (2026-10-19, PR #84)
 
