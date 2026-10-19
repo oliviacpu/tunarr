@@ -194,7 +194,7 @@ function makeLineupItem(): ContentBackedStreamLineupItem {
  * Creates a mock PipelineBuilderFactory that intercepts PipelineBuilder.build()
  * to capture the FrameState for assertion.
  */
-function createCapturingPipelineBuilderFactory(): {
+function createCapturingPipelineBuilderFactory(outputFrameRate?: number): {
   factory: PipelineBuilderFactory;
   getCapturedFrameState: () => FrameState | undefined;
   getCapturedFfmpegState: () => FfmpegState | undefined;
@@ -241,6 +241,7 @@ function createCapturingPipelineBuilderFactory(): {
     });
 
     const pipelineStub = () => ({
+      outputFrameRate,
       getCommandArgs: () => [],
       getCommandEnvironment: () => ({}),
       inputs: {},
@@ -806,6 +807,10 @@ describe('FfmpegStreamFactory', () => {
 
     test('leaves the picture alone with an ffmpeg that has no drawtext filter', async () => {
       const { sut, getCapturedVideoInput } = makeSut([]);
+      const warn = vi.fn();
+      (sut as unknown as { logger: Logger }).logger = {
+        warn,
+      } as unknown as Logger;
 
       await sut.createPlaceholderSession({
         kind: 'offline',
@@ -815,6 +820,14 @@ describe('FfmpegStreamFactory', () => {
       });
 
       expect(getCapturedVideoInput()?.filterSteps).toEqual([]);
+      expect(warn).toHaveBeenCalledOnce();
+      await sut.createPlaceholderSession({
+        kind: 'offline',
+        duration: dayjs.duration({ seconds: 90 }),
+        outputFormat: MpegTsOutputFormat,
+        nowPlaying,
+      });
+      expect(warn).toHaveBeenCalledOnce();
     });
 
     test('leaves the picture alone without a title to draw', async () => {
@@ -1140,6 +1153,25 @@ describe('FfmpegStreamFactory', () => {
         lineupItem: makeLineupItem(),
       });
     }
+
+    test('identifies an unavailable language when repeating the main track', async () => {
+      const { sut } = makeSut({ audioTracks: ['eng', 'jpn'] });
+      const info = vi.fn();
+      (sut as unknown as { logger: Logger }).logger = {
+        info,
+        debug: vi.fn(),
+        trace: vi.fn(),
+      } as unknown as Logger;
+      await streamSession(sut, [eng]);
+      expect(info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestedLanguage: 'jpn',
+          sourceLanguage: 'eng',
+          sourceIndex: 1,
+        }),
+        expect.stringContaining('Audio language unavailable'),
+      );
+    });
 
     function tracks(input: AudioInputSource | null | undefined) {
       return input?.streams.map((s) => [s.index, s.language]);
@@ -1882,6 +1914,9 @@ describe('FfmpegStreamFactory', () => {
       async function run(opts: {
         selected: SubtitleStreamDetails | null;
         hdhrClosedCaptions?: boolean;
+        pipelineOutputFrameRate?: number;
+        sessionCaptionsEnabled?: boolean;
+        noAudio?: boolean;
         streamMode?: 'hls' | 'mpegts';
         // The program's subtitle tracks, both files by default; null for
         // none, which the stream details leave undefined
@@ -1896,8 +1931,11 @@ describe('FfmpegStreamFactory', () => {
         // Stands in for the factory's own logger
         logger?: Logger;
       }) {
-        const capturing = createCapturingPipelineBuilderFactory();
+        const capturing = createCapturingPipelineBuilderFactory(
+          opts.pipelineOutputFrameRate,
+        );
         const details = makeStreamDetails();
+        if (opts.noAudio) details.audioDetails = undefined;
         const [video] = details.videoDetails ?? [];
         if (video && opts.framerate !== undefined) {
           video.framerate = opts.framerate;
@@ -1935,6 +1973,7 @@ describe('FfmpegStreamFactory', () => {
             ptsOffset: 0,
             realtime: true,
             streamMode: opts.streamMode ?? 'hls',
+            captionsEnabled: opts.sessionCaptionsEnabled,
           },
           lineupItem: opts.lineupItem ?? makeLineupItem(),
         });
@@ -1945,7 +1984,29 @@ describe('FfmpegStreamFactory', () => {
         };
       }
 
+      test.each([true, false])(
+        'keeps the session caption decision %s after a settings change',
+        async (enabled) => {
+          const { captions } = await run({
+            selected: fullTrack(),
+            hdhrClosedCaptions: !enabled,
+            sessionCaptionsEnabled: enabled,
+          });
+          expect(captions !== undefined).toBe(enabled);
+        },
+      );
+
       describe('frame rate', () => {
+        test('lays captions out at the final pipeline rate after deinterlacing', async () => {
+          const { captions, outputFrameRate } = await run({
+            selected: fullTrack(),
+            framerate: 30,
+            pipelineOutputFrameRate: 60,
+          });
+          expect(outputFrameRate).toBe(30);
+          expect(captions?.frameRate).toBe(60);
+        });
+
         test('pins the output to the source rate, and lays captions out at it', async () => {
           const { captions, outputFrameRate } = await run({
             selected: fullTrack(),
@@ -1984,6 +2045,55 @@ describe('FfmpegStreamFactory', () => {
           });
           expect(outputFrameRate).toBeNull();
         });
+      });
+
+      test('burns Japanese subtitles instead of sending empty CEA-608 captions', async () => {
+        fs.writeFileSync(
+          fullSubs,
+          '1\n00:00:11,000 --> 00:00:20,000\nこんにちは世界\n',
+        );
+        const track = fullTrack();
+        const warn = vi.fn();
+        const { method, captions } = await run({
+          selected: track,
+          subtitles: [track],
+          logger: { warn, debug: vi.fn(), trace: vi.fn() } as unknown as Logger,
+        });
+        expect(method).toBe(SubtitleMethods.Burn);
+        expect(captions).toBeUndefined();
+        expect(warn).toHaveBeenCalledOnce();
+      });
+
+      test.each([
+        { damagedCues: 1, method: SubtitleMethods.Convert },
+        { damagedCues: 2, method: SubtitleMethods.Burn },
+      ])(
+        'uses $method with $damagedCues unsupported cues out of ten',
+        async ({ damagedCues, method }) => {
+          fs.writeFileSync(
+            fullSubs,
+            Array.from({ length: 10 }, (_, i) => {
+              const second = 11 + i * 2;
+              const text = i < damagedCues ? 'こんにちは' : 'Hello';
+              return `${i + 1}\n00:00:${second},000 --> 00:00:${second + 1},000\n${text}\n`;
+            }).join('\n'),
+          );
+          const track = fullTrack();
+          const result = await run({ selected: track, subtitles: [track] });
+          expect(result.method).toBe(method);
+          expect(result.captions !== undefined).toBe(damagedCues === 1);
+        },
+      );
+
+      test('loads fallback captions without selecting a subtitle input when audio is absent', async () => {
+        const { method, captions } = await run({
+          selected: fullTrack(),
+          noAudio: true,
+        });
+        expect(method).toBeUndefined();
+        expect(captions?.cues).toEqual([
+          { startMs: 2000, endMs: 4500, text: 'Hello there' },
+        ]);
       });
 
       test('sends full text subtitles as captions and WebVTT instead of burning them in', async () => {

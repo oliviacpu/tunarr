@@ -1,3 +1,7 @@
+import { droppedCaptionCharacters } from '../stream/captions/Cea608Encoder.ts';
+import { streamMatchesLanguage } from './StreamSelectionEvaluator.ts';
+import fs from 'node:fs/promises';
+import { subtitleCharacterEncoding } from '../stream/captions/decodeSubtitleText.ts';
 import type {
   ISettingsDB,
   ReadableFfmpegSettings,
@@ -144,6 +148,8 @@ export function gapMusicFades(itemMs: number, trackMs: number): AudioFades {
 @loggingDef({ category: 'streaming' })
 export class FfmpegStreamFactory {
   @InjectLogger() declare private readonly logger: Logger;
+
+  private static readonly missingDrawtextWarnings = new Set<string>();
 
   private readonly ffmpegSettings: ReadableFfmpegSettings;
 
@@ -370,6 +376,7 @@ export class FfmpegStreamFactory {
       encoding,
       isFirstTranscode,
       emitEndList,
+      captionsEnabled: sessionCaptionsEnabled,
       subtitleSegmentStartNumber,
     },
     lineupItem,
@@ -384,7 +391,8 @@ export class FfmpegStreamFactory {
     // Subtitles are still processed as WebVTT sidecar when available.
     const isPassthrough =
       isRemux || outputFormat.type === OutputFormatTypes.HlsDirectV2;
-    const captionsOn = !isPassthrough && this.captionsOn(streamMode);
+    const captionsOn =
+      !isPassthrough && (sessionCaptionsEnabled ?? this.captionsOn(streamMode));
     const playbackParams = isPassthrough
       ? null
       : new FfmpegPlaybackParamsCalculator(
@@ -394,8 +402,6 @@ export class FfmpegStreamFactory {
           // Captions are laid out one pair per output frame, so the output's
           // rate must be known exactly
           pinFrameRate: captionsOn,
-          deinterlaceFilter: this.ffmpegSettings.deinterlaceFilter,
-          infiniteLoop: lineupItem.infiniteLoop,
         });
 
     const { videoStream, videoInputSource } = this.buildVideoInput(
@@ -557,7 +563,13 @@ export class FfmpegStreamFactory {
           subtitleRendition,
           isPassthrough,
         ),
-        captions,
+        captions:
+          captions === undefined
+            ? undefined
+            : {
+                ...captions,
+                frameRate: pipeline.outputFrameRate ?? captions.frameRate,
+              },
       },
     };
   }
@@ -588,7 +600,6 @@ export class FfmpegStreamFactory {
     captions: ProgramCaptions | undefined;
   }> {
     const { duration, startTime, streamMode, watermark, captionsOn } = options;
-    let captions: ProgramCaptions | undefined;
 
     const audioState = this.createAudioState(
       playbackParams,
@@ -599,8 +610,7 @@ export class FfmpegStreamFactory {
     );
 
     let audioInput: Nullable<AudioInputSource> = null;
-    let subtitleSource: Nullable<SubtitlesInputSource> = null;
-    let subtitleRendition: SubtitleRenditionInfo | undefined;
+    let selectedSubtitle: SubtitleStreamDetails | undefined;
 
     // Stream selection via profiles (handles both audio and subtitles)
     if (isDefined(streamDetails.audioDetails)) {
@@ -612,6 +622,8 @@ export class FfmpegStreamFactory {
           subtitleStreams: streamDetails.subtitleDetails ?? [],
         });
 
+      selectedSubtitle = subtitleStream ?? undefined;
+
       // With the channel's audio track layout: the program's track for each
       // slot (its main track where it has none), tagged with the slot language
       const slots = this.audioSlots;
@@ -621,14 +633,26 @@ export class FfmpegStreamFactory {
               slots,
               streamDetails.audioDetails,
               audioStream,
-            ).map((stream, i) =>
-              AudioStream.create({
+            ).map((stream, i) => {
+              const language = slots[i];
+              if (language && !streamMatchesLanguage(stream, language)) {
+                this.logger.info(
+                  {
+                    channelId: this.channel.uuid,
+                    requestedLanguage: language,
+                    sourceLanguage: stream.languageCodeISO6392,
+                    sourceIndex: stream.index,
+                  },
+                  'Audio language unavailable; repeating the main track to preserve the channel track layout',
+                );
+              }
+              return AudioStream.create({
                 index: stream.index,
                 codec: stream.codec ?? 'unknown',
                 channels: stream.channels ?? -2,
-                language: slots[i],
-              }),
-            )
+                language,
+              });
+            })
           : [
               AudioStream.create({
                 index: audioStream.index,
@@ -642,68 +666,6 @@ export class FfmpegStreamFactory {
         outputStreams,
         audioState,
       );
-
-      if (subtitleStream && this.channel.subtitlesEnabled) {
-        this.logger.trace('Using subtitle stream: %O', subtitleStream);
-
-        const sidecarEnabled = this.featureFlagService.get(
-          'webvttSidecarEnabled',
-        );
-        const canUseSidecar = !isImageBasedSubtitle(subtitleStream.codec);
-        // With captions, full text subtitles become switchable captions (and
-        // WebVTT for HLS players) instead of being burned in; forced ones stay.
-        // If they can't be read as captions, they're burned in as before.
-        if (captionsOn && canUseSidecar && !subtitleStream.forced) {
-          captions = await this.loadCaptions(
-            subtitleStream,
-            playbackParams.frameRate,
-            {
-              startTime,
-              duration,
-            },
-          );
-        }
-        const useSidecar =
-          (sidecarEnabled || captions !== undefined) && canUseSidecar;
-        const method = useSidecar
-          ? SubtitleMethods.Convert
-          : SubtitleMethods.Burn;
-
-        // External subtitles are always resolved to a local file before they
-        // get here -- downloaded during scanning, or read from storage shared
-        // with the media source.
-        const source = match(subtitleStream.path)
-          .with(P.string, (path) => new FileStreamSource(path))
-          .otherwise(() => streamSource);
-
-        // If the subtitle source differs from the video source, the
-        // subtitle lives in a separate file (e.g. an extracted .srt) and
-        // must be treated as external regardless of the declared type.
-        const isExternal =
-          subtitleStream.type === 'external' || source !== streamSource;
-
-        const stream = isExternal
-          ? new ExternalSubtitleStream(subtitleStream.codec, method)
-          : new EmbeddedSubtitleStream(
-              subtitleStream.codec,
-              subtitleStream.index ?? 0,
-              method,
-            );
-
-        if (stream) {
-          subtitleSource = new SubtitlesInputSource(source, [stream], method);
-
-          if (useSidecar) {
-            subtitleRendition = {
-              language: subtitleStream.languageCodeISO6392 ?? 'und',
-              languageName: subtitleStream.language,
-              default: subtitleStream.default,
-              forced: subtitleStream.forced,
-              title: subtitleStream.title,
-            };
-          }
-        }
-      }
     } else {
       audioInput = this.withAudioSlots(
         new NullAudioInputSource({
@@ -711,6 +673,128 @@ export class FfmpegStreamFactory {
           audioDuration: duration.asMilliseconds(),
         }),
       );
+    }
+
+    const { subtitleSource, subtitleRendition, captions } =
+      await this.buildTranscodeSubtitles(
+        streamSource,
+        streamDetails,
+        lineupItem,
+        selectedSubtitle,
+        playbackParams.frameRate,
+        { startTime, duration, captionsOn },
+      );
+
+    let watermarkSource: Nullable<WatermarkInputSource> = null;
+    if (watermark?.enabled) {
+      const watermarkUrl = watermark.url ?? makeLocalUrl('/images/tunarr.png');
+      watermarkSource = new WatermarkInputSource(
+        new HttpStreamSource(watermarkUrl),
+        StillImageStream.create({
+          frameSize: FrameSize.fromResolution({
+            widthPx: watermark.width,
+            heightPx: -1,
+          }),
+          index: 0,
+        }),
+        { ...watermark, url: watermarkUrl },
+      );
+    }
+
+    return {
+      audioInput,
+      subtitleSource,
+      subtitleRendition,
+      watermarkSource,
+      captions,
+    };
+  }
+
+  private async buildTranscodeSubtitles(
+    streamSource: HttpStreamSource | FileStreamSource,
+    streamDetails: StreamDetails,
+    lineupItem: ContentBackedStreamLineupItem,
+    subtitleStream: SubtitleStreamDetails | undefined,
+    frameRate: number | undefined,
+    options: { startTime: Duration; duration: Duration; captionsOn: boolean },
+  ): Promise<{
+    subtitleSource: Nullable<SubtitlesInputSource>;
+    subtitleRendition: SubtitleRenditionInfo | undefined;
+    captions: ProgramCaptions | undefined;
+  }> {
+    const { startTime, duration, captionsOn } = options;
+    let subtitleSource: Nullable<SubtitlesInputSource> = null;
+    let subtitleRendition: SubtitleRenditionInfo | undefined;
+    let captions: ProgramCaptions | undefined;
+    const attemptedCaptionPaths = new Set<string>();
+
+    if (subtitleStream && this.channel.subtitlesEnabled) {
+      this.logger.trace('Using subtitle stream: %O', subtitleStream);
+
+      const sidecarEnabled = this.featureFlagService.get(
+        'webvttSidecarEnabled',
+      );
+      const canUseSidecar = !isImageBasedSubtitle(subtitleStream.codec);
+      // With captions, full text subtitles become switchable captions (and
+      // WebVTT for HLS players) instead of being burned in; forced ones stay.
+      // If they can't be read as captions, they're burned in as before.
+      const captionCandidate =
+        captionsOn && canUseSidecar && !subtitleStream.forced;
+      if (captionCandidate) {
+        if (subtitleStream.path) attemptedCaptionPaths.add(subtitleStream.path);
+        captions = await this.loadCaptions(subtitleStream, frameRate, {
+          startTime,
+          duration,
+        });
+      }
+      const useSidecar =
+        ((sidecarEnabled && !captionCandidate) || captions !== undefined) &&
+        canUseSidecar;
+      const method = useSidecar
+        ? SubtitleMethods.Convert
+        : SubtitleMethods.Burn;
+
+      // External subtitles are always resolved to a local file before they
+      // get here -- downloaded during scanning, or read from storage shared
+      // with the media source.
+      const source = match(subtitleStream.path)
+        .with(P.string, (path) => new FileStreamSource(path))
+        .otherwise(() => streamSource);
+
+      // If the subtitle source differs from the video source, the
+      // subtitle lives in a separate file (e.g. an extracted .srt) and
+      // must be treated as external regardless of the declared type.
+      const isExternal =
+        subtitleStream.type === 'external' || source !== streamSource;
+
+      const stream = isExternal
+        ? new ExternalSubtitleStream(subtitleStream.codec, method)
+        : new EmbeddedSubtitleStream(
+            subtitleStream.codec,
+            subtitleStream.index ?? 0,
+            method,
+          );
+
+      if (stream) {
+        subtitleSource = new SubtitlesInputSource(source, [stream], method);
+        if (isExternal && canUseSidecar && subtitleStream.path) {
+          const bytes = await fs
+            .readFile(subtitleStream.path)
+            .catch(() => undefined);
+          if (bytes)
+            subtitleSource.characterEncoding = subtitleCharacterEncoding(bytes);
+        }
+
+        if (useSidecar) {
+          subtitleRendition = {
+            language: subtitleStream.languageCodeISO6392 ?? 'und',
+            languageName: subtitleStream.language,
+            default: subtitleStream.default,
+            forced: subtitleStream.forced,
+            title: subtitleStream.title,
+          };
+        }
+      }
     }
 
     // Otherwise caption from the program's full text track, if it has one
@@ -731,7 +815,9 @@ export class FfmpegStreamFactory {
         if (track?.path === undefined) {
           continue;
         }
-        captions = await this.loadCaptions(track, playbackParams.frameRate, {
+        if (attemptedCaptionPaths.has(track.path)) continue;
+        attemptedCaptionPaths.add(track.path);
+        captions = await this.loadCaptions(track, frameRate, {
           startTime,
           duration,
         });
@@ -747,7 +833,7 @@ export class FfmpegStreamFactory {
       captions = noCaptionsNotice(lineupItem, {
         subtitles: streamDetails.subtitleDetails ?? [],
         durationMs: duration.asMilliseconds(),
-        frameRate: playbackParams.frameRate,
+        frameRate: frameRate,
         // The first preferred language, the .ts stream's caption label
         language:
           this.ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ??
@@ -782,29 +868,7 @@ export class FfmpegStreamFactory {
       };
     }
 
-    let watermarkSource: Nullable<WatermarkInputSource> = null;
-    if (watermark?.enabled) {
-      const watermarkUrl = watermark.url ?? makeLocalUrl('/images/tunarr.png');
-      watermarkSource = new WatermarkInputSource(
-        new HttpStreamSource(watermarkUrl),
-        StillImageStream.create({
-          frameSize: FrameSize.fromResolution({
-            widthPx: watermark.width,
-            heightPx: -1,
-          }),
-          index: 0,
-        }),
-        { ...watermark, url: watermarkUrl },
-      );
-    }
-
-    return {
-      audioInput,
-      subtitleSource,
-      subtitleRendition,
-      watermarkSource,
-      captions,
-    };
+    return { subtitleSource, subtitleRendition, captions };
   }
 
   // Captions go into the .ts stream HDHomeRun clients read, which wraps an
@@ -847,6 +911,26 @@ export class FfmpegStreamFactory {
         durationMs: program.duration.asMilliseconds(),
         frameRate,
       });
+      if (captions && captions.cues.length > 0) {
+        const losses = captions.cues.map((cue) =>
+          droppedCaptionCharacters(cue.text),
+        );
+        const damagedCues = losses.filter((count) => count > 0).length;
+        if (damagedCues / captions.cues.length > 0.1) {
+          this.logger.warn(
+            {
+              droppedCharacters: losses.reduce(
+                (total, count) => total + count,
+                0,
+              ),
+              affectedCues: damagedCues,
+              totalCues: captions.cues.length,
+            },
+            'CEA-608 cannot represent more than 10% of this track’s cues; keeping subtitles for burn-in instead',
+          );
+          return;
+        }
+      }
       if (track.path !== undefined) {
         this.logger.debug(
           'Read subtitles %s for captions in %s ms: %d cues in this program',
@@ -1199,9 +1283,16 @@ export class FfmpegStreamFactory {
         offlineInput.addFilter(
           new NowPlayingTextFilter(nowPlaying.text, nowPlaying.fontFile),
         );
-      } else {
-        this.logger.debug(
-          "ffmpeg has no drawtext filter, so gap music's title isn't drawn",
+      } else if (
+        !FfmpegStreamFactory.missingDrawtextWarnings.has(
+          this.ffmpegSettings.ffmpegExecutablePath,
+        )
+      ) {
+        FfmpegStreamFactory.missingDrawtextWarnings.add(
+          this.ffmpegSettings.ffmpegExecutablePath,
+        );
+        this.logger.warn(
+          'FFmpeg has no drawtext filter; gap music titles cannot be displayed. Use a build with drawtext support.',
         );
       }
     }

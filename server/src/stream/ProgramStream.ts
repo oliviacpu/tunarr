@@ -217,15 +217,16 @@ export class ProgramStream extends events.EventEmitter<ProgramStreamEvents> {
       duration.asMilliseconds(),
     );
 
-    const backgroundMusic = lineupItem.backgroundMusic
-      ? await this.resolveBackgroundMusic(lineupItem.backgroundMusic)
-      : undefined;
-    // only over a track that plays: a gap whose track failed is silent
-    const nowPlaying =
-      backgroundMusic && lineupItem.backgroundMusic
-        ? await this.resolveNowPlaying(lineupItem.backgroundMusic)
-        : undefined;
-    const picture = await this.resolveOfflinePicture();
+    const [backgroundMusic, title, picture] = await Promise.all([
+      lineupItem.backgroundMusic
+        ? this.resolveBackgroundMusic(lineupItem.backgroundMusic)
+        : undefined,
+      lineupItem.backgroundMusic
+        ? this.resolveNowPlaying(lineupItem.backgroundMusic)
+        : undefined,
+      this.resolveOfflinePicture(),
+    ]);
+    const nowPlaying = backgroundMusic ? title : undefined;
 
     const result = await ffmpeg.createPlaceholderSession({
       kind: 'offline',

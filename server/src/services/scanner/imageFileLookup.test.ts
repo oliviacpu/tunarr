@@ -50,8 +50,11 @@ describe('locateImageFile', () => {
     expect(found).toBeUndefined();
   });
 
-  test('prefers an exact-case file over a differently cased duplicate', async () => {
+  test('prefers an exact-case file over a differently cased duplicate', async (context) => {
     await touch('poster.JPG', 'poster.jpg');
+    if ((await fs.readdir(dir)).length !== 2) {
+      context.skip();
+    }
 
     const found = await locateImageFile([path.join(dir, 'poster')]);
 

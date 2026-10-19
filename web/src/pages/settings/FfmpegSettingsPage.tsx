@@ -362,6 +362,15 @@ export default function FfmpegSettingsPage() {
             </Trans>
           </FormHelperText>
         </FormControl>
+        <NumericFormControllerText
+          control={control}
+          name="hlsReadAheadMaxThreads"
+          rules={{ min: 0, max: 256 }}
+          TextFieldProps={{
+            label: t`Read-ahead Thread Limit`,
+            helperText: t`Raises encoder threads up to this limit while HLS prepares video ahead of playback, without lowering your transcode configuration's thread count. 0 disables the increase. Applies from the next program.`,
+          }}
+        />
         <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
           <NumericFormControllerText
             control={control}

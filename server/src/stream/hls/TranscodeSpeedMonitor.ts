@@ -154,6 +154,8 @@ export type TranscodeSpeedLogDetails = {
   channel: { number: number; name: string };
   item: TranscodeSpeedLogItem;
   transcodeConfig: { name: string; threadCount: number };
+  configuredThreadCount?: number;
+  realtime?: boolean;
 };
 
 function itemTitle(item: TranscodeSpeedLogItem): string {
@@ -176,20 +178,27 @@ function itemTitle(item: TranscodeSpeedLogItem): string {
 /** The log line for a speed event, naming the channel, program and config */
 export function describeTranscodeSpeedEvent(
   event: TranscodeSpeedEvent,
-  { channel, item, transcodeConfig }: TranscodeSpeedLogDetails,
+  {
+    channel,
+    item,
+    transcodeConfig,
+    configuredThreadCount,
+    realtime,
+  }: TranscodeSpeedLogDetails,
 ): string {
   const where = `Channel ${channel.number} (${channel.name}) is transcoding "${itemTitle(item)}"`;
   const speed = `${event.speed.toFixed(2)}x`;
   if (event.type === 'recovered') {
     return `${where} at real time again (${speed}).`;
   }
-  const threads =
-    transcodeConfig.threadCount > 0
-      ? `${transcodeConfig.threadCount}`
-      : '0 (automatic)';
+  const configured = configuredThreadCount ?? transcodeConfig.threadCount;
+  const threads = configured > 0 ? `${configured}` : '0 (automatic)';
   return (
     `${where} at ${speed} real time over the last ${SpeedWindowMs / 1000} s, so players run out of video and pause. ` +
     `Transcode config "${transcodeConfig.name}" has thread count ${threads}; ` +
+    (realtime === false
+      ? `read-ahead is active with ${transcodeConfig.threadCount || 'automatic'} threads; `
+      : '') +
     'a higher thread count, a faster video preset or a lower output resolution helps.'
   );
 }

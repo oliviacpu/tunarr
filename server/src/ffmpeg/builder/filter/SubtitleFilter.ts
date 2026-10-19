@@ -18,7 +18,8 @@ export class SubtitleFilter extends FilterOption {
 
     // Named, not positional: a path with '=' after a run of option-name
     // characters would otherwise be read as option=value
-    return `subtitles=filename=${escapeFilterOptionValue(this.subtitleInputSource.path)}`;
+    const encoding = this.subtitleInputSource.characterEncoding;
+    return `subtitles=filename=${escapeFilterOptionValue(this.subtitleInputSource.path)}${encoding ? `:charenc=${escapeFilterOptionValue(encoding)}` : ''}`;
   }
 
   nextState(currentState: FrameState): FrameState {

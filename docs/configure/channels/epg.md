@@ -23,10 +23,10 @@ The full URL is also available in the Tunarr web UI under **Settings > HDHR / M3
   program in the guide window, so on a busy server pick an hour when nobody watches. Saving these settings moves the
   schedule at once and rebuilds the guide straight away.
 - **Each rebuild writes EPG (Hours) of guide**, and nothing adds to it until the next rebuild, so EPG (Hours) has to be
-  at least two hours longer than the time between rebuilds, covering seasonal clock rollbacks of up to two hours.
+  at least two hours longer than the time between rebuilds: this conservatively covers clock rollbacks of up to two hours, including Antarctica/Troll.
   The settings page flags a shorter guide and the API refuses it. A timer of 24 hours or more rebuilds once a day, so
   a 26-hour guide covers it. Settings saved before this check are rebuilt often enough for their guide (a 24 hour timer
-  with a 12-hour guide every 10 hours), and the server logs a warning at startup. Old guides shorter than three hours are generated as three-hour guides, the minimum that covers hourly rebuilds and the two-hour margin.
+  with a 12-hour guide every 10 hours), and the server logs a warning at startup. Legacy guide lengths below three hours are treated as three hours at runtime without rewriting the saved value.
 - **Upgrading from a version where the rebuilds stopped at midnight:** a start hour other than 00:00 with a timer under
   24 hours now rebuilds around the clock, so it can rebuild more often than before (every 6 hours from 18:00 was once
   a day, at 18:00, and now is 00:00, 06:00, 12:00 and 18:00). For one rebuild a day, set the timer to 24.

@@ -35,6 +35,7 @@ function makeChannel(
 async function wrap(opts: {
   subtitlesEnabled: boolean | null;
   hdhrClosedCaptions: boolean;
+  captionsEnabled?: boolean;
   streamMode?: ChannelConcatStreamMode;
   // The transcode config's video format (H.264 by default)
   videoFormat?: TranscodeVideoOutputFormat;
@@ -52,6 +53,7 @@ async function wrap(opts: {
     opts.hdhrClosedCaptions,
     'eng',
     { info } as unknown as Logger,
+    opts.captionsEnabled,
   );
   // In ConcatSession's order: the sink, then the session
   const sink = stream.outputSink();
@@ -64,6 +66,19 @@ async function wrap(opts: {
 }
 
 describe('ConcatStream captions', () => {
+  test.each([true, false])(
+    'uses the existing session decision %s after a settings change',
+    async (enabled) => {
+      const { url, sink } = await wrap({
+        subtitlesEnabled: true,
+        hdhrClosedCaptions: !enabled,
+        captionsEnabled: enabled,
+      });
+      expect(url.searchParams.has('captions')).toBe(enabled);
+      expect(sink instanceof CaptionLanguageStream).toBe(enabled);
+    },
+  );
+
   test("a channel with subtitles off gets plain segments and ffmpeg's own PMT", async () => {
     const { url, sink } = await wrap({
       subtitlesEnabled: false,

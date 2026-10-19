@@ -7,6 +7,7 @@ import type { OnDemandChannelService } from '@/services/OnDemandChannelService.j
 import type { Logger } from '@/util/logging/LoggerFactory.js';
 import type { DeepRequired } from 'ts-essentials';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConcatSession } from './ConcatSession.ts';
 import type { HlsSessionOptions } from './hls/HlsSession.ts';
 
 // Mock modules that create circular dependency chains through Inversify
@@ -98,7 +99,8 @@ function makeChannel(): ChannelOrmWithTranscodeConfig {
   return {
     uuid: channelUuid,
     number: 1,
-    transcodeConfig: {},
+    subtitlesEnabled: true,
+    transcodeConfig: { videoFormat: 'h264' },
   } as unknown as ChannelOrmWithTranscodeConfig;
 }
 
@@ -124,6 +126,9 @@ function makeSessionManager(
   const settingsDB: Partial<ISettingsDB> = {
     ffmpegSettings: vi.fn().mockReturnValue({
       transcodeDirectory: '/tmp/test-sessions',
+      hdhrClosedCaptions: true,
+      hlsSegmentSeconds: 3,
+      hlsInitialSegmentCount: 2,
     }),
   };
 
@@ -154,6 +159,67 @@ describe('SessionManager', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it.each(['hls', 'hls_direct_v2'] as const)(
+    'passes configured segment settings into %s sessions',
+    async (streamMode) => {
+      const created: HlsSessionOptions[] = [];
+      const manager = makeSessionManager((channel, options) => {
+        created.push(options);
+        return new StubHlsSession(channel, options);
+      });
+      await manager.getOrCreateHlsSession(channelUuid, 'token', connection, {
+        streamMode,
+      });
+      expect(created[0]).toMatchObject({
+        streamMode,
+        segmentSeconds: 3,
+        initialSegmentCount: 2,
+      });
+    },
+  );
+
+  it('inherits a live wrapper caption decision instead of rereading changed settings', async () => {
+    const created: HlsSessionOptions[] = [];
+    const manager = makeSessionManager((channel, options) => {
+      created.push(options);
+      return new StubHlsSession(channel, options);
+    });
+    const originalGet = manager.getSession.bind(manager);
+    vi.spyOn(manager, 'getSession').mockImplementation((channelId, mode) =>
+      mode === 'hls_concat'
+        ? ({
+            captionsEnabled: false,
+            stoppingOrStopped: false,
+          } as unknown as ConcatSession)
+        : originalGet(channelId, mode),
+    );
+    await manager.getOrCreateHlsSession(channelUuid, 'token', connection, {
+      streamMode: 'hls',
+    });
+    expect(created[0]?.captionsEnabled).toBe(false);
+  });
+
+  it('ignores a stopped wrapper when a new session chooses captions', async () => {
+    const created: HlsSessionOptions[] = [];
+    const manager = makeSessionManager((channel, options) => {
+      created.push(options);
+      return new StubHlsSession(channel, options);
+    });
+    const originalGet = manager.getSession.bind(manager);
+    vi.spyOn(manager, 'getSession').mockImplementation((channelId, mode) =>
+      mode === 'hls_concat'
+        ? ({
+            captionsEnabled: false,
+            stoppingOrStopped: true,
+          } as unknown as ConcatSession)
+        : originalGet(channelId, mode),
+    );
+    await manager.getOrCreateHlsSession(channelUuid, 'token', connection, {
+      streamMode: 'hls',
+    });
+    expect(created[0]?.captionsEnabled).toBe(true);
   });
 
   describe('session replacement race condition', () => {

@@ -52,7 +52,6 @@ import { HardwareUploadQsvFilter } from '../../filter/qsv/HardwareUploadQsvFilte
 import { TonemapQsvFilter } from '../../filter/qsv/TonemapQsvFilter.ts';
 import type { SubtitlesInputSource } from '../../input/SubtitlesInputSource.ts';
 import { CopyTimestampInputOption } from '../../options/input/CopyTimestampInputOption.ts';
-import { FrameRateOutputOption } from '../../options/output/FrameRateOutputOption.ts';
 
 export class QsvPipelineBuilder extends SoftwarePipelineBuilder {
   constructor(
@@ -185,27 +184,13 @@ export class QsvPipelineBuilder extends SoftwarePipelineBuilder {
       // The output rate Tunarr chose (normalized, captions, or a source whose
       // reported rate isn't standard), so captions laid out at it match
       const setFrameRate =
-        this.desiredState.frameRate ??
+        currentState.frameRate ??
         this.context?.videoStream.getNumericFrameRateOrDefault() ??
         24;
       currentState = this.addFilterToVideoChain(
         currentState,
         new SetFpsFilter(setFrameRate),
       );
-
-      // Remove existing frame rate output option if the framerate we just
-      // set differs from the
-      if (
-        this.desiredState.frameRate &&
-        this.desiredState.frameRate !== setFrameRate
-      ) {
-        const idx = this.pipelineSteps.findIndex(
-          (step) => step instanceof FrameRateOutputOption,
-        );
-        if (idx !== -1) {
-          this.pipelineSteps.splice(idx, 1);
-        }
-      }
     }
 
     currentState = this.setWatermark(currentState);

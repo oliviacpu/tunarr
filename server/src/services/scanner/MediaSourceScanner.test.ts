@@ -152,6 +152,7 @@ describe('MediaSourceScanner says when Plex hides sidecar file paths', () => {
   // A Plex item whose video path came through, with sidecars as given
   function programWithVideo(sourcePath: string | null) {
     const program = makeProgram();
+    program.program.libraryId = 'library-1';
     for (const sub of program.subtitles) {
       sub.sourcePath = sourcePath;
     }
@@ -180,6 +181,16 @@ describe('MediaSourceScanner says when Plex hides sidecar file paths', () => {
     );
 
     expect(hiddenLines()).toHaveLength(1);
+  });
+
+  test('tracks hidden paths independently for different libraries', async () => {
+    const first = programWithVideo(null);
+    const second = programWithVideo(null);
+    second.program.libraryId = 'library-2';
+    await scanner.exposeDownloadExternalSubtitleStreams(first, ok);
+    await scanner.exposeDownloadExternalSubtitleStreams(second, ok);
+    await scanner.exposeDownloadExternalSubtitleStreams(first, ok);
+    expect(hiddenLines()).toHaveLength(2);
   });
 
   test('again in the next scan', async () => {

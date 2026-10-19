@@ -40,6 +40,13 @@ function parseRate(framerate: number | string | null | undefined) {
   return Number.isFinite(rate) && rate > 0 && rate <= 240 ? rate : undefined;
 }
 
+export function preferredSourceFrameRate(
+  average: number | null | undefined,
+  reported: number | null | undefined,
+) {
+  return parseRate(average) ?? parseRate(reported);
+}
+
 /**
  * The constant frame rate to give a transcode of a source that reports `framerate`, never fewer frames a second than
  * it reports:

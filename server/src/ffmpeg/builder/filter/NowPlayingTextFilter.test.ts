@@ -67,7 +67,7 @@ describe('NowPlayingTextFilter', () => {
         'drawtext=fontfile=/data/fonts/MPLUSRounded1c-Bold.ttf',
         'expansion=none',
         "text=♪  It\\\\\\'s — 100%",
-        'fontsize=h/30',
+        'fontsize=min(h/30\\,max(1\\,(w-52)/34))',
         'fontcolor=0xF5F0E4',
         'box=1',
         'boxcolor=black@0.6',

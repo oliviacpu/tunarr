@@ -5,6 +5,7 @@ import { UpdateXmlTvTask } from '@/tasks/UpdateXmlTvTask.js';
 import type { RouterPluginCallback } from '@/types/serverType.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import { xmlTvRefreshCrontab } from '@/util/schedulingUtil.js';
+import { minimumXmlTvGuideHours } from '@tunarr/shared/util';
 import { BaseErrorSchema } from '@tunarr/types/api';
 import { XmlTvSettingsSchema } from '@tunarr/types/schemas';
 import { isError, isUndefined } from 'lodash-es';
@@ -31,11 +32,34 @@ const UpdateXmlTvSettingsRequestSchema = z.object({
   publicUrl: z.url().or(z.literal('')).optional(),
 });
 
+/**
+ * Why a save would leave the guide empty before the next rebuild, or
+ * undefined. Each scheduled rebuild writes `programmingHours` of guide and
+ * nothing adds to it before the next one (`minimumXmlTvGuideHours`).
+ */
+function xmlTvRefreshProblem(settings: {
+  refreshHours: number;
+  programmingHours: number;
+}): string | undefined {
+  const minimum = minimumXmlTvGuideHours(settings.refreshHours);
+  if (settings.programmingHours < minimum) {
+    return (
+      `EPG (Hours) is ${settings.programmingHours}, too short for a ` +
+      `${settings.refreshHours}-hour refresh timer: the guide would run out ` +
+      `before the next rebuild. It has to be at least ${minimum} hours, ` +
+      `two hours longer than the time between rebuilds, since that wait is up to two hours ` +
+      `longer on the night the clocks go back.`
+    );
+  }
+  return;
+}
+
 // The schedule is built at startup; a save moves it to the new refresh hours
 // and start hour, then rebuilds the guide once, now, as a save always has
 async function rescheduleAndRebuild(settings: {
   refreshHours: number;
   refreshStartHour: number;
+  programmingHours: number;
 }) {
   const job = GlobalScheduler.getScheduledJob(UpdateXmlTvTask.ID);
   job.reschedule(xmlTvRefreshCrontab(settings));
@@ -81,6 +105,7 @@ export const xmlTvSettingsRouter: RouterPluginCallback = (
         body: UpdateXmlTvSettingsRequestSchema,
         response: {
           200: XmlTvSettingsSchema,
+          400: BaseErrorSchema,
           500: BaseErrorSchema,
         },
       },
@@ -94,14 +119,32 @@ export const xmlTvSettingsRouter: RouterPluginCallback = (
         // instead silently reset settings the request never mentioned.
         // outputPath stays server-owned: it is deliberately read-only in the
         // UI, so it is not taken from the body even when one is sent.
+        const refreshHours = isUndefined(settings.refreshHours)
+          ? xmltv.refreshHours
+          : Math.max(1, settings.refreshHours);
+        const programmingHours =
+          settings.programmingHours ?? xmltv.programmingHours;
+        // Checked only when the request sets one of the two, so settings saved
+        // before this check can still have their other fields changed (their
+        // schedule is shortened to fit the guide; see xmlTvRefreshCrontab)
+        if (
+          !isUndefined(settings.refreshHours) ||
+          !isUndefined(settings.programmingHours)
+        ) {
+          const problem = xmlTvRefreshProblem({
+            refreshHours,
+            programmingHours,
+          });
+          if (!isUndefined(problem)) {
+            return res.status(400).send({ message: problem });
+          }
+        }
         await req.serverCtx.settings.updateSettings('xmltv', {
-          refreshHours: isUndefined(settings.refreshHours)
-            ? xmltv.refreshHours
-            : Math.max(1, settings.refreshHours),
+          refreshHours,
           refreshStartHour: settings.refreshStartHour ?? xmltv.refreshStartHour,
           enableImageCache: settings.enableImageCache ?? xmltv.enableImageCache,
           outputPath: xmltv.outputPath,
-          programmingHours: settings.programmingHours ?? xmltv.programmingHours,
+          programmingHours,
           useShowPoster: settings.useShowPoster ?? xmltv.useShowPoster,
           publicUrl: settings.publicUrl ?? xmltv.publicUrl,
         });

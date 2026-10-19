@@ -16,6 +16,7 @@ export class Libx265Encoder extends VideoEncoder {
   constructor(
     private currentState: FrameState,
     private videoPreset: Nullable<string>,
+    private threadCount: number = 0,
   ) {
     super('libx265');
   }
@@ -26,7 +27,9 @@ export class Libx265Encoder extends VideoEncoder {
       '-tag:v',
       'hvc1',
       '-x265-params',
-      'log-level=error',
+      this.threadCount > 0
+        ? `log-level=error:pools=${this.threadCount}`
+        : 'log-level=error',
     ];
     if (isNonEmptyString(this.videoPreset)) {
       opts.push('-preset:v', this.videoPreset);

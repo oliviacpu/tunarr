@@ -10,7 +10,7 @@ import {
 } from '../../testing/hls/randomPlaylists.ts';
 import { readTestFile } from '../../testing/util.ts';
 import type { TrimPlaylistResult } from './HlsPlaylistMutator.ts';
-import { HlsPlaylistMutator } from './HlsPlaylistMutator.ts';
+import { TestHlsPlaylistMutator as HlsPlaylistMutator } from '../../testing/hls/TestHlsPlaylistMutator.ts';
 
 describe('HlsPlaylistMutator', () => {
   const mutator = new HlsPlaylistMutator();

@@ -2,6 +2,7 @@ import {
   deinterlacerDoublesFrameRate,
   ffmpegFrameRate,
   outputFrameRate,
+  preferredSourceFrameRate,
 } from './outputFrameRate.ts';
 
 describe('outputFrameRate', () => {
@@ -112,4 +113,21 @@ describe('deinterlacerDoublesFrameRate', () => {
   ])('%s doubles the rate: %s', (filter, doubles) => {
     expect(deinterlacerDoublesFrameRate(filter)).toBe(doubles);
   });
+});
+
+describe('preferredSourceFrameRate', () => {
+  test('uses the average for variable-rate footage rather than the time-base rate', () => {
+    expect(
+      outputFrameRate(preferredSourceFrameRate(30000 / 1001, 120)).rate,
+    ).toBe(30000 / 1001);
+    expect(
+      outputFrameRate(preferredSourceFrameRate(60000 / 1001, 48)).rate,
+    ).toBe(60000 / 1001);
+  });
+  test.each([0, NaN, undefined])(
+    'falls back when the average is unusable (%s)',
+    (average) => {
+      expect(preferredSourceFrameRate(average, 24)).toBe(24);
+    },
+  );
 });
