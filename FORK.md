@@ -26,6 +26,21 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### MPEG-TS states no longer inherit an earlier HLS session's output format (2026-10-19)
+
+- **What you saw:** not reported from the deployment. The `videoPreset wiring` tests in `FfmpegStreamFactory.test.ts`
+  failed under `--sequence.shuffle` (seeds 4 and 7): an MPEG-TS session run after an HLS Direct v2 one was built as
+  passthrough.
+- **Cause:** `FfmpegState` defaulted `outputFormat` and `outputLocation` to the shared `MpegTsOutputFormat` and
+  `StdoutOutputLocation` objects, and its constructor deep-merges the caller's fields into them. So each HLS or HLS
+  Direct v2 session rewrote `MpegTsOutputFormat` as its own format. A later program stream given `MpegTsOutputFormat`
+  (an MPEG-TS channel, HLS Direct with mpegts output, the debug stream API) got the HLS muxer writing into that
+  session's directory, or a passthrough copy. Plex's `.ts` of an HLS channel was not affected: its wrapper and concat
+  pipelines always write MPEG-TS.
+- **Fix:** `FfmpegState.ts` starts each state from its own copy of the two defaults. Tests: `FfmpegState.test.ts`, and
+  factory tests that run an HLS or HLS Direct v2 session, then an MPEG-TS one.
+- **Upstream:** not sent; upstream `main` has the same code.
+
 ### batch publication lookups and clean stale temporary files (2026-10-19)
 
 - **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
