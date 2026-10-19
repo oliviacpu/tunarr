@@ -41,6 +41,17 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   ways (on the old code a light OS needed two). `store/index.test.ts`: a stored theme with `themePreference`, or from
   before it, hydrates without it, logs no error, and is written back without it.
 - **Upstream:** not sent.
+### Every channel form field marks its tab when it has an error (2026-10-19)
+
+- **What you saw:** nothing yet. The channel editor puts a red dot on the tab (Properties, Flex, EPG, Streaming) that
+  holds a field with an error. Its hand-written field lists left out `startTime`, `onDemand`, `transcodeConfigId`,
+  `disableFillerOverlay`, `id` and `duration`. None of these has a validation rule today, so no dot is missing yet.
+  A rule added to one of them later would leave Save disabled with no dot on any tab.
+- **Fix:** `channelFieldTabs.ts` maps each field to its tab as a `Record<keyof SaveableChannel, EditChannelTabs>`, so
+  a new channel field without a tab fails to compile. `EditChannelForm.tsx` marks tabs from it. `id` and `duration` are
+  not inputs on any tab and go to Properties. Test: `channelFieldTabs.test.ts` checks the map against
+  `SaveableChannelSchema.shape` and checks that an error marks the right tab.
+- **Upstream:** not sent; upstream `main`'s field lists have the same gaps.
 ### Dead delete dialogs and settings hooks removed from the web app (2026-10-19, PR #86)
 
 - **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
