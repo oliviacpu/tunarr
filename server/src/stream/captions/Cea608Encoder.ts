@@ -201,9 +201,13 @@ const Transliterations: Record<string, string> = {
   '‘': "'",
 };
 
+// Subtitle text decomposed into base letters and combining marks (NFD, as
+// macOS tools write it) is composed first: a lone combining mark has no 608
+// character, so "café" would lose its accent. Characters with no composed
+// form still fall back to their base letter below.
 function toUnits(text: string): CharUnit[] {
   const units: CharUnit[] = [];
-  for (const raw of text) {
+  for (const raw of text.normalize('NFC')) {
     for (const ch of Transliterations[raw] ?? raw) {
       const unit =
         charUnits.get(ch) ?? charUnits.get(ch.normalize('NFD')[0] ?? '');
@@ -217,7 +221,7 @@ function toUnits(text: string): CharUnit[] {
 }
 
 export function droppedCaptionCharacters(text: string): number {
-  const plain = text.replace(/<[^>]*>|\{[^}]*\}/g, '');
+  const plain = text.replace(/<[^>]*>|\{[^}]*\}/g, '').normalize('NFC');
   return [...plain].filter(
     (character) => !/\s/.test(character) && toUnits(character).length === 0,
   ).length;
@@ -376,9 +380,11 @@ function parseCueText(text: string): ParsedCue {
   let drawing = false;
   const lines: StyledChar[][] = [[]];
   const current = () => lines.at(-1) ?? [];
-  for (const [token] of text.matchAll(
-    /\{[^}]*\}|<[^>]*>|\\[Nnh]|\n|[\s\S]/gu,
-  )) {
+  // Composed, so an accent written as a separate combining mark stays on
+  // its letter rather than becoming a character of its own (see toUnits)
+  for (const [token] of text
+    .normalize('NFC')
+    .matchAll(/\{[^}]*\}|<[^>]*>|\\[Nnh]|\n|[\s\S]/gu)) {
     if (token.length > 1 && token.startsWith('{')) {
       // The first \pos, or where the first \move starts
       const moveOrPos = /\\(?:pos|move)\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)/.exec(
