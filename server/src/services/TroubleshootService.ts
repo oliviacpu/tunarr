@@ -46,6 +46,7 @@ import type {
 } from '../stream/types.js';
 import { KEYS } from '../types/inject.js';
 import { TroubleshootSessionFolderName } from '../util/constants.ts';
+import { redactSecrets } from '../util/redactSecrets.ts';
 import { CelEvaluationService } from './CelEvaluationService.js';
 import { StreamSelectionProfileResolver } from './StreamSelectionProfileResolver.js';
 
@@ -184,19 +185,13 @@ export class TroubleshootService {
 
       streamDetails = streamResult.get();
 
-      const redactPath = (p: string) =>
-        p
-          .replace(/(X-Plex-Token=)[A-Za-z0-9_-]+/g, '$1REDACTED')
-          .replace(/(X-Emby-Token:\s)[A-Za-z0-9_-]+/g, '$1REDACTED')
-          .replace(/(api_key=)[A-Za-z0-9_-]+/g, '$1REDACTED');
-
       result.mediaInfo = {
         title: program.title,
         type: program.type,
         duration: program.duration,
         sourceType: mediaSource.type,
         streamSourceType: streamDetails.streamSource.type,
-        streamSourcePath: redactPath(streamDetails.streamSource.path),
+        streamSourcePath: redactSecrets(streamDetails.streamSource.path),
         videoStreams:
           streamDetails.streamDetails.videoDetails?.map((v) => ({
             index: v.streamIndex ?? 0,
@@ -474,13 +469,7 @@ export class TroubleshootService {
       // const { session } = sessionResult;
 
       // Extract pipeline info from the real session's process.
-      const redactArg = (arg: string) =>
-        arg
-          .replace(/(X-Plex-Token=)[A-Za-z0-9_-]+/g, '$1REDACTED')
-          .replace(/(X-Emby-Token:\s)[A-Za-z0-9_-]+/g, '$1REDACTED')
-          .replace(/(api_key=)[A-Za-z0-9_-]+/g, '$1REDACTED');
-
-      const redactedArgs = session.process.args.map(redactArg);
+      const redactedArgs = session.process.args.map(redactSecrets);
 
       result.pipeline = {
         hardwareAccelMode: transcodeConfig.hardwareAccelerationMode ?? 'none',
@@ -549,9 +538,9 @@ export class TroubleshootService {
             (f) => f.startsWith('ffmpeg-') && f.endsWith('.log'),
           );
           if (reportFile) {
-            ffmpegLogContent = await fs.readFile(
-              path.join(tempDir, reportFile),
-              'utf-8',
+            // ffmpeg's report starts with its command line.
+            ffmpegLogContent = redactSecrets(
+              await fs.readFile(path.join(tempDir, reportFile), 'utf-8'),
             );
           }
         } catch {

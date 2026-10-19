@@ -10,6 +10,13 @@ import type {
   ProgramWithRelationsOrm,
 } from '../schema/derivedTypes.js';
 
+export type GapMusicProgram = Pick<
+  ProgramOrm,
+  'uuid' | 'type' | 'duration' | 'state' | 'artistName'
+> & {
+  artist: { title: string } | null;
+};
+
 export interface IFillerListDB {
   /**
    * Get a filler list by ID
@@ -39,6 +46,8 @@ export interface IFillerListDB {
   deleteFiller(id: string): void;
 
   getAllFillerIds(): Promise<string[]>;
+
+  getGapMusicPrograms(id: string): Promise<GapMusicProgram[]>;
 
   getFillerPrograms(id: string): Promise<ProgramWithRelationsOrm[]>;
 

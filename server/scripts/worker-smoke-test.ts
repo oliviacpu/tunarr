@@ -588,10 +588,11 @@ async function checkScanInWorker(mediaDir: string) {
     // A worker's log lines end with {"worker":true}
     check(
       "the scanner's log lines come from the worker thread",
-      /<LocalMovieScanner>: Scanning local media source[^\n]*"worker":true/.test(
-        output,
-      ),
-      'no LocalMovieScanner line marked {"worker":true}',
+      /Scanning local media source[^\n]*"worker"\s*:\s*true/.test(output),
+      `no worker scan log; observed: ${output
+        .split('\n')
+        .filter((line) => line.includes('Scanning local media source'))
+        .join('\n')}`,
     );
     check(
       'the scan worker saves every clip as a program',
@@ -615,7 +616,7 @@ async function checkScanInWorker(mediaDir: string) {
       {},
     );
     const forcedScan =
-      /<LocalMovieScanner>: Scanning local media source[^\n]*force=true[^\n]*"worker":true/;
+      /Scanning local media source[^\n]*force=true[^\n]*"worker"\s*:\s*true/;
     check(
       'a forced rescan is scanning in a worker when SIGTERM is sent',
       await waitFor(

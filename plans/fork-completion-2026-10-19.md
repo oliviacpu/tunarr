@@ -1,6 +1,6 @@
-# Fork completion candidate — 2026-10-19
+# Fork completion record — 2026-10-19
 
-This is work for the personal fork, not an upstream submission. The candidate starts
+This is work for the personal fork, not an upstream submission. The original integration candidate started
 at `5b1ba7065c21673427046ff4687bb18233376407` on `codex/fork-completion`.
 The original checkout and its existing uncommitted files are preserved.
 
@@ -17,11 +17,12 @@ The original checkout and its existing uncommitted files are preserved.
 | Throughput and storage | Configurable read-ahead thread limits, x265 pools, SQLite cache/mmap overrides and warmup caps; average frame-rate selection for VFR; parallel gap assets and a narrow gap-track query. Deleting a filler list clears channel gap-music references. Library pagination gains migration 0056 with a covering index. | Thread, frame-rate, pragma and warmup regressions; migrated-database query plan; explicit-transaction policy check. |
 | Scanning and publishing | Case-insensitive subtitle discovery, per-library scanner warnings, queued custom-show responses, one artwork listing per publication and stale temporary-file cleanup. | Real HTTP responsiveness regression, scanner and matching fixtures, bounded artwork listing tests. |
 | Caption fallback and maintenance | Unsupported text falls back to burn-in; repeated caption refusal warnings are suppressed per session. HLS serialization helpers move to test support; segment defaults and caption normalization are centralized. | Non-Latin fallback, timeline, playlist and session regressions. |
-| Engineering workflow | API generation retains temporary paths through server initialization; regenerated dev contracts; upstream `latest` spec restored. Rerunning a release edits its existing release notes. A Docker runtime-test stage is required by the final image and a nightly/manual workflow builds it without publishing. | Production builds, generated-file reproducibility, real-binary tests, packaged worker smoke test. |
+| Engineering workflow | API generation retains temporary paths through server initialization; regenerated dev contracts; upstream `latest` spec restored. Rerunning a release edits its existing release notes. A Docker runtime-test stage is required by the final image and a PR/nightly/manual workflow builds it without publishing. | Production builds, generated-file reproducibility, real-binary tests, packaged worker smoke test. |
 
-The five existing PRs are assembled locally for integration testing; this work does
-not mark them approved or merge them on GitHub. Release concurrency stays serialized:
-removing it would introduce a race between checking the newest tag and moving `latest`.
+The implementation PRs are being reviewed and merged individually into this personal
+fork. The map below records verified merge states; it does not imply a release or
+deployment. Release concurrency stays serialized: removing it would introduce a race
+between checking the newest tag and moving `latest`.
 
 ## Readability and redaction follow-up
 
@@ -35,9 +36,13 @@ The reported logging defect is reproduced with synthetic credentials: query punc
 was treated as a value terminator, leaving a suffix visible. The follow-up separates
 query and header handling and tests punctuation through strings, errors and streamed
 stderr. This is evidence of a redaction defect, not evidence that an actual credential
-was exposed. The fix was pushed to PR #66; its GitHub review has not been marked resolved by this work.
+was exposed. PR #66 was independently reviewed and merged, and its addressed review thread was resolved.
 
 ## Validation record
+
+The local combined-candidate results below are historical. Each PR also has its own
+head-specific CI; those runs are not a claim that this original candidate is the
+final merged main.
 
 Use Node 22 and `pnpm install --frozen-lockfile`. Validation commands:
 
@@ -58,7 +63,7 @@ The ordinary suite's artwork tests now stub their HTTP transport instead of cont
 a fake hostname. The duplicate-case artwork test skips when the filesystem cannot
 create two files distinguished only by case; it still runs on Linux.
 
-- Integrated follow-up suite: **3,694 passed, 4 skipped** (server 3,297; web 255; shared 142).
+- Historical integrated follow-up suite: **3,694 passed, 4 skipped** (server 3,297; web 255; shared 142).
   The subsequent unquoted-header quote fix passed all 44 focused redaction/process tests.
 - Workspace type checks: all five tasks passed, including local-test types.
 - Changed-file lint: passed for 144 TypeScript files.
@@ -66,10 +71,14 @@ create two files distinguished only by case; it still runs on Linux.
   database path isolation and shutdown. This image predates the final pagination-index
   migration, path-boundary fix and narrow gap-track query; those pass the final source suite.
 - Native Meilisearch: **2/2 passed**, including existing-index recovery and keyed restart.
-- Shipped Linux FFmpeg/runtime tests: 38 passed and 60 hardware-dependent cases skipped.
-  The combined runtime target is **not green locally**: Meilisearch cannot reserve its
-  500 GB virtual address range under Rosetta. Native Linux validation remains a release gate;
-  the workflow retains the full test rather than skipping it.
+- Historical emulated Linux FFmpeg/runtime tests: 38 passed and 60 hardware-dependent
+  cases skipped. That local combined runtime attempt failed because Meilisearch could
+  not reserve its 500 GB virtual address range under Rosetta.
+- Native Linux runtime validation subsequently passed in [PR #73 run 39290973656](https://github.com/oliviacpu/tunarr/actions/runs/39290973656)
+  at head `81365ff50897b5ecbfe04a795016f22b2845909b`: **34 passed, 60 skipped**
+  (5 test files passed, 3 skipped), plus **14/14 packaged-worker checks**. The skipped
+  cases require GPU hardware. This replaces the earlier unverified native-Linux gate
+  for that head; it does not validate later playback-stack changes or ARM64 execution.
 - Production build: all five tasks passed. API specification and generated client are byte-for-byte reproducible on a second generation.
 
 ## Release and remaining work
@@ -93,7 +102,9 @@ The following require additional implementation or evidence:
 
 Before a release is accepted:
 
-1. Review the combined changes and the individual PRs; run the runtime target on Linux.
+1. Individual merged PRs have independent review and passing head-specific CI, and
+   PR #73 has native Linux runtime evidence. Keep later playback/session validation
+   tied to its actual tested head before treating the completed stack as validated.
 2. Record Apple TV/Plex results for captions, language labels, audio switching, fallback
    programs and gaps. GPU support requires testing on the corresponding hardware.
 3. Preserve the current image digest and a verified backup, including the separate search
@@ -103,28 +114,25 @@ Before a release is accepted:
 
 ## Pull request map
 
-The existing work remains in #62 (Plex notifications), #63 (scan workers),
-#64 (XMLTV scheduling), #65 (caption boundaries) and #66 (logging redaction).
-PR #66 now includes the punctuation fix; #64 includes isolated scheduling cases.
-The fork Build workflow currently targets PRs against main, dev or media-scanner.
-Stacked children have independent local checks and commitlint, but require Build
-CI after their parents land and they are retargeted to main.
+Merge states below are verified from GitHub. Stacked children are retargeted to main
+after their parents merge, with Build/runtime checks required on the resulting head.
+This documentation PR (#76) lands after all implementation PRs. No release tag,
+release-image publication, or deployment is part of this work.
 
-| PR | Scope | Base / dependency |
+| PR | Scope | Verified state / merge commit |
 | --- | --- | --- |
-| [#67](https://github.com/oliviacpu/tunarr/pull/67) | Narrow gap-music query and deleted-list cleanup | main |
-| [#68](https://github.com/oliviacpu/tunarr/pull/68) | Atomic private search keys | main |
-| [#69](https://github.com/oliviacpu/tunarr/pull/69) | Queue lifecycle and responsive custom-show requests | #63 |
-| [#70](https://github.com/oliviacpu/tunarr/pull/70) | Database tuning and pagination index | main |
-| [#71](https://github.com/oliviacpu/tunarr/pull/71) | Artwork publication and URL helper cleanup | main |
-| [#72](https://github.com/oliviacpu/tunarr/pull/72) | Preset controls and labels | main |
-| [#73](https://github.com/oliviacpu/tunarr/pull/73) | Runtime validation and release tooling | main |
-| [#74](https://github.com/oliviacpu/tunarr/pull/74) | Subtitle encoding and matching | #65 |
-| [#75](https://github.com/oliviacpu/tunarr/pull/75) | Pipeline frame rate and rendering | #74 |
-| [#77](https://github.com/oliviacpu/tunarr/pull/77) | Session/caption integration and read-ahead controls | #75 |
-
-The session/caption integration is #77. This documentation PR describes the
-combined result and should land after the implementation PRs. Parent PRs must land
-before their children are retargeted to main. Resolve FORK.md entries by retaining
-each scoped entry; regenerate API contracts after combining schema-changing PRs.
-No merge, release, or deployment has been performed.
+| [#62](https://github.com/oliviacpu/tunarr/pull/62) | Plex guide notifications | Merged `b39515d1` |
+| [#63](https://github.com/oliviacpu/tunarr/pull/63) | Scan-worker watchdog and protocol | Merged `7d17e0bc` |
+| [#64](https://github.com/oliviacpu/tunarr/pull/64) | XMLTV scheduling and guide coverage | Pending — open |
+| [#65](https://github.com/oliviacpu/tunarr/pull/65) | Caption boundaries and language | Merged `3db986ba` |
+| [#66](https://github.com/oliviacpu/tunarr/pull/66) | Logging redaction and punctuation | Merged `41607ccc` |
+| [#67](https://github.com/oliviacpu/tunarr/pull/67) | Narrow gap query and deleted-list cleanup | Merged `f010d260` |
+| [#68](https://github.com/oliviacpu/tunarr/pull/68) | Atomic private search keys | Merged `e9d1a0e5` |
+| [#69](https://github.com/oliviacpu/tunarr/pull/69) | Queue lifecycle and responsive custom-show requests | Merged `5993fca6` |
+| [#70](https://github.com/oliviacpu/tunarr/pull/70) | Database tuning and pagination index | Merged `13f16c42` |
+| [#71](https://github.com/oliviacpu/tunarr/pull/71) | Artwork publication and URL helper cleanup | Merged `642f4c16` |
+| [#72](https://github.com/oliviacpu/tunarr/pull/72) | Preset controls and accessible labels | Merged `85d9b844` |
+| [#73](https://github.com/oliviacpu/tunarr/pull/73) | Runtime validation and release tooling | Merged `a0b1c339` |
+| [#74](https://github.com/oliviacpu/tunarr/pull/74) | Subtitle encoding and matching | Merged `89b822d0` |
+| [#75](https://github.com/oliviacpu/tunarr/pull/75) | Pipeline frame rate and rendering | Pending — open |
+| [#77](https://github.com/oliviacpu/tunarr/pull/77) | Session/caption integration and read-ahead controls | Pending — open |

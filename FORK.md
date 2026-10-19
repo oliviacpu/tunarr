@@ -6,8 +6,8 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Builds
 
-- Images are built only for tags named `oliviacpu-…`, by date: `oliviacpu-2026.10.13`, with a numeric suffix for additional builds on the same
-  day (both `.1` and `.2` tags exist). Pushes to `main` build nothing (`.github/workflows/fork-image.yml`). To release:
+- Images are built only for tags named `oliviacpu-…`, by date: `oliviacpu-2026.10.13`, with `.2` for a second one the same
+  day. Pushes to `main` build nothing (`.github/workflows/fork-image.yml`). To release:
   `git tag oliviacpu-2026.10.13 && git push origin oliviacpu-2026.10.13`.
 - Each build pushes `ghcr.io/oliviacpu/tunarr:<tag>`, `:sha-<commit>` and, when its tag is the newest `oliviacpu-` tag,
   `:latest`, for linux/amd64, and creates a GitHub Release for the tag. The deployment runs `:latest`, so pushing a tag
@@ -26,8 +26,33 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### batch publication lookups and clean stale temporary files (2026-10-19)
+
+- **Change:** Lists existing artwork once per publish, removes stale temporary files, and uses the shared public URL origin helper. HTTP fixtures are isolated from network access.
+
+### expose memory tuning and index library pagination (2026-10-19)
+
+- **Change:** Adds opt-in SQLite cache, mmap and warmup controls, preserving existing cache defaults. Migration 0056 indexes library pagination after EXPLAIN showed a temporary sort. Adds an explicit-transaction policy check.
+- **Tests:** covered by the local completion candidate; this branch is independently checked in CI.
+- **Upstream:** not submitted; personal fork.
+
+
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
+
+### Subtitle text decoding and discovery reliability (2026-10-19)
+
+- **What changed:** subtitle downloads and extraction preserve legacy-encoded text, local subtitle discovery accepts filename extension case variations, and stream details retain stored embedded SDH flags.
+- **Fix:** media-source subtitle requests read bytes and share BOM-aware UTF-8/Windows-1252 decoding. Local subtitle matching and extracted-file reads use the same decoding path.
+- **Validation:** targeted decoding, request, discovery, extraction and stream-details tests cover these paths.
+- **Upstream:** not sent; personal fork change, stacked on caption-boundary PR #65.
+
+### Narrow gap-music lookup and deleted-list cleanup (2026-10-19)
+
+- **What changed:** gap-music selection reads only the program fields it needs, avoiding full filler-list program materialization. Deleting a list clears its channel gap-music references.
+- **Fix:** `FillerListDB.getGapMusicPrograms` selects track identity, playback eligibility and artist display fields; `GapMusicPicker` uses that result. List deletion removes `offline.musicListId` while preserving other offline settings.
+- **Validation:** database tests check the selected fields and deleted-list cleanup; stream-program regressions use the narrower database contract.
+- **Upstream:** not sent; personal fork change.
 
 <!-- Entry format:
 ### Short title (YYYY-MM-DD, commit)
@@ -37,11 +62,191 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
-### Completion candidate: playback, subtitles, controls and runtime checks (2026-10-19)
+### A stuck or garbled scan worker no longer blocks the scan queue (2026-10-19)
 
-- **What changed:** the integration candidate includes PRs #62–#66 (bounded Plex guide notifications,
+- **What you saw:** nothing yet. The fork review of 2026-10-19 (`plans/fork-review-2026-10-19.md`, section 9) found
+  ways a scan worker could leave every later scan and custom show sync waiting until restart, with nothing in the log.
+- **Cause:**
+  - `WorkerScanJobRunner` logged and ignored a worker message that failed validation. If that was the job's
+    `scan-done` or `scan-failed`, the job never ended, and the coordinator's one-at-a-time queue waited on it
+    forever. Nothing limited how long a job could run.
+  - Worker messages carried no protocol version, so nothing caught a worker and main thread that disagree on the
+    messages (a bundle replaced on disk while the server runs, with a protocol change in it, say).
+  - `TunarrSubprocessService` set the worker's role only when the caller passed no `workerData`. A worker started
+    with `workerData` came up as a pool worker, which says it started and then ignores the scan it is sent.
+  - After a job, the runner removed its `error` listener. An error as the worker exited reached only the process's
+    uncaught exception handler, which writes to `console.error`, not the log file.
+  - A scan or sync that was already queued was logged at error as "Could not acquire lock". The nightly collection
+    sync does this routinely.
+- **Fix:**
+  - **Malformed messages** (`WorkerScanJobRunner.ts`): a message from the job's worker that fails validation stops
+    the worker, and the job fails with the validation error once the worker has exited. The coordinator then
+    releases its lock as for any failed job. The wait means the next job can't start while the old worker may still
+    hold the database's write lock. A malformed progress update or event is still only logged, since neither ends a
+    job. A job canceled meanwhile still ends as canceled.
+  - **Workers that can't be stopped:** Node's `terminate()` only takes effect once a thread returns to JavaScript, so
+    a thread stuck in native code (a long SQLite statement, a hung mount) never reports that it exited. Once a
+    worker has been told to stop (malformed message, time limit, or a cancel it ignored), its job ends at most
+    `exitGraceMs` (5 s; 10 s after a graceful stop) later regardless, and the error is logged.
+  - **Protocol version** (`types/worker_schemas.ts`): `ScanWorkerProtocolVersion` (1) goes to the worker in
+    `workerData`, and the scan worker sends its own in its `started` event. Bump it when the scan worker messages
+    change incompatibly. A worker whose version differs, or that sends none (a pool worker), fails to start. Every
+    later worker would run the same code, so scans stay on the main thread until restart, logged once at error.
+    The worker also logs a warning when the main thread's version differs from its own.
+  - **Role** (`TunarrSubprocessService.ts`): `workerStartData` keeps the caller's `workerData` and always sets the
+    role and version. `start-worker` reads both through the `WorkerStartData` schema.
+  - **Late errors:** each scan worker has an `error` listener for its whole life. While it starts or runs a job, the
+    error fails that, as before. At any other time it is logged at error through Tunarr's logger.
+  - **Job time limit:** `TUNARR_SCAN_JOB_TIMEOUT_MINUTES` (default unset: no limit). A job in a worker that runs
+    longer is logged, its worker terminated (its open transaction rolls back), and the job fails once the worker
+    has exited. Scans on the main thread aren't limited. The limit is logged at startup. A value that isn't a whole
+    number of minutes (`90s`, `0.5`) is ignored with a warning, and one past what a timer can wait (35,791 minutes) is
+    capped. Documented in `docs/getting-started/run.md`.
+  - **Already queued** (`MediaSourceScanCoordinator.ts`): logged at info as "Not queuing … it is already queued or
+    running".
+- **Tests:**
+  - `WorkerScanJobRunner.test.ts`:
+    - Malformed messages: a malformed `scan-done` or `scan-failed` fails the job, but only after the worker has
+      exited. A worker that can't be stopped fails it anyway. A canceled job still ends as canceled. Malformed
+      progress or events don't fail the job. With the real coordinator, the library's lock is released and its next
+      scan runs.
+    - Protocol version: a worker that starts with another version, or none, runs the job on the main thread. After
+      one mismatch, no more workers start.
+    - Errors: an error after the job is logged. One during the job fails it and isn't logged twice.
+    - Stuck workers: a canceled job whose worker can't be stopped still ends.
+    - Time limit: with a 50 ms limit, a job that never ends is terminated and fails, also when its worker can't be
+      stopped. A job that ends in time isn't touched. Without a limit, a long job runs to the end.
+    - `scanJobTimeoutMs` reads whole minutes and logs them. It is quiet when unset or 0, warns on negative, `90s`,
+      `0.5` and non-numbers, and caps at the longest timer delay.
+  - `ScanWorkerRoundTrip.test.ts`: a worker started with its own `workerData` still starts as a scan worker and
+    runs the job.
+  - `TunarrSubprocessService.test.ts`: `workerStartData` keeps the caller's data and options and sets role and
+    version; `WorkerStartData` reads a missing or unknown role as `pool`.
+  - `ScanWorker.test.ts`: `started` carries the version; a different main-thread version is logged.
+  - `MediaSourceScanCoordinator.test.ts`: an already-queued sync is logged at info, not error.
+  - Each new test fails with its fix reverted.
+- **Upstream:** not sent.
+### A program's captions end where the next item starts, and each segment names its own program's language (2026-10-19)
+
+- **What you saw:** found in code review, not on the deployment.
+  - When a program's video stopped before its scheduled end (ffmpeg exited early, or the file is shorter than its
+    recorded duration) and the next item had no captions of its own (flex time, an error screen, filler without
+    subtitles), that item carried the rest of the earlier program's dialogue, up to the earlier program's scheduled end.
+  - A captioned HLS segment's PMT named the language of the newest program's captions, so a client still fetching one
+    program's last segments after the next one started got the next program's language on them. The `.ts` stream for
+    HDHomeRun clients was not affected: `CaptionLanguageStream` relabels its PMT with the first language preference.
+- **Cause:**
+  - `HlsSession.transcode` advances `transcodedUntil` by the program's planned length before ffmpeg runs, and
+    `addCaptions` lays the program's captions out over that planned length. The next program starts where the last
+    segment's video ended (`getPtsOffset`), which is inside the earlier window when ffmpeg stopped early. Only a
+    program with captions added an entry to the caption timeline, so for an item without any, `captionEntryAt` found
+    the earlier program's entry and `captionPairs` sent its schedule.
+  - `captionedSegment` took the language from `#captionTimeline.at(-1)`, the newest entry, whichever program the
+    segment belonged to.
+- **Fix:**
+  - At every program start, with captions or without, `HlsSession.endCaptionsAt` cuts each timeline entry's window at
+    the new program's start PTS (on the 33-bit clock). Only frames from the new start on change, and those belong to
+    the new program, so a program keeps its own frames' captions. A captioned next program's frames resolve to its own
+    entry as before. A program whose video ends a frame short of its plan counts as cut too, which only adds the
+    erase below.
+  - Where a window was cut, the first two frames within a second after the cut that no program's captions cover carry
+    Erase Displayed Memory instead of padding, so a caption showing when the program stopped doesn't stay up over the
+    next item.
+  - When the last segment can't be read (ffmpeg left it empty), the next program starts again at `SessionStartPts`,
+    under programs that already played. Those that start inside its planned span are emptied, so none of their
+    captions go out over it. A program it won't reach keeps its captions for the segments viewers are still fetching.
+  - An entry cut to nothing leaves the timeline, so a run of programs that fail at once can't push out a program whose
+    segments are still being served.
+  - `insertCaptions` (`MpegTsCaptionInserter.ts`) can take the language as a function of the segment's frames, asked
+    after `pairsForFrames`. `captionedSegment` passes one that looks up the entry for the segment's first frame
+    (`captionLanguage`), and falls back to the first language preference only when no entry covers it.
+  - Still open: when the item after an early stop has captions of its own, a caption the stopped program left on
+    screen stays up until that item's first caption replaces it, as before. Erasing there would mean adding an erase
+    to the start of the next program's schedule in `Cea608Encoder`.
+- **Tests:** `HlsSession.test.ts`, "captionedSegment > across programs", with programs run through the session's own
+  loop:
+  - The first program has a line every 2 s for 30 s and its video ends 10 s in; the next has no captions. A segment
+    4 s into the first keeps its captions. The next item's first two frames erase the screen and the rest are padding.
+    A segment 12 s after the first program started is padding only.
+  - After the clock goes back, a segment inside an earlier program's window is padding only. When the program the
+    clock went back to is planned short of that earlier program, the earlier one keeps its captions.
+  - After ten programs that each fail at once, the first program's segment still has its caption.
+  - A program in `jpn` whose video ends early, then one in `eng`: the first one's last segment has `jpn` in its ISO
+    639 and caption service descriptors, the next one's `eng`. A segment past every program's window gets the first
+    language preference.
+  - Five of these fail on the old code. The sixth (the earlier program kept) passes there, and fails if the clock
+    check empties every later program. Taking out the erase, the clock check or the pruning fails its own test.
+    `MpegTsCaptionInserter.test.ts`: the language function gets the frames' PTS in presentation order. The other
+    caption tests and the golden snapshot are unchanged.
+- **Upstream:** not sent.
+
+### Search key replacement and backup guidance (2026-10-19)
+
+- **Cause:** replacing a missing or invalid key wrote directly to the destination, read failures were treated as missing keys, and reused files could retain broad permissions.
+- **Fix:** publish a generated key through a private temporary file and atomic rename; preserve existing keys on read/publication failure; tighten reused key files to owner-only permissions on the main thread. Workers only read existing valid keys.
+- **Backups:** the built-in archive omits `meilisearch-master-key`; keep a private copy separately and restore it before startup.
+- **Tests:** `searchMasterKey.test.ts` covers generation/reuse, permissions, worker refusal, rename failure and read failure. Native `MeilisearchService.local.test.ts` covers restart authentication and retained indexed data when a key is regenerated.
+- **Upstream:** not sent. This is hardening for the search authentication change in this personal fork.
+
+### ffmpeg's and ffprobe's logs no longer carry media-server tokens (2026-10-19)
+
+- **What you saw:** found in a review of the fork's logging on 2026-10-19, not on screen. ffmpeg prints its input URL
+  on stderr (`Input #0, … from 'http://…?X-Plex-Token=…'`, and again when it can't open it), so
+  a failed transcode's error dump put the media server's token in Tunarr's log, in the `ffmpeg-error-log-*.log` file it
+  writes and on the console. A failed ffprobe or subtitle extraction did the same. This is upstream's code; the fork
+  hadn't changed it.
+- **Cause:**
+  - `FfmpegProcess` redacted only its args line, and only `X-Plex-Token=` and the `X-Emby-Token: ` header form. It
+    missed Emby's `?X-Emby-Token=` query form (Emby stream URLs) and `api_key=`. With ffmpeg logging on, stderr went
+    to `process.stderr` raw, and on a failed run its last 25 KiB went to the log at error level, to the error-log file
+    and to `process.stderr`, all unredacted. A failed spawn logged the arguments too, through the error's `spawnargs`.
+  - `ChildProcessHelper.getStdout`, which runs ffprobe and the subtitle extraction, logged the command line at debug.
+    `execFile`'s error holds the command line and stderr in its message and `cmd`, and `SubtitleExtractorTask` logs it
+    at warn. `FfmpegInfo.probeFile` logged the path and ffprobe's raw output, whose `format.filename` is the URL, when
+    the output didn't parse.
+  - The redaction regexes had three copies (`FfmpegProcess`, `HttpStreamSource.redact`, twice in
+    `TroubleshootService`), each with a different set of keys.
+- **Fix:**
+  - `server/src/util/redactSecrets.ts`: `redactSecrets` covers `X-Plex-Token` and `X-Emby-Token` in query (`=`) and
+    header (`: `) form, also quoted, `api_key` and `ApiKey`, a bare `token` query parameter and the
+    `MediaBrowser … Token="…"` header, ignoring case as the servers do. A value runs to the next delimiter, so an odd
+    character can't leave part of it showing. `RedactSecretsStream` applies it to a stream and holds back the
+    unfinished last line, so a token split across two reads is still caught. A line over 64 KiB, which ffmpeg doesn't
+    write, is passed on up to that point with ` [line truncated]` and the rest of it dropped, so a token the cut splits
+    can't leak. `redactErrorSecrets` cleans an error's message, stack, `cmd` and `spawnargs`.
+  - `FfmpegProcess` pipes stderr through `RedactSecretsStream` before the console and the 25 KiB tail read it, so the
+    error-level dump, the error-log file and the console copy are redacted. The dump adds the stream's held line, so a
+    last line ffmpeg hadn't finished when it exited isn't lost. Its args line and spawn errors use the shared function.
+  - `ChildProcessHelper.getStdout` redacts its debug line and the error it rejects with; `FfmpegInfo.probeFile` its
+    warning.
+  - `HttpStreamSource.redact` and the troubleshoot report (stream path, ffmpeg args and the ffmpeg log it returns) call
+    `redactSecrets`.
+  - Not covered: ffmpeg's own report file (`FFREPORT`, written when `enableFileLogging` is on; off by default) starts
+    with the command line, and ffmpeg writes it itself.
+- **Tests:**
+  - `redactSecrets.test.ts`: each key form, mixed case, several in one text, real ffmpeg stderr lines, a value with odd
+    characters, and text without secrets unchanged. For the stream: a key and a value each split across chunks, a
+    multi-byte character split across chunks, finished lines passed on at once, the held line read before the end,
+    and overlong lines cut inside a long value and between a header key and its value.
+  - `FfmpegProcess.test.ts`: a shell stand-in for ffmpeg prints its input URL (one line split inside the key across
+    two writes, and a last line with no line break) and exits 1 while a background process keeps its stderr open. The
+    error-level log, the error-log file and everything written to `process.stderr` have `REDACTED` and never the
+    token, and the dump has the last line; so do the args lines and the `error` event's `cmd`. Spawning a missing
+    binary logs `spawnargs` redacted.
+  - `ChildProcessHelper.test.ts` and `ffmpegInfo.test.ts`: a failing stand-in ffprobe's error and debug line, and the
+    warning for output that doesn't parse, are redacted. `types.test.ts`: `ApiKey=` and a lowercase `x-emby-token=`.
+  - All of these fail on the old code. The kill test from the `.ts` wrapper fix passes unchanged.
+- **Upstream:** not sent. It's upstream's code, so it could go upstream as a plain bug fix.
+
+### expose saved encoder presets with accessible labels (2026-10-19)
+
+- **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
+
+### Completion record: playback, subtitles, controls and runtime checks (2026-10-19)
+
+- **What changed:** the completion work spans PRs #62–#77 (bounded Plex guide notifications,
   scan-worker protocol/watchdog handling, guide refreshes across midnight, caption boundaries and language,
-  and FFmpeg secret redaction). These PRs have not been merged by this work.
+  and FFmpeg secret redaction). The completion record links each PR and its verified merge state.
 - **Playback:** the selected pipeline filters determine the emitted frame rate and caption cadence;
   software, NVIDIA, VAAPI and QSV command-construction regressions cover normal and software-fallback paths.
   A caption eligibility decision is shared by a channel's HLS session and its transport-stream wrapper.
@@ -59,13 +264,13 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   separate key file. Missing drawtext and audio-language fallback have explicit diagnostics. API generation
   retains its temporary database through server initialization; generated contracts are refreshed. Release
   creation is rerunnable. The runtime-tests Docker target checks real binaries and the packaged scan worker;
-  nightly validation builds that target without publishing.
+  PR, nightly and manual validation build that target without publishing.
 - **Readability and redaction follow-up:** subtitle planning returns one result, custom-show syncs
   expose queue acceptance separately from completion, and caption-capable sessions share an explicit
   contract. Query and header redaction use separate boundaries so punctuation cannot leave credential
   suffixes visible. Synthetic regression fixtures cover process errors and saved logs; this does not
-  establish that any real credential was exposed. The logging fix is pushed to PR #66; completion work is split into the PRs listed in the completion record.
-- **Evidence and limits:** see `plans/fork-completion-2026-10-19.md` for commands, results and release gates.
+  establish that any real credential was exposed. The logging fix was independently reviewed and merged in PR #66; its addressed review thread is resolved.
+- **Evidence and limits:** see `plans/fork-completion-2026-10-19.md` for historical candidate results and head-specific CI. Native Linux PR #73 validation passed 34 tests (60 GPU cases skipped) and 14 packaged-worker checks; later playback changes need their own head-specific run.
   Hardware command tests do not establish GPU playback support. Client verification and a deployment soak
   remain pending. No image is published or deployed by this integration work.
 - **Upstream:** not submitted; this is personal-fork completion work.
@@ -104,6 +309,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   are unchanged apart from the fixture's format. In `FfmpegStreamFactory.test.ts`, an HEVC or MPEG-2 channel logs no
   info line about captions over two programs. The wrapper, log and factory tests fail on the old code.
 - **Upstream:** not sent.
+
+### validate packaged binaries and make fork releases rerunnable (2026-10-19)
+
+- **Change:** Requires real-binary and packaged-worker tests before the final image is assembled, adds PR/nightly/manual native Linux validation, repairs temporary paths in API generation, restores the upstream latest spec, and updates existing release notes on reruns. Release serialization remains in place.
 
 ### Captions keep the accented letters of Windows-1252 subtitle files (2026-10-19)
 
@@ -400,6 +609,50 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `TvGuideService.test.ts`: a full build and a channel save both ask for the read.
 - **Upstream:** not sent.
 
+### The Plex guide ask stops on a refused token, backs off, and can't hold up other servers or a flush (2026-10-19)
+
+- **What you saw:** nothing yet. A review of `PlexGuideNotifier` (`plans/fork-review-2026-10-19.md`, section 11)
+  found five ways it could misbehave.
+- **Cause:**
+  - A 401 or 403 from Plex was retried like a 503, so a token that can't work got three tries and three log lines.
+    The Plex client also reported a refused token on `GET /livetv/dvrs` as a generic failure, and the reload's as
+    a raw `AxiosError`, so the notifier couldn't tell it apart. A media source with no token was retried too.
+  - The wait between tries was a fixed 5 s, so a restarting Plex got all three tries within ten seconds.
+  - If making the client for one Plex server threw, the whole ask ended and every server after it was skipped.
+    Servers were also asked one after another, so one that didn't answer held up the rest for minutes.
+  - `flush()` had no time limit. A Plex that never answered held `POST /api/xmltv/flush` for up to about six minutes
+    per server (60 s request timeout × 2 calls × 3 tries).
+  - The retry wait was a plain `setTimeout`. It kept the process alive, and nothing cancelled it at shutdown.
+- **Fix:**
+  - The Plex client's `getDvrs` and `refreshGuide` both reject with an error classified by the base client's
+    `requestErrorResult`: 401/403 is `auth_error`, and 404 stays `not_found`. `getDvrs` logs its failure at debug,
+    since its one caller reports it. The notifier's `isPlexAuthError` checks only for `auth_error`. That server's
+    ask stops at once with a warning to check its Plex token. A media source with no token gets the same warning
+    without a try.
+  - Each wait is three times the last: 5 s, then 15 s (`retryDelayMs`, capped at 45 s). There are still three tries.
+  - Every server is asked at the same time, each with its own retry wait. Any failure is logged with the server's
+    name and leaves the others alone.
+    Server names are log arguments, not part of the format string.
+  - `flush()` answers after 30 s at the latest (`FlushTimeoutMs`) with `{ done, servers: [{ name, outcome }] }` and
+    logs what was still left. The outcomes are `reloaded`, `no_live_tv`, `auth_failed`, `failed` and `pending`.
+    `POST /api/xmltv/flush` returns that answer: 200 when everything finished, as before, and 202 when it stopped
+    waiting. The OpenAPI document and the web client were regenerated.
+  - The retry timer is unref'd. `stop()`, called from the server's graceful shutdown, clears the debounce and retry
+    timers and ends a retry wait without another try. It also answers a waiting flush with `done: false` and keeps
+    later requests from scheduling anything.
+  - `docs/configure/clients/plex.md` documents the ask, the retries and the flush route.
+- **Tests:** each new one fails on the old code.
+  - `PlexGuideNotifier.test.ts`: a 401 or 403 from either call gets no retry and one warning, and the next server
+    is asked at once.
+  - Two failures then a success, with the waits growing (5 s, then 15 s), plus the wait formula itself.
+  - One server's client lookup throws, has no token, or never answers, and the other server is still asked at once.
+  - A flush with a server that never answers resolves after 30 s, naming it `pending` and the other `reloaded`. One
+    that runs out before any server is reached logs "an ask under way". The route's status is 200 or 202.
+  - After `stop()`, a waiting retry never fires and no timer is left. The retry timer was unref'd. A try that fails
+    after `stop()` starts no retry timer.
+  - `PlexApiClient.test.ts`: `getDvrs` rejects with `auth_error` on 401 and 403 without an error line;
+    `refreshGuide` rejects with `auth_error` on 401 and 403, and `generic_request_error` on 503.
+
 ### Plex is asked to reload the guide once per change, and only when it can download it (2026-10-18)
 
 - **What you saw:** Plex showed yesterday's lineup, or half of today's, for hours after a change. After every
@@ -414,7 +667,8 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   with `writeFile`, and `/api/xmltv.xml` serves the same path, so a download during a write got a truncated file.
 - **Fix:** `PlexGuideNotifier` (singleton) takes the asks: a request made before `markListening()` (called by
   `App.start()` after `runServer()`) waits for it; requests within 10 s collapse into one ask after the last; a failed
-  ask is retried 3 times, 5 s apart, then logged once. `POST /api/xmltv/flush` resolves when no guide write is under way (the task reports
+  ask is retried 3 times, 5 s apart, then logged once (since 2026-10-19: 5 s then 15 s, a refused token isn't
+  retried, and a flush answers within 30 s; see above). `POST /api/xmltv/flush` resolves when no guide write is under way (the task reports
   its start and end; a channel save starts one without awaiting it) and no ask is pending or running, for a script
   that saved several channels and wants to check Plex's guide. `XmlTvWriter` writes
   `<outputPath>.<pid>.tmp` and renames it over the guide. The Plex client doc no longer says a guide refresh ends
@@ -449,7 +703,7 @@ ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a 
   between writes, piped to a reader that never drains, exits within seconds of `kill()` with code 0 (on the old code
   it is SIGKILLed after 15 s).
 
-### Plex shows the channel number only once (2026-10-18)
+### Plex shows "2 Sci-Fi", not "2 2 Sci-Fi" (2026-10-18)
 
 - **What you saw:** every channel in Plex's guide carried its number twice.
 - **Cause:** Plex titles a channel `<number> <first display-name>`, and the first `display-name` was already
@@ -827,7 +1081,7 @@ sidecar subtitles> --mode hdhr --ffmpeg-setting hdhrClosedCaptions=true --second
   plans/test-channel-99.md) needs its own.
 - **Change:** a channel setting, **Captions for this channel**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.captions`, `{ testPattern?, alignment?, appearance? }`, stored in the new column
-    `captions` (migration 0055). Only what the channel sets is saved; the rest follows the global settings, so a later
+    `captions` (migration 0054). Only what the channel sets is saved; the rest follows the global settings, so a later
     global change still reaches it. The appearance fields have no defaults (`CaptionAppearanceOverridesSchema`), or an
     override would fill in every field.
   - **Test pattern on this channel:** the numbered samples on this channel only. The global switch still shows them on
@@ -915,7 +1169,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 ### Saving a channel no longer rewrites every channel's guide entries (2026-10-16)
 
 - **What you saw:** Live TV paused while channels were saved. On the deployment, with the owner watching channel 1,
-  the latency probe saw 6 requests over 250 ms (worst 1.05 s), all while one channel was being saved. The
+  the latency probe saw 6 requests over 250 ms (worst 1.05 s), all while the Sci-Fi channel was being saved. The
   save took 4 s there. Editing channels in the web UI did the same on 2026-10-14.
 - **Cause:**
   - Every save (`PUT /api/channels/:id`) ends with an XMLTV write.
@@ -1024,7 +1278,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
     restarts, so the tracks can't change from program to program.
 - **Change:** a channel setting, **Audio tracks**, under _Audio & Subtitles_ on the Streaming tab:
   - **What it is:** `Channel.audioTracks`, up to four ISO 639-2 codes in order, stored in the new column
-    `audio_tracks` (migration 0054).
+    `audio_tracks` (migration 0053).
   - **Effect:** every program, commercial, gap (offline picture, with gap music or silence) and error screen on the
     channel outputs exactly those tracks, in that order, tagged with their languages.
   - **Filling a slot:**
@@ -1337,7 +1591,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 
 ### The library programs request no longer freezes Tunarr (2026-10-15)
 
-- **What you saw:** Live TV paused while a script ran against Tunarr (a scheduling script, even in dry-run mode). A latency
+- **What you saw:** Live TV paused while a script ran against Tunarr (`build_grid.py`, even with `--dry-run`). A latency
   probe saw two freezes, of 17,061 ms and 17,158 ms, one per run.
 - **Cause:** `GET /api/media-libraries/:libraryId/programs` built its whole response in one go on the main thread,
   which also serves the streams:
@@ -1992,8 +2246,8 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
   `/library/sections/<section>/all?type=9&artist.id=<artist>`, which returns every release by that album artist.
   `PlexMediaSourceMusicScanner.getAlbums` passes `context.library.externalKey`. Without a section key it keeps the
   old listing. Test: `PlexApiClient.test.ts` (`getArtistAlbums` lists EPs and singles through the library section).
-- **Checked** against a real Plex server: the section listing returned all releases for two test artists, including an EP
-  omitted by the children listing. Its `totalSize` matches, so
+- **Checked** against a real Plex server: the section listing returned all 5 of Foodman's releases (the children
+  listing returned 0), and 7 for Air (the children listing missed the EP _Casanova 70_). Its `totalSize` matches, so
   paging is unchanged.
 - **After upgrading:** run a scan of the music library. Scans walk every artist's releases, so the missing ones are
   added.
@@ -2227,7 +2481,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 - **Where to set it:** the channel's Flex settings, **Gap music**, next to the fallback image (any filler list).
   Documented in `docs/configure/channels/flex.md`.
 - **Checked end to end** on a throwaway server (stream-repro, local music library, ffmpeg 9.0.2;
-  the current image ships jellyfin-ffmpeg 8.1.3; these measurements were made with the earlier build): three tracks measuring
+  the deployed image ships 7.1.1, which has the same `loudnorm` and `afade`): three tracks measuring
   -6.2, -22.6 and -47.6 LUFS all came out at -24.0 LUFS. Gap items rotated tracks (never-played first, then the
   oldest), the track cut by the gap's end faded out over its last 3 s, each item faded in over 1 s, and a channel
   without a list still played digital silence.
@@ -2282,7 +2536,7 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 - **Fix:** the calculator uses the transcode config's preset when it's a known libx264/libx265 preset, and keeps
   `veryfast` when it's empty or unknown, so existing configs behave as before. The transcode config page shows a **Video
   Preset** dropdown (ultrafast to medium) under Video Options when Hardware Acceleration is Software and the format is
-  H.264 or HEVC. A change takes effect when the channel's stream session next starts; no server restart. Hardware encoders are unchanged.
+  H.264 or HEVC. A change takes effect when the next ffmpeg process starts; no restart. Hardware encoders are unchanged.
   Files: `server/src/ffmpeg/FfmpegPlaybackParamsCalculator.ts`, `server/src/ffmpeg/builder/constants.ts`,
   `web/src/components/settings/ffmpeg/TranscodeConfigVideoSettingsForm.tsx`. Tests:
   `FfmpegPlaybackParamsCalculator.test.ts`.

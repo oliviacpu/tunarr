@@ -14382,8 +14382,26 @@ export type PostApiXmltvFlushResponses = {
     /**
      * Default Response
      */
-    200: unknown;
+    200: {
+        done: boolean;
+        servers: Array<{
+            name: string;
+            outcome: 'reloaded' | 'no_live_tv' | 'auth_failed' | 'failed' | 'pending';
+        }>;
+    };
+    /**
+     * Default Response
+     */
+    202: {
+        done: boolean;
+        servers: Array<{
+            name: string;
+            outcome: 'reloaded' | 'no_live_tv' | 'auth_failed' | 'failed' | 'pending';
+        }>;
+    };
 };
+
+export type PostApiXmltvFlushResponse = PostApiXmltvFlushResponses[keyof PostApiXmltvFlushResponses];
 
 export type DeleteApiChannelsM3uData = {
     body?: never;

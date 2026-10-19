@@ -55,7 +55,7 @@ export class GapMusicPicker {
   ) {}
 
   async pick(channelId: string, musicListId: string, now = dayjs()) {
-    const tracks = await this.fillerDB.getFillerPrograms(musicListId);
+    const tracks = await this.fillerDB.getGapMusicPrograms(musicListId);
     const history = await this.playHistoryDB.getFillerHistory(
       channelId,
       OpenDateTimeRange.create(now.subtract(HistoryWindowDays, 'day'), now) ??

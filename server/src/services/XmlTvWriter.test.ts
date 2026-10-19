@@ -1,3 +1,4 @@
+import { publicLinkOrigin } from '../util/iconUtil.ts';
 import { faker } from '@faker-js/faker';
 import { parseXmltv, writeXmltv } from '@iptv/xmltv';
 import { tag } from '@tunarr/types';
@@ -27,11 +28,7 @@ import {
   PublicMediaService,
   type PublicArtworkRef,
 } from './PublicMediaService.ts';
-import {
-  MaterializedChannelPrograms,
-  XmlTvWriter,
-  xmlTvLinkHost,
-} from './XmlTvWriter.ts';
+import { MaterializedChannelPrograms, XmlTvWriter } from './XmlTvWriter.ts';
 
 beforeAll(async () => {
   await setTestGlobalOptions();
@@ -1274,19 +1271,19 @@ describe('XmlTvWriter', () => {
   });
 });
 
-describe('xmlTvLinkHost', () => {
+describe('publicLinkOrigin', () => {
   const request = { protocol: 'http', host: '127.0.0.1:8000' };
 
   test('uses the address the guide was requested on by default', () => {
-    expect(xmlTvLinkHost('', request)).toBe('http://127.0.0.1:8000');
-    expect(xmlTvLinkHost(undefined, request)).toBe('http://127.0.0.1:8000');
+    expect(publicLinkOrigin('', request)).toBe('http://127.0.0.1:8000');
+    expect(publicLinkOrigin(undefined, request)).toBe('http://127.0.0.1:8000');
   });
 
   test('prefers the configured public address, without a trailing slash', () => {
-    expect(xmlTvLinkHost('https://tunarr.example.com/', request)).toBe(
+    expect(publicLinkOrigin('https://tunarr.example.com/', request)).toBe(
       'https://tunarr.example.com',
     );
-    expect(xmlTvLinkHost('https://example.com/tunarr', request)).toBe(
+    expect(publicLinkOrigin('https://example.com/tunarr', request)).toBe(
       'https://example.com/tunarr',
     );
   });

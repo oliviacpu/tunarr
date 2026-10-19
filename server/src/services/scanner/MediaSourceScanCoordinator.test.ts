@@ -247,6 +247,27 @@ describe('MediaSourceScanCoordinator', () => {
       expect(runner.run).toHaveBeenCalledTimes(1);
     });
 
+    test('a sync already queued is routine: logged at info, not error', async () => {
+      const running = deferredRun();
+      const { coordinator, mediaSourceDB, runner } = makeSut();
+      mediaSourceDB.getById.mockResolvedValue(remoteSource);
+      runner.run.mockReturnValueOnce(running.promise);
+      const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      Object.defineProperty(coordinator, 'logger', { value: logger });
+      const request = { mediaSourceId: 'ms1' as MediaSourceId };
+
+      await coordinator.addCollections(request);
+      await coordinator.addCollections(request);
+      running.finish('completed');
+      await coordinator.awaitAllFinished();
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('already queued'),
+        'collections of media source ms1',
+      );
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
     test("doesn't lock the source's libraries", async () => {
       const running = deferredRun();
       const { coordinator, mediaSourceDB, runner } = makeSut();

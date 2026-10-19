@@ -224,6 +224,34 @@ describe('insertCaptions', () => {
     ).toBeGreaterThan(0);
   });
 
+  test('names the language picked from the frames, given in presentation order', () => {
+    // Decode order I P B: P is presented after B
+    const pts = [framePts(0), framePts(2), framePts(1)];
+    const asked: (readonly number[])[] = [];
+    const result = insertCaptions(segment({ pts }), {
+      pairsForFrames: eachFrame(pairFor),
+      language: (presented) => {
+        asked.push(presented);
+        return 'jpn';
+      },
+    });
+    if (!result.ok) {
+      throw new Error(result.reason);
+    }
+
+    expect(asked).toEqual([[framePts(0), framePts(1), framePts(2)]]);
+    const { pmtPacket } = parse(result.segment);
+    if (!pmtPacket) {
+      throw new Error('no PMT');
+    }
+    expect(
+      pmtPacket.indexOf(Buffer.from([0x0a, 4, ...Buffer.from('jpn'), 0])),
+    ).toBeGreaterThan(0);
+    expect(
+      pmtPacket.indexOf(Buffer.from([0x86, 7, 0xe1, ...Buffer.from('jpn')])),
+    ).toBeGreaterThan(0);
+  });
+
   test('leaves video that already carries captions alone', () => {
     const existingCaptions = [
       0,

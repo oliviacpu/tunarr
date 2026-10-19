@@ -96,6 +96,8 @@ export const WorkerEvent = z.object({
   type: z.literal('event'),
   eventType: z.enum(['started']),
   message: z.string().optional(),
+  // A scan worker's ScanWorkerProtocolVersion; pool workers send none
+  protocolVersion: z.number().int().optional(),
 });
 
 export type WorkerEvent = z.infer<typeof WorkerEvent>;
@@ -105,6 +107,28 @@ export type WorkerEvent = z.infer<typeof WorkerEvent>;
 export const WorkerRole = z.enum(['pool', 'scan']);
 
 export type WorkerRole = z.infer<typeof WorkerRole>;
+
+/**
+ * The version of the scan worker protocol below (ScanWorkerRequest and
+ * ScanWorkerMessage). Bump it when a change to either would leave an older
+ * worker and a newer main thread (or the reverse) unable to read each other.
+ * The main thread sends it in workerData and the worker sends its own in its
+ * `started` event. A worker whose version differs, or that sends none (a pool
+ * worker), is treated as one that failed to start, so the scan runs on the
+ * main thread instead.
+ */
+export const ScanWorkerProtocolVersion = 1;
+
+// workerData every worker thread starts with, besides the server options.
+// Workers spawned before roles existed carry no role: they're pool workers.
+export const WorkerStartData = z
+  .object({
+    role: WorkerRole.catch('pool'),
+    protocolVersion: z.number().int().optional().catch(undefined),
+  })
+  .catch({ role: 'pool', protocolVersion: undefined });
+
+export type WorkerStartData = z.infer<typeof WorkerStartData>;
 
 // Main thread -> scan worker
 export const ScanWorkerRequest = z.discriminatedUnion('type', [
