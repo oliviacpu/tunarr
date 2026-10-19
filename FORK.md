@@ -26,6 +26,21 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### The New Channel page shows its breadcrumbs, and Settings opens on General (2026-10-19)
+
+- **What you saw:** the New Channel page had an empty breadcrumb trail. Opening `/settings` showed the tab bar with no
+  tab selected over an empty panel, and MUI warned that the Tabs value was invalid.
+- **Cause:** `NewChannelPage.tsx` imported MUI's `Breadcrumbs` instead of the app's `components/Breadcrumbs.tsx`, which
+  builds the trail from the URL. The settings layout route had no index child, so at `/settings` its tab value came
+  out as `'/undefined'`.
+- **Fix:** the page uses the app's `Breadcrumbs` and reads Channels › New (`useRouteName.ts` already named
+  `/channels/new`). A new index route, `routes/settings/index.tsx`, redirects `/settings` to `/settings/general` in
+  `beforeLoad`. The e2e sweep maps the new `/settings/` path and no longer expects the Tabs warning on `/settings`.
+  The `/settings/sources` warning is a separate issue and stays listed.
+- **Tests:** `NewChannelPage.test.tsx` finds the Channels link and New in the trail; `router.test.ts` loads the app's
+  route tree at `/settings` and `/settings/` and lands on `/settings/general`. Both fail without the fix.
+- **Upstream:** not sent. Both defects are in upstream's code.
+
 ### Dead delete dialogs and settings hooks removed from the web app (2026-10-19, PR #86)
 
 - **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
