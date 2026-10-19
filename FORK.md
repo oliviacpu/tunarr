@@ -2538,3 +2538,11 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
   `SoftwarePipelineBuilder.test.ts` (a 10-bit source gets `-pix_fmt yuv420p`; an 8-bit source gets no conversion).
 - **Upstream:** not sent. Related: upstream PR #1559 (an unconditional `-pix_fmt yuv420p`) was closed on the grounds
   that the pipeline builder already forces 8-bit output; on the software path it didn't.
+
+### Scan queue responsiveness
+
+Custom-show sync requests wait for completion when the queue is idle, and return
+once accepted when another job is running. Acceptance and completion use an explicit
+job handle; requests joining the same show share its job and retain priority. Scanner
+validation warnings run once per library. The duplicate-case artwork test skips
+when the filesystem cannot create two distinct files differing only in case. This follow-up depends on scan-worker watchdog PR #63.
