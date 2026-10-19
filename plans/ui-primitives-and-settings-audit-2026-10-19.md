@@ -252,6 +252,8 @@ behaviour changes). UI PRs attach before/after screenshots from the e2e fixture
 
 ### Wave 5: primitives without a home (decisions, then work)
 
+Decisions taken by the user on 2026-10-19: **P1 shelve** (hide the stream-selection API from the spec and docs until a feature needs it) and **P2 retire** (one migration drops the vestigial tables and columns). Both are ready to delegate.
+
 | Id | Issue | Size | Files | Decision / done when |
 |---|---|---|---|---|
 | P1 | **Stream Selection Profiles: surface or shelve.** Full CRUD API, resolver at three levels, no UI, CEL expressions. Decide: (a) a Library › Stream profiles page with a tested CEL editor and the channel/filler pickers, or (b) mark the API internal and hide it from the OpenAPI spec until the dev branch needs it. Recommendation: (b) now, (a) when switchable audio needs per-program rules. | S (b) / L (a) | `streamSelectionApi.ts`, docs | Decision recorded in FORK.md; whichever path, nothing half-exposed. |
