@@ -528,13 +528,6 @@ export function ChannelFlexConfig() {
                   </FormControl>
                 )}
               />
-              <Controller
-                name="offline.soundtrack"
-                control={control}
-                render={({ field }) => (
-                  <TextField fullWidth label={t`Soundtrack`} {...field} />
-                )}
-              />
             </Stack>
           </Stack>
         </Box>

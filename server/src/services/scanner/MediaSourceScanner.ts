@@ -84,7 +84,7 @@ export abstract class MediaSourceScanner<
 > extends BaseMediaSourceScanner<ApiClientTypeT, ScanRequest> {
   #state: Map<string, RunState> = new Map();
   // Whether this scan has said that Plex hides sidecar file paths (once a scan)
-  #hiddenSidecarPathsReported = false;
+  #hiddenSidecarPathsReported = new Set<string>();
   abstract readonly type: MediaLibraryTypeT;
   abstract readonly mediaSourceType: MediaSourceTypeT;
 
@@ -99,7 +99,7 @@ export abstract class MediaSourceScanner<
 
   async scan({ library, force, pathFilter }: ScanRequest) {
     this.#state.set(library.uuid, 'starting');
-    this.#hiddenSidecarPathsReported = false;
+    this.#hiddenSidecarPathsReported.delete(library.uuid);
 
     this.#state.set(library.uuid, 'running');
 
@@ -140,6 +140,7 @@ export abstract class MediaSourceScanner<
       await this.mediaSourceDB.setLibraryLastScannedTime(library.uuid, dayjs());
     } finally {
       this.#state.delete(library.uuid);
+      this.#hiddenSidecarPathsReported.delete(library.uuid);
     }
   }
 
@@ -270,7 +271,12 @@ export abstract class MediaSourceScanner<
     withRelations: NewProgramWithRelations,
     sidecars: NewProgramWithRelations['subtitles'],
   ) {
-    if (this.mediaSourceType !== 'plex' || this.#hiddenSidecarPathsReported) {
+    const libraryId = withRelations.program.libraryId;
+    if (
+      !libraryId ||
+      this.mediaSourceType !== 'plex' ||
+      this.#hiddenSidecarPathsReported.has(libraryId)
+    ) {
       return;
     }
     const videoHasPath =
@@ -286,7 +292,7 @@ export abstract class MediaSourceScanner<
         !isNonEmptyString(sidecar.sourcePath),
     );
     if (videoHasPath && pathHidden) {
-      this.#hiddenSidecarPathsReported = true;
+      this.#hiddenSidecarPathsReported.add(libraryId);
       this.logger.info(
         "Plex didn't report subtitle file paths (Tunarr connects to it through a remote address), so subtitles are downloaded instead of read from shared storage. Use a local address for the Plex server to read them directly.",
       );

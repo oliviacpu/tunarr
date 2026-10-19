@@ -238,6 +238,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - All of these fail on the old code. The kill test from the `.ts` wrapper fix passes unchanged.
 - **Upstream:** not sent. It's upstream's code, so it could go upstream as a plain bug fix.
 
+### expose saved encoder presets with accessible labels (2026-10-19)
+
+- **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
+
 ### An HEVC or MPEG-2 channel's .ts stream no longer offers an empty caption track (2026-10-19)
 
 - **What you saw:** found in code review, not on the deployment. With closed captions for HDHomeRun clients on, a
@@ -272,6 +276,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   are unchanged apart from the fixture's format. In `FfmpegStreamFactory.test.ts`, an HEVC or MPEG-2 channel logs no
   info line about captions over two programs. The wrapper, log and factory tests fail on the old code.
 - **Upstream:** not sent.
+
+### validate packaged binaries and make fork releases rerunnable (2026-10-19)
+
+- **Change:** Requires real-binary and packaged-worker tests before the final image is assembled, adds nightly/manual native Linux validation, repairs temporary paths in API generation, restores the upstream latest spec, and updates existing release notes on reruns. Release serialization remains in place.
 
 ### Captions keep the accented letters of Windows-1252 subtitle files (2026-10-19)
 
@@ -2603,3 +2611,10 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
 - **Upstream:** not sent. Related: upstream PR #1559 (an unconditional `-pix_fmt yuv420p`) was closed on the grounds
   that the pipeline builder already forces 8-bit output; on the software path it didn't.
 
+### Scan queue responsiveness
+
+Custom-show sync requests wait for completion when the queue is idle, and return
+once accepted when another job is running. Acceptance and completion use an explicit
+job handle; requests joining the same show share its job and retain priority. Scanner
+validation warnings run once per library. The duplicate-case artwork test skips
+when the filesystem cannot create two distinct files differing only in case. This follow-up depends on scan-worker watchdog PR #63.
