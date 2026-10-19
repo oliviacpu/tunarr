@@ -1,3 +1,5 @@
+import type { Logger } from '@/util/logging/LoggerFactory.js';
+import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import tmp from 'tmp';
@@ -96,4 +98,68 @@ describe('FfmpegInfo executable path', () => {
     expect((await info.getVersion()).versionString).toBe('8.1.3-Jellyfin');
     expect((await info.getCapabilities()).hasFilter('tonemapx')).toBe(true);
   });
+});
+
+describe('FfmpegInfo.probeFile', () => {
+  let dir: tmp.DirResult;
+
+  beforeEach(() => {
+    dir = tmp.dirSync({ unsafeCleanup: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    dir.removeCallback();
+  });
+
+  // A made-up token in the URL a media server would hand ffprobe.
+  const InputUrl =
+    'http://media.example:32400/library/parts/1/a.mkv?X-Plex-Token=abc';
+  const RedactedUrl =
+    'http://media.example:32400/library/parts/1/a.mkv?X-Plex-Token=REDACTED';
+
+  test.skipIf(process.platform === 'win32')(
+    'logs output it cannot parse with the token redacted',
+    async () => {
+      const logger = {
+        trace: vi.fn(),
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      };
+      vi.spyOn(LoggerFactory, 'child').mockReturnValue(
+        logger as unknown as Logger,
+      );
+      vi.spyOn(LoggerFactory, 'root', 'get').mockReturnValue(
+        logger as unknown as Logger,
+      );
+
+      // A stand-in ffprobe whose output names its input, as format.filename
+      // does, but doesn't match the schema.
+      const ffprobe = path.join(dir.name, 'ffprobe');
+      fs.writeFileSync(
+        ffprobe,
+        [
+          '#!/bin/sh',
+          'for last; do :; done',
+          `printf '{"streams":"none","format":{"filename":"%s"}}' "$last"`,
+          '',
+        ].join('\n'),
+        { mode: 0o755 },
+      );
+      const info = new FfmpegInfo(fixedPaths('/unused/ffmpeg', ffprobe));
+
+      await expect(info.probeFile(InputUrl)).resolves.toBeUndefined();
+
+      expect(logger.warn).toHaveBeenCalledOnce();
+      const warned = JSON.stringify(logger.warn.mock.calls);
+      expect(warned).toContain(RedactedUrl);
+      expect(warned).not.toContain('abc');
+      // ChildProcessHelper's command line, at debug.
+      const debugged = JSON.stringify(logger.debug.mock.calls);
+      expect(debugged).toContain(RedactedUrl);
+      expect(debugged).not.toContain('X-Plex-Token=abc');
+    },
+  );
 });
