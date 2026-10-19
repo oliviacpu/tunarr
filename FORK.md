@@ -26,7 +26,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### Dead delete dialogs and settings hooks removed from the web app (2026-10-19)
+### Dead delete dialogs and settings hooks removed from the web app (2026-10-19, PR #86)
 
 - **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
 - **Cause:**
