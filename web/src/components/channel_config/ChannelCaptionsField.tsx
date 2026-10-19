@@ -19,6 +19,11 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  channelCaptionLook,
+  channelHasOwnCaptionLook,
+  normalizeChannelCaptions,
+} from '@tunarr/shared/util';
 import type { ChannelCaptions } from '@tunarr/types';
 import type { CaptionAlignment } from '@tunarr/types/schemas';
 import { CaptionAlignments } from '@tunarr/types/schemas';
@@ -31,12 +36,7 @@ import {
   getApiFfmpegSettingsQueryKey,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { putApiFfmpegSettings } from '../../generated/sdk.gen.ts';
-import {
-  changedCaptionAppearance,
-  channelCaptionLook,
-  hasOwnCaptionLook,
-  normalizeChannelCaptions,
-} from '../../helpers/channelCaptions.ts';
+import { changedCaptionAppearance } from '../../helpers/channelCaptions.ts';
 import { useCaptionAlignmentNames } from '../../hooks/useCaptionAlignmentNames.ts';
 import { useChannelFormContext } from '../../hooks/useChannelFormContext.ts';
 import { CaptionAppearanceFields } from '../settings/ffmpeg/CaptionAppearanceFields.tsx';
@@ -106,7 +106,7 @@ export function ChannelCaptionsField() {
       name="captions"
       render={({ field }) => {
         const captions = field.value ?? null;
-        const showLook = lookOpen || hasOwnCaptionLook(captions);
+        const showLook = lookOpen || channelHasOwnCaptionLook(captions);
         const look = channelCaptionLook(global, captions);
         const update = (next: ChannelCaptions) =>
           field.onChange(normalizeChannelCaptions(next));

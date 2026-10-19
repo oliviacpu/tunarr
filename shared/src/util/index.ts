@@ -1,4 +1,5 @@
 export { mod as dayjsMod } from './dayjsExtensions.js';
+export * from './channelCaptions.js';
 export * from './plexSearchUtil.js';
 export * as search from './searchUtil.js';
 export * as seq from './seq.js';
