@@ -48,7 +48,7 @@ export const KNOWN_ISSUES: KnownIssue[] = [
   },
   {
     match: /MUI: The `value` provided to the Tabs component is invalid/,
-    routes: ['/settings', '/settings/sources'],
+    routes: ['/settings/sources'],
     note: 'Settings tabs receive a value with no matching tab.',
   },
   {

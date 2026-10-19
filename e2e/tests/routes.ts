@@ -33,6 +33,7 @@ export const ROUTES: Record<string, RouteTarget> = {
   '/guide': () => ['/guide'],
   '/search': () => ['/search'],
   '/settings': () => ['/settings'],
+  '/settings/': () => ['/settings/'],
   '/settings/features': () => ['/settings/features'],
   '/settings/ffmpeg': () => ['/settings/ffmpeg'],
   '/settings/ffmpeg/new': () => ['/settings/ffmpeg/new'],
