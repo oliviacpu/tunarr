@@ -69,6 +69,9 @@ const VideoPresetOptions: DropdownOption<string>[] = [
   { description: 'faster', value: 'faster' },
   { description: 'fast', value: 'fast' },
   { description: 'medium', value: 'medium' },
+  { description: 'slow', value: 'slow' },
+  { description: 'slower', value: 'slower' },
+  { description: 'veryslow', value: 'veryslow' },
 ];
 
 const videoPresetConverter: Converter<string | null, string> = {

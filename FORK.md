@@ -26,6 +26,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### expose saved encoder presets with accessible labels (2026-10-19)
+
+- **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
+- **Tests:** covered by the local completion candidate; this branch is independently checked in CI.
+- **Upstream:** not submitted; personal fork.
+
+
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 

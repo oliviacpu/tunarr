@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { isNonEmptyString } from '@tunarr/shared/util';
 import { identity } from 'lodash-es';
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import type { StrictOmit } from 'ts-essentials';
 import type { DropdownOption } from '../../helpers/DropdownOption.ts';
 import { useFieldContext } from '../../hooks/form.ts';
@@ -54,13 +54,18 @@ export function SelectInput<ValueTypeT, InputTypeT extends string | number>({
   converter,
 }: Props<ValueTypeT, InputTypeT>) {
   const field = useFieldContext<ValueTypeT>();
+  const generatedLabelId = useId();
+  const labelId = selectProps?.labelId ?? generatedLabelId;
   return (
     <FormControl {...formControlProps}>
       {isNonEmptyString(selectProps?.label) ? (
-        <InputLabel>{selectProps?.label}</InputLabel>
+        <InputLabel id={labelId}>{selectProps?.label}</InputLabel>
       ) : null}
       <Select
         {...selectProps}
+        labelId={
+          isNonEmptyString(selectProps?.label) ? labelId : selectProps?.labelId
+        }
         value={converter.to(field.state.value)}
         onChange={(e) =>
           field.handleChange(converter.from(e.target.value as InputTypeT))
