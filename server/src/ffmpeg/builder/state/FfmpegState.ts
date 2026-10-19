@@ -84,8 +84,12 @@ export class FfmpegState {
   softwareDeinterlaceFilter: string = 'yadif=1';
   vaapiDevice: Nullable<string> = null;
   vaapiDriver: Nullable<string> = null;
-  outputFormat: OutputFormat = MpegTsOutputFormat; // TODO: No
-  outputLocation: OutputLocation = StdoutOutputLocation;
+  // Copies of the shared constants: the constructor deep-merges the caller's
+  // fields into these, which would otherwise rewrite the constants themselves
+  // (an HLS format merged into MpegTsOutputFormat made every later MPEG-TS
+  // state output HLS to that session's directory).
+  outputFormat: OutputFormat = { ...MpegTsOutputFormat };
+  outputLocation: OutputLocation = { ...StdoutOutputLocation };
   ptsOffset?: number;
   /**
    * Segment/file number to continue the WebVTT subtitle sidecar's `segment`

@@ -6,6 +6,7 @@ import type {
 } from '@/db/interfaces/ISettingsDB.ts';
 import type { ChannelOrm } from '@/db/schema/Channel.ts';
 import type { TranscodeConfigOrm } from '@/db/schema/TranscodeConfig.ts';
+import type { OutputFormat } from '@/ffmpeg/builder/constants.ts';
 import {
   AudioFormats,
   HlsDirectOutputFormat,
@@ -1084,6 +1085,48 @@ describe('FfmpegStreamFactory', () => {
         { outputIndex: 2, codec: AudioFormats.Ac3 },
       ]);
     });
+
+    async function runSession(outputFormat: OutputFormat) {
+      const session = createPassthroughSut();
+      await session.sut.createStreamSession({
+        stream: {
+          source: new HttpStreamSource('http://example.com/video.ts'),
+          details: session.streamDetails,
+        },
+        options: {
+          startTime: dayjs.duration(0),
+          duration: dayjs.duration({ seconds: 30 }),
+          outputFormat,
+          ptsOffset: 0,
+          realtime: true,
+          streamMode: 'hls',
+        },
+        lineupItem: makeLineupItem(),
+      });
+      return session;
+    }
+
+    test.each([
+      { name: 'HLS', earlierFormat: HlsOutputFormat(defaultHlsOptions) },
+      { name: 'HLS Direct v2', earlierFormat: hlsDirectV2Format },
+    ])(
+      'an $name session leaves a later MPEG-TS session transcoding',
+      async ({ earlierFormat }) => {
+        // The earlier session's FfmpegState used to rewrite the shared
+        // MpegTsOutputFormat, so a later .ts program stream inherited its
+        // format: the HLS muxer, or a passthrough copy
+        await runSession(earlierFormat);
+        const transcode = await runSession(MpegTsOutputFormat);
+
+        expect(transcode.getCapturedFfmpegState()?.outputFormat).toEqual({
+          type: 'mpegts',
+        });
+        expect(transcode.getCapturedFfmpegState()?.copyAllStreams).toBe(false);
+        expect(transcode.getCapturedFrameState()?.videoPreset).toBe(
+          VideoPresets.VeryFast,
+        );
+      },
+    );
 
     test('passthrough uses source video dimensions for FrameState sizes', async () => {
       const details = makeStreamDetails();
