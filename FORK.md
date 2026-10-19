@@ -26,6 +26,20 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### General settings: Reset works on an invalid value, and the log level help names `TUNARR_LOG_LEVEL` (2026-10-19)
+
+- **What you saw:** not reported from the deployment; found in the fork review (B5). The log level help told you to set
+  `LOG_LEVEL`. "Reset Options" was disabled while a field held an invalid value, the one time you need it. With no
+  log roll schedule saved, Reset left the schedule without its `type`, so the form stayed dirty and a schedule ticked
+  after that was dropped on save. A bad log roll schedule increment was reported as "Max Backups".
+- **Cause:** the server reads `TUNARR_LOG_LEVEL` (`server/src/util/env.ts`). The Reset button was disabled on
+  `!isValid`. Reset filled the form from `getBaseFormValues`, while load and save used `getDefaultFormValues`, which
+  also fills in the log roll schedule (with its `type`) and size. `LogRollForm` copied BackupForm's field name.
+- **Fix:** `GeneralSettingsForm.tsx` has one `getDefaultFormValues` for load, a successful save and Reset; Reset is
+  enabled whenever the form has changes; the help text names `TUNARR_LOG_LEVEL`. `LogRollForm.tsx` names the field
+  "Roll Schedule Increment". Tests: `GeneralSettingsForm.test.tsx`, `LogRollForm.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
 ### The New Channel page shows its breadcrumbs, and Settings opens on General (2026-10-19, PR #90)
 
 - **What you saw:** the New Channel page had an empty breadcrumb trail. Opening `/settings` showed the tab bar with no
