@@ -22,8 +22,10 @@ export type InsertCaptionsOptions = {
   // order. Asked once per segment, before any frame is written, so the answer
   // can depend on the frames around each one.
   pairsForFrames: (pts90k: readonly number[]) => readonly CcPair[];
-  // ISO 639-2 code for the PMT's language descriptors
-  language: string;
+  // ISO 639-2 code for the PMT's language descriptors, or a function that
+  // picks it from the same frames' PTS, asked once per segment after
+  // pairsForFrames
+  language: string | ((pts90k: readonly number[]) => string);
 };
 
 export type InsertCaptionsResult =
@@ -596,7 +598,9 @@ export function insertCaptions(
 
   const newPmt = withLanguageDescriptors(
     segment.subarray(pmt.offset, pmt.offset + PacketSize),
-    options.language,
+    typeof options.language === 'string'
+      ? options.language
+      : options.language(presented),
   );
 
   // Write packets in their original order; a PES's new packets take the place

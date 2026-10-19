@@ -57,7 +57,7 @@ export const PaddingPair: CcPair = pair(0, 0);
 const ResumeCaptionLoading = pair(0x14, 0x20);
 const ResumeDirectCaptioning = pair(0x14, 0x29);
 const CarriageReturn = pair(0x14, 0x2d);
-const EraseDisplayedMemory = pair(0x14, 0x2c);
+export const EraseDisplayedMemory = pair(0x14, 0x2c);
 const EraseNonDisplayedMemory = pair(0x14, 0x2e);
 const EndOfCaption = pair(0x14, 0x2f);
 

@@ -87,6 +87,23 @@ vi.mock('./TranscodeSpeedWatcher.js', () => ({
   },
 }));
 
+// The last packet ffprobe finds in the newest segment, from which the session
+// works out where the next program starts on the output clock
+const lastPacket = vi.hoisted(() => ({
+  current: undefined as { pts: number; duration: number } | undefined,
+}));
+
+vi.mock('@/ffmpeg/GetLastPtsDuration.js', () => ({
+  GetLastPtsDurationTask: class {
+    run() {
+      const packet = lastPacket.current;
+      return Promise.resolve(
+        packet ? Result.success(packet) : Result.forError(new Error('none')),
+      );
+    }
+  },
+}));
+
 const channelUuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
 function makeSession(
@@ -141,6 +158,8 @@ describe('HlsSession', () => {
     const ntscFrame = 1001 / 30; // ms per frame at 29.97 fps
     // End of Caption on channel 1, with parity bits
     const EndOfCaption = [0x94, 0x2f];
+    // Erase Displayed Memory on channel 1, with parity bits
+    const EraseDisplayed = [0x94, 0x2c];
 
     async function serve(
       captions: ProgramCaptions,
@@ -430,6 +449,339 @@ describe('HlsSession', () => {
       ).addCaptions(0, captions(30));
 
       expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
+    });
+
+    describe('across programs', () => {
+      const isPadding = (p: number[]) => p[0] === 0x80 && p[1] === 0x80;
+
+      // The language each of a served segment's PMT descriptors names: the
+      // ISO 639 language descriptor's and the caption service descriptor's
+      function pmtLanguages(segment: Buffer) {
+        const pmt = parseTsSegment(segment).pmtPacket?.toString('latin1');
+        if (pmt === undefined) {
+          throw new Error('no PMT');
+        }
+        return {
+          iso639: pmt.match(/\x0a\x04([a-z]{3})\x00/)?.[1],
+          captionService: pmt.match(/\x86\x07\xe1([a-z]{3})/)?.[1],
+        };
+      }
+
+      // Plays programs back to back through the session's own loop, each
+      // against a fake ffmpeg that exits at once. A program is planned for
+      // `plannedMs` (60 s unless given) and its video ends at `endPts`, where
+      // the session starts the next one; without it, the last segment can't
+      // be read and the next one starts again at SessionStartPts. Its caption
+      // window is its captions' durationMs.
+      async function playPrograms(
+        programs: {
+          captions?: ProgramCaptions;
+          endPts?: number;
+          plannedMs?: number;
+        }[],
+      ) {
+        const queue = [...programs];
+        const channel = {
+          uuid: channelUuid,
+          transcodeConfig: {},
+        } as unknown as ChannelOrmWithTranscodeConfig;
+        const session: HlsSession = new HlsSession(
+          channel,
+          {
+            streamMode: 'hls',
+            initialSegmentCount: 2,
+            transcodeDirectory: dir.name,
+          },
+          {
+            getCurrentLineupItem: () =>
+              Promise.resolve(
+                Result.success({
+                  lineupItem: { type: 'program', duration: 60_000 },
+                  channelContext: channel,
+                  sourceChannel: channel,
+                }),
+              ),
+          } as unknown as StreamProgramCalculator,
+          {
+            ffmpegSettings: () => defaultFfmpegSettings,
+          } as unknown as ISettingsDB,
+          {
+            getLiveTimestamp: () => Promise.resolve(Date.now()),
+          } as unknown as OnDemandChannelService,
+          (context) => {
+            const program = queue.shift();
+            const transcodeSession = {
+              streamDuration: dayjs.duration(program?.plannedMs ?? 60_000),
+              wait: () => Promise.resolve(),
+            };
+            return {
+              context,
+              on: vi.fn(),
+              renditions: { audio: [], captions: program?.captions },
+              transcodeSession,
+              setup: () => Promise.resolve(Result.success(transcodeSession)),
+              start: async () => {
+                await fs.writeFile(
+                  path.join(session.workingDirectory, 'data000000.ts'),
+                  '',
+                );
+                lastPacket.current =
+                  program?.endPts === undefined
+                    ? undefined
+                    : { pts: program.endPts - 3003 - 1, duration: 3003 };
+                // Nothing buffered, so the loop starts the next at once
+                internals.transcodedUntil = undefined;
+                if (queue.length === 0) {
+                  internals.state = 'stopped';
+                }
+              },
+            } as unknown as ProgramStream;
+          },
+        );
+        await fs.mkdir(session.workingDirectory, { recursive: true });
+        const internals = session as unknown as {
+          state: string;
+          transcodedUntil: unknown;
+          run(): Promise<void>;
+        };
+        internals.state = 'started';
+        await internals.run();
+        return session;
+      }
+
+      afterEach(() => {
+        lastPacket.current = undefined;
+      });
+
+      // ffmpeg stopped early (a crash, or a file shorter than its recorded
+      // duration), and the next item has no captions of its own: a gap, an
+      // error screen, a commercial without subtitles
+      test("ends a program's captions where the next item starts", async () => {
+        const aStart = SessionStartPts;
+        // 10 s into a program planned for 60 s
+        const bStart = aStart + 300 * 3003;
+        // A line every 2 s for the program's first 30 s
+        const dialogue: ProgramCaptions = {
+          cues: Array.from({ length: 15 }, (_, k) => ({
+            startMs: k * 2000 + 500,
+            endMs: k * 2000 + 1500,
+            text: `Line ${k}`,
+          })),
+          frameRate: 30000 / 1001,
+          durationMs: 60_000,
+          language: 'eng',
+        };
+
+        const session = await playPrograms([
+          { captions: dialogue, endPts: bStart },
+          {},
+        ]);
+        // 4 s into the first program; the next item's first 2 s; and 12 s
+        // after the first program started, 2 s into the next item
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: aStart + 120 * 3003, frames: 60 }),
+        );
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000002.ts'),
+          makeTsSegment({ firstPts: bStart, frames: 60 }),
+        );
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000003.ts'),
+          makeTsSegment({ firstPts: aStart + 360 * 3003, frames: 60 }),
+        );
+        const own = await session.captionedSegment('data000001.ts');
+        const start = await session.captionedSegment('data000002.ts');
+        const later = await session.captionedSegment('data000003.ts');
+        if (!own || !start || !later) {
+          throw new Error('not captioned');
+        }
+
+        // The first program still has its own captions
+        expect(framePairs(own).some((p) => !isPadding(p))).toBe(true);
+        // The next item's first two frames erase what was left on screen,
+        // and nothing else of the first program's comes
+        expect(framePairs(start).slice(0, 2)).toEqual([
+          EraseDisplayed,
+          EraseDisplayed,
+        ]);
+        expect(framePairs(start).slice(2).every(isPadding)).toBe(true);
+        expect(framePairs(later)).toHaveLength(60);
+        expect(framePairs(later).every(isPadding)).toBe(true);
+      });
+
+      // ffprobe couldn't read the last segment (ffmpeg crashed, leaving it
+      // empty), so the clock goes back to SessionStartPts, under programs
+      // that already played
+      test('sends no earlier program its captions when the clock goes back', async () => {
+        const aStart = SessionStartPts;
+        const bStart = aStart + 600 * 3003;
+        const dialogue = (language: string): ProgramCaptions => ({
+          cues: Array.from({ length: 30 }, (_, k) => ({
+            startMs: k * 2000 + 500,
+            endMs: k * 2000 + 1500,
+            text: `Line ${k}`,
+          })),
+          frameRate: 30000 / 1001,
+          durationMs: 60_000,
+          language,
+        });
+
+        const session = await playPrograms([
+          { captions: dialogue('eng'), endPts: bStart },
+          { captions: dialogue('eng') },
+          {},
+        ]);
+        // 22 s after the clock went back: 2 s into the second program's
+        // window
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: bStart + 60 * 3003, frames: 60 }),
+        );
+        const served = await session.captionedSegment('data000001.ts');
+        if (!served) {
+          throw new Error('not captioned');
+        }
+
+        expect(framePairs(served).every(isPadding)).toBe(true);
+      });
+
+      // Viewers are served segments up to a minute or more behind the
+      // transcode, so a program the next one won't reach keeps its captions
+      test('keeps the captions of a program the clock went back short of', async () => {
+        const aStart = SessionStartPts;
+        const bStart = aStart + 600 * 3003;
+        const dialogue: ProgramCaptions = {
+          cues: Array.from({ length: 30 }, (_, k) => ({
+            startMs: k * 2000 + 500,
+            endMs: k * 2000 + 1500,
+            text: `Line ${k}`,
+          })),
+          frameRate: 30000 / 1001,
+          durationMs: 60_000,
+          language: 'eng',
+        };
+
+        const session = await playPrograms([
+          { captions: dialogue, endPts: bStart },
+          { captions: dialogue },
+          // Planned for 10 s from SessionStartPts, short of the second
+          { plannedMs: 10_000 },
+        ]);
+        // 2 s into the second program
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: bStart + 60 * 3003, frames: 60 }),
+        );
+        const served = await session.captionedSegment('data000001.ts');
+        if (!served) {
+          throw new Error('not captioned');
+        }
+
+        expect(framePairs(served).some((p) => !isPadding(p))).toBe(true);
+      });
+
+      // Each of a run of programs whose ffmpeg fails at once is cut to
+      // nothing by the next
+      test('keeps the captions of a program whose segments are still served', async () => {
+        const aStart = SessionStartPts;
+        const bStart = aStart + 300 * 3003;
+        const failing = Array.from({ length: 10 }, () => ({
+          captions: captions(30000 / 1001),
+          endPts: bStart,
+        }));
+
+        const session = await playPrograms([
+          { captions: captions(30000 / 1001), endPts: bStart },
+          ...failing,
+        ]);
+        // The first program's frames with its caption, at frame 40
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: aStart, frames: 60 }),
+        );
+        const served = await session.captionedSegment('data000001.ts');
+        if (!served) {
+          throw new Error('not captioned');
+        }
+
+        expect(framePairs(served)[40]).toEqual(EndOfCaption);
+      });
+
+      // A client still fetching one program's last segments after the next
+      // program started
+      test('names each segment in its own program’s language', async () => {
+        const aStart = SessionStartPts;
+        // Its video ends 10 s into its 60 s of captions
+        const bStart = aStart + 300 * 3003;
+        const session = await playPrograms([
+          {
+            captions: { ...captions(30000 / 1001), language: 'jpn' },
+            endPts: bStart,
+          },
+          { captions: { ...captions(30000 / 1001), language: 'eng' } },
+        ]);
+        // The first program's last 2 s, and the next one's first
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: bStart - 60 * 3003, frames: 60 }),
+        );
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000002.ts'),
+          makeTsSegment({ firstPts: bStart, frames: 60 }),
+        );
+
+        const trailing = await session.captionedSegment('data000001.ts');
+        const next = await session.captionedSegment('data000002.ts');
+        if (!trailing || !next) {
+          throw new Error('not captioned');
+        }
+
+        expect(pmtLanguages(trailing)).toEqual({
+          iso639: 'jpn',
+          captionService: 'jpn',
+        });
+        expect(pmtLanguages(next)).toEqual({
+          iso639: 'eng',
+          captionService: 'eng',
+        });
+      });
+
+      test('names a segment no program captions in the preferred language', async () => {
+        const session = makeSession(
+          dir.name,
+          {},
+          {
+            ...defaultFfmpegSettings,
+            languagePreferences: {
+              preferences: [
+                { iso6391: 'fr', iso6392: 'fre', displayName: 'French' },
+              ],
+            },
+          },
+        );
+        await fs.mkdir(session.workingDirectory, { recursive: true });
+        (
+          session as unknown as {
+            addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+          }
+        ).addCaptions(900_000, { ...captions(30000 / 1001), language: 'jpn' });
+        // After the program's 60 s
+        await fs.writeFile(
+          path.join(session.workingDirectory, 'data000001.ts'),
+          makeTsSegment({ firstPts: 900_000 + 60_000 * 90, frames: 60 }),
+        );
+
+        const served = await session.captionedSegment('data000001.ts');
+        if (!served) {
+          throw new Error('not captioned');
+        }
+
+        expect(pmtLanguages(served)).toEqual({
+          iso639: 'fre',
+          captionService: 'fre',
+        });
+      });
     });
 
     // Numbers from a deployment's log, to decide whether caching captioned
