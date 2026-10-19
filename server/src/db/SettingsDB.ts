@@ -1,3 +1,4 @@
+import { effectiveXmlTvGuideHours } from '@tunarr/shared/util';
 import type {
   ISettingsDB,
   ReadableFfmpegSettings,
@@ -186,7 +187,11 @@ export class SettingsDB extends ITypedEventEmitter implements ISettingsDB {
   }
 
   xmlTvSettings(): DeepReadonly<XmlTvSettings> {
-    return this.db.data.settings.xmltv;
+    const settings = this.db.data.settings.xmltv;
+    return {
+      ...settings,
+      programmingHours: effectiveXmlTvGuideHours(settings.programmingHours),
+    };
   }
 
   hdhrSettings(): DeepReadonly<HdhrSettings> {

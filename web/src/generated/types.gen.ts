@@ -10842,6 +10842,12 @@ export type PutApiXmltvSettingsErrors = {
     /**
      * Default Response
      */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
     500: {
         message: string;
     };

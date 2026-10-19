@@ -1,8 +1,9 @@
 /**
  * The scheduled full guide rebuild (UpdateXmlTvTask) runs at the XMLTV
- * settings' start hour and every refreshHours after it.
+ * settings' start hour and every refreshHours after it, or more often when the
+ * guide is too short to last that long.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../util/logging/LoggerFactory.ts', () => {
   const stubLogger: Record<string, unknown> = {};
@@ -15,8 +16,12 @@ vi.mock('../../util/logging/LoggerFactory.ts', () => {
   };
 });
 
+const logger = vi.hoisted(() => ({ warn: vi.fn(), debug: vi.fn() }));
+
 vi.mock('../../util/inject.ts', () => ({
-  InjectLogger: () => () => {},
+  InjectLogger: () => (target: object, key: string | symbol) => {
+    Object.defineProperty(target, key, { get: () => logger });
+  },
 }));
 
 vi.mock('../../container.ts', () => ({
@@ -84,23 +89,35 @@ vi.mock('../../tasks/UpdateXmlTvTask.ts', () => stubTask('UpdateXmlTvTask'));
 import type { ISettingsDB } from '../../db/interfaces/ISettingsDB.ts';
 import { ScheduleJobsStartupTask } from './ScheduleJobsStartupTask.ts';
 
-function settingsWith(refreshHours: number, refreshStartHour: number) {
+function settingsWith(
+  refreshHours: number,
+  refreshStartHour: number,
+  programmingHours: number,
+) {
   return {
-    xmlTvSettings: () => ({ refreshHours, refreshStartHour }),
+    xmlTvSettings: () => ({ refreshHours, refreshStartHour, programmingHours }),
     globalMediaSourceSettings: () => ({ rescanIntervalHours: 6 }),
     backup: { configurations: [] },
   } as unknown as ISettingsDB;
 }
 
-async function guideSchedule(refreshHours: number, refreshStartHour: number) {
+async function guideSchedule(
+  refreshHours: number,
+  refreshStartHour: number,
+  programmingHours = 72,
+) {
   scheduled.length = 0;
   await new ScheduleJobsStartupTask(
-    settingsWith(refreshHours, refreshStartHour),
+    settingsWith(refreshHours, refreshStartHour, programmingHours),
   ).getPromise();
   return scheduled.find((task) => task.name === 'UpdateXmlTvTask')?.schedule;
 }
 
 describe('ScheduleJobsStartupTask', () => {
+  beforeEach(() => {
+    logger.warn.mockClear();
+  });
+
   it('schedules the guide rebuild from the settings start hour', async () => {
     expect(await guideSchedule(24, 3)).toBe('0 0 3 * * *');
     expect(await guideSchedule(4, 3)).toBe('0 0 3,7,11,15,19,23 * * *');
@@ -108,5 +125,19 @@ describe('ScheduleJobsStartupTask', () => {
 
   it('with the default start hour, runs at the hours it always did', async () => {
     expect(await guideSchedule(4, 0)).toBe('0 0 0,4,8,12,16,20 * * *');
+    expect(await guideSchedule(4, 0, 12)).toBe('0 0 0,4,8,12,16,20 * * *');
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds often enough for a guide saved too short for its timer, and says so', async () => {
+    // A 12-hour guide lasts an 11-hour wait, with the hour the clocks go back
+    expect(await guideSchedule(24, 3, 12)).toBe('0 0 3,13,23 * * *');
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('too short'),
+      12,
+      24,
+      10,
+      26,
+    );
   });
 });
