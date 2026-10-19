@@ -37,6 +37,41 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### An HEVC or MPEG-2 channel's .ts stream no longer offers an empty caption track (2026-10-19)
+
+- **What you saw:** found in code review, not on the deployment. With closed captions for HDHomeRun clients on, a
+  channel with subtitles on whose transcode config outputs HEVC or MPEG-2 video had its subtitles burned in, as it
+  should since the H.264 check below, but its `.ts` stream still offered Plex a caption track that never showed
+  anything. Every segment was read and parsed before being refused, with only a debug line to show for it, and the
+  log said "closed captions need H.264" at info once for every program.
+- **Cause:** two copies of the rule. `FfmpegStreamFactory.captionsOn` checked the output video format, but
+  `ConcatStream.captioned` did not. That getter decides whether the `.ts` wrapper asks for captioned segments
+  (`captions=true`) and relabels the PMT through `CaptionLanguageStream`. So `HlsSession.captionedSegment` parsed each
+  segment in full before `insertCaptions` refused it as not H.264. Meanwhile `CaptionLanguageStream` added the
+  caption-service descriptor to the HEVC (0x24) or MPEG-2 (0x02) video entry, which advertised captions. The info
+  line repeated because the factory is made per program (`ProgramStream`).
+- **Fix:**
+  - `stream/captions/hdhrCaptionsEnabled.ts` holds the rule. `hdhrCaptionsEnabled` needs the switch, the HLS stream
+    mode, the channel's subtitles and H.264 output. `hdhrCaptionsWanted` is the same without the format.
+    `captionsOn` and `ConcatStream.captioned` both call it. The wrapper turns its concat mode into the HLS session's
+    mode with `ConcatStreamModeToChildMode` and reads the format from the channel's transcode config.
+  - An HEVC or MPEG-2 channel's wrapper asks for plain segments and keeps ffmpeg's own PMT, as with the switch off.
+  - The info line moved from `captionsOn` to `ConcatStream.createSession`, so it is logged once each time the `.ts`
+    stream starts. It names the channel number, the transcode config and its format. The factory no longer logs it.
+  - `insertCaptions` still refuses video that isn't H.264, as a fail-safe.
+  - `docs/configure/ffmpeg/index.md` (Requirements) describes the whole channel, not only the transcode. The API
+    description of the `captions` playlist parameter (`streamApi.ts`) names the H.264 requirement, and the OpenAPI
+    document and web client were regenerated.
+  - The two sides still read their inputs at different times: the wrapper when its stream starts, the transcode
+    partly per program. A change made while a channel plays can still split them until both restart (a known
+    risk, not changed here).
+- **Tests:** new `hdhrCaptionsEnabled.test.ts` covers each input. In `ConcatStream.test.ts`, for HEVC and MPEG-2 with
+  the switch and subtitles on, the playlist URL has no `captions` flag and there is no output sink. The info line is
+  logged once per wrapper, and not at all when captions weren't asked for or the channel is H.264. The H.264 tests
+  are unchanged apart from the fixture's format. In `FfmpegStreamFactory.test.ts`, an HEVC or MPEG-2 channel logs no
+  info line about captions over two programs. The wrapper, log and factory tests fail on the old code.
+- **Upstream:** not sent.
+
 ### Captions keep the accented letters of Windows-1252 subtitle files (2026-10-19)
 
 - **What you saw:** nothing reported; found in the 2026-10-19 fork review. A subtitle file saved in Windows-1252 or

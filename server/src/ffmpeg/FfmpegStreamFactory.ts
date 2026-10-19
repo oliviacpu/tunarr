@@ -39,6 +39,7 @@ import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLi
 import type { IChannelDB } from '../db/interfaces/IChannelDB.ts';
 import { FeatureFlagService } from '../services/FeatureFlagService.ts';
 import { captionTestPattern } from '../stream/captions/CaptionTestPattern.ts';
+import { hdhrCaptionsEnabled } from '../stream/captions/hdhrCaptionsEnabled.ts';
 import {
   channelCaptionAppearance,
   channelCaptionTestPattern,
@@ -809,26 +810,18 @@ export class FfmpegStreamFactory {
   // Captions go into the .ts stream HDHomeRun clients read, which wraps an
   // HLS session; other modes keep today's subtitles. Captions can only be added
   // to H.264 video, so a transcode config with another video format keeps
-  // today's subtitles too, rather than losing both them and the captions.
+  // today's subtitles too, rather than losing both them and the captions. The
+  // .ts wrapper (ConcatStream) decides with the same rule, and logs once per
+  // tune-in when the video format rules captions out. This factory is made per
+  // program, so it says nothing.
   private captionsOn(streamMode: ChannelStreamMode | undefined): boolean {
-    if (
-      !this.ffmpegSettings.hdhrClosedCaptions ||
-      streamMode !== ChannelStreamModes.Hls ||
-      !this.channel.subtitlesEnabled
-    ) {
-      return false;
-    }
-    // The format an HLS program is encoded in (FfmpegPlaybackParamsCalculator)
-    const videoFormat = this.transcodeConfig.videoFormat;
-    if (videoFormat !== VideoFormats.H264) {
-      this.logger.info(
-        'Transcode config "%s" outputs %s video, and closed captions need H.264; this program gets its subtitles as with captions off',
-        this.transcodeConfig.name,
-        videoFormat,
-      );
-      return false;
-    }
-    return true;
+    return hdhrCaptionsEnabled({
+      hdhrClosedCaptions: this.ffmpegSettings.hdhrClosedCaptions,
+      streamMode,
+      subtitlesEnabled: this.channel.subtitlesEnabled,
+      // The format an HLS program is encoded in (FfmpegPlaybackParamsCalculator)
+      videoFormat: this.transcodeConfig.videoFormat,
+    });
   }
 
   // A subtitle track's cues on the program's clock, for captions laid out at
