@@ -56,11 +56,12 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
     `DISCONTINUITY-SEQUENCE`) is served exactly as `ReferenceHlsPlaylistTrim` trims the whole session's playlist, with
     and without `HlsSession`'s pruning (`testing/hls/FfmpegHlsPlaylist.ts` writes both).
   - Unit cases: a new ffmpeg whose window starts mid-program, tags at the window's head at session start and later, a
-    gap with and without a tag, the clamp, a failed read, partial and empty windows, numbering that goes back, and a
-    window read with no history.
+    gap with and without a tag, the clamp, a failed read (also the first read of a window), partial and empty
+    windows, numbering that goes back, and a window read with no history.
   - `HlsSession.test.ts`: a request on a 20,000-segment session whose file is a 450-entry window reads under 8 KiB and
     serves the whole-playlist trim.
-  - All of these fail on `main`. The existing reader, mutator and session tests pass unchanged.
+  - 30 of the 31 new tests fail on `main`. The other one pins today's behaviour: after a failed read, a file that lists
+    the whole session is parsed whole again. The existing reader, mutator and session tests pass unchanged.
   - stream-repro, before and after (10 minutes, 2 s segments, eight clips of 15 to 50 s, `--rewind 15`, with a
     playlist poller): the same in both runs.
     - **Capture:** 306 segments from 20 programs, with no findings.
