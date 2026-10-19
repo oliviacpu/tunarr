@@ -18,6 +18,7 @@ import type {
 } from '@/stream/captions/Cea608Encoder.js';
 import {
   buildCaptionSchedule,
+  EraseDisplayedMemory,
   PaddingPair,
 } from '@/stream/captions/Cea608Encoder.js';
 import { insertCaptions } from '@/stream/captions/MpegTsCaptionInserter.js';
@@ -66,6 +67,8 @@ export type HlsSlowerSessionProvider = (
 // One program's captions on the session's output clock (90 kHz MPEG-TS PTS)
 type CaptionTimelineEntry = {
   startPts: number;
+  // The program's planned length, cut short where the next program started
+  // (see endCaptionsAt)
   durationPts: number;
   framePts: number;
   schedule: CaptionSchedule;
@@ -75,6 +78,9 @@ type CaptionTimelineEntry = {
 
 // MPEG-TS timestamps are 33 bits and wrap after about 26.5 hours
 const PtsWrap = 2 ** 33;
+// How far `pts` comes after `startPts` on the 33-bit clock
+const ptsSince = (startPts: number, pts: number) =>
+  (((pts - startPts) % PtsWrap) + PtsWrap) % PtsWrap;
 // Where a session's output clock starts (90 kHz): its first program's
 // -output_ts_offset. At 0, the encoder's B-frame delay makes the first
 // decoding timestamps negative, and the muxer shifts the whole program later
@@ -85,6 +91,10 @@ const PtsWrap = 2 ** 33;
 export const SessionStartPts = 90_000;
 // Captions of this many recent programs are kept, for segments still being served
 const CaptionTimelineLength = 10;
+// Where a program's captions were cut short, the first two frames within this
+// long after the cut that no program's captions cover erase the screen, so a
+// caption left showing goes away (608 sends a control code twice)
+const CaptionCutClearPts = 90_000;
 // A live subtitle playlist with no segments yet (see ensureSubtitlePlaylist)
 const EmptySubtitlePlaylist = [
   '#EXTM3U',
@@ -126,6 +136,8 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
   #currentSubtitleRendition: SubtitleRenditionInfo | undefined;
   #currentAudioRenditions: AudioRenditionInfo[] = [];
   #captionTimeline: CaptionTimelineEntry[] = [];
+  // Where programs' captions were cut short (see endCaptionsAt)
+  #captionCuts: number[] = [];
   // Time spent adding captions to served segments, summed up when the session
   // ends: numbers to decide whether caching captioned segments is worth it
   #captionRewrites = { count: 0, totalMs: 0, maxMs: 0 };
@@ -475,6 +487,12 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
         this.#currentSession = transcodeSession;
         this.#currentSubtitleRendition = programStream.renditions?.subtitle;
         this.#currentAudioRenditions = programStream.renditions?.audio ?? [];
+        // Every program, with captions or without, ends the captions of the
+        // one before it
+        this.endCaptionsAt(
+          ptsOffset,
+          transcodeSession.streamDuration.asMilliseconds() * 90,
+        );
         const captions = programStream.renditions?.captions;
         if (captions) {
           this.addCaptions(ptsOffset, captions);
@@ -601,9 +619,51 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     ].slice(-CaptionTimelineLength);
   }
 
+  // A program's captions stop where the next program, planned to run for
+  // `plannedPts`, starts on the output clock. A transcode advances
+  // transcodedUntil by its planned length before ffmpeg runs, so when ffmpeg
+  // stops early (a crash, or a file shorter than its recorded duration) the
+  // next item starts inside the earlier program's window. Without this, an
+  // item that adds no captions (a gap, an error screen, a commercial without
+  // subtitles) would carry the earlier program's remaining dialogue. Only
+  // frames from the new start on change: they are the new program's.
+  private endCaptionsAt(pts: number, plannedPts: number) {
+    // Starts inside the new program's planned span: the clock went back to
+    // SessionStartPts, because the last segment couldn't be read, and the new
+    // program will reuse these timestamps
+    const inNewProgram = (startPts: number) => {
+      const ahead = ptsSince(pts, startPts);
+      return ahead > 0 && ahead < plannedPts;
+    };
+    let cut = false;
+    for (const entry of this.#captionTimeline) {
+      const offset = ptsSince(entry.startPts, pts);
+      if (offset < entry.durationPts) {
+        entry.durationPts = offset;
+        cut = true;
+      } else if (inNewProgram(entry.startPts)) {
+        entry.durationPts = 0;
+        cut = true;
+      }
+    }
+    // A program cut to nothing would only take a place a program whose
+    // segments are still being served needs
+    this.#captionTimeline = this.#captionTimeline.filter(
+      (entry) => entry.durationPts > 0,
+    );
+    this.#captionCuts = this.#captionCuts.filter(
+      (cutPts) => cutPts !== pts && !inNewProgram(cutPts),
+    );
+    if (cut) {
+      this.#captionCuts = [...this.#captionCuts, pts].slice(
+        -CaptionTimelineLength,
+      );
+    }
+  }
+
   private captionEntryAt(pts: number) {
     for (const entry of this.#captionTimeline.toReversed()) {
-      const offset = (((pts - entry.startPts) % PtsWrap) + PtsWrap) % PtsWrap;
+      const offset = ptsSince(entry.startPts, pts);
       if (offset < entry.durationPts) {
         return { entry, timeMs: (entry.startPts + offset) / 90 };
       }
@@ -621,16 +681,11 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     const readStart = performance.now();
     const segment = await fs.readFile(path.join(this.workingDirectory, file));
     const readMs = performance.now() - readStart;
-    const language =
-      this.#captionTimeline.at(-1)?.language ??
-      this.settingsDB.ffmpegSettings().languagePreferences.preferences[0]
-        ?.iso6392 ??
-      'eng';
 
     // Synchronous, in the segment request's handler, once per viewer
     const rewriteStart = performance.now();
     const captioned = insertCaptions(segment, {
-      language,
+      language: (ptsInOrder) => this.captionLanguage(ptsInOrder[0]),
       pairsForFrames: (ptsInOrder) => this.captionPairs(ptsInOrder),
     });
     const rewriteMs = performance.now() - rewriteStart;
@@ -658,9 +713,26 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
     return captioned.segment;
   }
 
+  // The language a segment's PMT names: that of the program its first frame
+  // belongs to, so a client still fetching one program's last segments after
+  // the next one started gets them in their own language. The first language
+  // preference when no program's captions cover the frame.
+  private captionLanguage(firstPts: number | undefined): string {
+    const entry =
+      firstPts === undefined ? undefined : this.captionEntryAt(firstPts)?.entry;
+    return (
+      entry?.language ??
+      this.settingsDB.ffmpegSettings().languagePreferences.preferences[0]
+        ?.iso6392 ??
+      'eng'
+    );
+  }
+
   // The caption pair for each of a segment's frames, in presentation order
   private captionPairs(ptsInOrder: readonly number[]): CcPair[] {
     const pairs: CcPair[] = ptsInOrder.map(() => PaddingPair);
+    // Frames no program's captions cover
+    const uncovered: { index: number; pts: number }[] = [];
     // Each program's frames in this segment: their places, PTS and times
     const byEntry = new Map<
       CaptionTimelineEntry,
@@ -673,8 +745,22 @@ export class HlsSession extends BaseHlsSession<HlsSessionOptions> {
           ...(byEntry.get(hit.entry) ?? []),
           { index, pts, timeMs: hit.timeMs },
         ]);
+      } else {
+        uncovered.push({ index, pts });
       }
     });
+
+    // Where a program's captions were cut short, what it left on screen is
+    // erased by the first two frames after the cut that no captions cover.
+    // An item with captions of its own replaces it with its first caption.
+    for (const cut of this.#captionCuts) {
+      uncovered
+        .filter((f) => ptsSince(cut, f.pts) < CaptionCutClearPts)
+        .slice(0, 2)
+        .forEach((f) => {
+          pairs[f.index] = EraseDisplayedMemory;
+        });
+    }
 
     for (const [entry, frames] of byEntry) {
       // The schedule assumes the program's frame rate. If the frames are

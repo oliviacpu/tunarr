@@ -59,7 +59,7 @@ describe('FillerDB.deleteFiller', () => {
           '{}',
           'Test Channel',
           999999,
-          '{}',
+          JSON.stringify({ musicListId: fillerUuid, mode: 'pic' }),
           0,
           'test-transcode-config',
         );
@@ -79,6 +79,10 @@ describe('FillerDB.deleteFiller', () => {
       const fillerDb = new FillerDB(db, drizzle);
 
       await fillerDb.deleteFiller(fillerUuid);
+      const channel = conn.sqlite
+        .prepare('SELECT offline FROM channel WHERE uuid = ?')
+        .get(channelUuid) as { offline: string };
+      expect(JSON.parse(channel.offline)).toEqual({ mode: 'pic' });
 
       const fillerCount = conn.sqlite
         .prepare('SELECT COUNT(*) AS count FROM filler_show WHERE uuid = ?')
@@ -164,6 +168,16 @@ describe('FillerDB content resolution', () => {
       }
       const fillerDb = new FillerDB(db, drizzle);
 
+      const gapPrograms = await fillerDb.getGapMusicPrograms(fillerUuid);
+      expect(gapPrograms).toHaveLength(1);
+      expect(Object.keys(gapPrograms[0]).sort()).toEqual([
+        'artist',
+        'artistName',
+        'duration',
+        'state',
+        'type',
+        'uuid',
+      ]);
       const programs = await fillerDb.getFillerPrograms(fillerUuid);
       expect(programs).toHaveLength(1);
       expect(programs[0]?.uuid).toBe(programUuid);
