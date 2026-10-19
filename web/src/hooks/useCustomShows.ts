@@ -25,7 +25,12 @@ type OverridableCustomShowQueryOptions<TOut> = StrictOmit<
 export const customShowsQuery = <TOut = CustomShow[]>(
   opts?: OverridableCustomShowQueryOptions<TOut>,
 ) =>
-  ({ ...getApiCustomShowsOptions(), ...(opts ?? {}) }) as UseQueryOptions<
+  ({
+    ...getApiCustomShowsOptions(),
+    refetchInterval: (query) =>
+      query.state.data?.some((show) => show.isSyncing) ? 1_000 : false,
+    ...(opts ?? {}),
+  }) as UseQueryOptions<
     CustomShow[],
     Error,
     TOut,

@@ -29,7 +29,7 @@ export class MediaSourceScanCoordinator {
   // the first
   private readonly customShowSyncs = new Map<
     string,
-    { settled: Promise<ScanOutcome>; priority: number }
+    ScanJobHandle & { priority: number }
   >();
   private shuttingDown = false;
 
@@ -182,6 +182,20 @@ export class MediaSourceScanCoordinator {
     });
   }
 
+  // An idle request waits for the sync; a busy one waits only for acceptance.
+  async syncCustomShowForRequest(customShowId: string): Promise<void> {
+    const busy = this.inFlight.size > 0 || this.customShowSyncs.size > 0;
+    const sync = this.queueCustomShowSync(customShowId, true);
+    if (busy) {
+      void sync.completed.catch((error) =>
+        this.logger.error(error, 'Queued custom show sync failed'),
+      );
+      await sync.accepted;
+      return;
+    }
+    await sync.completed;
+  }
+
   /**
    * Syncs a custom show from its external playlist, in the scan queue: in a
    * scan worker when there is one, one job at a time. Resolves with the
@@ -195,6 +209,13 @@ export class MediaSourceScanCoordinator {
     customShowId: string,
     { priority = false }: { priority?: boolean } = {},
   ): Promise<ScanOutcome> {
+    return this.queueCustomShowSync(customShowId, priority).completed;
+  }
+
+  private queueCustomShowSync(
+    customShowId: string,
+    priority: boolean,
+  ): ScanJobHandle {
     const wanted = priority ? 1 : 0;
     const jobId = `custom_show.${customShowId}`;
     const existing = this.customShowSyncs.get(customShowId);
@@ -204,10 +225,10 @@ export class MediaSourceScanCoordinator {
         existing.priority = wanted;
         this.raisePriority(jobId, wanted);
       }
-      return existing.settled;
+      return existing;
     }
 
-    const settled = this.enqueue({
+    const queued = this.enqueue({
       id: jobId,
       label: `custom show ${customShowId}`,
       getLock: () => this.entityMutex.getLockForCustomShow(customShowId),
@@ -215,29 +236,33 @@ export class MediaSourceScanCoordinator {
       // A sync never reconciled channel durations, and still doesn't
       reconcileDurations: false,
       priority: wanted,
-    }).then((queued) => {
+    });
+    const accepted = queued.then((queued) => queued !== undefined);
+    void accepted.catch(() => {});
+    const completed = queued.then((queued) => {
       if (queued === undefined) {
         throw new Error(
           `Could not queue a sync of custom show ${customShowId}`,
         );
       }
       // Raised by a request that joined while this one was being queued
-      const raised = this.customShowSyncs.get(customShowId)?.priority ?? wanted;
+      const raised = handle.priority;
       if (raised > wanted) {
         this.raisePriority(jobId, raised);
       }
       return queued.settled;
     });
-    this.customShowSyncs.set(customShowId, { settled, priority: wanted });
+    const handle = { accepted, completed, priority: wanted };
+    this.customShowSyncs.set(customShowId, handle);
     // Failures are logged where the job runs; callers see them too
-    void settled
-      .catch(() => {})
+    void completed
       .finally(() => {
-        if (this.customShowSyncs.get(customShowId)?.settled === settled) {
+        if (this.customShowSyncs.get(customShowId) === handle) {
           this.customShowSyncs.delete(customShowId);
         }
-      });
-    return settled;
+      })
+      .catch(() => {});
+    return handle;
   }
 
   // Whether a sync of the custom show is queued or running
@@ -401,4 +426,9 @@ type LocalScanRequest = {
   mediaSourceId: MediaSourceId;
   forceScan: boolean;
   pathFilter?: string;
+};
+
+type ScanJobHandle = {
+  accepted: Promise<boolean>;
+  completed: Promise<ScanOutcome>;
 };
