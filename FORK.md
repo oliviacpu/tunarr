@@ -26,7 +26,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### A repeated audio track is filtered once, not once per slot (2026-10-19)
+### A repeated audio track is filtered once, not once per slot (2026-10-19, PR #81)
 
 - **What you saw:** nothing on screen. The fork review of 2026-10-19 (task T32) found that with a channel audio track
   layout such as `eng, jpn`, a program with only English audio repeats its English track in the `jpn` slot, and ffmpeg
