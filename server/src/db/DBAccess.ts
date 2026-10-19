@@ -1,3 +1,4 @@
+import { databaseTuning } from './databaseTuning.ts';
 import type { TunarrMigrationInfo } from '@/migration/DrizzleMigrator.js';
 import { DrizzleMigrator } from '@/migration/DrizzleMigrator.js';
 import { attempt, isNonEmptyString } from '@/util/index.js';
@@ -48,6 +49,7 @@ export const MigrationLockTableName = 'migration_lock';
  * settings: a worker waiting on the disk blocks nothing else.
  */
 export function connectionPragmas(mainThread: boolean): string[] {
+  const tuning = databaseTuning();
   return [
     // Write to a separate WAL file, reads continue from main database
     // Multiple readers can work simultaneously with one writer.
@@ -62,13 +64,15 @@ export function connectionPragmas(mainThread: boolean): string[] {
           // Up to 256 MiB of pages in this process's own memory (negative =
           // KiB): room for the whole database of a large install. Another
           // connection's write empties it, so it refills after scans.
-          'cache_size = -262144',
-          'mmap_size = 0',
+          `cache_size = -${tuning.cacheKiB ?? 262144}`,
+          `mmap_size = ${tuning.mmapBytes ?? 0}`,
         ]
       : [
           // Keeps 10k DB pages in RAM; adds about 40MB of memory overhead.
-          'cache_size = 10000',
-          'mmap_size = 268435456',
+          tuning.cacheKiB === undefined
+            ? 'cache_size = 10000'
+            : `cache_size = -${tuning.cacheKiB}`,
+          `mmap_size = ${tuning.mmapBytes ?? 268435456}`,
         ]),
     'foreign_keys = ON',
   ];

@@ -108,6 +108,7 @@ export const Program = sqliteTable(
     index('program_artist_uuid_index').on(table.artistUuid),
     index('program_media_source_id_index').on(table.mediaSourceId),
     index('program_media_library_id_index').on(table.libraryId),
+    index('program_library_uuid_index').on(table.libraryId, table.uuid),
     uniqueIndex(
       'program_source_type_external_source_id_external_key_unique',
     ).on(table.sourceType, table.externalSourceId, table.externalKey),

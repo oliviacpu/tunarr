@@ -1,3 +1,4 @@
+import type * as FileCacheModule from './readIntoFileCache.ts';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,8 +8,7 @@ import { readIntoFileCache } from './readIntoFileCache.ts';
 
 // The real read, watched
 vi.mock('./readIntoFileCache.ts', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('./readIntoFileCache.ts')>();
+  const actual = await importOriginal<typeof FileCacheModule>();
   return { ...actual, readIntoFileCache: vi.fn(actual.readIntoFileCache) };
 });
 
@@ -104,6 +104,25 @@ describe('DatabaseFileWarmer', () => {
 
     // Codex on PR #51: the startup read stops at 512 MiB, which would leave a
     // larger database's end, and its WAL, uncached
+    test.each(['0', '100'])(
+      'skips a guide warm-up beyond the configured cap %s',
+      async (cap) => {
+        const db = path.join(dir, 'db.db');
+        await fs.writeFile(db, Buffer.alloc(1024));
+        vi.stubEnv('TUNARR_DB_WARMUP_MAX_BYTES', cap);
+        try {
+          vi.mocked(readIntoFileCache).mockClear();
+          expect(await new DatabaseFileWarmer(() => [db]).warm()).toEqual({
+            bytes: 0,
+            ms: 0,
+          });
+          expect(readIntoFileCache).not.toHaveBeenCalled();
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      },
+    );
+
     test('reads every byte, without the startup read’s cap', async () => {
       const db = path.join(dir, 'db.db');
       await fs.writeFile(db, Buffer.alloc(4096, 1));

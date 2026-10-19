@@ -12,6 +12,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type stream from 'node:stream';
 import { LastNBytesStream } from '../util/LastNBytesStream.ts';
+import {
+  RedactSecretsStream,
+  redactErrorSecrets,
+  redactSecrets,
+} from '../util/redactSecrets.ts';
 
 export type FfmpegEvents = {
   // Emitted when the process ended with a code === 0, i.e. it exited
@@ -73,10 +78,7 @@ export class FfmpegProcess extends events.EventEmitter<FfmpegEvents> {
       return this.#processHandle!.stdout;
     }
 
-    const argsWithTokenRedacted = this.ffmpegArgs
-      .join(' ')
-      .replaceAll(/(X-Plex-Token=)([A-z0-9_\\-]+)/g, '$1REDACTED')
-      .replaceAll(/(X-Emby-Token:\s)([A-z0-9_\\-]+)/g, '$1REDACTED');
+    const argsWithTokenRedacted = redactSecrets(this.ffmpegArgs.join(' '));
 
     this.#logger.debug(
       `Starting ffmpeg with args: "%s"`,
@@ -116,13 +118,18 @@ export class FfmpegProcess extends events.EventEmitter<FfmpegEvents> {
 
     this.#running = true;
 
+    // ffmpeg prints its input URLs, media-server tokens included, so its
+    // stderr is redacted before anything reads it.
+    const redactedStderr = new RedactSecretsStream();
+    const stderr = this.#processHandle.stderr.pipe(redactedStderr);
+
     // Pipe to our own stderr if enabled
     if (this.ffmpegSettings.enableLogging) {
-      this.#processHandle.stderr.pipe(process.stderr, { end: false });
+      stderr.pipe(process.stderr, { end: false });
     }
 
     const bufferedOut = new LastNBytesStream({ bufSizeBytes: 25 * 1024 });
-    this.#processHandle.stderr.pipe(bufferedOut);
+    stderr.pipe(bufferedOut);
 
     if (this.#processKilled) {
       this.#logger.debug('Sending SIGKILL to ffmpeg');
@@ -131,7 +138,11 @@ export class FfmpegProcess extends events.EventEmitter<FfmpegEvents> {
     }
 
     this.#processHandle.on('error', (error) => {
-      this.#logger.error(error, `${this.ffmpegName} received error event`);
+      // A failed spawn's error lists the arguments (spawnargs).
+      this.#logger.error(
+        redactErrorSecrets(error),
+        `${this.ffmpegName} received error event`,
+      );
     });
 
     this.#processHandle.on('close', () => {
@@ -177,7 +188,10 @@ export class FfmpegProcess extends events.EventEmitter<FfmpegEvents> {
           outPath,
         );
 
-        const bufferedBytes = bufferedOut.getLastN().toString('utf-8');
+        // The redactor holds back an unfinished last line; it may be the one
+        // that says what went wrong.
+        const bufferedBytes =
+          bufferedOut.getLastN().toString('utf-8') + redactedStderr.heldLine;
         this.#logger.error(bufferedBytes);
         fs.writeFile(
           outPath,
