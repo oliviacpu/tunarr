@@ -41,12 +41,22 @@ These settings trade a little efficiency for a faster tune-in on channels that u
 
 | Setting | Default | What it does |
 |---|---|---|
-| **HLS Segment Length (seconds)** | 4 | Length of each HLS segment, with a keyframe at every segment start. Shorter segments are ready sooner; their extra keyframes cost a little picture quality at the same bitrate. HLS Direct (v2) channels copy their source's video and keep 4 s segments. |
+| **HLS Segment Length (seconds)** | 4 | Length of each HLS segment, with a keyframe at every segment start. Shorter segments are ready sooner; their extra keyframes cost a little picture quality at the same bitrate. HLS Direct (v2) channels copy their source's video and use a fixed four-second target, cutting at source keyframes. |
 | **Segments Before Playback** | 2 | How many segments must exist before a client gets the playlist. Segment length × this count is roughly the video encoded before the first byte is sent. Tunarr checks for them every 100 ms and waits up to 15 s. |
 | **MPEG-TS Start-up Burst (seconds)** | 0 | HDHomeRun clients such as Plex read an HLS channel as one `.ts` stream, made by reading the channel's playlist at real-time pace. With a burst, that reader first sends up to this many seconds of video as fast as it is available, so the client's buffer fills at once. 0 turns it off. |
-| **Read-ahead Thread Limit** | 16 | A transcode that reads ahead of real time (the first one after a viewer tunes in, or one catching up) gets more encoder threads, up to this limit and no more than the CPU cores Tunarr may run on, so the first seconds of video arrive sooner. It never lowers a transcode config's [Thread Count](transcode_config.md), and a Thread Count of 0 (automatic) is left to FFmpeg. 0 turns the increase off. Unlike the settings above, it applies from the next program. |
+| **Read-ahead Thread Limit** | 16 | While HLS prepares video ahead of playback (the first transcode after a viewer tunes in, or one catching up), it raises the transcode config's thread count up to this limit, and no higher than the CPU cores Tunarr may run on, so the first seconds of video arrive sooner. It never lowers a config's count, and an automatic (0) count stays automatic. 0 turns the increase off. Unlike the settings above, it applies from the next program. See [Read-ahead threads](transcode_config.md#read-ahead-threads). |
 
 For example, when the encoder runs near real time, 2 s segments with a 10 s burst send a cold channel's first byte in about half the time of the defaults (4 s instead of 8 s), and fill the client's buffer faster after that.
+
+The served HLS playlist keeps up to 20 segments, with up to 10 segments of history
+before the playback point. For regular HLS, the default four-second segment length
+corresponds to roughly an 80-second window and 40-second history; changing **HLS
+Segment Length** changes these durations.
+
+HLS Direct v2 uses a fixed four-second target, unaffected by **HLS Segment Length**.
+Its copied video can only be cut at source keyframes, so actual segment lengths
+vary and a 20-segment window does not necessarily span 80 seconds. Alternate HLS
+also retains its fixed four-second segment configuration.
 
 ### FFmpeg Transcode Path
 
@@ -118,8 +128,14 @@ When using the **HLS Direct v2** stream mode, text-based subtitles (embedded or 
 
 Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. That stream can't carry a selectable subtitle track, so Tunarr normally burns subtitles into the picture. With **Closed captions for HDHomeRun clients (Plex)** turned on, Tunarr sends them as CEA-608 closed captions instead. Viewers switch them on and off with their player's subtitles or CC button.
 
+When more than 10% of a subtitle track's cues contain characters CEA-608 cannot
+represent, Tunarr keeps that track for burn-in rather than presenting partial or
+empty captions. A warning reports the affected cue and character counts. CEA-608
+cannot represent Japanese and many other scripts; WebVTT and burn-in do not have
+that character restriction.
+
 - **Which subtitles:** the program's full text subtitles become captions. If the channel's subtitle selection picks forced subtitles (for example, only the foreign-language lines of an English program), those stay burned in, and the program's full subtitles in your preferred language become the captions. Before 2026-10-18, Tunarr read every subtitle track inside a video file as not forced: subtitle selection that asks for forced subtitles never found one, and a forced track (an English dub's "Signs & Songs", say) could become the captions instead of the full one. Tunarr now keeps the flag the media server (or, for a local library, the file) reports, and corrects programs scanned before when it starts.
-- **No longer burned in:** full text subtitles that would have been burned in for the whole program are sent as captions instead, so viewers who want them must turn captions on. Tunarr's own players get them as selectable WebVTT subtitles. Full text subtitles that can't become captions (the program's frame rate is unknown, the file can't be read, or more than 1 cue in 10 has characters captions can't show) are burned in instead, even with the WebVTT sidecar option on, so HDHomeRun viewers still see them.
+- **No longer burned in:** full text subtitles that would have been burned in for the whole program are sent as captions instead, unless the character-support fallback above requires burn-in, so viewers who want captions must turn them on. Tunarr's own players get them as selectable WebVTT subtitles. Full text subtitles that can't become captions (that fallback, a program whose frame rate is unknown, or a file that can't be read) are burned in even with the WebVTT sidecar option on, so HDHomeRun viewers still see them.
 - **Always burned in:** image-based subtitles (PGS, VobSub) can't become captions and are still burned in.
 - **Requirements:** text subtitles on disk, either sidecar files or [extracted](#subtitle-extraction) ones. The channel must use the **HLS** stream mode and have subtitles enabled, and its [transcode config](transcode_config.md) must output H.264 video (its **Video Format**). The caption track is only added on those channels: on a channel with subtitles off, the `.ts` stream is left untouched, as with the switch off. Captions can only be added to H.264 video: with HEVC or MPEG-2 output, the whole channel is treated as with the switch off. Its subtitles are burned in as with captions off, programs without subtitles get no notice, and its `.ts` stream has no caption track. When the channel's `.ts` stream starts, the log says so once at info level. A channel whose HLS session was started with captions off keeps them off until that session restarts, even after the switch or the channel's subtitles are turned on, and the log says that instead. Before 2026-10-18, such a channel's full text subtitles were neither burned in nor sent as captions. Until 2026-10-19, its `.ts` stream still offered a caption track that never showed anything.
 - **Formatting:** italics and underline from the subtitle file (`<i>`, `<u>`, and ASS `{\i1}`, `{\u1}`) are kept. Other formatting (bold, colors, fonts) is dropped, and so is the text of ASS vector drawings.
