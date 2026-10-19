@@ -26,6 +26,21 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Reloading or closing a clean editor no longer asks "Leave site?" (2026-10-19)
+
+- **What you saw:** the browser's "Leave site?" dialog on reload or tab close with nothing changed, on every page that
+  warns about unsaved changes: the channel editor, the programming page, both slot editors, and the FFmpeg, XMLTV
+  and HDHR settings pages.
+- **Cause:** `UnsavedNavigationAlert` called TanStack Router's `useBlocker` without `enableBeforeUnload`, which
+  defaults to on. The browser-level handler in `@tanstack/history` reads only that option and never calls
+  `shouldBlockFn`, so the dirty check guarded in-app navigation but not reload or close.
+- **Fix:** `UnsavedNavigationAlert.tsx` passes `enableBeforeUnload: isDirty`, so the browser dialog follows the same
+  dirty state as the in-app one. In-app blocking and `exceptTargetPaths` are unchanged.
+- **Tests:** `UnsavedNavigationAlert.test.tsx` mocks `useBlocker`: the browser prompt is off for a clean form, on for
+  a dirty one, and follows `isDirty` across re-renders; `shouldBlockFn` blocks only a dirty form and lets it reach an
+  exempt path.
+- **Upstream:** not sent.
+
 ### The Live TV playlist reader keeps the session's history itself (2026-10-19, PR #84)
 
 - **What you saw:** nothing yet. This prepares the fix for `stream.m3u8` growing for as long as a session runs
