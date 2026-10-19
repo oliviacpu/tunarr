@@ -42,6 +42,7 @@ const { values: opt } = parseArgs({
     hwaccel: { type: 'string' },
     'vaapi-device': { type: 'string' },
     'thread-count': { type: 'string' },
+    'transcode-setting': { type: 'string', multiple: true, default: [] },
     schedule: { type: 'string' },
     'sar-override': { type: 'string' },
     'subs-start': { type: 'string', default: '0' },
@@ -462,20 +463,28 @@ async function offlineSettings(base) {
   return offline;
 }
 
-// Applies --resolution, --hwaccel, --vaapi-device, and --thread-count to the channel's transcode config.
+// Applies --resolution, --hwaccel, --vaapi-device, --thread-count and --transcode-setting to the channel's
+// transcode config.
 async function applyTranscodeConfig(base, transcodeConfigId) {
-  const patch = {};
-  if (resolution) patch.resolution = resolution;
-  if (opt.hwaccel !== undefined) patch.hardwareAccelerationMode = opt.hwaccel;
-  if (opt['vaapi-device'] !== undefined) patch.vaapiDevice = opt['vaapi-device'];
-  if (opt['thread-count'] !== undefined) patch.threadCount = Number(opt['thread-count']);
+  const patch = { ...transcodeFlagOverrides, ...transcodeOverrides };
   if (Object.keys(patch).length === 0) return undefined;
   const tc = await api(base, 'GET', `/api/transcode_configs/${transcodeConfigId}`);
   await api(base, 'PUT', `/api/transcode_configs/${transcodeConfigId}`, { ...tc, ...patch });
   const saved = await api(base, 'GET', `/api/transcode_configs/${transcodeConfigId}`);
-  const ignored = Object.keys(patch).filter((k) => JSON.stringify(saved[k]) !== JSON.stringify(patch[k]));
+  const ignored = Object.keys(patch).filter((k) => !savedMatches(saved[k], patch[k]));
   if (ignored.length) throw new Error(`transcode config not applied: ${ignored.join(', ')}`);
   return patch;
+}
+
+// Whether a saved value took a requested one. An object only has to carry the fields it was given: the server fills
+// in defaults (a loudnorm config given only `i`) and writes keys back in its own order.
+function savedMatches(saved, wanted) {
+  if (wanted !== null && typeof wanted === 'object' && !Array.isArray(wanted)) {
+    return (
+      saved !== null && typeof saved === 'object' && Object.keys(wanted).every((k) => savedMatches(saved[k], wanted[k]))
+    );
+  }
+  return JSON.stringify(saved) === JSON.stringify(wanted);
 }
 
 // key=value pairs; values parse as JSON when they can (true, 3, "x", ["eng","jpn"]), and as plain strings otherwise.
@@ -497,6 +506,19 @@ function parseKeyValues(pairs, flag) {
 }
 
 const channelOverrides = parseKeyValues(opt['channel-setting'], '--channel-setting');
+
+// Transcode config fields from their own options, then from --transcode-setting. A field set both ways is an error,
+// since one would silently replace the other.
+const transcodeFlagOverrides = {};
+if (resolution) transcodeFlagOverrides.resolution = resolution;
+if (opt.hwaccel !== undefined) transcodeFlagOverrides.hardwareAccelerationMode = opt.hwaccel;
+if (opt['vaapi-device'] !== undefined) transcodeFlagOverrides.vaapiDevice = opt['vaapi-device'];
+if (opt['thread-count'] !== undefined) transcodeFlagOverrides.threadCount = Number(opt['thread-count']);
+const transcodeOverrides = parseKeyValues(opt['transcode-setting'], '--transcode-setting');
+const setTwice = Object.keys(transcodeOverrides).filter((k) => k in transcodeFlagOverrides);
+if (setTwice.length) {
+  throw new Error(`--transcode-setting sets ${setTwice.join(', ')}, which another option already sets`);
+}
 
 // --channel-setting fields of the channel: a synthetic channel is created with them (an update would round its
 // startTime to the minute); a copied channel is updated. Either way a field that didn't stick fails the run.
