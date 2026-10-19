@@ -26,6 +26,57 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### A repeated audio track is filtered once, not once per slot (2026-10-19, PR #81)
+
+- **What you saw:** nothing on screen. The fork review of 2026-10-19 (task T32) found that with a channel audio track
+  layout such as `eng, jpn`, a program with only English audio repeats its English track in the `jpn` slot, and ffmpeg
+  ran the whole audio filter chain once per slot on identical input, loudnorm included.
+- **Measured** before changing anything. Tunarr's own command, captured by stream-repro for `audioTracks: ["eng","jpn"]`,
+  an English-only program and loudnorm `I=-24:LRA=7:TP=-2`, was run on 120 s of input without `-readrate`, against the
+  same command with one chain and `asplit` (ffmpeg 9.0.2, a 14-core Mac, user CPU seconds, medians):
+
+  | Output                      | One chain per slot | One chain + `asplit` | Saved          |
+  | --------------------------- | ------------------ | -------------------- | -------------- |
+  | 1080p x264, stereo AAC 192k | 63.37 / 61.91 s    | 58.92 / 59.00 s      | 7.0% / 4.7%    |
+  | 1080p x264, 5.1 AC3 384k    | 48.62 s            | 40.90 s              | 7.7 s, **16%** |
+
+  - The stereo row is two rounds of five runs. The audio path alone (`-vn`) shows the same saving with less noise:
+    8.70 → 5.66 s stereo (4.8% of the whole process) and 16.99 → 8.93 s for 5.1.
+  - A second loudnorm costs as much as the first. loudnorm resamples to 192 kHz internally, so the cost grows with
+    the channel count.
+  - With 5.1 the repeated loudnorm also held back the whole transcode. The filter graph runs in one thread, so the
+    run took 16.9 s of wall time instead of 8.6 s.
+
+- **Cause:** `ComplexFilter` built one chain per output track:
+  `[0:1]aresample=async=1,apad,loudnorm=…,aresample=48000[a0];[0:1]aresample=async=1,apad,loudnorm=…[a1]`.
+- **Fix:** `ComplexFilter.ts` builds one chain per source stream. Slots that repeat a source share its chain, split
+  after the filters: `[0:1]aresample=async=1,apad,loudnorm=…,aresample=48000,asplit=2[a0][a1]`.
+  - Volume, loudnorm and the gap-music fades run once per source.
+  - Labels, `-map`s and `-metadata:s:a:N language=` tags stay in slot order.
+  - A single track, and a layout whose slots all use different streams, build the same command as before.
+- **Verified** with stream-repro before and after, using layout `eng, jpn` on English-only clips with loudnorm on (the
+  new `--transcode-setting` option turns it on):
+
+  | Mode            | Before                              | After                    |
+  | --------------- | ----------------------------------- | ------------------------ |
+  | HLS, stereo     | 12/12 segments `[eng 2ch, jpn 2ch]` | 13/13 segments, the same |
+  | HLS, 5.1 AC3    | 9/9 segments `[eng 6ch, jpn 6ch]`   | 9/9 segments, the same   |
+  | MPEG-TS         | the whole capture `[eng, jpn]`      | the same                 |
+  | HDHomeRun `.ts` | the whole capture `[eng, jpn]`      | the same                 |
+
+  - Audio timestamps at the program join are identical before and after.
+  - The `.ts` capture flags a one-packet audio overlap at the join, before and after. A second one appears when the
+    tune-in seek puts the next program one video frame later. That depends on the tune-in time, not on this change.
+
+- **Tests:** `BasePipelineBuilder.test.ts`:
+  - a repeated source with volume, padding, loudnorm and both fades gives one chain with one `loudnorm`, the fades
+    after it, then `asplit=2[a0][a1]`, with maps `[a0] [a1]` and tags `eng`, `jpn`;
+  - three slots whose first and third share a source split only those two, and keep the output order;
+  - distinct sources with loudnorm give exactly the graph from before;
+  - with the audio copied, a repeated source is mapped twice.
+  - The first two fail without the fix.
+- **Upstream:** not sent.
+
 ### MPEG-TS states no longer inherit an earlier HLS session's output format (2026-10-19)
 
 - **What you saw:** not reported from the deployment. The `videoPreset wiring` tests in `FfmpegStreamFactory.test.ts`
@@ -1396,9 +1447,10 @@ ve{\3c&H000000&}ry end ♪`. The default box ("player") sends no box codes and w
     3. otherwise the main track again, so the list never changes.
   - **Recommended Anime setting:** `eng, jpn`, English first, as the user chose.
 - **How** (plans/switchable-audio.md):
-  - **Builder:** several streams on an audio input each get their own filter chain, label and `-map`
-    (`ComplexFilter`), language tag (`-metadata:s:a:<i>`), and `-ac` whenever any source differs. One stream keeps
-    exactly today's arguments.
+  - **Builder:** several streams on an audio input each get their own label and `-map` (`ComplexFilter`), language
+    tag (`-metadata:s:a:<i>`), and `-ac` whenever any source differs. Each source stream gets one filter chain, shared
+    by the slots that repeat it (see "A repeated audio track is filtered once" above). One stream keeps exactly today's
+    arguments.
   - **Stream factory:** builds the slots (`AudioTrackLayout.ts`) for programs and placeholders.
   - **HLS alt:** its concat re-encodes audio streams 1..N.
   - **MPEG-TS:** its concat maps every stream (`-map 0`) instead of ffmpeg's pick of one audio track.

@@ -81,6 +81,7 @@ restarts. So a channel only gets a working audio menu when the tracks never chan
 - **A program with that language** uses its own track for the slot. Among several tracks in that language, commentary
   tracks are skipped; then the selected, the default, or the first track wins.
 - **A program without that language** repeats its main audio in that slot, so the menu still has the same entries.
+  The repeated track is processed once (volume, loudness normalization) and copied into each slot that uses it.
 - **Every track is encoded** with the channel's transcode configuration (codec, bitrate, channels, sample rate). Each
   extra track costs one more audio encode.
 - **Every track is in the `.ts` stream Plex reads from the start.** That stream waits up to 15 seconds for a track whose
