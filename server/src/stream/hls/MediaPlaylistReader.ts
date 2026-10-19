@@ -85,8 +85,10 @@ export class MediaPlaylistReader {
   #mutator = new HlsPlaylistMutator();
   #index: MediaPlaylistIndex | undefined;
   // Whether the byte anchors below describe #index. A windowed read parses
-  // by segment number and leaves them stale.
+  // by segment number and leaves them stale, and so can a failed read.
   #byteAnchored = false;
+  // Whether #index continues a window of the file (MEDIA-SEQUENCE above 0)
+  #windowed = false;
   // Length of the body prefix (from the first #EXTINF line) parsed into #index
   #parsedBytes = 0;
   // The first and last (up to) AnchorBytes of that prefix
@@ -207,12 +209,10 @@ export class MediaPlaylistReader {
     try {
       return await this.#updateIndex(handle, size, start, opts, forceFullParse);
     } catch (e) {
-      // A byte-anchored index may no longer match #parsedBytes: start over
-      // next time. A windowed read changes the index only once its reads
-      // succeed, and a window can't rebuild the history, so it is kept.
-      if (this.#byteAnchored) {
-        this.#index = undefined;
-      }
+      // The byte anchors may no longer match the index, so a file that lists
+      // the whole session is parsed whole next time. The index is kept: it
+      // holds only entries the file listed, and a window can't rebuild them.
+      this.#byteAnchored = false;
       throw e;
     }
   }
@@ -227,7 +227,7 @@ export class MediaPlaylistReader {
     const head = await findBody(handle, size);
     if (head === undefined) {
       const index = this.#continuableIndex(start);
-      if (!this.#byteAnchored && index?.lastSegment !== undefined) {
+      if (this.#windowed && index?.lastSegment !== undefined) {
         // A window with no entries can't take back what was listed
         return { index, rest: [], windowed: true };
       }
@@ -271,8 +271,9 @@ export class MediaPlaylistReader {
     }
 
     if (chunk === undefined) {
-      this.#reset(start);
+      // Read before resetting, so a failed read keeps the index
       chunk = await readRange(handle, bodyStart, size);
+      this.#reset(start);
       this.#stats.fullParses++;
     } else {
       this.#stats.incrementalReads++;
@@ -314,6 +315,7 @@ export class MediaPlaylistReader {
       );
     }
     this.#byteAnchored = false;
+    this.#windowed = true;
 
     // The last segment parsed is usually among the last few entries
     let from = Math.max(head.bodyStart, size - TailReadBytes);
@@ -414,6 +416,7 @@ export class MediaPlaylistReader {
     );
     this.#reset(start);
     this.#byteAnchored = false;
+    this.#windowed = true;
     const index = this.#requireIndex();
     index.skipTime(mediaSequence * targetDuration * 1000);
     const chunk = await readFrom(handle, head, head.bodyStart, size);
@@ -434,6 +437,7 @@ export class MediaPlaylistReader {
   #reset(start: Dayjs) {
     this.#index = new MediaPlaylistIndex(start);
     this.#byteAnchored = true;
+    this.#windowed = false;
     this.#parsedBytes = 0;
     this.#head = Buffer.alloc(0);
     this.#tail = Buffer.alloc(0);

@@ -793,8 +793,8 @@ describe('MediaPlaylistReader on a window of the playlist', () => {
     }
   }
 
-  it('keeps its history when a read fails', async () => {
-    await readFiftySegments();
+  // A request whose first read of the file fails
+  async function expectFailedRequest(filter: HlsPlaylistFilterOptions) {
     const probe = await fs.open(file, 'r');
     const fileHandle = Object.getPrototypeOf(probe) as typeof probe;
     await probe.close();
@@ -802,18 +802,48 @@ describe('MediaPlaylistReader on a window of the playlist', () => {
       .spyOn(fileHandle, 'read')
       .mockRejectedValueOnce(new Error('EIO'));
     try {
-      session.segments(2);
-      await write(session.window(10));
-      await expect(reader.trim(start, afterSegment(50), opts)).rejects.toThrow(
-        'EIO',
-      );
+      await expect(reader.trim(start, filter, opts)).rejects.toThrow('EIO');
     } finally {
       read.mockRestore();
     }
+  }
+
+  it('keeps its history when a read fails', async () => {
+    await readFiftySegments();
+    session.segments(2);
+    await write(session.window(10));
+    await expectFailedRequest(afterSegment(50));
 
     await expectWindowSameAsWholeSession(10, afterSegment(51));
     expect(warn).not.toHaveBeenCalled();
     expect(reader.stats.fullParses).toBe(1);
+  });
+
+  it('keeps its history when its first read of a window fails', async () => {
+    // Read while the file still lists the whole session
+    session.segments(5);
+    await expectWindowSameAsWholeSession(10, afterSegment(0));
+    session.segments(5);
+    await expectWindowSameAsWholeSession(10, afterSegment(5));
+    // The window starts sliding
+    session.segments(5);
+    await write(session.window(10));
+    await expectFailedRequest(afterSegment(14));
+
+    await expectWindowSameAsWholeSession(10, afterSegment(14));
+    expect(warn).not.toHaveBeenCalled();
+    expect(reader.stats.fullParses).toBe(1);
+  });
+
+  it('parses a whole-session file again after a failed read', async () => {
+    session.segments(5);
+    await expectWindowSameAsWholeSession(10, afterSegment(0));
+    session.segments(2);
+    await write(session.window(10));
+    await expectFailedRequest(afterSegment(6));
+
+    await expectWindowSameAsWholeSession(10, afterSegment(6));
+    expect(reader.stats.fullParses).toBe(2);
   });
 
   it('keeps its history when the window has no complete entry', async () => {
