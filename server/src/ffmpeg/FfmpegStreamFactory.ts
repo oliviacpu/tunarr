@@ -762,6 +762,11 @@ export class FfmpegStreamFactory {
         captions = loaded.captions;
         subtitleFile = loaded.file;
       }
+      // A caption candidate that didn't load as captions (no frame rate, a
+      // read error, or more than 10% of its cues beyond CEA-608) is burned in,
+      // even with the WebVTT sidecar flag on: as WebVTT alone it would reach
+      // Tunarr's own HLS players, but HDHomeRun viewers (Plex) would get no
+      // subtitles at all. This is deliberate.
       const useSidecar =
         ((sidecarEnabled && !captionCandidate) || captions !== undefined) &&
         canUseSidecar;
