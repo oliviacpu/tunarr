@@ -8,11 +8,6 @@ export const setGuideDurationState = (duration: number) => {
   });
 };
 
-export const setThemePreference = (pref: 'light' | 'dark' | 'system') =>
-  useStore.setState((state) => {
-    state.theme.themePreference = pref;
-  });
-
 export const updateShowWelcomeState = () => {
   useStore.setState((state) => {
     state.theme.showWelcome = !state.theme.showWelcome;
