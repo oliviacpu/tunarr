@@ -73,6 +73,14 @@ const awkward = [
   '\f/form feed and vertical tab/x.srt\v',
   'C:\\Users\\viewer\\Videos\\Show\\ep.srt',
   'http://127.0.0.1:8096/Videos/abc/Subtitles/3/0/Stream.srt?api_key=k:v&x=[1]',
+  // Upstream's cases (SubtitleFilter.test.ts and SubtitleFilter.local.test.ts)
+  "/media/Maggie's Plan/Maggie's_Plan.he.srt",
+  '/media/Juliet, Naked/Juliet,_Naked.he.srt',
+  '/media/Title: Part; Cut = Final [2026]\\Movie.he.srt',
+  "C:\\Movies\\Title's.srt",
+  'http://example.test:8096/Title, Name.srt',
+  '/media/Ocean’s Eleven/æon Flux 8½ WALL·E.he.srt',
+  "/media/It's: A [Test], Really; x=y/Don't, Stop; [Me]: a=b\\c.srt",
 ];
 
 describe('escapeFilterOptionValue', () => {
