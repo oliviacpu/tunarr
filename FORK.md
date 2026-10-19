@@ -36,6 +36,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 
+### Narrow gap-music lookup and deleted-list cleanup (2026-10-19)
+
+- **What changed:** gap-music selection reads only the program fields it needs, avoiding full filler-list program materialization. Deleting a list clears its channel gap-music references.
+- **Fix:** `FillerListDB.getGapMusicPrograms` selects track identity, playback eligibility and artist display fields; `GapMusicPicker` uses that result. List deletion removes `offline.musicListId` while preserving other offline settings.
+- **Validation:** database tests check the selected fields and deleted-list cleanup; stream-program regressions use the narrower database contract.
+- **Upstream:** not sent; personal fork change.
+
 <!-- Entry format:
 ### Short title (YYYY-MM-DD, commit)
 - **What you saw:** the symptom.
