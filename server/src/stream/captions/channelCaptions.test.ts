@@ -2,7 +2,6 @@ import { defaultFfmpegSettings } from '@tunarr/types';
 import {
   channelCaptionAppearance,
   channelCaptionTestPattern,
-  channelHasOwnCaptionLook,
 } from './channelCaptions.ts';
 
 const global = {
@@ -15,54 +14,28 @@ const global = {
   },
 };
 
+// The merge itself is tested with channelCaptionLook in @tunarr/shared; this
+// is the shape the encoder takes, with the alignment beside the appearance
 describe('channelCaptionAppearance', () => {
   test('is the global look for a channel without its own', () => {
     expect(channelCaptionAppearance(global, null)).toEqual({
       ...global.hdhrCaptionAppearance,
       alignment: 'centeredLines',
     });
-    expect(channelCaptionAppearance(global, undefined)).toEqual(
-      channelCaptionAppearance(global, {}),
-    );
   });
 
   test("puts the channel's fields over the global ones and keeps the rest", () => {
-    const look = channelCaptionAppearance(global, {
-      alignment: 'left',
-      appearance: { backgroundColor: 'magenta', maxLines: 2 },
-    });
-
-    expect(look).toEqual({
+    expect(
+      channelCaptionAppearance(global, {
+        alignment: 'left',
+        appearance: { backgroundColor: 'magenta', maxLines: 2 },
+      }),
+    ).toEqual({
       ...global.hdhrCaptionAppearance,
       backgroundColor: 'magenta',
       maxLines: 2,
       alignment: 'left',
     });
-    // From the global look
-    expect(look.textColor).toBe('yellow');
-  });
-
-  test('a field the channel leaves undefined keeps the global value', () => {
-    const look = channelCaptionAppearance(global, {
-      appearance: { textColor: undefined, upperCase: true },
-    });
-    expect(look.textColor).toBe('yellow');
-    expect(look.upperCase).toBe(true);
-    expect(look.alignment).toBe('centeredLines');
-  });
-});
-
-describe('channelHasOwnCaptionLook', () => {
-  test.each([
-    [null, false],
-    [{}, false],
-    [{ testPattern: true }, false],
-    [{ appearance: {} }, false],
-    [{ appearance: { textColor: undefined } }, false],
-    [{ alignment: 'left' as const }, true],
-    [{ appearance: { backgroundColor: 'magenta' as const } }, true],
-  ])('%j: %s', (captions, expected) => {
-    expect(channelHasOwnCaptionLook(captions)).toBe(expected);
   });
 });
 

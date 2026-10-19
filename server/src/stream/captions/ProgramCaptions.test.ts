@@ -10,7 +10,6 @@ import type { ProgramType } from '../../db/schema/Program.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
 import { captionLoadFrames } from './Cea608Encoder.ts';
 import {
-  exactFrameRate,
   firstFrameMs,
   loadProgramCaptions,
   markSegmentsForCaptions,
@@ -19,29 +18,6 @@ import {
   parseSubtitleCues,
   captionTrackCandidates,
 } from './ProgramCaptions.ts';
-
-describe('exactFrameRate', () => {
-  test('keeps a fraction exact', () => {
-    expect(exactFrameRate('24000/1001')).toBe(24000 / 1001);
-  });
-
-  test('snaps rounded NTSC rates to their exact value', () => {
-    expect(exactFrameRate(23.976)).toBe(24000 / 1001);
-    expect(exactFrameRate('29.97')).toBe(30000 / 1001);
-    expect(exactFrameRate(59.94)).toBe(60000 / 1001);
-  });
-
-  test('leaves whole rates alone', () => {
-    expect(exactFrameRate(25)).toBe(25);
-    expect(exactFrameRate('30')).toBe(30);
-  });
-
-  test('has no rate for missing or implausible values', () => {
-    expect(exactFrameRate(undefined)).toBeUndefined();
-    expect(exactFrameRate('0/0')).toBeUndefined();
-    expect(exactFrameRate(1000)).toBeUndefined();
-  });
-});
 
 // ffmpeg drops the frames before the seek, so the program's first frame is
 // the first one at or after it

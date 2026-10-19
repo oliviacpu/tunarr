@@ -35,6 +35,30 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Caption housekeeping: dead code removed, one channel-caption merge for server and web (2026-10-18)
+
+- **What you saw:** nothing; cleanup from the 2026-10-18 captions review (`plans/closed-captions-review-2026-10-18.md`).
+- **Cause:**
+  - `exactFrameRate` in `ProgramCaptions.ts` was only called by its own tests. The output frame rate comes from
+    `ffmpeg/outputFrameRate.ts`.
+  - `HlsSession.addCaptions` passed no keyframe interval for HLS Direct v2, a branch that never ran:
+    `FfmpegStreamFactory` only builds captions for transcoded video, and HLS Direct v2 copies it.
+  - The channel page (`web/src/helpers/channelCaptions.ts`) had its own copy of the server's merge of a channel's
+    caption settings over the global ones.
+- **Fix:**
+  - `exactFrameRate` and its tests are gone. `addCaptions` always passes the segment length as the keyframe interval,
+    with a comment that copied video never gets captions.
+  - `shared/src/util/channelCaptions.ts` (`@tunarr/shared/util`) holds the merge (`channelCaptionLook`), whether a
+    channel has its own look (`channelHasOwnCaptionLook`) and what is saved (`normalizeChannelCaptions`). The server's
+    `channelCaptionAppearance` flattens the merged look into the encoder's appearance, and the test pattern rule stays
+    on the server. The web keeps `changedCaptionAppearance` for its form.
+  - The two copies behaved the same: a field the channel leaves undefined keeps the global value, and its alignment
+    falls back to the global one. Nothing changes on screen.
+- **Tests:** the merge, own-look and saved-form tests from both sides are in `shared/src/util/channelCaptions.test.ts`,
+  plus one case: a setting turned off (`upperCase: false`) still counts as the channel's own. The server keeps tests
+  for the flattened look and the test pattern, the web for `changedCaptionAppearance`. `ChannelCaptionsField.test.tsx`
+  and the `HlsSession.test.ts` caption tests pass unchanged, and the golden snapshot is unchanged.
+
 ### Caption work is timed in the log, per segment and per program (2026-10-18)
 
 - **What you saw:** nothing. A review of the closed captions found two synchronous steps on hot paths that nothing
@@ -345,14 +369,12 @@ ready after N ms (N segments on disk)` at info, and `FfmpegProcess` logs when a 
       caption can make the next late too (up to 0.6 s). 15 fps: 60% before, 35% after, since a two-line caption
       needs more than 2 s of frames.
   - End to end with `stream-repro --mode hdhr` and the same subtitles on a synthetic clip, 2 s segments, the capture
-    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
-    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
-frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
-    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
-    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
-    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`: - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
-    same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms. - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms. - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`, `no
-    frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
+    cut at each keyframe (PAT and PMT first) and decoded with ffmpeg's `movie=…[out+subcc]`:
+    - 29.97 fps, 150 s: 37 of 146 keyframe cuts showed a fragment before, none after. The continuous decode shows the
+      same 77 captions, each a whole subtitle cue; 74 on the same frame as before, 3 later by 33-134 ms.
+    - 23.976 fps, 200 s: 62 of 196 before, 15 after. The same 91 captions; 89 on the same frame, 2 later by 83 ms.
+    - A cut 15 frames past a keyframe decodes nothing until the next one (`non-existing PPS 0 referenced`,
+      `no frame!`, as Plex logs at every tune), and its first caption data comes on that keyframe.
 - **Tests:** `Cea608Encoder.keyframes.test.ts`: a load that would cross a keyframe goes before it, on time; one
   that fits nowhere on time shows up to 300 ms late, else crosses as before; generated dialogue at 23.976, 25, 29.97
   and 59.94 fps leaves no fragment at any keyframe with pauses between lines, and at most a quarter of them back to

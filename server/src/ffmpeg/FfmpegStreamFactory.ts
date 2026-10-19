@@ -21,6 +21,7 @@ import type { Maybe, Nullable } from '@/types/util.js';
 import { isDefined, isLinux, isNonEmptyString } from '@/util/index.js';
 import type { Logger } from '@/util/logging/LoggerFactory.js';
 import { makeLocalUrl } from '@/util/serverUtil.js';
+import { channelHasOwnCaptionLook } from '@tunarr/shared/util';
 import type {
   ChannelStreamMode,
   LoudnormConfig,
@@ -41,7 +42,6 @@ import { captionTestPattern } from '../stream/captions/CaptionTestPattern.ts';
 import {
   channelCaptionAppearance,
   channelCaptionTestPattern,
-  channelHasOwnCaptionLook,
 } from '../stream/captions/channelCaptions.ts';
 import type { ProgramCaptions } from '../stream/captions/ProgramCaptions.ts';
 import {
