@@ -193,11 +193,18 @@ export function describeTranscodeSpeedEvent(
   }
   const configured = configuredThreadCount ?? transcodeConfig.threadCount;
   const threads = configured > 0 ? `${configured}` : '0 (automatic)';
+  // Named only when reading ahead actually raised the count: with the limit
+  // at 0, an automatic (0) count, or a count already at the limit, the
+  // transcode runs with the configured threads
+  const readAheadThreads =
+    realtime === false && transcodeConfig.threadCount !== configured
+      ? transcodeConfig.threadCount
+      : undefined;
   return (
     `${where} at ${speed} real time over the last ${SpeedWindowMs / 1000} s, so players run out of video and pause. ` +
     `Transcode config "${transcodeConfig.name}" has thread count ${threads}; ` +
-    (realtime === false
-      ? `read-ahead is active with ${transcodeConfig.threadCount || 'automatic'} threads; `
+    (readAheadThreads !== undefined
+      ? `read-ahead is active with ${readAheadThreads} threads; `
       : '') +
     'a higher thread count, a faster video preset or a lower output resolution helps.'
   );
