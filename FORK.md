@@ -59,12 +59,17 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - The info line moved from `captionsOn` to `ConcatStream.createSession`, so it is logged once each time the `.ts`
     stream starts. It names the channel number, the transcode config and its format. The factory no longer logs it.
   - `insertCaptions` still refuses video that isn't H.264, as a fail-safe.
-  - `docs/configure/ffmpeg/index.md` (Requirements) describes the whole channel, not only the transcode.
+  - `docs/configure/ffmpeg/index.md` (Requirements) describes the whole channel, not only the transcode. The API
+    description of the `captions` playlist parameter (`streamApi.ts`) names the H.264 requirement, and the OpenAPI
+    document and web client were regenerated.
+  - The two sides still read their inputs at different times: the wrapper when its stream starts, the transcode
+    partly per program. A change made while a channel plays can still split them until both restart (a known
+    risk, not changed here).
 - **Tests:** new `hdhrCaptionsEnabled.test.ts` covers each input. In `ConcatStream.test.ts`, for HEVC and MPEG-2 with
   the switch and subtitles on, the playlist URL has no `captions` flag and there is no output sink. The info line is
   logged once per wrapper, and not at all when captions weren't asked for or the channel is H.264. The H.264 tests
-  are unchanged apart from the fixture's format. In `FfmpegStreamFactory.test.ts`, an HEVC or MPEG-2 channel logs
-  nothing at info over two programs. The wrapper, log and factory tests fail on the old code.
+  are unchanged apart from the fixture's format. In `FfmpegStreamFactory.test.ts`, an HEVC or MPEG-2 channel logs no
+  info line about captions over two programs. The wrapper, log and factory tests fail on the old code.
 - **Upstream:** not sent.
 
 ### Captions keep the accented letters of Windows-1252 subtitle files (2026-10-19)

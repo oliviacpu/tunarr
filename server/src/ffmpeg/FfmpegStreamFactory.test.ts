@@ -2183,10 +2183,10 @@ describe('FfmpegStreamFactory', () => {
             expect(outputFrameRate).toBe(24000 / 1001);
           });
 
-          // A session makes a factory per program, so a line here came once
-          // per program. The .ts wrapper says it once per tune-in instead
-          // (ConcatStream).
-          test('says nothing at info, program after program', async () => {
+          // A session makes a factory per program (ProgramStream), as `run`
+          // does, so a line here came once per program. The .ts wrapper says
+          // it once when its stream starts instead (ConcatStream).
+          test('says nothing about captions, program after program', async () => {
             const logger = {
               debug: vi.fn(),
               trace: vi.fn(),
@@ -2204,7 +2204,11 @@ describe('FfmpegStreamFactory', () => {
               expect(captions).toBeUndefined();
             }
 
-            expect(logger.info).not.toHaveBeenCalled();
+            const captionLines = logger.info.mock.calls.filter(
+              ([message]) =>
+                typeof message === 'string' && message.includes('captions'),
+            );
+            expect(captionLines).toEqual([]);
           });
         },
       );

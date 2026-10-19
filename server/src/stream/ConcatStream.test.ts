@@ -148,7 +148,7 @@ describe('ConcatStream captions', () => {
         expect(sink).toBeUndefined();
       });
 
-      test('says why once per tune-in', async () => {
+      test('says why once when the stream starts', async () => {
         const { info } = await wrap({
           subtitlesEnabled: true,
           hdhrClosedCaptions: true,
