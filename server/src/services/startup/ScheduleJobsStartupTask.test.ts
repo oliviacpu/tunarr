@@ -1,7 +1,8 @@
 /**
  * The scheduled full guide rebuild (UpdateXmlTvTask) runs at the XMLTV
  * settings' start hour and every refreshHours after it, or more often when the
- * guide is too short to last that long.
+ * guide is too short to last that long. The library scan and the collection
+ * and custom show syncs run every rescanIntervalHours.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -127,6 +128,16 @@ describe('ScheduleJobsStartupTask', () => {
     expect(await guideSchedule(4, 0)).toBe('0 0 0,4,8,12,16,20 * * *');
     expect(await guideSchedule(4, 0, 12)).toBe('0 0 0,4,8,12,16,20 * * *');
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('schedules the library scan, at half past, and the syncs from the rescan interval', async () => {
+    await guideSchedule(24, 0);
+    const scheduleOf = (name: string) =>
+      scheduled.find((task) => task.name === name)?.schedule;
+
+    expect(scheduleOf('ScanLibrariesTask')).toBe('0 30 */6 * * *');
+    expect(scheduleOf('SyncCollectionsTask')).toBe('0 0 */6 * * *');
+    expect(scheduleOf('SyncCustomShowsTask')).toBe('0 0 */6 * * *');
   });
 
   it('rebuilds often enough for a guide saved too short for its timer, and says so', async () => {

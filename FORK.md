@@ -26,6 +26,26 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### A new scan interval takes effect when it's saved (2026-10-19)
+
+- **What you saw:** a new **Rescan Interval (hours)** under Settings > Scanner saved, but scans kept the old timing
+  until Tunarr restarted, and the page didn't say so.
+- **Cause:** `ScheduleJobsStartupTask` reads `rescanIntervalHours` once, at startup, to schedule `ScanLibrariesTask`,
+  `SyncCollectionsTask` and `SyncCustomShowsTask`. `PUT /api/settings/media-source` only wrote `settings.json`.
+- **Fix:**
+  - `services/rescanSchedule.ts` builds the three jobs' crontabs for the startup task, and `rescheduleRescanJobs`
+    moves the jobs with `ScheduledTask.reschedule`, as the XMLTV settings save does. `settingsApi.ts` calls it after a
+    save. A scan under way finishes; the next one follows the new interval.
+  - The save refuses, with a 400, an interval that isn't a whole number of hours, 1 or more. node-schedule can't run
+    `*/0` or `*/1.5`: a refused reschedule cancels the job yet still reports its old next run, and at startup such an
+    interval threw while the jobs were being scheduled.
+  - The Scanner page shows "Next scan: <time>" from `GET /api/tasks`, refreshes it after a save, and flags an interval
+    under 1 before saving. `docs/configure/media_sources/index.md` has a new "Scheduled Scans" section.
+- **Tests:** `settingsApi.test.ts` runs the real scheduler and jobs on a fixed clock: a save moves the next scan and
+  syncs, and 0 or 1.5 hours is refused with the jobs left as they were. Also `ScheduleJobsStartupTask.test.ts` and
+  `ScannerSettingsPage.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
 ### Empty Trash asks before it purges (2026-10-19, PR #89)
 
 - **What you saw:** one click on **Empty Trash** started the purge. It can't be undone: trashed programs are deleted
