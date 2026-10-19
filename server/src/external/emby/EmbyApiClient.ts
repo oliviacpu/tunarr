@@ -1,3 +1,4 @@
+import { decodeSubtitleText } from '../../stream/captions/decodeSubtitleText.ts';
 import { EmbyRequestRedacter } from '@/external/emby/EmbyRequestRedacter.js';
 import type { Maybe, Nilable, Nullable } from '@/types/util.js';
 import {
@@ -492,12 +493,15 @@ export class EmbyApiClient extends MediaSourceApiClient<EmbyItemTypes> {
     try {
       // A 404 means the server no longer has this subtitle; the caller
       // reports that.
-      const subtitlesResult = await this.doGet<string>(
-        { url: `/${trimStart(subtitlePath, '/')}` },
+      const subtitlesResult = await this.doGet<Buffer>(
+        {
+          url: `/${trimStart(subtitlePath, '/')}`,
+          responseType: 'arraybuffer',
+        },
         { notFoundIsExpected: true },
       );
 
-      return this.makeSuccessResult(subtitlesResult);
+      return this.makeSuccessResult(decodeSubtitleText(subtitlesResult));
     } catch (e) {
       return this.requestErrorResult(e);
     }
@@ -510,14 +514,15 @@ export class EmbyApiClient extends MediaSourceApiClient<EmbyItemTypes> {
     subtitleFormat: string,
   ): Promise<QueryResult<string>> {
     try {
-      const subtitlesResult = await this.doGet<string>(
+      const subtitlesResult = await this.doGet<Buffer>(
         {
+          responseType: 'arraybuffer',
           url: `/Videos/${itemId}/${mediaItemId}/Subtitles/${streamIndex}/Stream.${subtitleFormat}`,
         },
         { notFoundIsExpected: true },
       );
 
-      return this.makeSuccessResult(subtitlesResult);
+      return this.makeSuccessResult(decodeSubtitleText(subtitlesResult));
     } catch (e) {
       return this.requestErrorResult(e);
     }

@@ -134,7 +134,12 @@ export class ProgramStreamDetailsFetcher {
             codec: subtitle.codec,
             default: subtitle.default,
             forced: subtitle.forced,
-            sdh: false, // TODO:
+            sdh:
+              program.subtitles?.find(
+                (track) =>
+                  track.subtitleType === 'embedded' &&
+                  track.streamIndex === subtitle.index,
+              )?.sdh ?? false,
             type: 'embedded',
             index: subtitle.index,
             languageCodeISO6392: nullToUndefined(subtitle.language),

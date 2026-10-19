@@ -200,6 +200,67 @@ function makeProgramDB(program: ProgramWithRelationsOrm): IProgramDB {
 }
 
 describe('ProgramStreamDetailsFetcher', () => {
+  it('preserves embedded SDH metadata without borrowing a sidecar flag', async () => {
+    const program = makeProgram('plex', '/library/parts/1/2/file.mkv');
+    const version = program.versions?.[0];
+    const template = version?.mediaStreams?.[0];
+    if (!version || !template || !program.mediaSourceId) {
+      throw new Error('Incomplete program fixture');
+    }
+    version.mediaStreams.push(
+      ...[1, 2, 3].map((index) => ({
+        ...template,
+        uuid: faker.string.uuid(),
+        streamKind: 'subtitles' as const,
+        index,
+        codec: 'subrip',
+        language: 'eng',
+      })),
+    );
+    program.subtitles = [
+      ...[1, 2].map((streamIndex) => ({
+        uuid: faker.string.uuid(),
+        programId: program.uuid,
+        subtitleType: 'embedded' as const,
+        streamIndex,
+        codec: 'subrip',
+        language: 'eng',
+        path: null,
+        sourcePath: null,
+        sourceKey: null,
+        isExtracted: false,
+        default: false,
+        forced: false,
+        sdh: streamIndex === 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })),
+    ];
+    const sdhTrack = program.subtitles[0];
+    if (!sdhTrack) throw new Error('Missing SDH fixture');
+    program.subtitles.push({
+      ...sdhTrack,
+      uuid: faker.string.uuid(),
+      subtitleType: 'sidecar',
+      streamIndex: 3,
+    });
+    const fetcher = new ProgramStreamDetailsFetcher(
+      makeProgramDB(program),
+      makeArtworkService(),
+    );
+    const result = await fetcher.getStream({
+      server: makeServer({ type: 'plex', uri: 'http://localhost:32400' }),
+      lineupItem: { ...program, mediaSourceId: program.mediaSourceId },
+    });
+    expect(result.get().streamDetails.subtitleDetails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'embedded', index: 1, sdh: true }),
+        expect.objectContaining({ type: 'embedded', index: 2, sdh: false }),
+        expect.objectContaining({ type: 'embedded', index: 3, sdh: false }),
+      ]),
+    );
+  });
+
   describe('getStream constructs valid HTTP URLs for remote streams', () => {
     it('constructs a valid Plex stream URL preserving the http:// protocol', async () => {
       const serverPath = '/library/parts/1014/1222133011/file.avi';

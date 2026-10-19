@@ -1,3 +1,4 @@
+import { decodeSubtitleText } from '../../stream/captions/decodeSubtitleText.ts';
 import { MediaSourceType } from '@/db/schema/base.js';
 import type { MediaSourceLibrary } from '@/db/schema/MediaSourceLibrary.js';
 import type { Nilable, Nullable } from '@/types/util.js';
@@ -1133,12 +1134,12 @@ export class PlexApiClient extends MediaSourceApiClient<PlexTypes> {
     try {
       // A 404 means Plex no longer has this stream (its file was replaced or
       // removed and the item not rescanned yet); the caller reports that.
-      const subtitlesResult = await this.doGet<string>(
-        { url: key },
+      const subtitlesResult = await this.doGet<Buffer>(
+        { url: key, responseType: 'arraybuffer' },
         { notFoundIsExpected: true },
       );
 
-      return this.makeSuccessResult(subtitlesResult);
+      return this.makeSuccessResult(decodeSubtitleText(subtitlesResult));
     } catch (e) {
       return this.requestErrorResult(e);
     }
