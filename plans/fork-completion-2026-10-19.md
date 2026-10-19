@@ -55,6 +55,7 @@ pnpm --filter @tunarr/server generate-openapi
 pnpm --filter @tunarr/web generate-client
 docker build --platform linux/amd64 --target runtime-tests \
   --build-arg exec_target=linux-x64 --build-arg is_edge_build=false \
+  --build-arg runtime_validation_run="$(date +%s)" \
   --build-arg tunarr_version=completion-validation --build-arg tunarr_build=local \
   -t tunarr-completion-validation .
 ```
@@ -79,11 +80,15 @@ create two files distinguished only by case; it still runs on Linux.
   (5 test files passed, 3 skipped), plus **14/14 packaged-worker checks**. The skipped
   cases require GPU hardware. This replaces the earlier unverified native-Linux gate
   for that head; it does not validate later playback-stack changes or ARM64 execution.
+- Pipeline PR #75 also passed [native Linux run 39292973501](https://github.com/oliviacpu/tunarr/actions/runs/39292973501)
+  at head `ce18cf8922d74f98e2ada2a0048ffe21b29aaa47`: **39 passed, 60 GPU-dependent
+  cases skipped** (6 files passed, 3 skipped), plus **14/14 packaged-worker checks**.
+  This is pipeline-head evidence; final session-stack PR #77 validation remains pending.
 - Production build: all five tasks passed. API specification and generated client are byte-for-byte reproducible on a second generation.
 
 ## Release and remaining work
 
-This candidate is not a claim that every item in the older 36-task review is complete.
+This merged work is not a claim that every item in the older 36-task review is complete.
 The following require additional implementation or evidence:
 
 - Benchmark the new tuning controls on representative deployment media before changing
@@ -123,7 +128,7 @@ release-image publication, or deployment is part of this work.
 | --- | --- | --- |
 | [#62](https://github.com/oliviacpu/tunarr/pull/62) | Plex guide notifications | Merged `b39515d1` |
 | [#63](https://github.com/oliviacpu/tunarr/pull/63) | Scan-worker watchdog and protocol | Merged `7d17e0bc` |
-| [#64](https://github.com/oliviacpu/tunarr/pull/64) | XMLTV scheduling and guide coverage | Pending — open |
+| [#64](https://github.com/oliviacpu/tunarr/pull/64) | XMLTV scheduling and guide coverage | Merged `6c975bf1` |
 | [#65](https://github.com/oliviacpu/tunarr/pull/65) | Caption boundaries and language | Merged `3db986ba` |
 | [#66](https://github.com/oliviacpu/tunarr/pull/66) | Logging redaction and punctuation | Merged `41607ccc` |
 | [#67](https://github.com/oliviacpu/tunarr/pull/67) | Narrow gap query and deleted-list cleanup | Merged `f010d260` |
@@ -134,5 +139,6 @@ release-image publication, or deployment is part of this work.
 | [#72](https://github.com/oliviacpu/tunarr/pull/72) | Preset controls and accessible labels | Merged `85d9b844` |
 | [#73](https://github.com/oliviacpu/tunarr/pull/73) | Runtime validation and release tooling | Merged `a0b1c339` |
 | [#74](https://github.com/oliviacpu/tunarr/pull/74) | Subtitle encoding and matching | Merged `89b822d0` |
-| [#75](https://github.com/oliviacpu/tunarr/pull/75) | Pipeline frame rate and rendering | Pending — open |
+| [#75](https://github.com/oliviacpu/tunarr/pull/75) | Pipeline frame rate and rendering | Merged `6670d01c` |
+| [#76](https://github.com/oliviacpu/tunarr/pull/76) | Final completion documentation | This record; merges after implementation |
 | [#77](https://github.com/oliviacpu/tunarr/pull/77) | Session/caption integration and read-ahead controls | Pending — open |

@@ -270,7 +270,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   contract. Query and header redaction use separate boundaries so punctuation cannot leave credential
   suffixes visible. Synthetic regression fixtures cover process errors and saved logs; this does not
   establish that any real credential was exposed. The logging fix was independently reviewed and merged in PR #66; its addressed review thread is resolved.
-- **Evidence and limits:** see `plans/fork-completion-2026-10-19.md` for historical candidate results and head-specific CI. Native Linux PR #73 validation passed 34 tests (60 GPU cases skipped) and 14 packaged-worker checks; later playback changes need their own head-specific run.
+- **Evidence and limits:** see `plans/fork-completion-2026-10-19.md` for historical candidate results and head-specific CI. Native Linux PR #73 and #75 validation passed on their recorded heads; final combined session-stack validation is tracked separately in the completion record.
   Hardware command tests do not establish GPU playback support. Client verification and a deployment soak
   remain pending. No image is published or deployed by this integration work.
 - **Upstream:** not submitted; this is personal-fork completion work.
