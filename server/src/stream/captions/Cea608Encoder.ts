@@ -216,6 +216,13 @@ function toUnits(text: string): CharUnit[] {
   return units;
 }
 
+export function droppedCaptionCharacters(text: string): number {
+  const plain = text.replace(/<[^>]*>|\{[^}]*\}/g, '');
+  return [...plain].filter(
+    (character) => !/\s/.test(character) && toUnits(character).length === 0,
+  ).length;
+}
+
 type CaptionStyle = { italic: boolean; underline: boolean };
 
 const PlainStyle: CaptionStyle = { italic: false, underline: false };

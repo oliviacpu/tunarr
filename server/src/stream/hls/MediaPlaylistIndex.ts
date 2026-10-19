@@ -58,8 +58,6 @@ export type PlaylistDiscontinuity = {
 
 export type PlaylistLine = PlaylistSegment | PlaylistDiscontinuity;
 
-const Discontinuity: PlaylistDiscontinuity = { type: 'discontinuity' };
-
 export type MediaPlaylistSavepoint = {
   segmentCount: number;
   discontinuities: number;
@@ -278,33 +276,5 @@ export class MediaPlaylistIndex {
       this.#segments.splice(0, count);
       this.#discarded += count;
     }
-  }
-
-  /**
-   * The entries in playlist order, with `endWithDiscontinuity` adding a
-   * discontinuity tag at the end when the last entry isn't one. Only for an
-   * index that has discarded nothing.
-   */
-  toLines(endWithDiscontinuity: boolean): PlaylistLine[] {
-    if (this.#discarded > 0) {
-      throw new Error('This playlist index has discarded segments');
-    }
-    const items: PlaylistLine[] = [];
-    let discontinuities = 0;
-    for (const segment of this.#segments) {
-      while (discontinuities < segment.discontinuitiesBefore) {
-        items.push(Discontinuity);
-        discontinuities++;
-      }
-      items.push(segment);
-    }
-    while (discontinuities < this.#discontinuities) {
-      items.push(Discontinuity);
-      discontinuities++;
-    }
-    if (endWithDiscontinuity && !this.#endsWithDiscontinuity) {
-      items.push(Discontinuity);
-    }
-    return items;
   }
 }

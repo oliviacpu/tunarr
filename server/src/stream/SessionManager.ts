@@ -1,3 +1,4 @@
+import { hdhrCaptionsEnabled } from './captions/hdhrCaptionsEnabled.ts';
 import { Result } from '@/types/result.js';
 import type { Maybe } from '@/types/util.js';
 import type { Logger } from '@/util/logging/LoggerFactory.js';
@@ -23,7 +24,7 @@ import {
   type ConcatSessionFactory,
   type ConcatSessionOptions,
 } from './ConcatSession.js';
-import type { HlsConcatSessionType } from './Session.js';
+import type { CaptionSession, HlsConcatSessionType } from './Session.js';
 import { Session } from './Session.js';
 import type { HlsSession, HlsSessionOptions } from './hls/HlsSession.js';
 import {
@@ -231,7 +232,13 @@ export class SessionManager {
       options.sessionType,
       (channel) => {
         options.cleanupDelayMs ??= 5_000;
-        return this.concatSessionFactory(channel, options);
+        return this.concatSessionFactory(channel, {
+          ...options,
+          captionsEnabled: this.sessionCaptionsEnabled(
+            channel,
+            sessionTypeFromConcatType(options.sessionType),
+          ),
+        });
       },
     );
   }
@@ -284,8 +291,38 @@ export class SessionManager {
           stalenessMs:
             getNumericEnvVar(TUNARR_ENV_VARS.SESSION_STALENESS_MS) ?? undefined,
           ...options,
+          captionsEnabled: this.sessionCaptionsEnabled(
+            channel,
+            options?.streamMode ?? 'hls',
+          ),
         }),
     );
+  }
+
+  private sessionCaptionsEnabled(
+    channel: ChannelOrmWithTranscodeConfig,
+    streamMode: string,
+  ) {
+    if (streamMode !== 'hls') return false;
+    const sessions: ((CaptionSession & Session) | undefined)[] = [
+      this.getHlsSession(channel.uuid),
+      this.getHlsWrapperSession(channel.uuid, 'hls_concat'),
+    ];
+    for (const session of sessions) {
+      if (
+        session &&
+        !session.stoppingOrStopped &&
+        session.captionsEnabled !== undefined
+      ) {
+        return session.captionsEnabled;
+      }
+    }
+    return hdhrCaptionsEnabled({
+      hdhrClosedCaptions: this.settingsDB.ffmpegSettings().hdhrClosedCaptions,
+      streamMode,
+      subtitlesEnabled: channel.subtitlesEnabled,
+      videoFormat: channel.transcodeConfig.videoFormat,
+    });
   }
 
   private async getOrCreateSession<TSession extends Session>(

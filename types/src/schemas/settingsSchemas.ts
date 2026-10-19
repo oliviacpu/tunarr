@@ -249,6 +249,7 @@ export const FfmpegSettingsSchema = z.object({
   tonemapAlgorithm: z.enum(TonemapAlgorithms).default('hable'),
   // HLS stream mode: segment length, and how many segments must exist before
   // a client gets the playlist. Read when a channel's session starts.
+  hlsReadAheadMaxThreads: z.number().int().min(0).max(256).default(16),
   hlsSegmentSeconds: z.number().int().min(1).max(10).default(4),
   hlsInitialSegmentCount: z.number().int().min(1).max(10).default(2),
   // How many seconds the .ts stream reading an HLS channel's playlist (what

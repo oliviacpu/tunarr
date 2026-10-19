@@ -4,8 +4,8 @@ import { filter, first, max, nth, take, takeRight, trimEnd } from 'lodash-es';
 import { basename } from 'node:path';
 import { match } from 'ts-pattern';
 import { SegmentNameRegex } from './BaseHlsSession.ts';
-import type { PlaylistLine, PlaylistSegment } from './MediaPlaylistIndex.ts';
-import { MediaPlaylistIndex } from './MediaPlaylistIndex.ts';
+import type { PlaylistSegment } from './MediaPlaylistIndex.ts';
+import type { MediaPlaylistIndex } from './MediaPlaylistIndex.ts';
 
 export type MutateOptions = {
   maxSegmentsToKeep: number;
@@ -33,33 +33,6 @@ export type HlsPlaylistFilterOptions =
   | FilterBeforeSegmentNumber;
 
 export class HlsPlaylistMutator {
-  trimPlaylist(
-    start: Dayjs,
-    filter: HlsPlaylistFilterOptions,
-    playlistLines: string[],
-    opts: MutateOptions,
-  ): TrimPlaylistResult {
-    const result = this.trimIndex(
-      MediaPlaylistIndex.fromLines(start, playlistLines),
-      filter,
-      opts,
-    );
-    if (result === undefined) {
-      throw new Error('A playlist parsed whole has no discarded segments');
-    }
-    return result;
-  }
-
-  parsePlaylist(
-    start: Dayjs,
-    playlistLines: string[],
-    endWithDiscontinuity: boolean,
-  ): PlaylistLine[] {
-    return MediaPlaylistIndex.fromLines(start, playlistLines).toLines(
-      endWithDiscontinuity,
-    );
-  }
-
   /**
    * The playlist to serve from a parsed media playlist. Its work grows with
    * the segments the index keeps, not with the whole playlist.

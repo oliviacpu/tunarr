@@ -1,3 +1,4 @@
+import type { Logger } from '../../util/logging/LoggerFactory.ts';
 import type { ISettingsDB } from '@/db/interfaces/ISettingsDB.js';
 import type { ChannelOrmWithTranscodeConfig } from '@/db/schema/derivedTypes.js';
 import type { OutputFormat } from '@/ffmpeg/builder/constants.js';
@@ -437,6 +438,9 @@ describe('HlsSession', () => {
 
     test('serves nothing for a segment it cannot caption', async () => {
       const session = makeSession(dir.name);
+      const warn = vi.fn();
+      const log = { warn, debug: vi.fn() } as unknown as Logger;
+      (session as unknown as { logger: Logger }).logger = log;
       await fs.mkdir(session.workingDirectory, { recursive: true });
       await fs.writeFile(
         path.join(session.workingDirectory, 'data000001.ts'),
@@ -449,6 +453,8 @@ describe('HlsSession', () => {
       ).addCaptions(0, captions(30));
 
       expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
+      expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
+      expect(warn).toHaveBeenCalledOnce();
     });
 
     describe('across programs', () => {

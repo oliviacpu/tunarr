@@ -62,6 +62,10 @@ type StreamSessionEvents = {
   end: [];
 };
 
+export interface CaptionSession {
+  readonly captionsEnabled: boolean | undefined;
+}
+
 export abstract class Session<
   TOpts extends SessionOptions = SessionOptions,
 > extends events.EventEmitter<StreamSessionEvents> {

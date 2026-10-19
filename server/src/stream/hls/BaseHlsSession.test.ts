@@ -332,6 +332,18 @@ describe('BaseHlsSession', () => {
       expect(done).toBe(true);
     });
 
+    it('stops polling within one interval when the session stops', async () => {
+      const ready = new ReadySession(makeChannel(), baseOptions);
+      const result = ready.waitReady();
+      await vi.advanceTimersByTimeAsync(200);
+      ready.state = 'stopped';
+      const reads = vi.mocked(fs.readdir).mock.calls.length;
+      await vi.advanceTimersByTimeAsync(150);
+      expect((await result).isFailure()).toBe(true);
+      expect(vi.mocked(fs.readdir).mock.calls.length).toBe(reads);
+      expect(ready.state).toBe('stopped');
+    });
+
     it('still gives up after about 15 seconds', async () => {
       const ready = new ReadySession(makeChannel(), baseOptions);
       files = ['stream.m3u8'];

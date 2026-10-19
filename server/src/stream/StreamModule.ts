@@ -82,7 +82,7 @@ const configure = ({ bind }: ContainerModuleLoadOptions) => {
   ).toFactory((ctx) => {
     const ffmpegFactory = ctx.get<FFmpegAssistedFactory>(KEYS.FFmpegFactory);
     const settingsDB = ctx.get<ISettingsDB>(KEYS.SettingsDB);
-    return (channel, streamMode) => {
+    return (channel, streamMode, captionsEnabled) => {
       const ffmpegSettings = settingsDB.ffmpegSettings();
       return new ConcatStream(
         channel,
@@ -90,6 +90,8 @@ const configure = ({ bind }: ContainerModuleLoadOptions) => {
         ffmpegFactory,
         ffmpegSettings.hdhrClosedCaptions,
         ffmpegSettings.languagePreferences.preferences[0]?.iso6392 ?? 'eng',
+        undefined,
+        captionsEnabled,
       );
     };
   });

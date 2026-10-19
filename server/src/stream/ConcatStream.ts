@@ -18,6 +18,7 @@ import {
 export type ConcatStreamFactory = (
   channel: ChannelOrmWithTranscodeConfig,
   streamMode: ChannelConcatStreamMode,
+  captionsEnabled?: boolean,
 ) => ConcatStream;
 export class ConcatStream {
   constructor(
@@ -33,6 +34,7 @@ export class ConcatStream {
       className: ConcatStream.name,
       channel: channel.uuid,
     }),
+    private captionsEnabled?: boolean,
   ) {}
 
   // Whether this .ts stream is captioned is decided by hdhrCaptionsEnabled, the
@@ -57,14 +59,14 @@ export class ConcatStream {
    * would otherwise drop.
    */
   outputSink(): PassThrough | undefined {
-    return hdhrCaptionsEnabled(this.captionGate)
+    return (this.captionsEnabled ?? hdhrCaptionsEnabled(this.captionGate))
       ? new CaptionLanguageStream(this.captionLanguage)
       : undefined;
   }
 
   async createSession(): Promise<FfmpegTranscodeSession> {
     const gate = this.captionGate;
-    const captioned = hdhrCaptionsEnabled(gate);
+    const captioned = this.captionsEnabled ?? hdhrCaptionsEnabled(gate);
     if (!captioned && hdhrCaptionsWanted(gate)) {
       // Once each time the channel's .ts stream starts (ConcatSession), which
       // all its viewers share. The transcode makes the same choice for every

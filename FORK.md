@@ -52,6 +52,13 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Fix:** playback parameters retain the source-based target; the selected pipeline applies its actual deinterlacer once. Caption renditions use the final pipeline rate, preventing doubled field-rate targets.
 - **Validation:** calculator, caption cadence and software/QSV/VAAPI/NVIDIA pipeline unit regressions.
 
+### Playback session completion and bounded HLS read-ahead (2026-10-19)
+
+- **What changed:** HLS and transport-stream sessions share their caption decision, subtitle planning returns one cohesive result, and read-ahead encoding has a configurable thread limit. Playback uses the final pipeline output rate for captions.
+- **Fix:** session types carry explicit caption capability; the factory keeps subtitle conversion, burn-in and caption fallback together. HLS session buffering, playlist mutation and transcode-speed monitoring use the candidate's completed playback lifecycle handling.
+- **Validation:** targeted playback and session regressions, source-based typechecks, and freshly generated API/client contracts on this branch.
+- **Upstream:** not sent; personal fork integration stacked on the pipeline-output-rate and subtitle-text-reliability PRs.
+
 ### Narrow gap-music lookup and deleted-list cleanup (2026-10-19)
 
 - **What changed:** gap-music selection reads only the program fields it needs, avoiding full filler-list program materialization. Deleting a list clears its channel gap-music references.

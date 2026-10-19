@@ -27,17 +27,8 @@ export function hdhrCaptionsWanted(
 }
 
 /**
- * Whether a channel's .ts stream for HDHomeRun clients carries CEA-608
- * closed captions. The transcode (FfmpegStreamFactory) and the .ts wrapper
- * (ConcatStream) both decide with this, so given the same settings and
- * channel they agree: a channel either gets captions on both sides, or its
- * subtitles as with captions off and a .ts stream with no caption track. They
- * read the inputs at different times (the wrapper when its stream starts, the
- * transcode partly per program, partly when its HLS session starts), so a
- * change made while a channel plays can still split them until both restart.
- *
- * Captions can only be written into H.264 video (MpegTsCaptionInserter), so
- * HEVC or MPEG-2 output rules them out.
+ * HLS sessions and their transport-stream wrappers share this decision for
+ * the session lifetime. CEA-608 insertion requires H.264 output.
  */
 export function hdhrCaptionsEnabled(input: HdhrCaptionsInput): boolean {
   return hdhrCaptionsWanted(input) && input.videoFormat === VideoFormats.H264;

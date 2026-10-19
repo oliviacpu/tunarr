@@ -19,6 +19,17 @@ function config(
 }
 
 describe('readAheadThreadCount', () => {
+  it.each([
+    [0, 2],
+    [4, 4],
+    [16, 16],
+  ])('honors a configured limit of %i', (limit, expected) => {
+    expect(readAheadThreadCount(config(2), 64, limit)).toBe(expected);
+    expect(transcodeConfigFor(config(2), false, 64, limit).threadCount).toBe(
+      expected,
+    );
+  });
+
   it('uses up to 16 threads on a machine with the cores for them', () => {
     expect(ReadAheadMaxThreads).toBe(16);
     expect(readAheadThreadCount(config(8), 16)).toBe(16);
