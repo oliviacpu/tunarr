@@ -793,16 +793,28 @@ describe('MediaPlaylistReader on a window of the playlist', () => {
     }
   }
 
-  // A request whose first read of the file fails
-  async function expectFailedRequest(filter: HlsPlaylistFilterOptions) {
+  // A request whose `failing`th read of the file fails
+  async function expectFailedRequest(
+    filter: HlsPlaylistFilterOptions,
+    failing = 1,
+  ) {
     const probe = await fs.open(file, 'r');
     const fileHandle = Object.getPrototypeOf(probe) as typeof probe;
     await probe.close();
-    const read = vi
-      .spyOn(fileHandle, 'read')
-      .mockRejectedValueOnce(new Error('EIO'));
+    const original = fileHandle.read;
+    let reads = 0;
+    const read = vi.spyOn(fileHandle, 'read').mockImplementation(function (
+      this: typeof probe,
+      ...args: Parameters<typeof original>
+    ) {
+      reads++;
+      return reads === failing
+        ? Promise.reject(new Error('EIO'))
+        : original.apply(this, args);
+    });
     try {
       await expect(reader.trim(start, filter, opts)).rejects.toThrow('EIO');
+      expect(reads).toBe(failing);
     } finally {
       read.mockRestore();
     }
@@ -831,6 +843,21 @@ describe('MediaPlaylistReader on a window of the playlist', () => {
     await expectFailedRequest(afterSegment(14));
 
     await expectWindowSameAsWholeSession(10, afterSegment(14));
+    expect(warn).not.toHaveBeenCalled();
+    expect(reader.stats.fullParses).toBe(1);
+  });
+
+  it('keeps its history when reading a window to parse afresh fails', async () => {
+    await readFiftySegments();
+    // Over 4 KiB, all older than the last segment read: the reader reads its
+    // head, its end, then all of it to parse it afresh, and that read fails
+    await write(new FfmpegHlsPlaylist().segments(46).window(45));
+    await expectFailedRequest(afterSegment(45), 3);
+    expect(warn).not.toHaveBeenCalled();
+
+    // ffmpeg's real window again
+    session.segments(2);
+    await expectWindowSameAsWholeSession(10, afterSegment(51));
     expect(warn).not.toHaveBeenCalled();
     expect(reader.stats.fullParses).toBe(1);
   });

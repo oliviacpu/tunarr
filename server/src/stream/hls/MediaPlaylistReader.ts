@@ -408,6 +408,8 @@ export class MediaPlaylistReader {
     targetDuration: number,
     why: string,
   ): Promise<IndexUpdate> {
+    // Read before resetting, so a failed read keeps the index
+    const chunk = await readFrom(handle, head, head.bodyStart, size);
     this.logger?.warn(
       'The HLS playlist %s starts at segment %d, and %s. Parsing it afresh and estimating its start time.',
       this.path,
@@ -419,7 +421,6 @@ export class MediaPlaylistReader {
     this.#windowed = true;
     const index = this.#requireIndex();
     index.skipTime(mediaSequence * targetDuration * 1000);
-    const chunk = await readFrom(handle, head, head.bodyStart, size);
     const lines = chunk.toString('utf-8').split('\n');
     this.#stats.fullParses++;
     this.#stats.parsedLines += lines.length;
