@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1aa5f765-8e05-46f3-8fec-ce3cbb0337a4",
+  "id": "178577e5-5879-4963-a1bb-c40956590404",
   "prevId": "82ebb6a6-53fd-4587-ac19-31bddb77c6b8",
   "tables": {
     "artwork": {
@@ -330,13 +330,6 @@
           "notNull": false,
           "autoincrement": false,
           "default": false
-        },
-        "audio_tracks": {
-          "name": "audio_tracks",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "stream_selection_profile_id": {
           "name": "stream_selection_profile_id",
@@ -2646,6 +2639,15 @@
           "name": "program_grouping_state_index",
           "columns": [
             "state"
+          ],
+          "isUnique": false
+        },
+        "program_grouping_media_source_library_external_key_index": {
+          "name": "program_grouping_media_source_library_external_key_index",
+          "columns": [
+            "media_source_id",
+            "library_id",
+            "external_key"
           ],
           "isUnique": false
         }

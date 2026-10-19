@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f2b0ec31-7dab-4b1f-a85e-b81121a49db7",
-  "prevId": "1aa5f765-8e05-46f3-8fec-ce3cbb0337a4",
+  "id": "f8ef476e-cf54-44eb-b7cd-ed733aabeae7",
+  "prevId": "178577e5-5879-4963-a1bb-c40956590404",
   "tables": {
     "artwork": {
       "name": "artwork",
@@ -333,13 +333,6 @@
         },
         "audio_tracks": {
           "name": "audio_tracks",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "captions": {
-          "name": "captions",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -2653,6 +2646,15 @@
           "name": "program_grouping_state_index",
           "columns": [
             "state"
+          ],
+          "isUnique": false
+        },
+        "program_grouping_media_source_library_external_key_index": {
+          "name": "program_grouping_media_source_library_external_key_index",
+          "columns": [
+            "media_source_id",
+            "library_id",
+            "external_key"
           ],
           "isUnique": false
         }

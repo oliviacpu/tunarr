@@ -35,6 +35,57 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Merged upstream main as of 2026-10-18
+
+- **What came in:** 25 upstream commits, up to `b09a7e06`.
+  - #2288: the subtitle playlist keeps its `#EXT-X-DISCONTINUITY` markers and discontinuity sequence when trimmed.
+  - #2324: subtitle burn-in paths are escaped for both of ffmpeg's parsers (the fork already did this; see below).
+  - #2232: an index on `program_grouping` (media source, library, external key), migration `0053_real_raza`. A later
+    upstream commit registers it in `DirectMigrationProvider`, which #2232 left out.
+  - Tone mapping with `tonemap` and `tonemap_opencl` passes the peak as a multiple of 100-nit reference white
+    (`peak=10`, not `peak=1000`), so the CPU curve is no longer normalized for 100,000 nits.
+  - #2327: `tonemap_opencl` returns VAAPI frames when a download follows. #2322: VAAPI MPEG-2 output uses
+    `mpeg2_vaapi`.
+  - #2308: saving a channel sends `startTime` only when it was changed, so a save no longer undoes a rebase
+    (`UpdateChannelRequest`).
+  - #2294: artwork ignores a `cachePath` whose file is missing. #2304: the OtherVideo NFO parser reads `uniqueid` as
+    a list. #2319: `gcd` no longer loops on zero.
+  - #2338: the Node.js version is gone from the sidebar and `/api/version`. #2332: the library scan spinner stops
+    when a scan finishes. #2331: copy to clipboard works over plain HTTP and in dialogs. Three log roll form fixes, with
+    an e2e test.
+  - TypeScript 7.0.2: `tsc` is now the Go compiler, so every `tsgo` script runs `tsc` and
+    `@typescript/native-preview` is gone. `.pnpmfile.cjs` gives the tools that still need the JS compiler API
+    TypeScript 5.9.3.
+  - #2318: a Docker compose setup for testing on GPU hardware. #2325: CI uses `actions/checkout` v7. #2333, #2334:
+    web tests and docs. Two plans.
+- **Conflicts:**
+  - `HlsPlaylistMutator.ts`: only the comment above `parseSubtitlePlaylist` conflicted, beside the fork's
+    `selectSegments`. #2288 changes the subtitle playlist path, which the fork never changed: it still reads the
+    whole subtitle playlist, unlike the media playlists that `MediaPlaylistIndex` reads incrementally. So #2288's
+    code and its tests came in unchanged.
+  - `SubtitleFilter.ts`: the fork's version stays. It passes the path as the named `filename` option, escaped with
+    `escapeFilterOptionValue`, where #2324 escapes a positional path and its `=` too. #2324's `SubtitleFilter.test.ts`
+    cases now expect `subtitles=filename=...` with `=` left as is, and their paths are in the round-trip list in
+    `escapeFilterValue.test.ts`. Its real-ffmpeg test, `SubtitleFilter.local.test.ts`, typed its subtitle source with
+    the wrong `StreamSource`, which the fork's local-test typecheck caught; it now uses the input builder's.
+  - `TonemapFilter.ts`: the fork's curve choice and HDR10 side data strip, with upstream's `toFfmpegTonemapPeak`. The
+    fork's own curve tests expect `peak=10`. `tonemapx` passes no peak, so it is unchanged.
+  - `BasicChannelRepository.ts`: both sides' imports. `server/package.json`: both typecheck scripts run `tsc`, and
+    the fork's local-test typecheck and bench scripts stay. `stream-repro/scripts/repro.mjs`: both sides' options.
+  - The OpenAPI document was regenerated.
+- **Migrations:** upstream's `0053_real_raza` keeps its number. The fork's two were regenerated after it with
+  `drizzle-kit generate`, one at a time, with the same SQL:
+  - `0053_flawless_donald_blake.sql` → `0054_flawless_donald_blake.sql` (`channel.audio_tracks`)
+  - `0054_serious_rattler.sql` → `0055_serious_rattler.sql` (`channel.captions`)
+  - They keep the registry keys they were released with, `migration1792160617` and `migration1792181517`.
+    `resolve-migrations` would have joined them into one new migration under a new key. A database that already
+    ran them would then hold two names the build doesn't know, and startup would stop with
+    `DatabaseSchemaTooNewError`. With the keys kept, such a database runs only `0053_real_raza` (key
+    `migration1791321608`, which sorts before them).
+- **Tests:** new in `DBAccess.test.ts`: a database with the fork's two keys and without upstream's migration and
+  index runs only `0053_real_raza`, gets the index, and keeps both columns. With a changed key it fails with
+  `DatabaseSchemaTooNewError`. `pnpm drizzle-kit check` passes and `drizzle-kit generate` finds no schema changes.
+
 ### Caption housekeeping: dead code removed, one channel-caption merge for server and web (2026-10-18)
 
 - **What you saw:** nothing; cleanup from the 2026-10-18 captions review (`plans/closed-captions-review-2026-10-18.md`).
