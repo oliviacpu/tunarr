@@ -238,6 +238,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - All of these fail on the old code. The kill test from the `.ts` wrapper fix passes unchanged.
 - **Upstream:** not sent. It's upstream's code, so it could go upstream as a plain bug fix.
 
+### expose saved encoder presets with accessible labels (2026-10-19)
+
+- **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
+
 ### An HEVC or MPEG-2 channel's .ts stream no longer offers an empty caption track (2026-10-19)
 
 - **What you saw:** found in code review, not on the deployment. With closed captions for HDHomeRun clients on, a
