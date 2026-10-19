@@ -46,6 +46,89 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   - Tests: `hdhrSettingsApi.test.ts`, `SettingsDB.test.ts`, `HdhrSettingsPage.test.tsx`.
 - **Upstream:** not sent; upstream `main` has the same code.
 
+### General settings: Reset works on an invalid value, and the log level help names `TUNARR_LOG_LEVEL` (2026-10-19)
+
+- **What you saw:** not reported from the deployment; found in the fork review (B5). The log level help told you to set
+  `LOG_LEVEL`. "Reset Options" was disabled while a field held an invalid value, the one time you need it. With no
+  log roll schedule saved, Reset left the schedule without its `type`, so the form stayed dirty and a schedule ticked
+  after that was dropped on save. A bad log roll schedule increment was reported as "Max Backups".
+- **Cause:** the server reads `TUNARR_LOG_LEVEL` (`server/src/util/env.ts`). The Reset button was disabled on
+  `!isValid`. Reset filled the form from `getBaseFormValues`, while load and save used `getDefaultFormValues`, which
+  also fills in the log roll schedule (with its `type`) and size. `LogRollForm` copied BackupForm's field name.
+- **Fix:** `GeneralSettingsForm.tsx` has one `getDefaultFormValues` for load, a successful save and Reset; Reset is
+  enabled whenever the form has changes; the help text names `TUNARR_LOG_LEVEL`. `LogRollForm.tsx` names the field
+  "Roll Schedule Increment". Tests: `GeneralSettingsForm.test.tsx`, `LogRollForm.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
+### The New Channel page shows its breadcrumbs, and Settings opens on General (2026-10-19, PR #90)
+
+- **What you saw:** the New Channel page had an empty breadcrumb trail. Opening `/settings` showed the tab bar with no
+  tab selected over an empty panel, and MUI warned that the Tabs value was invalid.
+- **Cause:** `NewChannelPage.tsx` imported MUI's `Breadcrumbs` instead of the app's `components/Breadcrumbs.tsx`, which
+  builds the trail from the URL. The settings layout route had no index child, so at `/settings` its tab value came
+  out as `'/undefined'`.
+- **Fix:** the page uses the app's `Breadcrumbs` and reads Channels › New (`useRouteName.ts` already named
+  `/channels/new`). A new index route, `routes/settings/index.tsx`, redirects `/settings` to `/settings/general` in
+  `beforeLoad`. The e2e sweep maps the new `/settings/` path and no longer expects the Tabs warning on `/settings`.
+  The `/settings/sources` warning is a separate issue and stays listed.
+- **Tests:** `NewChannelPage.test.tsx` finds the Channels link and New in the trail; `router.test.ts` loads the app's
+  route tree at `/settings` and `/settings/` and lands on `/settings/general`. Both fail without the fix.
+- **Upstream:** not sent. Both defects are in upstream's code.
+
+### Reloading or closing a clean editor no longer asks "Leave site?" (2026-10-19, PR #91)
+
+- **What you saw:** the browser's "Leave site?" dialog on reload or tab close with nothing changed, on every page that
+  warns about unsaved changes: the channel editor, the programming page, both slot editors, and the FFmpeg, XMLTV
+  and HDHR settings pages.
+- **Cause:** `UnsavedNavigationAlert` called TanStack Router's `useBlocker` without `enableBeforeUnload`, which
+  defaults to on. The browser-level handler in `@tanstack/history` reads only that option and never calls
+  `shouldBlockFn`, so the dirty check guarded in-app navigation but not reload or close.
+- **Fix:** `UnsavedNavigationAlert.tsx` passes `enableBeforeUnload: isDirty`, so the browser dialog follows the same
+  dirty state as the in-app one. In-app blocking and `exceptTargetPaths` are unchanged.
+- **Tests:** `UnsavedNavigationAlert.test.tsx` mocks `useBlocker`: the browser prompt is off for a clean form, on for
+  a dirty one, and follows `isDirty` across re-renders; `shouldBlockFn` blocks only a dirty form and lets it reach an
+  exempt path.
+### The top bar's dark mode button works the first time on a light OS (2026-10-19)
+
+- **What you saw:** until a mode was picked in settings, the first click on the top bar's moon icon did nothing on a
+  computer set to light. A second click turned dark mode on.
+- **Cause:** with no mode chosen, MUI's mode is `system`. `DarkModeButton` set `mode === 'light' ? 'dark' : 'light'`,
+  so from `system` it always set `light`, which looked the same as a light OS.
+- **Fix:** `nextColorMode(mode, resolved)` in `useTunarrTheme.ts` flips a chosen light or dark mode, and under
+  `system` flips the scheme on screen (`useColorScheme().colorScheme`). The unused `theme.themePreference` store field
+  is gone, with the load-time step that wrote it. `store/index.ts` drops the key from a stored theme on load, so it
+  is not saved again.
+- **Tests:** `useTunarrTheme.test.ts`: light to dark, dark to light, system on a light OS to dark, system on a dark OS
+  to light. `DarkModeButton.test.tsx`: with the OS scheme stubbed, one click from `system` changes the scheme both
+  ways (on the old code a light OS needed two). `store/index.test.ts`: a stored theme with `themePreference`, or from
+  before it, hydrates without it, logs no error, and is written back without it.
+- **Upstream:** not sent.
+### Every channel form field marks its tab when it has an error (2026-10-19)
+
+- **What you saw:** nothing yet. The channel editor puts a red dot on the tab (Properties, Flex, EPG, Streaming) that
+  holds a field with an error. Its hand-written field lists left out `startTime`, `onDemand`, `transcodeConfigId`,
+  `disableFillerOverlay`, `id` and `duration`. None of these has a validation rule today, so no dot is missing yet.
+  A rule added to one of them later would leave Save disabled with no dot on any tab.
+- **Fix:** `channelFieldTabs.ts` maps each field to its tab as a `Record<keyof SaveableChannel, EditChannelTabs>`, so
+  a new channel field without a tab fails to compile. `EditChannelForm.tsx` marks tabs from it. `id` and `duration` are
+  not inputs on any tab and go to Properties. Test: `channelFieldTabs.test.ts` checks the map against
+  `SaveableChannelSchema.shape` and checks that an error marks the right tab.
+- **Upstream:** not sent; upstream `main`'s field lists have the same gaps.
+### Dead delete dialogs and settings hooks removed from the web app (2026-10-19, PR #86)
+
+- **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
+- **Cause:**
+  - The channels page had its own channel delete dialog, but its open state was only ever set back to empty, so it
+    never opened. Deleting a channel goes through `ChannelOptionsMenu` and `ChannelDeleteDialog`.
+  - The FFmpeg settings page had a transcode config delete mutation and confirmation dialog that nothing opened.
+    `TranscodeConfigsTable` has its own. Its `restoreTunarrDefaults` flag was never set to true.
+  - `usePlexStreamSettings` and `usePlexSettings` in `web/src/hooks/settingsHooks.ts` had no callers.
+- **Fix:** all of the above removed (`ChannelsPage.tsx`, `FfmpegSettingsPage.tsx`, `settingsHooks.ts`). The FFmpeg
+  page's Save and Reset Changes buttons now depend on `isDirty` alone, which is what they already did. No behaviour
+  changes. Locale catalogs are left to the post-merge `lingui extract` job.
+- **Tests:** none added; removal only. The web suite, `pnpm turbo typecheck` and `pnpm lint-changed` pass.
+- **Upstream:** not sent; upstream `main` has the same dead code.
+
 ### The Live TV playlist reader keeps the session's history itself (2026-10-19, PR #84)
 
 - **What you saw:** nothing yet. This prepares the fix for `stream.m3u8` growing for as long as a session runs

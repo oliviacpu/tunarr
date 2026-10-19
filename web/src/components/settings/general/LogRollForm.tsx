@@ -116,7 +116,7 @@ export const LogRollForm = () => {
                 <NumericFormControllerText
                   control={control}
                   name="logging.logRollConfig.schedule.increment"
-                  prettyFieldName="Max Backups"
+                  prettyFieldName={t`Roll Schedule Increment`}
                   // The rule outlives this field when it unmounts. Unticking
                   // the schedule writes 0, and min: 1 would block every save.
                   rules={{ min: 0 }}

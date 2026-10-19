@@ -36,6 +36,10 @@ export default function UnsavedNavigationAlert({
       }
       return isDirty;
     },
+    // The browser's own "Leave site?" prompt (reload, tab close) never
+    // consults shouldBlockFn; TanStack Router turns it on unless told
+    // otherwise. Tie it to the same dirty state as the in-app dialog.
+    enableBeforeUnload: isDirty,
     withResolver: true,
   });
 

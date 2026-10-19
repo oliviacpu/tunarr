@@ -22,11 +22,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  FfmpegSettings,
-  TranscodeConfig,
-  TupleToUnion,
-} from '@tunarr/types';
+import type { FfmpegSettings, TupleToUnion } from '@tunarr/types';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import type { TonemapAlgorithm } from '@tunarr/types/schemas';
 import {
@@ -34,21 +30,18 @@ import {
   FfmpegLogLevels,
   TonemapAlgorithms,
 } from '@tunarr/types/schemas';
-import { capitalize, isEmpty, isEqual, isNull, map, some } from 'lodash-es';
+import { capitalize, isEmpty, isEqual, map, some } from 'lodash-es';
 import { useSnackbar } from 'notistack';
-import { useState } from 'react';
 import type { SubmitHandler } from 'react-hook-form';
 import { Controller, useForm } from 'react-hook-form';
 import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert.tsx';
 
-import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { LanguagePreferencesList } from '@/components/LanguagePreferencesList';
 import type { DeepRequired } from 'ts-essentials';
 import { CaptionAppearanceFields } from '../../components/settings/ffmpeg/CaptionAppearanceFields.tsx';
 import { TranscodeConfigsTable } from '../../components/settings/ffmpeg/TranscodeConfigsTable.tsx';
 import {
-  deleteApiTranscodeConfigsByIdMutation,
   getApiFfmpegInfoOptions,
   getApiFfmpegInfoQueryKey,
   getApiFfmpegSettingsQueryKey,
@@ -79,9 +72,6 @@ export default function FfmpegSettingsPage() {
 
   const queryClient = useQueryClient();
   const systemState = useSystemState();
-
-  const [confirmDeleteTranscodeConfig, setConfirmDeleteTranscodeConfig] =
-    useState<TranscodeConfig | null>(null);
 
   const {
     reset,
@@ -141,15 +131,12 @@ export default function FfmpegSettingsPage() {
     }
   };
 
-  const [restoreTunarrDefaults, setRestoreTunarrDefaults] = useState(false);
-
   const snackbar = useSnackbar();
 
   const updateFfmpegSettingsMutation = useMutation({
     ...putApiFfmpegSettingsMutation(),
     // mutationFn: apiClient.updateFfmpegSettings,
     onSuccess: (data) => {
-      setRestoreTunarrDefaults(false);
       snackbar.enqueueSnackbar(t`Settings Saved!`, {
         variant: 'success',
       });
@@ -167,12 +154,6 @@ export default function FfmpegSettingsPage() {
         },
       });
     },
-  });
-
-  const deleteTranscodeConfig = useMutation({
-    ...deleteApiTranscodeConfigsByIdMutation(),
-    // mutationFn: (id: string) =>
-    //   apiClient.deleteTranscodeConfig(undefined, { params: { id } }),
   });
 
   const updateFfmpegSettings: SubmitHandler<
@@ -614,22 +595,14 @@ export default function FfmpegSettingsPage() {
         </FormControl>
       </Stack>
       <Stack spacing={2} direction="row" justifyContent="right">
-        {(isDirty || (isDirty && !isSubmitting) || restoreTunarrDefaults) && (
-          <Button
-            variant="outlined"
-            onClick={() => {
-              reset(ffmpegSettings);
-              setRestoreTunarrDefaults(false);
-            }}
-          >
+        {(isDirty || (isDirty && !isSubmitting)) && (
+          <Button variant="outlined" onClick={() => reset(ffmpegSettings)}>
             <Trans>Reset Changes</Trans>
           </Button>
         )}
         <Button
           variant="contained"
-          disabled={
-            !isValid || isSubmitting || (!isDirty && !restoreTunarrDefaults)
-          }
+          disabled={!isValid || isSubmitting || !isDirty}
           type="submit"
         >
           <Trans>Save</Trans>
@@ -648,21 +621,6 @@ export default function FfmpegSettingsPage() {
       </Typography>
       <TranscodeConfigsTable />
       <UnsavedNavigationAlert isDirty={isDirty} />
-      <DeleteConfirmationDialog
-        open={!isNull(confirmDeleteTranscodeConfig)}
-        title={t`Delete Transcoding Config "${confirmDeleteTranscodeConfig?.name}"?`}
-        body={t`All channels assigned to this config will be set to use the default configuration. If this is the last configuration, a new default configuration will be created.`}
-        onConfirm={() =>
-          deleteTranscodeConfig.mutate({
-            path: { id: confirmDeleteTranscodeConfig!.id },
-          })
-        }
-        onClose={() => setConfirmDeleteTranscodeConfig(null)}
-        dialogProps={{
-          maxWidth: 'sm',
-          fullWidth: true,
-        }}
-      />
     </Box>
   );
 }
