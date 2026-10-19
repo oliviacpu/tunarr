@@ -35,6 +35,30 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### The real-ffmpeg caption test runs again, and the typecheck now covers it (2026-10-18)
+
+- **What you saw:** with ffmpeg installed, `pnpm test:local CaptionInsertion` failed all ten tests with
+  "options.pairsForFrames is not a function", while CI stayed green.
+- **Cause:**
+  - `insertCaptions` replaced its per-frame `pairForPts` option with `pairsForFrames`, which gets a segment's frame PTS
+    list at once, but `CaptionInsertion.local.test.ts` still passed the old one.
+  - The `*.local.test.ts` tests need real binaries, so `pnpm test` skips them, and the typecheck
+    (`tsconfig.build.json`) leaves out every test, so nothing reported it.
+  - Three other local tests had type errors of the same kind: a `SearchParser` built without its `MediaSourceDB`, a
+    `Buffer` passed as an `expect` message, and two helpers nothing calls.
+- **Fix:**
+  - The caption test builds each segment's pairs the way `HlsSession.captionPairs` does for one program:
+    `pairsForFrames` over the schedule, with each frame's PTS as its time in milliseconds. The language test sends
+    padding on every frame. The assertions are unchanged.
+  - The Meilisearch, NVIDIA and QSV local tests and `testing/ffmpeg/FfmpegIntegrationHelper.ts` compile again.
+  - The server's `pnpm typecheck`, which CI runs, also checks the local tests (`tsconfig.local-test.json`, script
+    `typecheck:local-tests`, about 3 s). `pnpm build` compiles the same files as before.
+  - The other tests are still not typechecked; between them they have about 650 type errors.
+- **Tests:** `pnpm test:local` with Homebrew's ffmpeg 9.0.2 and Meilisearch: the ten caption tests, the two session
+  start tests, the Meilisearch test and seven of the eight software pipeline tests pass. The software subtitle burn-in
+  test fails because that ffmpeg has no `subtitles` filter (no libass). The VAAPI, QSV and NVIDIA tests skip on a Mac.
+  With `pairForPts` put back, `pnpm typecheck` fails with TS2353.
+
 ### The .ts stream only carries a caption track on channels with subtitles on (2026-10-18)
 
 - **What you saw:** nothing on screen. With **Closed captions for HDHomeRun clients** on, every HLS channel's `.ts`

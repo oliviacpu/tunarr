@@ -1,0 +1,13 @@
+{
+    // The *.local.test.ts tests need real binaries (ffmpeg, Meilisearch), so
+    // `pnpm test` skips them and CI never runs them. `pnpm typecheck` checks
+    // them with this config, so a test left calling an API that has changed
+    // fails the build instead of waiting for someone to run `pnpm test:local`.
+    // The declaration files carry the global types (Fastify's request
+    // additions and others) that the build gets from including all of src.
+    "extends": "./tsconfig.test.json",
+    "include": [
+        "./src/**/*.d.ts",
+        "./src/**/*.local.test.ts",
+    ],
+}

@@ -19,10 +19,7 @@ import {
   FileOutputLocation,
   VideoFormats,
 } from '../../constants.ts';
-import {
-  PixelFormatYuv420P,
-  PixelFormatYuv420P10Le,
-} from '../../format/PixelFormat.ts';
+import { PixelFormatYuv420P } from '../../format/PixelFormat.ts';
 import {
   AudioInputFilterSource,
   AudioInputSource,
@@ -58,21 +55,6 @@ function makeH264VideoInput(inputPath: string, frameSize: FrameSize) {
       frameSize,
       index: 0,
       pixelFormat: new PixelFormatYuv420P(),
-      providedSampleAspectRatio: null,
-      colorFormat: null,
-    }),
-  );
-}
-
-function makeHevc10BitVideoInput(inputPath: string, frameSize: FrameSize) {
-  return VideoInputSource.withStream(
-    new FileStreamSource(inputPath),
-    VideoStream.create({
-      codec: VideoFormats.Hevc,
-      displayAspectRatio: '16:9',
-      frameSize,
-      index: 0,
-      pixelFormat: new PixelFormatYuv420P10Le(),
       providedSampleAspectRatio: null,
       colorFormat: null,
     }),

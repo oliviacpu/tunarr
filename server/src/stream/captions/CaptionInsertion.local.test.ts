@@ -6,9 +6,23 @@ import { pipeline } from 'node:stream/promises';
 import { createTempWorkdir } from '../../testing/ffmpeg/FfmpegIntegrationHelper.ts';
 import { binaries } from '../../testing/ffmpeg/FfmpegTestFixtures.ts';
 import { CaptionLanguageStream } from './CaptionLanguageStream.ts';
-import type { CaptionAppearance, CaptionCue } from './Cea608Encoder.ts';
+import type {
+  CaptionAppearance,
+  CaptionCue,
+  CaptionSchedule,
+} from './Cea608Encoder.ts';
 import { PaddingPair, buildCaptionSchedule } from './Cea608Encoder.ts';
 import { insertCaptions } from './MpegTsCaptionInserter.ts';
+import { pairsForFrames } from './pairsForFrames.ts';
+
+// The pairs for a segment's frames as HlsSession.captionPairs works them out
+// when the whole segment is one program: a frame's time on the schedule's
+// clock is its PTS in milliseconds
+const pairsFrom = (schedule: CaptionSchedule) => (pts90k: readonly number[]) =>
+  pairsForFrames(
+    schedule,
+    pts90k.map((pts) => pts / 90),
+  );
 
 // Captions written into real libx264 output (B-frames, MPEG-TS as Tunarr's HLS
 // segments are muxed) must come back out of ffmpeg's own 608 decoder with the
@@ -63,7 +77,7 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
     );
 
     const result = insertCaptions(await fs.readFile(input), {
-      pairForPts: (pts) => schedule.pairAt(pts / 90),
+      pairsForFrames: pairsFrom(schedule),
       language: 'eng',
     });
     if (!result.ok) {
@@ -151,7 +165,7 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
         appearance: layout,
       });
       const result = insertCaptions(await fs.readFile(input), {
-        pairForPts: (pts) => schedule.pairAt(pts / 90),
+        pairsForFrames: pairsFrom(schedule),
         language: 'eng',
       });
       if (!result.ok) {
@@ -241,7 +255,7 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
         { firstFrameMs: firstMs, frameRate: 30, appearance },
       );
       const result = insertCaptions(await fs.readFile(input), {
-        pairForPts: (pts) => schedule.pairAt(pts / 90),
+        pairsForFrames: pairsFrom(schedule),
         language: 'eng',
       });
       if (!result.ok) {
@@ -450,7 +464,7 @@ describe.skipIf(!binaries)('caption insertion with ffmpeg', () => {
       ...['-f', 'mpegts', input],
     ]);
     const result = insertCaptions(await fs.readFile(input), {
-      pairForPts: () => PaddingPair,
+      pairsForFrames: (pts) => pts.map(() => PaddingPair),
       language: 'eng',
     });
     if (!result.ok) {
