@@ -277,6 +277,7 @@ describe('insertCaptions', () => {
 
     expect(result).toEqual({
       ok: false,
+      kind: 'already-captioned',
       reason: 'the video already carries captions',
     });
   });
@@ -298,6 +299,7 @@ describe('insertCaptions', () => {
 
     expect(result).toEqual({
       ok: false,
+      kind: 'not-whole-packets',
       reason: 'not a whole number of TS packets',
     });
   });

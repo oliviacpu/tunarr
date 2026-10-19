@@ -457,6 +457,44 @@ describe('HlsSession', () => {
       expect(warn).toHaveBeenCalledOnce();
     });
 
+    test('warns once for refusals whose reasons differ only in detail', async () => {
+      const session = makeSession(dir.name);
+      const warn = vi.fn();
+      const log = { warn, debug: vi.fn() } as unknown as Logger;
+      (session as unknown as { logger: Logger }).logger = log;
+      await fs.mkdir(session.workingDirectory, { recursive: true });
+      // Whole TS packets that lose sync at different bytes
+      const losingSyncAt = (packet: number) => {
+        const data = Buffer.alloc(188 * 4);
+        for (let i = 0; i < packet; i++) {
+          data[i * 188] = 0x47;
+        }
+        return data;
+      };
+      await fs.writeFile(
+        path.join(session.workingDirectory, 'data000001.ts'),
+        losingSyncAt(1),
+      );
+      await fs.writeFile(
+        path.join(session.workingDirectory, 'data000002.ts'),
+        losingSyncAt(2),
+      );
+      (
+        session as unknown as {
+          addCaptions(ptsOffset: number, captions: ProgramCaptions): void;
+        }
+      ).addCaptions(0, captions(30));
+
+      expect(await session.captionedSegment('data000001.ts')).toBeUndefined();
+      expect(await session.captionedSegment('data000002.ts')).toBeUndefined();
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith(
+        'Serving segment %s without captions: %s',
+        'data000001.ts',
+        'lost TS sync at byte 188',
+      );
+    });
+
     describe('across programs', () => {
       const isPadding = (p: number[]) => p[0] === 0x80 && p[1] === 0x80;
 
