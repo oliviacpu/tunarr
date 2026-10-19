@@ -61,7 +61,10 @@ export const STALE_CACHE_COPY_MS = 6 * 60 * 60 * 1000;
 export function isInsideFolder(folder: string, file: string) {
   const relative = path.relative(path.resolve(folder), path.resolve(file));
   return (
-    relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+    relative !== '' &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
   );
 }
 

@@ -4,6 +4,30 @@ import path from 'node:path';
 import { LocalSubtitlesService } from './LocalSubtitlesService.ts';
 
 describe('LocalSubtitlesService', () => {
+  test('matches mixed-case names without claiming a longer video name', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subtitle-case-'));
+    try {
+      await Promise.all(
+        [
+          'MOVIE.MKV',
+          'movie.EN.SRT',
+          'Movie.PART2.MKV',
+          'MOVIE.part2.FR.SRT',
+        ].map((name) => fs.writeFile(path.join(dir, name), '')),
+      );
+      const found = await new LocalSubtitlesService().findExternalSubtitles(
+        path.join(dir, 'MOVIE.MKV'),
+      );
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({
+        language: 'eng',
+        path: path.join(dir, 'movie.EN.SRT'),
+      });
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('parse basic', () => {
     const subs = LocalSubtitlesService.parseSubtitleFilePath(
       '/a/b/c/The Player (1992) {imdb-tt0105151}.mkv',

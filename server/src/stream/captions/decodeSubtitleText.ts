@@ -83,3 +83,23 @@ export function decodeSubtitleText(bytes: Buffer): string {
   }
   return nonAscii >= broken ? lossy : decodeWindows1252(bytes);
 }
+
+/** A charset override only when the file decoder selects Windows-1252. BOMs are handled by FFmpeg. */
+export function subtitleCharacterEncoding(
+  bytes: Buffer,
+): 'WINDOWS-1252' | undefined {
+  if (
+    startsWith(bytes, Utf8Bom) ||
+    startsWith(bytes, Utf16LeBom) ||
+    startsWith(bytes, Utf16BeBom)
+  )
+    return;
+  try {
+    StrictUtf8.decode(bytes);
+    return;
+  } catch {
+    return decodeSubtitleText(bytes) === decodeWindows1252(bytes)
+      ? 'WINDOWS-1252'
+      : undefined;
+  }
+}

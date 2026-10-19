@@ -35,17 +35,25 @@ export class LocalSubtitlesService {
     // Other videos whose names extend this one's ("Movie.part2" beside "Movie"):
     // a subtitle that starts with one of those names is that video's.
     const longerVideoNames = files
-      .filter((dirent) => KnownVideoFileExtensions.has(extname(dirent.name)))
-      .map((dirent) => basename(dirent.name, extname(dirent.name)))
-      .filter((name) => name.startsWith(`${itemName}.`));
+      .filter((dirent) =>
+        KnownVideoFileExtensions.has(extname(dirent.name).toLowerCase()),
+      )
+      .map((dirent) =>
+        basename(dirent.name, extname(dirent.name)).toLowerCase(),
+      )
+      .filter((name) => name.startsWith(`${itemName.toLowerCase()}.`));
 
     for (const dirent of files) {
       // "Episode 1." so that "Episode 10.en.srt" isn't taken for episode 1's
-      if (!dirent.name.startsWith(`${itemName}.`)) {
+      if (!dirent.name.toLowerCase().startsWith(`${itemName.toLowerCase()}.`)) {
         continue;
       }
 
-      if (longerVideoNames.some((name) => dirent.name.startsWith(`${name}.`))) {
+      if (
+        longerVideoNames.some((name) =>
+          dirent.name.toLowerCase().startsWith(`${name}.`),
+        )
+      ) {
         continue;
       }
 
@@ -88,7 +96,7 @@ export class LocalSubtitlesService {
     // hearing, and "Movie.commentary.en.srt" is English. Failing that, it is the first part
     // that isn't an option, and "unknown" when there is none. The other parts are the options.
     const parts = basename(fileName, codecExt)
-      .replace(itemName, '')
+      .slice(itemName.length)
       .toLowerCase()
       .split('.')
       .filter((s) => s.length > 0);

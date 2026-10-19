@@ -1,3 +1,4 @@
+import { decodeSubtitleText } from '../../stream/captions/decodeSubtitleText.ts';
 import { JellyfinRequestRedacter } from '@/external/jellyfin/JellyfinRequestRedacter.js';
 import type { Maybe, Nilable, Nullable } from '@/types/util.js';
 import {
@@ -580,8 +581,9 @@ export class JellyfinApiClient extends MediaSourceApiClient<JellyfinItemTypes> {
     try {
       // A 404 means the server no longer has this subtitle; the caller
       // reports that.
-      const subtitlesResult = await this.doGet<string>(
+      const subtitlesResult = await this.doGet<Buffer>(
         {
+          responseType: 'arraybuffer',
           url: `/${trimStart(subtitlePath, '/')}`,
           params: {
             userId: this.options.mediaSource.userId,
@@ -590,7 +592,7 @@ export class JellyfinApiClient extends MediaSourceApiClient<JellyfinItemTypes> {
         { notFoundIsExpected: true },
       );
 
-      return this.makeSuccessResult(subtitlesResult);
+      return this.makeSuccessResult(decodeSubtitleText(subtitlesResult));
     } catch (e) {
       return this.requestErrorResult(e);
     }
@@ -604,8 +606,9 @@ export class JellyfinApiClient extends MediaSourceApiClient<JellyfinItemTypes> {
     tickOffset: number = 0,
   ): Promise<QueryResult<string>> {
     try {
-      const subtitlesResult = await this.doGet<string>(
+      const subtitlesResult = await this.doGet<Buffer>(
         {
+          responseType: 'arraybuffer',
           url: `/Videos/${itemId}/${mediaItemId}/Subtitles/${streamIndex}/${tickOffset}/Stream.${trimStart(subtitleExt, '.')}`,
           params: {
             userId: this.options.mediaSource.userId,
@@ -614,7 +617,7 @@ export class JellyfinApiClient extends MediaSourceApiClient<JellyfinItemTypes> {
         { notFoundIsExpected: true },
       );
 
-      return this.makeSuccessResult(subtitlesResult);
+      return this.makeSuccessResult(decodeSubtitleText(subtitlesResult));
     } catch (e) {
       return this.requestErrorResult(e);
     }

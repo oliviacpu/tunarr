@@ -29,6 +29,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 
+### Subtitle text decoding and discovery reliability (2026-10-19)
+
+- **What changed:** subtitle downloads and extraction preserve legacy-encoded text, local subtitle discovery accepts filename extension case variations, and stream details retain stored embedded SDH flags.
+- **Fix:** media-source subtitle requests read bytes and share BOM-aware UTF-8/Windows-1252 decoding. Local subtitle matching and extracted-file reads use the same decoding path.
+- **Validation:** targeted decoding, request, discovery, extraction and stream-details tests cover these paths.
+- **Upstream:** not sent; personal fork change, stacked on caption-boundary PR #65.
+
 <!-- Entry format:
 ### Short title (YYYY-MM-DD, commit)
 - **What you saw:** the symptom.
