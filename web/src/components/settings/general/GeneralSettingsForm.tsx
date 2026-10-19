@@ -88,49 +88,51 @@ const LogCategorySelectInputs = [
   },
 ] as const;
 
-const getBaseFormValues = (
-  settings: SettingsStateInternal,
-  systemSettings: SystemSettings,
-): GeneralSettingsFormData => ({
-  backendUri: settings.backendUri,
-  logLevel: systemSettings.logging.useEnvVarLevel
-    ? 'env'
-    : systemSettings.logging.logLevel,
-  backup: systemSettings.backup,
-  server: systemSettings.server,
-  logging: {
-    ...systemSettings.logging,
-    categoryLogLevel: {
-      ...(systemSettings.logging.categoryLogLevel ?? {}),
-      ...LogCategorySelectInputs.reduce(
-        (prev, { category }) => {
-          prev[category] ??=
-            systemSettings.logging.categoryLogLevel?.[category] ?? 'inherit';
-          return prev;
-        },
-        {} as Record<TupleToUnion<typeof LogCategories>, LogLevel | 'inherit'>,
-      ),
-    },
-  },
-});
-
+// Loading the page, a successful save and Reset all fill the form from this,
+// so every field has the same shape after each of them.
 function getDefaultFormValues(
   settings: SettingsStateInternal,
   systemSettings: SystemSettings,
-) {
-  const base = getBaseFormValues(settings, systemSettings);
-  base.logging.logRollConfig = { ...base.logging.logRollConfig };
-  base.logging.logRollConfig.maxFileSizeBytes ??= 0;
-
-  // An increment of 0 renders "Roll on Schedule" unticked. The save handler
-  // omits the schedule in that case, because the API requires a positive one.
-  base.logging.logRollConfig.schedule ??= {
-    type: 'every',
-    unit: 'day',
-    increment: 0,
-    offsetMs: 0,
+): GeneralSettingsFormData {
+  const { logRollConfig } = systemSettings.logging;
+  return {
+    backendUri: settings.backendUri,
+    logLevel: systemSettings.logging.useEnvVarLevel
+      ? 'env'
+      : systemSettings.logging.logLevel,
+    backup: systemSettings.backup,
+    server: systemSettings.server,
+    logging: {
+      ...systemSettings.logging,
+      logRollConfig: {
+        ...logRollConfig,
+        maxFileSizeBytes: logRollConfig.maxFileSizeBytes ?? 0,
+        // An increment of 0 renders "Roll on Schedule" unticked. The save
+        // handler omits the schedule in that case, because the API requires a
+        // positive one.
+        schedule: logRollConfig.schedule ?? {
+          type: 'every',
+          unit: 'day',
+          increment: 0,
+          offsetMs: 0,
+        },
+      },
+      categoryLogLevel: {
+        ...(systemSettings.logging.categoryLogLevel ?? {}),
+        ...LogCategorySelectInputs.reduce(
+          (prev, { category }) => {
+            prev[category] ??=
+              systemSettings.logging.categoryLogLevel?.[category] ?? 'inherit';
+            return prev;
+          },
+          {} as Record<
+            TupleToUnion<typeof LogCategories>,
+            LogLevel | 'inherit'
+          >,
+        ),
+      },
+    },
   };
-  return base;
 }
 
 export function GeneralSettingsForm({
@@ -374,8 +376,9 @@ export function GeneralSettingsForm({
                       Set the log level for the Tunarr server.
                       <br />
                       Selecting <strong>"Use environment settings"</strong> will
-                      instruct the server to use the <code>LOG_LEVEL</code>{' '}
-                      environment variable, if set, or system default "info".
+                      instruct the server to use the{' '}
+                      <code>TUNARR_LOG_LEVEL</code> environment variable, if
+                      set, or system default "info".
                     </Trans>
                   </FormHelperText>
                 </FormControl>
@@ -445,9 +448,10 @@ export function GeneralSettingsForm({
             <Button
               variant="outlined"
               onClick={() => {
-                reset(getBaseFormValues(settings, systemSettings));
+                reset(getDefaultFormValues(settings, systemSettings));
               }}
-              disabled={!isValid || isSubmitting || !isDirty}
+              // Reset is the way out of an invalid value, so it stays enabled
+              disabled={isSubmitting || !isDirty}
             >
               <Trans>Reset Options</Trans>
             </Button>
