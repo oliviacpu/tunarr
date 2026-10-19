@@ -449,7 +449,7 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
         captions: TruthyQueryParam.optional()
           .default(false)
           .describe(
-            'With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on.',
+            'With variant, mark the segments so they are served with CEA-608 captions. The .ts wrapper uses this when HDHomeRun closed captions are on and the channel has subtitles enabled.',
           ),
       }),
     },

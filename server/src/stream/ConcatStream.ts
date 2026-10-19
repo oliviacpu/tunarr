@@ -23,8 +23,15 @@ export class ConcatStream {
     private captionLanguage: string = 'eng',
   ) {}
 
+  // Only a channel with subtitles on gets captions (see
+  // FfmpegStreamFactory.captionsOn). Any other channel's segments would be
+  // rewritten for padding alone, so it gets them plain, with ffmpeg's own PMT.
   private get captioned() {
-    return this.streamMode === 'hls_concat' && this.hdhrClosedCaptions;
+    return (
+      this.streamMode === 'hls_concat' &&
+      this.hdhrClosedCaptions &&
+      this.channel.subtitlesEnabled === true
+    );
   }
 
   /**
