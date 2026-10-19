@@ -37,6 +37,14 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Search key replacement and backup guidance (2026-10-19)
+
+- **Cause:** replacing a missing or invalid key wrote directly to the destination, read failures were treated as missing keys, and reused files could retain broad permissions.
+- **Fix:** publish a generated key through a private temporary file and atomic rename; preserve existing keys on read/publication failure; tighten reused key files to owner-only permissions on the main thread. Workers only read existing valid keys.
+- **Backups:** the built-in archive omits `meilisearch-master-key`; keep a private copy separately and restore it before startup.
+- **Tests:** `searchMasterKey.test.ts` covers generation/reuse, permissions, worker refusal, rename failure and read failure. Native `MeilisearchService.local.test.ts` covers restart authentication and retained indexed data when a key is regenerated.
+- **Upstream:** not sent. This is hardening for the search authentication change in this personal fork.
+
 ### An HEVC or MPEG-2 channel's .ts stream no longer offers an empty caption track (2026-10-19)
 
 - **What you saw:** found in code review, not on the deployment. With closed captions for HDHomeRun clients on, a
