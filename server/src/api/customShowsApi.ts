@@ -219,9 +219,9 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
       // queue (in a scan worker), ahead of any scans waiting there.
       if (req.body.syncMediaSourceId && req.body.syncExternalPlaylistId) {
         try {
-          await req.serverCtx.mediaSourceScanCoordinator.syncCustomShow(newId, {
-            priority: true,
-          });
+          await req.serverCtx.mediaSourceScanCoordinator.syncCustomShowForRequest(
+            newId,
+          );
         } catch (e) {
           logger.error(e, 'Failed initial sync for new custom show %s', newId);
         }
@@ -316,9 +316,9 @@ export const customShowsApiV2: RouterPluginAsyncCallback = async (fastify) => {
 
       // Runs in the scan queue (in a scan worker), ahead of any scans waiting
       // there, and joins a sync of this show that's already queued
-      await req.serverCtx.mediaSourceScanCoordinator.syncCustomShow(show.uuid, {
-        priority: true,
-      });
+      await req.serverCtx.mediaSourceScanCoordinator.syncCustomShowForRequest(
+        show.uuid,
+      );
 
       const updatedShow = await req.serverCtx.customShowDB.getShow(show.uuid);
       if (!updatedShow) {

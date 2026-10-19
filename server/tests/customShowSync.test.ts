@@ -11,6 +11,7 @@ import {
   vi,
 } from 'vitest';
 import { container } from '../src/container.ts';
+import { MediaSourceScanCoordinator } from '../src/services/scanner/MediaSourceScanCoordinator.ts';
 import type { MediaSourceId } from '../src/db/schema/base.ts';
 import { MeilisearchService } from '../src/services/MeilisearchService.ts';
 import type { ScanJobRunner } from '../src/services/scanner/ScanJobRunner.ts';
@@ -73,6 +74,23 @@ async function createShow(playlistId: string | null) {
 }
 
 describe('custom show sync', () => {
+  test('returns a queued custom show while another scan remains running', async () => {
+    const coordinator = container.get(MediaSourceScanCoordinator);
+    const gate = Promise.withResolvers<'completed'>();
+    runnerRun.mockReturnValueOnce(gate.promise);
+    const held = coordinator.syncCustomShow('held-for-response-test');
+    try {
+      await vi.waitFor(() => expect(runnerRun).toHaveBeenCalled());
+      const show = await createShow(plex.playlistId);
+      expect(show.isSyncing).toBe(true);
+      expect(runnerRun).toHaveBeenCalledTimes(1);
+    } finally {
+      gate.resolve('completed');
+      await held;
+      await coordinator.awaitAllFinished();
+    }
+  });
+
   test('runs in-process when scans do', () => {
     expect(container.get(KEYS.ScanJobRunner)).toBeInstanceOf(
       InProcessScanJobRunner,

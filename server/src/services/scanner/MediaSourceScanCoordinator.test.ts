@@ -300,6 +300,52 @@ describe('MediaSourceScanCoordinator', () => {
   });
 
   describe('custom show sync', () => {
+    test('an idle request waits for completion and cleanup', async () => {
+      const running = deferredRun();
+      const { coordinator, runner, progress } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+      let returned = false;
+      const request = coordinator.syncCustomShowForRequest('cs1').then(() => {
+        returned = true;
+      });
+      await vi.waitFor(() => expect(runner.run).toHaveBeenCalled());
+      expect(returned).toBe(false);
+      running.finish('completed');
+      await request;
+      expect(coordinator.isCustomShowSyncing('cs1')).toBe(false);
+      expect(progress.getScanProgress('custom_show.cs1').state).toBe(
+        'not_scanning',
+      );
+    });
+
+    test('a request joins a sync still being accepted without waiting for completion', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+      const first = coordinator.syncCustomShow('cs1');
+      await coordinator.syncCustomShowForRequest('cs1');
+      expect(coordinator.isCustomShowSyncing('cs1')).toBe(true);
+      expect(runner.run).toHaveBeenCalledTimes(1);
+      running.finish('completed');
+      await first;
+    });
+
+    test('returns a queued request while another job is held open', async () => {
+      const running = deferredRun();
+      const { coordinator, runner } = makeSut();
+      runner.run.mockReturnValueOnce(running.promise);
+      const first = coordinator.syncCustomShow('cs1');
+      await vi.waitFor(() => expect(runner.run).toHaveBeenCalled());
+      await coordinator.syncCustomShowForRequest('cs2');
+      expect(coordinator.isCustomShowSyncing('cs2')).toBe(true);
+      expect(runner.run).toHaveBeenCalledTimes(1);
+      running.finish('completed');
+      await first;
+      await vi.waitFor(() =>
+        expect(coordinator.isCustomShowSyncing('cs2')).toBe(false),
+      );
+    });
+
     test('runs as a job for the runner and resolves with its outcome', async () => {
       const { coordinator, runner } = makeSut();
 
