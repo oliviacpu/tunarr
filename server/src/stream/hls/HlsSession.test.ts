@@ -23,6 +23,7 @@ import {
   makeTsSegment,
   parseTsSegment,
 } from '../../testing/captions/MpegTsSegmentFixture.ts';
+import { FfmpegHlsPlaylist } from '../../testing/hls/FfmpegHlsPlaylist.ts';
 import { ReferenceHlsPlaylistTrim } from '../../testing/hls/ReferenceHlsPlaylistTrim.ts';
 import type { ContentBackedStreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import type { ProgramCaptions } from '../captions/ProgramCaptions.ts';
@@ -1336,6 +1337,107 @@ describe('HlsSession', () => {
       );
       expect(second?.playlist).toBe(expected.playlist);
       expect(second?.sequence).toBe(19_982);
+    });
+
+    // With a bounded hls_list_size, ffmpeg's file is a window of its newest
+    // entries, rewritten after every segment: its first entry moves on every
+    // time. The session's history is the reader's own.
+    test('a request on a long session reads under 8 KiB of a windowed playlist', async () => {
+      const session = makeSession(dir.name, { segmentSeconds: 2 });
+      await (
+        session as unknown as { startInternal(): Promise<void> }
+      ).startInternal();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const workingDir = session.workingDirectory;
+      await fs.mkdir(workingDir, { recursive: true });
+      const playlistPath = path.join(workingDir, 'stream.m3u8');
+      const writePlaylist = async (content: string) => {
+        await fs.writeFile(`${playlistPath}.tmp`, content);
+        await fs.rename(`${playlistPath}.tmp`, playlistPath);
+      };
+      // 15 minutes of 2-second segments
+      const listSize = 450;
+      const ffmpeg = new FfmpegHlsPlaylist(
+        `/stream/channels/${channelUuid}/hls/`,
+      );
+
+      // About 11 hours, a program every 2,000 segments, requested often
+      // enough that no segment leaves the window unread
+      let previous: Awaited<ReturnType<HlsSession['trimPlaylist']>> | undefined;
+      while (ffmpeg.segmentCount < 20_000) {
+        if (ffmpeg.segmentCount % 2_000 === 0 && ffmpeg.segmentCount > 0) {
+          ffmpeg.newProgram();
+        }
+        ffmpeg.segments(400);
+        await writePlaylist(ffmpeg.window(listSize));
+        session.onSegmentRequested(
+          '10.0.0.1',
+          `data${String(ffmpeg.segmentCount - 10).padStart(6, '0')}.ts`,
+        );
+        previous = await session.trimPlaylist();
+      }
+      const first = previous?.get();
+      expect(first?.sequence).toBe(19_980);
+      expect(first?.discontinuitySequence).toBe(9);
+
+      ffmpeg.segments(2);
+      await writePlaylist(ffmpeg.window(listSize));
+      session.onSegmentRequested('10.0.0.1', 'data019992.ts');
+
+      const probe = await fs.open(playlistPath, 'r');
+      const fileHandle = Object.getPrototypeOf(probe) as FileHandle;
+      await probe.close();
+      const readFile = vi.spyOn(fs, 'readFile');
+      const read = vi.spyOn(fileHandle, 'read');
+      let second;
+      let bytesRead: number;
+      try {
+        second = (await session.trimPlaylist()).get();
+        bytesRead =
+          sumBy(readFile.mock.settledResults, (result) =>
+            result.type === 'fulfilled' ? result.value.length : 0,
+          ) +
+          sumBy(read.mock.settledResults, (result) =>
+            result.type === 'fulfilled' ? result.value.bytesRead : 0,
+          );
+      } finally {
+        readFile.mockRestore();
+        read.mockRestore();
+      }
+
+      const windowFile = (await fs.stat(playlistPath)).size;
+      expect(windowFile).toBeGreaterThan(50_000);
+      expect(await fs.readFile(playlistPath, 'utf-8')).toContain(
+        '#EXT-X-MEDIA-SEQUENCE:19552\n',
+      );
+      // The header, the end of the file, and two entries
+      expect(bytesRead).toBeLessThan(8 * 1024);
+
+      // The same playlist as trimming the whole session's playlist
+      const playlistStart = first?.playlistStart.subtract(19_980 * 2, 'second');
+      expect(playlistStart).toBeDefined();
+      if (playlistStart === undefined) {
+        return;
+      }
+      const expected = new ReferenceHlsPlaylistTrim().trimPlaylist(
+        playlistStart,
+        {
+          type: 'before_segment_number',
+          segmentNumber: 19_992,
+          segmentsToKeepBefore: 10,
+        },
+        ffmpeg.whole().split('\n'),
+        {
+          maxSegmentsToKeep: 20,
+          endWithDiscontinuity: false,
+          targetDuration: 2,
+          previousDiscontinuitySequence: first?.discontinuitySequence,
+        },
+      );
+      expect(second?.playlist).toBe(expected.playlist);
+      expect(second?.sequence).toBe(19_982);
+      expect(second?.discontinuitySequence).toBe(9);
     });
   });
 

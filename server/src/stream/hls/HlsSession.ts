@@ -168,7 +168,10 @@ export class HlsSession
         subtitlesEnabled: channel.subtitlesEnabled,
         videoFormat: channel.transcodeConfig.videoFormat,
       });
-    this.#playlistReader = new MediaPlaylistReader(this._m3u8PlaylistPath);
+    this.#playlistReader = new MediaPlaylistReader(
+      this._m3u8PlaylistPath,
+      this.logger,
+    );
   }
 
   public get sessionType(): HlsSessionOptions['streamMode'] {

@@ -26,6 +26,52 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### The Live TV playlist reader keeps the session's history itself (2026-10-19, PR #84)
+
+- **What you saw:** nothing yet. This prepares the fix for `stream.m3u8` growing for as long as a session runs
+  (`plans/hls-playlist-growth-2026-10-19.md`, task T37). ffmpeg runs with `hls_list_size 0` and `append_list`, so with
+  2 s segments it rewrites about 136 GB of playlist a day, and jellyfin-ffmpeg 8.1.3 holds about 585 MB per program
+  after 24 hours. The fix (T38) keeps only 15 minutes of segments in the file. Today's reader can't read such a window.
+- **Cause:** in a window, the first entry moves on with every rewrite. `MediaPlaylistReader` took a changed first entry
+  for a rewritten file and parsed it again from the window's first entry. The report's probe (section 3(a)) showed
+  program date-times late by the dropped duration and moving between polls, and a discontinuity sequence that stopped
+  advancing.
+- **Fix** (`MediaPlaylistReader.ts`, `MediaPlaylistIndex.ts`):
+  - While `#EXT-X-MEDIA-SEQUENCE` is 0, the file lists the whole session (always so today) and the reader works as
+    before. The served playlists are byte-identical.
+  - Once it is above 0, the reader anchors on segment numbers. It reads the last 2 KiB of the file (the whole window
+    when needed), finds the last segment it parsed, and appends only newer entries to its own history. A
+    discontinuity tag counts only between a known entry and a new one. discont_start's header tag is still a header
+    artifact.
+  - A gap in the numbering (segments that left the window unread) is logged once and counted as one discontinuity,
+    plus the target duration for each missing segment. A 15-minute window should make it unreachable.
+  - A window with no complete entry, or whose last entry read is cut off, leaves the history as it is, and so does a
+    failed read. A window that lists only older segments is parsed afresh, with a warning.
+  - A filter that reaches segments the index discarded is clamped to the kept ones instead of parsing the file again
+    (`HlsPlaylistMutator.trimIndex`'s `clampToKept`). A window can't rebuild their times, and their files are deleted.
+    `HlsSession`'s filters never reach there.
+- **Tests:**
+  - `MediaPlaylistReader.test.ts`, a windowed oracle: for random sessions, after every change, the window ffmpeg
+    writes with `hls_list_size` 5 to 40 (`MEDIA-SEQUENCE` = first entry, discont_start's tag only while it is 0, no
+    `DISCONTINUITY-SEQUENCE`) is served exactly as `ReferenceHlsPlaylistTrim` trims the whole session's playlist, with
+    and without `HlsSession`'s pruning (`testing/hls/FfmpegHlsPlaylist.ts` writes both).
+  - Unit cases: a new ffmpeg whose window starts mid-program, tags at the window's head at session start and later, a
+    gap with and without a tag, the clamp, failed reads (the first read of a window, and the read of a window parsed
+    afresh), partial and empty windows, numbering that goes back, and a window read with no history.
+  - `HlsSession.test.ts`: a request on a 20,000-segment session whose file is a 450-entry window reads under 8 KiB and
+    serves the whole-playlist trim.
+  - 31 of the 32 new tests fail on `main`. The other one pins today's behaviour: after a failed read, a file that lists
+    the whole session is parsed whole again. The existing reader, mutator and session tests pass unchanged.
+  - stream-repro, before and after (10 minutes, 2 s segments, eight clips of 15 to 50 s, `--rewind 15`, with a
+    playlist poller): the same in both runs.
+    - **Capture:** 306 segments from 20 programs, with no findings.
+    - **Rewind:** found every segment it listed.
+    - **Poller:** 274 requests, zero continuity violations. `MEDIA-SEQUENCE` went from 0 to 286 and the
+      discontinuity sequence from 0 to 17, both only forward. No segment's program date-time or discontinuity
+      changed between polls, and each segment started where the one before it ended.
+    - **Latency:** median 1.85 ms before, 1.77 ms after.
+- **Upstream:** not sent. Upstream's reader parses the whole file on every request.
+
 ### A repeated audio track is filtered once, not once per slot (2026-10-19, PR #81)
 
 - **What you saw:** nothing on screen. The fork review of 2026-10-19 (task T32) found that with a channel audio track

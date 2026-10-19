@@ -1,11 +1,10 @@
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { filter, first, max, nth, take, takeRight, trimEnd } from 'lodash-es';
-import { basename } from 'node:path';
+import { filter, first, max, take, takeRight, trimEnd } from 'lodash-es';
 import { match } from 'ts-pattern';
-import { SegmentNameRegex } from './BaseHlsSession.ts';
 import type { PlaylistSegment } from './MediaPlaylistIndex.ts';
 import type { MediaPlaylistIndex } from './MediaPlaylistIndex.ts';
+import { segmentNumberOf } from './MediaPlaylistIndex.ts';
 
 export type MutateOptions = {
   maxSegmentsToKeep: number;
@@ -38,17 +37,21 @@ export class HlsPlaylistMutator {
    * the segments the index keeps, not with the whole playlist.
    *
    * Undefined when the filter would list a segment the index has discarded.
-   * Trim an index of the whole playlist then.
+   * Trim an index of the whole playlist then, or, when the file no longer
+   * lists those segments either, pass `clampToKept`: the filter then selects
+   * from the kept segments as if they were all there ever was.
    */
   trimIndex(
     index: MediaPlaylistIndex,
     filterOptions: HlsPlaylistFilterOptions,
     opts: MutateOptions,
+    { clampToKept = false }: { clampToKept?: boolean } = {},
   ): TrimPlaylistResult | undefined {
     const selected = this.selectSegments(
       index,
       filterOptions,
       opts.maxSegmentsToKeep,
+      clampToKept,
     );
     if (selected === undefined) {
       return;
@@ -136,22 +139,26 @@ export class HlsPlaylistMutator {
 
   // The segments to list, oldest first: the first maxSegmentsToKeep that pass
   // the filter, or the newest maxSegmentsToKeep when fewer pass. Undefined
-  // when that takes a discarded segment.
+  // when that takes a discarded segment, unless clampToKept leaves the
+  // discarded segments out.
   private selectSegments(
     index: MediaPlaylistIndex,
     filterOptions: HlsPlaylistFilterOptions,
     maxSegmentsToKeep: number,
+    clampToKept: boolean,
   ): readonly PlaylistSegment[] | undefined {
     const kept = index.segments;
-    if (!(index.segmentCount > maxSegmentsToKeep)) {
-      return index.discardedCount === 0 ? kept : undefined;
+    const hasDiscarded = !clampToKept && index.discardedCount > 0;
+    const segmentCount = clampToKept ? kept.length : index.segmentCount;
+    if (!(segmentCount > maxSegmentsToKeep)) {
+      return hasDiscarded ? undefined : kept;
     }
 
     const filtered = match(filterOptions)
       .with({ type: 'before_date' }, ({ before }) => {
         // What Dayjs's isBefore compares: the timestamps
         const beforeMs = before.valueOf();
-        return index.discardedSegmentStartingFrom(beforeMs)
+        return hasDiscarded && index.discardedSegmentStartingFrom(beforeMs)
           ? undefined
           : filter(kept, (segment) => !(segment.startMs < beforeMs));
       })
@@ -160,7 +167,7 @@ export class HlsPlaylistMutator {
           beforeSeg.segmentNumber - beforeSeg.segmentsToKeepBefore,
           beforeSeg.segmentFloor ?? 0,
         );
-        return index.discardedSegmentNumberedFrom(minSeg)
+        return hasDiscarded && index.discardedSegmentNumberedFrom(minSeg)
           ? undefined
           : filter(kept, (segment) => {
               const number = segment.number;
@@ -175,7 +182,7 @@ export class HlsPlaylistMutator {
     if (filtered.length >= maxSegmentsToKeep) {
       return take(filtered, maxSegmentsToKeep);
     }
-    if (index.discardedCount > 0 && maxSegmentsToKeep > kept.length) {
+    if (hasDiscarded && maxSegmentsToKeep > kept.length) {
       return;
     }
     return takeRight(kept, maxSegmentsToKeep);
@@ -294,9 +301,7 @@ export class SubtitlePlaylistSegment {
   }
 
   get segmentNumber(): number | null {
-    const matches = basename(this.line).match(SegmentNameRegex);
-    const match = nth(matches, 1);
-    return match ? parseInt(match) : null;
+    return segmentNumberOf(this.line);
   }
 }
 
