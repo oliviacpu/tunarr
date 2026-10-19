@@ -17,6 +17,7 @@ import type { TypedEventEmitter } from '../types/eventEmitter.ts';
 import { LastNBytesStream } from './LastNBytesStream.ts';
 import { InjectLogger } from './inject.ts';
 import type { Logger } from './logging/LoggerFactory.ts';
+import { redactErrorSecrets, redactSecrets } from './redactSecrets.ts';
 
 type SpawnOpts = {
   name: string;
@@ -157,15 +158,17 @@ export class ChildProcessHelper {
           opts.env = env;
         }
 
+        // ffprobe and ffmpeg take media-server URLs, tokens included.
         this.logger.debug(
-          `Executing child process: "${sanitizedPath}" ${args.join(' ')}`,
+          `Executing child process: "${sanitizedPath}" ${redactSecrets(args.join(' '))}`,
         );
 
         return await new Promise((resolve, reject) => {
           execFile(sanitizedPath, args, opts, function (error, stdout, stderr) {
             if (error !== null && !swallowError) {
+              // The error's message and cmd hold the command line and stderr.
               // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-              reject(error);
+              reject(redactErrorSecrets(error));
             }
             resolve(isNonEmptyString(stdout) ? stdout : stderr);
           });

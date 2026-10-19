@@ -16,6 +16,14 @@ A Tunarr backup archive includes:
 | `ms-snapshots/` | Meilisearch index snapshots (optional) |
 | `*.xml` | XMLTV output files |
 
+### Search authentication key in this fork
+
+Keep a separate, private copy of `meilisearch-master-key` from Tunarr's data
+directory alongside your backups. The built-in backup archive does not include
+this file. Restore it before starting Tunarr and restrict its permissions to
+the account running Tunarr (`chmod 600 meilisearch-master-key` on Unix).
+The file contains a credential; do not include it in support reports.
+
 ## Configuration
 
 Backup settings can be configured in the Tunarr web UI under **Settings > System > Backup**, or via the API.
