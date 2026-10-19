@@ -1,4 +1,5 @@
 import {
+  decodeSubtitleFile,
   decodeSubtitleText,
   decodeWindows1252,
   subtitleCharacterEncoding,
@@ -134,5 +135,23 @@ describe('subtitleCharacterEncoding', () => {
         ]),
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('decodeSubtitleFile', () => {
+  test('gives the text and the charset ffmpeg needs from one decode', () => {
+    expect(decodeSubtitleFile(Buffer.from('café', 'latin1'))).toEqual({
+      text: 'café',
+      characterEncoding: 'WINDOWS-1252',
+    });
+    expect(decodeSubtitleFile(Buffer.from('café'))).toEqual({
+      text: 'café',
+      characterEncoding: undefined,
+    });
+    // Mostly UTF-8 with a stray byte stays UTF-8, which ffmpeg reads itself
+    expect(decodeSubtitleFile(bytes('Un café, ', [0xff], ' niño'))).toEqual({
+      text: 'Un café, \ufffd niño',
+      characterEncoding: undefined,
+    });
   });
 });

@@ -7,6 +7,7 @@ import {
   captionLoadFrames,
   numpadFromLegacyAlignment,
 } from './Cea608Encoder.ts';
+import type { DecodedSubtitleFile } from './decodeSubtitleText.ts';
 import { decodeSubtitleText } from './decodeSubtitleText.ts';
 
 /**
@@ -271,19 +272,19 @@ export function firstFrameMs(seekMs: number, frameRate: number): number {
  * Reads a subtitle track's cues and puts them on the program's clock: the cue
  * times minus the first frame's time, keeping only those that overlap the
  * program. The file may be UTF-8, UTF-16 or Windows-1252
- * ({@link decodeSubtitleText}).
+ * ({@link decodeSubtitleText}). A caller that has already read and decoded
+ * the track's file passes it as `file`, so it isn't read again.
  */
 export async function loadProgramCaptions(
   track: SubtitleStreamDetails,
   program: { seekMs: number; durationMs: number; frameRate: number },
+  file?: DecodedSubtitleFile,
 ): Promise<ProgramCaptions | undefined> {
   if (track.path === undefined) {
     return;
   }
-  const cues = parseSubtitleCues(
-    decodeSubtitleText(await fs.readFile(track.path)),
-    track.codec,
-  );
+  const text = file?.text ?? decodeSubtitleText(await fs.readFile(track.path));
+  const cues = parseSubtitleCues(text, track.codec);
   if (!cues) {
     return;
   }
