@@ -157,23 +157,28 @@ export const NumericFormController = <
     [props.prettyFieldName, props.name],
   );
 
+  // The caller's own checks run first, so their messages win, then the
+  // numeric check
   const passedValidate = props.rules?.validate;
   let validate: Record<
     string,
     Validate<FieldPathValue<TFieldValues, TName>, TFieldValues>
-  > = { validateNumeric };
+  > = {};
   if (isFunction(passedValidate)) {
     validate['custom'] = passedValidate;
   } else if (!isUndefined(passedValidate)) {
-    validate = { ...validate, ...passedValidate };
+    validate = { ...passedValidate };
   }
+  validate['validateNumeric'] = validateNumeric;
 
   return (
     <TypedController<TFieldValues, TName, string | number>
       {...props}
+      // `validate` already holds the caller's own checks beside the numeric
+      // one, so it goes last: the caller's `validate` would replace it
       rules={{
-        validate,
         ...(props.rules ?? {}),
+        validate,
       }}
       toFormType={handleStr}
       render={(renderProps) =>

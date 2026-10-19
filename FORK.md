@@ -526,6 +526,74 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   height.
 - **Upstream:** not sent.
 
+### The guide rebuild hours carry on past midnight, so the guide no longer runs out (2026-10-19)
+
+- **What you saw:** nothing on the deployment yet; the fork review of 2026-10-19 found it. With a start hour other than
+  00:00 (fork PR #50, "The guide's full rebuild can run at a chosen hour" below), the scheduled rebuilds stopped at
+  midnight: every 4 hours from 12:00 rebuilt at 12:00, 16:00 and 20:00, then not until 12:00 the next day, and every
+  6 hours from 23:00 rebuilt once a day. Each rebuild writes EPG (Hours) of guide (12 by default), so Plex would show
+  an empty guide for hours every day.
+- **Cause:**
+  - `hoursFromCrontab` listed the hours from the start hour up to 23 and stopped there, on purpose, and its test
+    locked in "every 6 hours from 23 runs once a day".
+  - Nothing adds to the guide between rebuilds: `UpdateXmlTvTask` writes `programmingHours` from the rebuild, and
+    `TvGuideService.getChannelLineup` only logs a warning when asked past the end.
+  - Nothing stopped a refresh timer the guide can't last either, which runs out the same way at any start hour.
+- **Fix:**
+  - `hoursFromCrontab` (`util/schedulingUtil.ts`) lists `(start + k × interval) mod 24` for each k with
+    `k × interval` under 24, sorted. Every 4 hours from 12 is 0, 4, 8, 12, 16 and 20; every 6 hours from 23 is 5, 11,
+    17 and 23. From 00:00, and with 24 hours or more, the hours are the same as before.
+  - An interval that doesn't divide 24 starts again at the start hour each day, so the day's one short gap comes just
+    before it: every 5 hours from 4 is 0, 4, 9, 14 and 19. Counting on until the hours repeat would land on every hour
+    that steps of the interval reach (every 5 hours would run every hour) and change the hours from 00:00.
+  - Daylight saving time is node-schedule's (cron-parser 4.9): on the day the clocks go forward, an hour that doesn't
+    exist (02:00 in the US) runs at 03:00, once even when 03:00 is listed too; on the day they go back, a repeated
+    hour runs once, so a one-hour rollback adds an hour of real time. Kept as it is: no run is lost, and
+    the guide length rule below covers the longer wait.
+  - The rule, in `@tunarr/shared/util` (`xmlTvRefresh.ts`) for the server and the settings page: the time between
+    rebuilds is the timer rounded, from 1 to 24 hours (a longer timer rebuilds once a day), and EPG (Hours) has to be
+    at least two hours longer than it, covering two-hour seasonal rollbacks.
+  - `PUT /api/xmltv-settings` refuses a shorter guide with a 400 and the reason, when the request sets the timer or
+    EPG (Hours). Settings saved before the check can still have their other fields changed.
+  - Those settings are rebuilt often enough anyway: `xmlTvRefreshCrontab` shortens the interval to two hours less than
+    the guide (a 24 hour timer with a 12-hour guide rebuilds every 10 hours), and startup logs a warning saying so.
+  - Settings > XMLTV flags the timer on the field (also when EPG (Hours) is lowered under it, and when the page opens
+    on settings saved before the check) and shows the server's reason if a save is refused. A value that isn't a
+    number is left to the numeric check. The start hour field is now **Refresh Timer Starts At**, since it's no longer
+    always the day's first rebuild.
+  - `NumericFormController` spread the caller's rules over the merged `validate`, so a field with its own `validate`
+    lost the "should be numeric" check. The merged one now goes last, with the caller's checks first so their
+    messages are unchanged.
+  - On upgrade, a start hour other than 00:00 with a timer under 24 hours rebuilds around the clock, so more often
+    than before: every 6 hours from 18:00 was once a day and is now four times. For once a day, set 24.
+  - `docs/configure/channels/epg.md` describes the hours, the guide length rule, daylight saving time and the upgrade.
+- **Tests:**
+  - `schedulingUtil.test.ts`: every 6 hours from 23 is `0 0 5,11,17,23 * * *`; every 4 hours from 12 carries on to 0,
+    4 and 8; for every start hour 0-23 and interval 1-24 no gap is longer than the interval, the start hour is in the
+    list, and there are no more runs than the interval needs; from 00:00 the same runs as `*/N`; start hour 2 in
+    Central time on 2026-11-01 (02:00 once, a 5-hour wait for a 4-hour timer) and 2027-03-14 (03:00 instead, no
+    longer wait); the crontab is shortened for a guide too short for its timer.
+  - `xmlTvRefresh.test.ts` (shared): the interval, the minimum guide, the shortened interval, and that the schedule is
+    shortened exactly when the API would refuse.
+  - `xmltvSettingsApi.test.ts`: a timer the guide can't last, a guide too short for the saved timer, and both at once
+    are refused and nothing is saved or rescheduled; a guide two hours longer is saved; a 48 hour timer with a 26-hour
+    guide is saved; old settings can have their start hour changed and are rescheduled every 10 hours.
+  - `ScheduleJobsStartupTask.test.ts`: old settings are scheduled every 10 hours, with one warning.
+  - `XmlTvSettingsPage.test.tsx`: the field is flagged and Save disabled, also on opening old settings; a longer guide
+    clears it and both are sent; two hours longer is fine; an empty guide isn't compared; a non-number is still flagged
+    as one; a refused save shows the server's reason.
+  - `TypedController.test.tsx`: with its own `validate`, a field still checks for a number, runs the caller's check,
+    and shows the caller's message when both fail. The first fails on the old code.
+  - 12 server and 6 web tests fail on the old code.
+- **Upstream:** not sent (the start hour is fork-only).
+
+### XMLTV review follow-up
+
+Guide coverage now conservatively allows two-hour seasonal clock rollbacks,
+including Antarctica/Troll. Existing guides shorter than three hours use three
+hours at runtime, without changing the saved setting, so the hourly scheduling
+floor can cover them. Shared rules, API/UI messages, and regressions agree.
+
 ### The guide's full rebuild can run at a chosen hour (2026-10-18)
 
 - **What you saw:** the scheduled full guide rebuild could only run at midnight and every refresh interval after it
@@ -538,6 +606,10 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
     hour and every `refreshHours` after it until midnight: `hoursFromCrontab` in `util/schedulingUtil.ts` lists the
     hours (`0 0 3,7,11,15,19,23 * * *` for 4 hours from 3, `0 0 3 * * *` for 24 hours from 3); from 0 it runs at the
     same hours as before.
+  - **Fixed on 2026-10-19** ("The guide rebuild hours carry on past midnight", above): stopping at midnight left the
+    guide empty for hours each day with a start hour other than 0 (every 6 hours from 23 ran once a day). The hours
+    now carry on around the clock (5, 11, 17 and 23), and EPG (Hours) has to be at least an hour longer than the time
+    between rebuilds. The field is now **Refresh Timer Starts At**.
   - `PUT /api/xmltv-settings` takes it, keeping the stored value when it is left out; a save (and a reset) moves the
     scheduled task to the new hours (`ScheduledTask.reschedule`) before the rebuild a save already ran, so neither
     waits for a restart and no extra rebuild runs.
@@ -2562,3 +2634,11 @@ sizes account for picture width and share filter-value escaping.
 This follow-up stacks on the subtitle text reliability branch and caption timeline
 PR #65. Playback parameters keep their source-based target and caption timing uses
 the resolved pipeline rate; broader session integration follows separately.
+
+### Scan queue responsiveness
+
+Custom-show sync requests wait for completion when the queue is idle, and return
+once accepted when another job is running. Acceptance and completion use an explicit
+job handle; requests joining the same show share its job and retain priority. Scanner
+validation warnings run once per library. The duplicate-case artwork test skips
+when the filesystem cannot create two distinct files differing only in case. This follow-up depends on scan-worker watchdog PR #63.

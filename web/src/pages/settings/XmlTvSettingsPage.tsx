@@ -1,6 +1,8 @@
 import { useSettings } from '@/store/settings/selectors.ts';
+import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { minimumXmlTvGuideHours } from '@tunarr/shared/util';
 import {
   Box,
   Button,
@@ -40,6 +42,7 @@ export default function XmlTvSettingsPage() {
     control,
     formState: { isDirty, isValid, isSubmitting, defaultValues },
     handleSubmit,
+    trigger,
   } = useForm<XmlTvSettings>({
     defaultValues: defaultXmlTvSettings,
     mode: 'onBlur',
@@ -50,6 +53,14 @@ export default function XmlTvSettingsPage() {
       reset(data);
     }
   }, [data, reset]);
+
+  // Settings saved before the refresh timer had to fit in the guide can't be
+  // saved as they are: say why when they load, not only once the field is
+  // touched. Keyed on the reset's new defaults, since a reset unregisters the
+  // fields until the next render, so validating in the same effect finds none
+  useEffect(() => {
+    void trigger('refreshHours');
+  }, [defaultValues, trigger]);
 
   const queryClient = useQueryClient();
 
@@ -63,6 +74,12 @@ export default function XmlTvSettingsPage() {
       reset(data, { keepValues: true });
       return queryClient.invalidateQueries({
         predicate: invalidateTaggedQueries('Settings'),
+      });
+    },
+    onError: (error) => {
+      const message = getApiErrorMessage(error) ?? error.message;
+      snackbar.enqueueSnackbar(t`Error saving XMLTV settings. ${message}`, {
+        variant: 'error',
       });
     },
   });
@@ -125,6 +142,8 @@ export default function XmlTvSettingsPage() {
           control={control}
           name="programmingHours"
           prettyFieldName={t`EPG (Hours)`}
+          // The guide has to last the refresh timer
+          rules={{ deps: ['refreshHours'] }}
           TextFieldProps={{
             id: 'epg-hours',
             label: t`EPG (Hours)`,
@@ -136,10 +155,30 @@ export default function XmlTvSettingsPage() {
           control={control}
           name="refreshHours"
           prettyFieldName={t`Refresh Timer (Hours)`}
+          rules={{
+            validate: {
+              // The server refuses it too: each rebuild writes EPG (Hours) of
+              // guide, which has to last until the next one, up to two hours late on
+              // the night the clocks go back. A value that isn't a number is
+              // left to the numeric checks
+              guideLastsTheTimer: (refreshHours, { programmingHours }) => {
+                if (
+                  !Number.isFinite(refreshHours) ||
+                  !Number.isFinite(programmingHours)
+                ) {
+                  return undefined;
+                }
+                const minimum = minimumXmlTvGuideHours(refreshHours);
+                return programmingHours < minimum
+                  ? t`EPG (Hours) is too short for this timer: the guide would run out before the next rebuild. Set it to ${minimum} or more, two hours longer than the time between rebuilds.`
+                  : undefined;
+              },
+            },
+          }}
           TextFieldProps={{
             id: 'refresh-hours',
             label: t`Refresh Timer (Hours)`,
-            helperText: t`How often the XMLTV file is regenerated`,
+            helperText: t`How often the XMLTV file is regenerated. EPG (Hours) has to be at least two hours longer.`,
           }}
         />
         <Controller
@@ -149,8 +188,8 @@ export default function XmlTvSettingsPage() {
             <TextField
               select
               id="refresh-start-hour"
-              label={t`First Refresh of the Day`}
-              helperText={t`The hour (server time) the refresh timer counts from. With a 24 hour timer, the only refresh each day.`}
+              label={t`Refresh Timer Starts At`}
+              helperText={t`An hour (server time) the guide is rebuilt at. The refresh timer counts on from it around the clock. With a 24 hour timer, the only refresh each day.`}
               sx={{ minWidth: 200 }}
               {...field}
               onChange={(e) => field.onChange(Number(e.target.value))}

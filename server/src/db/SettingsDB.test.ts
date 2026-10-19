@@ -53,3 +53,18 @@ describe('pendingOperations', () => {
     expect(parsed.pendingOperations).toEqual({ emptyTrashRequestedAt: null });
   });
 });
+
+describe('legacy XMLTV guide coverage', () => {
+  test.each([0, 0.5, 1, 2])(
+    'clamps an old %s-hour guide without rewriting settings',
+    (hours) => {
+      const initial = defaultSettings('/tmp/tunarr-test');
+      initial.settings.xmltv.programmingHours = hours;
+      const settings = new SettingsDB(
+        new Low<SettingsFile>(new Memory(), initial),
+      );
+      expect(settings.xmlTvSettings().programmingHours).toBe(3);
+      expect(settings.getAll().settings.xmltv.programmingHours).toBe(hours);
+    },
+  );
+});

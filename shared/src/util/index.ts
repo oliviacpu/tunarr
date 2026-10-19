@@ -3,6 +3,7 @@ export * from './channelCaptions.js';
 export * from './plexSearchUtil.js';
 export * as search from './searchUtil.js';
 export * as seq from './seq.js';
+export * from './xmlTvRefresh.js';
 import type { ChannelProgram, ProgramLike } from '@tunarr/types';
 import type { PlexMedia } from '@tunarr/types/plex';
 import type {

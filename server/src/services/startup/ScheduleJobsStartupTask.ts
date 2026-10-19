@@ -1,3 +1,8 @@
+import {
+  minimumXmlTvGuideHours,
+  xmlTvRefreshIntervalHours,
+  xmlTvScheduledIntervalHours,
+} from '@tunarr/shared/util';
 import { inject, injectable } from 'inversify';
 import { filter, flatten, forEach, values } from 'lodash-es';
 import { container } from '../../container.ts';
@@ -38,6 +43,19 @@ export class ScheduleJobsStartupTask extends SimpleStartupTask {
 
   getPromise(): Promise<void> {
     const xmlTvSettings = this.settingsDB.xmlTvSettings();
+    const scheduledHours = xmlTvScheduledIntervalHours(xmlTvSettings);
+    if (
+      scheduledHours < xmlTvRefreshIntervalHours(xmlTvSettings.refreshHours)
+    ) {
+      // Saved before the API refused a timer the guide can't cover
+      this.logger.warn(
+        'EPG (Hours) is %d, too short for the %d-hour refresh timer, so the guide is rebuilt every %d hours instead. Set EPG (Hours) to at least %d, or shorten the timer, in Settings > XMLTV.',
+        xmlTvSettings.programmingHours,
+        xmlTvSettings.refreshHours,
+        scheduledHours,
+        minimumXmlTvGuideHours(xmlTvSettings.refreshHours),
+      );
+    }
 
     GlobalScheduler.scheduleTask(
       UpdateXmlTvTask.ID,
