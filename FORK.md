@@ -26,7 +26,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
-### Resetting the HDHomeRun settings gives 2 tuners, and a tuner count below 1 is refused (2026-10-19)
+### Resetting the HDHomeRun settings gives 2 tuners, and a tuner count below 1 is refused (2026-10-19, PR #93)
 
 - **What you saw:** not reported from the deployment. The fork review of 2026-10-19 (B6) found that the settings
   page's "Restore Default Settings" and a fresh install give 2 tuners, but the server's reset (`POST
