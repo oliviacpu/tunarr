@@ -26,6 +26,19 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Empty Trash asks before it purges (2026-10-19)
+
+- **What you saw:** one click on **Empty Trash** started the purge. It can't be undone: trashed programs are deleted
+  and the lineup slots that played them become flex.
+- **Cause:** the button called the empty-trash mutation directly (`TrashPage.tsx`).
+- **Fix:** the button opens the shared `DeleteConfirmationDialog`. It says all trashed items will be deleted and their
+  lineup slots replaced with flex. Its red **Empty trash** button runs the mutation; Cancel does nothing. The dialog
+  takes an optional `confirmLabel`, which defaults to "Delete". The progress bar is unchanged.
+  `docs/configure/library/trash.md` mentions the confirmation.
+- **Tests:** `TrashPage.test.tsx` (no purge before confirming, one after, then the progress bar; Cancel purges
+  nothing); `DeleteConfirmationDialog.test.tsx` (the label).
+- **Upstream:** not sent. Upstream's Trash page has the same button.
+
 ### The Live TV playlist reader keeps the session's history itself (2026-10-19, PR #84)
 
 - **What you saw:** nothing yet. This prepares the fix for `stream.m3u8` growing for as long as a session runs
