@@ -1369,6 +1369,7 @@ export const postApiXmltvRefresh = <ThrowOnError extends boolean = false>(option
 
 export const postApiXmltvFlush = <ThrowOnError extends boolean = false>(options?: Options<PostApiXmltvFlushData, ThrowOnError>) => {
     return (options?.client ?? _heyApiClient).post<PostApiXmltvFlushResponses, unknown, ThrowOnError>({
+        responseType: 'json',
         url: '/api/xmltv/flush',
         ...options
     });

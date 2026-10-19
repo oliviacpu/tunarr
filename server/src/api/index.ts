@@ -17,7 +17,11 @@ import { createReadStream, promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod/v4';
 import { container } from '../container.ts';
-import { PlexGuideNotifier } from '../services/PlexGuideNotifier.ts';
+import {
+  flushResponseStatus,
+  PlexGuideFlushResultSchema,
+  PlexGuideNotifier,
+} from '../services/PlexGuideNotifier.ts';
 import { TruthyQueryParam } from '../types/schemas.ts';
 import { getBooleanEnvVar, TUNARR_ENV_VARS } from '../util/env.ts';
 import { isDev, isNonEmptyString, run } from '../util/index.js';
@@ -274,12 +278,26 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
 
   // Resolves once every guide write under way (a channel save starts one
   // without awaiting it) has finished and been followed by the ask to Plex,
-  // or at once when nothing is pending. A script that saved several channels
-  // waits here, after its saves have returned, before checking Plex's guide.
-  fastify.post('/xmltv/flush', async (_, res) => {
-    await container.get(PlexGuideNotifier).flush();
-    return res.status(200).send();
-  });
+  // at once when nothing is pending, and after 30 s at the latest. A script
+  // that saved several channels waits here, after its saves have returned,
+  // before checking Plex's guide. 200 (`done: true`) means everything
+  // finished; 202 (`done: false`) means it stopped waiting with something
+  // still under way. `servers` says how each Plex server's ask ended.
+  fastify.post(
+    '/xmltv/flush',
+    {
+      schema: {
+        response: {
+          200: PlexGuideFlushResultSchema,
+          202: PlexGuideFlushResultSchema,
+        },
+      },
+    },
+    async (_, res) => {
+      const result = await container.get(PlexGuideNotifier).flush();
+      return res.status(flushResponseStatus(result)).send(result);
+    },
+  );
 
   // CHANNELS.M3U Download
   fastify.route({
