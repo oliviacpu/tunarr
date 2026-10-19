@@ -37,6 +37,35 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 - **Upstream:** not sent / issue or PR link.
 -->
 
+### Captions keep the accented letters of Windows-1252 subtitle files (2026-10-19)
+
+- **What you saw:** nothing reported; found in the 2026-10-19 fork review. A subtitle file saved in Windows-1252 or
+  Latin-1, as older rips often are, lost its accented letters in the closed captions: `café` came out as `caf` and
+  `niño` as `nio`. A UTF-16 file gave no captions.
+- **Cause:** `loadProgramCaptions` (`ProgramCaptions.ts`) read every subtitle file as UTF-8. A Windows-1252 accented
+  letter is one byte that isn't valid UTF-8, so it became U+FFFD, and the CEA-608 encoder drops characters it has no
+  code for. A UTF-16 file decoded as UTF-8 has no timing line the parser can read.
+- **Fix:** `server/src/stream/captions/decodeSubtitleText.ts` turns the file's bytes into text, and
+  `loadProgramCaptions` uses it. It is the only place Tunarr reads a subtitle file's text for captions.
+  - A byte order mark (UTF-8, UTF-16 LE or BE) decides. Otherwise UTF-8 when the bytes are valid UTF-8, or when they
+    hold at least as many valid non-ASCII characters as broken sequences, so one stray byte in a UTF-8 file doesn't
+    turn every `é` into `Ã©`. Otherwise Windows-1252.
+  - Windows-1252's 0x80-0x9f (`’ – “ ” … €`) comes from a table, not `TextDecoder('windows-1252')`: Node 22.20.0
+    decodes those bytes with it as Latin-1 control codes, which the encoder would drop.
+  - Burn-in is unchanged. ffmpeg's subtitle decoder reads byte order marks but, without a `charenc`, leaves out every
+    line that isn't valid UTF-8. Decoding a Windows-1252 SRT with ffmpeg 9.0.2 drops its accented lines with
+    `Invalid UTF-8 in decoded subtitles text`, and the `subtitles` filter (jellyfin-ffmpeg's too) skips a line its
+    decoder rejects. Such lines were never burned in either.
+  - Not covered: a subtitle Tunarr downloads from the media server (when it can't read the file) arrives as text the
+    HTTP client has already decoded as UTF-8, so a Windows-1252 file the server sends as is is cached without its
+    accented letters.
+- **Tests:** `decodeSubtitleText.test.ts`: UTF-8 with and without a byte order mark, UTF-16 LE and BE with one,
+  Windows-1252 `café` and `niño`, its punctuation at 0x80-0x9f, plain ASCII, a UTF-8 file with a stray byte or a
+  cut-off last character, a Windows-1252 file holding one valid UTF-8 pair, an empty file, and every byte of the code
+  page. In `ProgramCaptions.test.ts`, a Windows-1252 SRT gives `café`, `niño` and `It’s` in its cues and `é` and
+  `ñ` in the 608 stream, and a UTF-16 SRT gives its cue; both fail on the old code. The golden snapshot is unchanged.
+- **Upstream:** not sent (the closed captions are this fork's).
+
 ### Merged upstream main as of 2026-10-18
 
 - **What came in:** 25 upstream commits, up to `b09a7e06`.

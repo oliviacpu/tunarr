@@ -8,7 +8,8 @@ import type {
 import { createOfflineStreamLineupItem } from '../../db/derived_types/StreamLineup.ts';
 import type { ProgramType } from '../../db/schema/Program.ts';
 import type { SubtitleStreamDetails } from '../types.ts';
-import { captionLoadFrames } from './Cea608Encoder.ts';
+import { decodeScreens } from '../../testing/captions/Cea608TestDecoder.ts';
+import { buildCaptionSchedule, captionLoadFrames } from './Cea608Encoder.ts';
 import {
   firstFrameMs,
   loadProgramCaptions,
@@ -76,6 +77,85 @@ describe('loadProgramCaptions', () => {
     expect(captions?.cues).toHaveLength(1);
     expect(captions?.cues[0]?.text).toBe('Hello');
     expect((captions?.cues[0]?.startMs ?? 0) / (1000 / 30)).toBeCloseTo(19);
+  });
+
+  const srtTrack = (file: string): SubtitleStreamDetails => ({
+    type: 'external',
+    codec: 'subrip',
+    default: false,
+    forced: false,
+    sdh: false,
+    languageCodeISO6392: 'spa',
+    path: file,
+  });
+
+  // Older rips are often saved in Windows-1252. Read as UTF-8, é and ñ became
+  // U+FFFD, which 608 has no character for, so 'café' was sent as 'caf'.
+  test('reads a Windows-1252 subtitle file', async () => {
+    const file = path.join(dir.name, 'cp1252.srt');
+    await fs.writeFile(
+      file,
+      Buffer.concat([
+        Buffer.from('1\r\n00:00:01,000 --> 00:00:03,000\r\nUn caf'),
+        Buffer.from([0xe9]),
+        Buffer.from(' para el ni'),
+        Buffer.from([0xf1]),
+        Buffer.from('o\r\n\r\n2\r\n00:00:04,000 --> 00:00:05,000\r\nIt'),
+        Buffer.from([0x92]),
+        Buffer.from('s\r\n'),
+      ]),
+    );
+
+    const captions = await loadProgramCaptions(srtTrack(file), {
+      seekMs: 0,
+      durationMs: 60_000,
+      frameRate: 30,
+    });
+
+    expect(captions?.cues.map((cue) => cue.text)).toEqual([
+      'Un café para el niño',
+      'It’s',
+    ]);
+
+    // And the 608 stream carries them. The test decoder prints the basic
+    // character set as ASCII: 608's é is 0x5c (\) and its ñ 0x7e (~).
+    const schedule = buildCaptionSchedule(captions?.cues ?? [], {
+      firstFrameMs: 0,
+      frameRate: 30,
+    });
+    const screens = decodeScreens(
+      Array.from({ length: 30 * 6 }, (_, k) => [
+        ...schedule.pairAt((k * 1000) / 30),
+      ]),
+    );
+    expect(screens.flatMap((s) => s.rows.map((r) => r.text))).toEqual([
+      'Un caf\\ para el ni~o',
+      "It's",
+    ]);
+  });
+
+  test('reads a UTF-16 subtitle file with a byte order mark', async () => {
+    const file = path.join(dir.name, 'utf16.srt');
+    await fs.writeFile(
+      file,
+      Buffer.concat([
+        Buffer.from([0xff, 0xfe]),
+        Buffer.from(
+          '1\r\n00:00:01,000 --> 00:00:03,000\r\nUn café para el niño\r\n',
+          'utf16le',
+        ),
+      ]),
+    );
+
+    const captions = await loadProgramCaptions(srtTrack(file), {
+      seekMs: 0,
+      durationMs: 60_000,
+      frameRate: 30,
+    });
+
+    expect(captions?.cues.map((cue) => cue.text)).toEqual([
+      'Un café para el niño',
+    ]);
   });
 });
 
