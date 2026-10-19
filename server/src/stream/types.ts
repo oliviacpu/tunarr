@@ -3,6 +3,7 @@ import type { MediaChapter } from '@tunarr/types';
 import type { Duration } from 'dayjs/plugin/duration.js';
 import type { Dictionary, NonEmptyArray } from 'ts-essentials';
 import type { Maybe } from '../types/util.ts';
+import { redactSecrets } from '../util/redactSecrets.ts';
 
 export type StreamDetails = {
   duration: Duration;
@@ -89,13 +90,7 @@ export class HttpStreamSource implements IStreamSource {
   ) {}
 
   redact() {
-    this.path = this.path
-      .replaceAll(/(X-Plex-Token=)([A-z0-9_\\-]+)/g, '$1REDACTED')
-      // Subtitle URLs carry the token in the query string, since ffmpeg reads
-      // them as a plain input and never sees our extra headers.
-      .replaceAll(/(X-Emby-Token=)([A-z0-9_\\-]+)/g, '$1REDACTED')
-      .replaceAll(/(api_key=)([A-z0-9_\\-]+)/g, '$1REDACTED')
-      .replaceAll(/(X-Emby-Token:\s)([A-z0-9_\\-]+)/g, '$1REDACTED');
+    this.path = redactSecrets(this.path);
     for (const header of Object.keys(this.extraHeaders)) {
       if (/token|key|auth|secret|password/i.test(header)) {
         this.extraHeaders[header] = 'REDACTED';
