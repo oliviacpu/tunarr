@@ -1,4 +1,5 @@
 import type { FrameState } from '@/ffmpeg/builder/state/FrameState.js';
+import { hlsPlaylistWindowSize } from '../constants.ts';
 import { OutputOption } from './OutputOption.ts';
 
 export class HlsOutputFormat extends OutputOption {
@@ -14,6 +15,10 @@ export class HlsOutputFormat extends OutputOption {
     private oneSecondGop: boolean,
     private emitEndList: boolean = false,
     private segmentSeconds: number = HlsOutputFormat.SegmentSeconds,
+    // The newest segments the playlist lists. The program's ffmpeg reads them
+    // back in (append_list) to continue the numbering, and Tunarr keeps the
+    // session's history itself (MediaPlaylistReader).
+    private listSize: number = hlsPlaylistWindowSize(segmentSeconds),
   ) {
     super();
   }
@@ -37,7 +42,7 @@ export class HlsOutputFormat extends OutputOption {
       '-hls_time',
       `${this.segmentSeconds}`,
       '-hls_list_size',
-      '0',
+      `${this.listSize}`,
       '-segment_list_flags',
       '+live',
       '-hls_segment_type',
@@ -50,6 +55,8 @@ export class HlsOutputFormat extends OutputOption {
       'playlist.m3u8',
     ];
 
+    // No delete_segments: HlsSession deletes segment files itself, once no
+    // viewer can still ask for them
     const flags = ['program_date_time', 'append_list', 'independent_segments'];
     if (!this.emitEndList) flags.push('omit_endlist');
     if (!this.isFirstTranscode) flags.push('discont_start');

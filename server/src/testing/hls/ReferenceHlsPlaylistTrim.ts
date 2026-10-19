@@ -98,8 +98,10 @@ export class ReferenceHlsPlaylistTrim {
       // all DISCs are in the body; counting both would double-count.
       // This is beacuse Tunarr has discrete ffmpeg processes continuouly write
       // to the same underlying playlist file.
-      // TODO: We could consider writing out the trimmed playlist periodically
-      // in the session manager to keep things cleaner
+      // This trims the whole session's playlist, what ffmpeg writes with
+      // hls_list_size 0. HlsSession bounds ffmpeg's file to a 15-minute
+      // window instead, and MediaPlaylistReader keeps the history; its tests
+      // check the two agree (testing/hls/FfmpegHlsPlaylist.ts writes both).
       i++;
     }
 

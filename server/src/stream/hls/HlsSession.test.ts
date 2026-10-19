@@ -137,6 +137,50 @@ function makeSession(
     ) => ProgramStream,
   );
 }
+
+// A served media playlist as a player reads it: each segment's number, its
+// discontinuity number (the DISCONTINUITY-SEQUENCE plus the tags before it),
+// its program date-time and its length
+function parseServedPlaylist(playlist: string) {
+  let mediaSequence: number | undefined;
+  let discontinuitySequence = 0;
+  let tags = 0;
+  let startMs = NaN;
+  let seconds = NaN;
+  const segments: {
+    number: number;
+    discontinuity: number;
+    startMs: number;
+    seconds: number;
+  }[] = [];
+  for (const line of playlist.split('\n')) {
+    if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) {
+      mediaSequence = parseInt(line.slice('#EXT-X-MEDIA-SEQUENCE:'.length));
+    } else if (line.startsWith('#EXT-X-DISCONTINUITY-SEQUENCE:')) {
+      discontinuitySequence = parseInt(
+        line.slice('#EXT-X-DISCONTINUITY-SEQUENCE:'.length),
+      );
+    } else if (line === '#EXT-X-DISCONTINUITY') {
+      tags++;
+    } else if (line.startsWith('#EXTINF:')) {
+      seconds = parseFloat(line.slice('#EXTINF:'.length));
+    } else if (line.startsWith('#EXT-X-PROGRAM-DATE-TIME:')) {
+      startMs = Date.parse(line.slice('#EXT-X-PROGRAM-DATE-TIME:'.length));
+    } else {
+      const number = line.match(/data(\d+)\.ts$/)?.[1];
+      if (number !== undefined) {
+        segments.push({
+          number: parseInt(number),
+          discontinuity: discontinuitySequence + tags,
+          startMs,
+          seconds,
+        });
+      }
+    }
+  }
+  return { mediaSequence, discontinuitySequence, segments };
+}
+
 // The caption pair each video frame of a served segment carries
 function framePairs(segment: Buffer) {
   return parseTsSegment(segment).videoPes.map((pes) => {
@@ -951,6 +995,7 @@ describe('HlsSession', () => {
       captions?: ProgramCaptions,
     ) {
       const offsets: (number | undefined)[] = [];
+      const formats: OutputFormat[] = [];
       const channel = {
         uuid: channelUuid,
         transcodeConfig: {},
@@ -978,8 +1023,9 @@ describe('HlsSession', () => {
         {
           getLiveTimestamp: () => Promise.resolve(Date.now()),
         } as unknown as OnDemandChannelService,
-        (context, _outputFormat, opts) => {
+        (context, outputFormat, opts) => {
           offsets.push(opts?.ptsOffset);
+          formats.push(outputFormat);
           return {
             context,
             on: vi.fn(),
@@ -997,7 +1043,7 @@ describe('HlsSession', () => {
       };
       internals.state = 'started';
       await internals.transcode(true);
-      return { session, offsets };
+      return { session, offsets, formats };
     }
 
     // At 0, the encoder's B-frame delay put the first program's video two
@@ -1037,6 +1083,24 @@ describe('HlsSession', () => {
 
       expect(offsets).toEqual([0]);
     });
+
+    // ffmpeg's playlist used to list every segment of the session
+    test.each(['hls', 'hls_direct_v2'] as const)(
+      "builds the program's ffmpeg with a 15-minute playlist (%s)",
+      async (streamMode) => {
+        const { formats } = await runFirstProgram(streamMode);
+
+        expect(formats).toHaveLength(1);
+        const format = formats[0];
+        expect(format?.type).toBe(streamMode);
+        // 4 s segments
+        expect(
+          format !== undefined && 'hlsOptions' in format
+            ? format.hlsOptions.hlsListSize
+            : undefined,
+        ).toBe(225);
+      },
+    );
   });
 
   describe('segment length', () => {
@@ -1059,6 +1123,28 @@ describe('HlsSession', () => {
       expect(hlsTime({ streamMode: 'hls_direct_v2', segmentSeconds: 2 })).toBe(
         4,
       );
+    });
+  });
+
+  describe('playlist window', () => {
+    function hlsListSize(overrides: Partial<HlsSessionOptions>) {
+      const session = makeSession('/tmp', overrides);
+      return (
+        session as unknown as { getHlsOptions(): { hlsListSize: number } }
+      ).getHlsOptions().hlsListSize;
+    }
+
+    test('lists 15 minutes of segments', () => {
+      expect(hlsListSize({ segmentSeconds: 2 })).toBe(450);
+      expect(hlsListSize({})).toBe(225);
+      expect(hlsListSize({ segmentSeconds: 1 })).toBe(900);
+      expect(hlsListSize({ segmentSeconds: 3 })).toBe(300);
+    });
+
+    test('lists 15 minutes of 4 s segments in hls_direct_v2', () => {
+      expect(
+        hlsListSize({ streamMode: 'hls_direct_v2', segmentSeconds: 2 }),
+      ).toBe(225);
     });
   });
 
@@ -1235,8 +1321,9 @@ describe('HlsSession', () => {
       }
     });
 
-    // ffmpeg never trims stream.m3u8, so after hours of watching it lists
-    // thousands of segments. Each playlist request read and parsed all of it.
+    // With hls_list_size 0, ffmpeg never trims stream.m3u8, so after hours
+    // of watching it lists thousands of segments. Each playlist request read
+    // and parsed all of it.
     test('a request on a long session reads only what ffmpeg appended', async () => {
       const session = makeSession(dir.name, { segmentSeconds: 2 });
       await (
@@ -1439,6 +1526,150 @@ describe('HlsSession', () => {
       expect(second?.sequence).toBe(19_982);
       expect(second?.discontinuitySequence).toBe(9);
     });
+
+    // What a player polling the session sees once ffmpeg keeps only the
+    // session's 15-minute window: each program's ffmpeg reads the window
+    // back in and continues it, the window's first entry moves on with every
+    // rewrite, and program starts and their discontinuity tags leave the
+    // file. The served playlists must stay continuous.
+    test('keeps the media and discontinuity sequences continuous as the window slides', async () => {
+      // Pruning runs every 30 s of the session's clock
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(Date.UTC(2026, 9, 19, 17));
+        const session = makeSession(dir.name, { segmentSeconds: 2 });
+        await (
+          session as unknown as { startInternal(): Promise<void> }
+        ).startInternal();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        const listSize = (
+          session as unknown as { getHlsOptions(): { hlsListSize: number } }
+        ).getHlsOptions().hlsListSize;
+        const workingDir = session.workingDirectory;
+        await fs.mkdir(workingDir, { recursive: true });
+        const playlistPath = path.join(workingDir, 'stream.m3u8');
+        const ffmpeg = new FfmpegHlsPlaylist(
+          `/stream/channels/${channelUuid}/hls/`,
+        );
+        // Each segment's discontinuity number and start, from what ffmpeg
+        // wrote, counted from the session's first segment
+        const expected: { discontinuity: number; startMs: number }[] = [];
+        let discontinuities = 0;
+        let elapsedMs = 0;
+        const addSegments = (count: number, seconds = 2) => {
+          for (let i = 0; i < count; i++) {
+            ffmpeg.segments(1, seconds);
+            discontinuities += ffmpeg.entries.at(-1)?.tagsBefore ?? 0;
+            expected.push({
+              discontinuity: discontinuities,
+              startMs: elapsedMs,
+            });
+            elapsedMs += seconds * 1000;
+            vi.setSystemTime(Date.now() + seconds * 1000);
+          }
+        };
+
+        let lastMediaSequence = -1;
+        let lastDiscontinuitySequence = -1;
+        let sessionStartMs: number | undefined;
+        // Polls of a file that no longer starts at the session's first
+        // segment, and of those, the ones whose window starts with a program
+        let windowedPolls = 0;
+        let tagsAtWindowHead = 0;
+        const poll = async () => {
+          const content = ffmpeg.window(listSize);
+          if (!content.includes('#EXT-X-MEDIA-SEQUENCE:0\n')) {
+            windowedPolls++;
+            const header = content.slice(0, content.indexOf('#EXTINF:'));
+            if (header.includes('#EXT-X-DISCONTINUITY')) {
+              tagsAtWindowHead++;
+            }
+          }
+          await fs.writeFile(`${playlistPath}.tmp`, content);
+          await fs.rename(`${playlistPath}.tmp`, playlistPath);
+          // A player a few segments behind the newest one
+          session.onSegmentRequested(
+            '10.0.0.1',
+            `data${String(Math.max(0, ffmpeg.segmentCount - 3)).padStart(6, '0')}.ts`,
+          );
+          const served = (await session.trimPlaylist()).get();
+          if (served === undefined) {
+            throw new Error('No playlist served');
+          }
+          const { mediaSequence, discontinuitySequence, segments } =
+            parseServedPlaylist(served.playlist);
+
+          expect(segments.length).toBeGreaterThan(0);
+          expect(mediaSequence).toBe(segments[0]?.number);
+          expect(mediaSequence).toBeGreaterThanOrEqual(lastMediaSequence);
+          expect(discontinuitySequence).toBeGreaterThanOrEqual(
+            lastDiscontinuitySequence,
+          );
+          lastMediaSequence = mediaSequence ?? -1;
+          lastDiscontinuitySequence = discontinuitySequence;
+
+          sessionStartMs ??= segments[0]?.startMs;
+          for (const [i, segment] of segments.entries()) {
+            const want = expected[segment.number];
+            expect(want).toBeDefined();
+            // Every poll gives a segment the same discontinuity number and
+            // start, those of the whole session's playlist
+            expect(segment.discontinuity).toBe(want?.discontinuity);
+            expect(segment.startMs - (sessionStartMs ?? 0)).toBe(want?.startMs);
+            const previous = segments[i - 1];
+            if (previous !== undefined) {
+              expect(segment.number).toBe(previous.number + 1);
+              expect(segment.startMs).toBe(
+                previous.startMs + previous.seconds * 1000,
+              );
+            }
+          }
+        };
+
+        // About 45 minutes of programs of 9 to 26 segments. Each program's
+        // first segments come in a burst, as a read-ahead does, and its last
+        // segment is short. The player polls after every segment or two.
+        const programLengths = [10, 17, 9, 25, 12, 21, 15, 26];
+        let program = 0;
+        while (ffmpeg.segmentCount < 1_400) {
+          if (program > 0) {
+            ffmpeg.newProgram();
+          }
+          const length = programLengths[program % programLengths.length] ?? 10;
+          const burst = program % 3 === 0 ? 6 : 1;
+          addSegments(burst);
+          await poll();
+          for (let done = burst; done < length - 1; done += 2) {
+            addSegments(Math.min(2, length - 1 - done));
+            await poll();
+          }
+          addSegments(1, 0.5);
+          program++;
+        }
+        await poll();
+
+        // The file is a full window, and has slid past the session's start
+        // with program starts at its head
+        expect(listSize).toBe(450);
+        const final = await fs.readFile(playlistPath, 'utf-8');
+        expect(final.match(/#EXTINF:/g)).toHaveLength(450);
+        expect(final).toContain(
+          `#EXT-X-MEDIA-SEQUENCE:${ffmpeg.segmentCount - 450}\n`,
+        );
+        expect(final).not.toContain('#EXT-X-DISCONTINUITY-SEQUENCE');
+        expect(windowedPolls).toBeGreaterThan(400);
+        expect(tagsAtWindowHead).toBeGreaterThan(10);
+        // Program starts long gone from the file are still counted
+        expect(discontinuities).toBeGreaterThan(70);
+        expect(lastDiscontinuitySequence).toBeGreaterThan(70);
+        // The newest 20 segments
+        expect(lastMediaSequence).toBe(ffmpeg.segmentCount - 20);
+      } finally {
+        vi.useRealTimers();
+      }
+      // About 2 s on an idle laptop: 900 rewrites of a 450-entry file
+    }, 60_000);
   });
 
   describe('start with a subtitle rendition', () => {

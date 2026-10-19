@@ -8,6 +8,7 @@ import type { HlsOptions } from '@/ffmpeg/builder/constants.js';
 import {
   HlsDirectOutputFormat,
   HlsOutputFormat,
+  hlsPlaylistWindowSize,
 } from '@/ffmpeg/builder/constants.js';
 import { HlsSubtitleOutputFormat } from '@/ffmpeg/builder/options/HlsSubtitleOutputFormat.js';
 import type { OnDemandChannelService } from '@/services/OnDemandChannelService.js';
@@ -128,13 +129,15 @@ export class HlsSession
   readonly captionsEnabled: boolean;
   #playlistStart?: Dayjs;
   #hlsPlaylistMutator: HlsPlaylistMutator = new HlsPlaylistMutator();
-  // Parses only what ffmpeg appended to stream.m3u8 since the last request
+  // Parses only what ffmpeg appended to stream.m3u8 since the last request,
+  // and keeps the segments the file's 15-minute window no longer lists
   #playlistReader: MediaPlaylistReader;
   #currentSession: Maybe<FfmpegTranscodeSession>;
   #lastDelete: Dayjs = dayjs().subtract(1, 'year');
   #lastSubtitleDelete: Dayjs = dayjs().subtract(1, 'year');
   // Every video segment numbered below this has been deleted. ffmpeg's
-  // stream.m3u8 still lists them, so trimmed playlists must start at or above
+  // stream.m3u8 can still list them (it keeps 15 minutes of segments), and
+  // the reader's history can too, so trimmed playlists must start at or above
   // the floor. Subtitles need no floor. Their muxer keeps a 20-entry window
   // (HlsSubtitleOutputFormat), and that window is also the deletion boundary,
   // so subs.m3u8 never lists a pruned .vtt.
@@ -831,6 +834,10 @@ export class HlsSession
   }
 
   protected getHlsOptions(): DeepRequired<HlsOptions> {
+    const hlsTime =
+      this.sessionOptions.streamMode === 'hls'
+        ? (this.sessionOptions.segmentSeconds ?? 4)
+        : 4;
     return {
       hlsDeleteThreshold: 3,
       streamNameFormat: 'stream.m3u8',
@@ -839,11 +846,13 @@ export class HlsSession
       segmentBaseDirectory: dirname(this.workingDirectory),
       streamBasePath: basename(this.workingDirectory),
       streamBaseUrl: `/stream/channels/${this.channel.uuid}/${this.sessionType}/`,
-      hlsTime:
-        this.sessionOptions.streamMode === 'hls'
-          ? (this.sessionOptions.segmentSeconds ?? 4)
-          : 4,
-      hlsListSize: 0,
+      hlsTime,
+      // stream.m3u8 lists the last 15 minutes of segments, so ffmpeg's cost
+      // of rewriting it after each segment and of reading it back in at each
+      // program start stays the same however long the session runs
+      // (plans/hls-playlist-growth-2026-10-19.md). #playlistReader keeps the
+      // session's history.
+      hlsListSize: hlsPlaylistWindowSize(hlsTime),
       deleteThreshold: null,
       appendSegments: true,
     };

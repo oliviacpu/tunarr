@@ -841,6 +841,105 @@ describe('BasePipelineBuilder HLS stream timing', () => {
     expect(args).toContain('expr:gte(t,n_forced*2)');
   });
 
+  test.each([
+    ['hls', HlsOutputFormat({ ...defaultHlsOptions, hlsListSize: 37 })],
+    [
+      'hls_direct_v2',
+      HlsDirectOutputFormat({ ...defaultHlsOptions, hlsListSize: 37 }),
+    ],
+  ])("writes the HLS options' playlist length (%s)", (_, outputFormat) => {
+    const video = VideoInputSource.withStream(
+      new FileStreamSource('/path/to/video.mkv'),
+      VideoStream.create({
+        codec: 'h264',
+        displayAspectRatio: '16:9',
+        frameSize: FrameSize.FHD,
+        index: 0,
+        pixelFormat: new PixelFormatYuv420P(),
+        providedSampleAspectRatio: null,
+      }),
+    );
+    const build = (format: typeof outputFormat) =>
+      new NoopPipelineBuilder(
+        video,
+        null,
+        null,
+        null,
+        null,
+        EmptyFfmpegCapabilities,
+      )
+        .build(
+          FfmpegState.create({ version, outputFormat: format }),
+          new FrameState({
+            isAnamorphic: false,
+            paddedSize: FrameSize.FHD,
+            scaledSize: FrameSize.FHD,
+          }),
+          DefaultPipelineOptions,
+        )
+        .getCommandArgs();
+
+    const args = build(outputFormat);
+    expect(args[args.indexOf('-hls_list_size') + 1]).toBe('37');
+
+    // The default options keep 15 minutes of 4 s segments
+    const defaults = build({
+      ...outputFormat,
+      hlsOptions: defaultHlsOptions,
+    });
+    expect(defaults[defaults.indexOf('-hls_list_size') + 1]).toBe('225');
+  });
+
+  // HlsSlowerSession's one ffmpeg reads the channel's concat stream. Its
+  // HLS output is HlsConcatOutputFormat's, which deletes its own segments
+  // and lists a fixed 25, whatever the session's HLS options say.
+  test('keeps the concat HLS output of hls_slower as it is', () => {
+    const concat = new ConcatInputSource(
+      new HttpStreamSource('http://localhost:8000/stream/channels/test.nut'),
+      FrameSize.FHD,
+    );
+    const video = VideoInputSource.withStream(
+      concat.source,
+      VideoStream.create({
+        codec: 'rawvideo',
+        displayAspectRatio: '16:9',
+        frameSize: FrameSize.FHD,
+        index: 0,
+        pixelFormat: new PixelFormatYuv420P(),
+        providedSampleAspectRatio: null,
+      }),
+    );
+    const args = new NoopPipelineBuilder(
+      video,
+      null,
+      null,
+      null,
+      concat,
+      EmptyFfmpegCapabilities,
+    )
+      .build(
+        FfmpegState.create({
+          version,
+          outputFormat: HlsOutputFormat({
+            ...defaultHlsOptions,
+            hlsListSize: 37,
+          }),
+        }),
+        new FrameState({
+          isAnamorphic: false,
+          paddedSize: FrameSize.FHD,
+          scaledSize: FrameSize.FHD,
+        }),
+        DefaultPipelineOptions,
+      )
+      .getCommandArgs();
+
+    expect(args.filter((arg) => arg === '-hls_list_size')).toHaveLength(1);
+    expect(args[args.indexOf('-hls_list_size') + 1]).toBe('25');
+    expect(args[args.indexOf('-hls_flags') + 1]).toContain('delete_segments');
+    expect(args[args.indexOf('-hls_flags') + 1]).not.toContain('append_list');
+  });
+
   describe('HLS wrapper start-up burst', () => {
     const withBurstOption = new FfmpegCapabilities(
       new Set(['readrate_initial_burst']),
