@@ -1,0 +1,285 @@
+# Tunarr UI pass: primitives, how the web app manages them, and settings (2026-10-19)
+
+## Context
+
+The fork has a frontend design skill available now, and the web app has never had a design pass.
+This report answers three questions and turns the answers into issues that one Opus subagent each
+can take as a PR (one worktree per PR, per the fork's usual flow):
+
+1. What are Tunarr's primitives and how do they relate?
+2. How does the web app manage each one, and what design system is it actually using?
+3. What should change in Settings?
+
+Evidence: three Explore agents over `types/`, `server/src/db/schema/`, `web/src/` and the settings
+API, plus screenshots of every top-level page on the user's deployment (desktop width, light mode).
+One bug was reproduced live. The earlier `plans/frontend-audit-plan.md` (2026-08-23) covers the
+data layer (query keys, state duplication, DST maths) and is not repeated here; a few of its items
+are referenced where a UI fix depends on them.
+
+Decisions already taken with the user:
+
+- **Design scope:** stay on MUI and Material. Add a real theme and fix inconsistencies. No new identity.
+- **Settings:** regroup the tabs by user task, keep the tab layout, one shared page shell.
+
+---
+
+## 1. The primitives
+
+Three stores: SQLite (Drizzle schema in `server/src/db/schema/`), one JSON file per channel lineup
+(`channel-lineups/<channelId>.json`, schema `server/src/db/derived_types/Lineup.ts`), and one
+global `settings.json` (schema `server/src/db/SettingsDB.ts`).
+
+| Primitive | Where | What it is | Owns / points at |
+|---|---|---|---|
+| **Channel** | `types/src/schemas/channelSchema.ts`, table `channel` | A numbered virtual channel that loops its lineup from `startTime` | → one Transcode Config (required); → optional Stream Selection Profile; JSON columns `icon`, `watermark`, `offline`, `captions`, `audioTracks`; `stealth`, `groupTitle`, `guideFlexTitle`, `guideMinimumDuration`, `fillerRepeatCooldown` |
+| **Lineup** | lineup JSON; `channel_programs` is only a membership index | Ordered `items[]` of `content` / `offline` / `redirect` with start offsets; optional `schedule` (time or random slots); `onDemandConfig` | content items → Program, optionally tagged with `customShowId`, `fillerListId` |
+| **Program** | `schemas/programmingSchema.ts`, table `program` | One playable item: movie, episode, track, music video, other video | → Media Source, Library, Groupings (show/season/artist/album); owns versions → files → streams, chapters, subtitles, artwork, credits |
+| **Program Grouping** | table `program_grouping` | Show, season, artist, album | self FKs `showUuid`, `artistUuid` |
+| **Media Source** | `schemas/settingsSchemas.ts` (union), table `media_source` | Plex, Jellyfin, Emby, or a local folder | owns Libraries, path replacements, local paths; per-source `sendGuideUpdates`, `sendChannelUpdates`, `sendPlayStatusUpdates` |
+| **Library** | table `media_source_library` | One library on a source, `mediaType`, user `enabled` flag | owns programs, groupings, local folder tree, external collections |
+| **Filler List** | `schemas/fillerSchema.ts`, table `filler_show` | A pool of clips for gaps and pre/mid/post breaks, also gap music | ↔ Channel via `channel_filler_show` (weight, cooldown); referenced by ID (no FK) from offline `musicListId`, slot filler |
+| **Custom Show** | `schemas/customShowsSchema.ts`, table `custom_show` | Ordered, user-built episode list; can sync from a Plex playlist | ↔ Programs via `custom_show_content` (duplicates allowed) |
+| **Smart Collection** | `schemas/collectionsSchema.ts`, table `smart_collection` | A saved Meilisearch query | referenced by slot `smartCollectionId` (no FK) |
+| **Slot schedule** (classic) | `api/TimeSlots.ts`, `api/RandomSlots.ts`; lineup JSON `schedule` | A rule that generates a bounded, cycling lineup; hand edits clear `scheduleSeed` | slots → show, custom show, smart collection, filler list, redirect channel (all by ID, no FK) |
+| **Infinite schedule** | `architecture/infinite-schedules/` only | Shared schedule → placements → slots with a rolling per-channel buffer | design only; nothing on `main` |
+| **Transcode Config** | `schemas/transcodeConfigSchemas.ts`, table `transcode_config` | Named encoder profile, one `isDefault` | ← many channels |
+| **Stream Selection Profile** | `schemas/streamSelectionSchema.ts`, table `stream_selection_profiles` | CEL rules that pick audio/subtitle tracks | attachable to channel, filler list, program. **Full API, no UI.** |
+| **Watermark** | `channel.watermark` JSON | Per-channel bug/DOG overlay | suppressed by config `disableChannelOverlay` or channel `disableFillerOverlay` |
+| **Guide / XMLTV** | `XmlTvSettingsSchema`, `TvGuideService.ts` | Derived, nothing stored | per-channel inputs: stealth, flex title, min duration, gap picture |
+| **HDHomeRun / M3U** | `HdhrSettingsSchema` | Discovery + tuner count; derived endpoints | no entity |
+| **Tasks** | `schemas/tasksSchema.ts`, `server/src/tasks/` | In-memory scheduler | nothing stored |
+| **Users / auth** | none | Optional Basic auth from env | no entity |
+
+**Relationship map, in one paragraph.** A Media Source has Libraries, which have Programs grouped
+into Shows/Seasons or Artists/Albums. A Channel's Lineup is an ordered list of Programs (plus
+offline gaps and redirects to other channels), optionally generated by a Slot schedule whose slots
+point at Shows, Custom Shows, Smart Collections, Filler Lists or other Channels. Channels attach
+Filler Lists (weighted, with cooldowns) for gaps and breaks, one Transcode Config for encoding, and
+carry their own captions, audio-track, watermark and guide settings. Everything scheduling-related
+inside the lineup JSON references other entities by ID with no database integrity (TODO in
+`derived_types/Lineup.ts`; infinite-schedules decision D12).
+
+**Dead or vestigial primitives** (candidates for removal, see issue P2):
+`channel_fallback` (read, never written; `SaveableChannelSchema` drops `fallback`),
+`channel.transcoding` (replaced by `transcodeConfigId`), `DynamicContentConfig` (nothing reads it),
+`plexStream.*` settings and `xmltv.enableImageCache` (never read), the dizqueTV-era `ProgramSchema`,
+`externalSourceId` columns, `mikroOrmMigrations`. Also: `ChannelSubtitlePreferences`,
+`CustomShowSubtitlePreferences` and `cached_image` are in Kysely's `DB` type but missing from the
+Drizzle `schema` index.
+
+---
+
+## 2. How the UI manages them
+
+Shell: `web/src/App.tsx` (fixed `TopBar`, permanent 240px `Drawer`, `BottomNavBar` under `sm`,
+`Container maxWidth="xl"`). Nav entries come from `web/src/hooks/useNavItems.tsx`:
+Guide, Channels, Library (→ Filler Lists, Smart Collections, Custom Shows, Trash), Sources, System,
+Settings. Every list is a material-react-table with sorting, filter and pagination on and no row
+selection or bulk actions.
+
+| Primitive | List | Create | Edit | Form lib | Delete |
+|---|---|---|---|---|---|
+| Channel | MRT table (cards on mobile) | Page, tabs disabled until valid | Page with four state-driven tabs (`?tab=`): Properties, Flex, EPG, Streaming (holds watermark) | RHF | `ChannelDeleteDialog`; a second inline dialog in `ChannelsPage.tsx` is dead code |
+| Lineup | Virtualised `ChannelLineupList` or calendar | "Add" → `ProgrammingSelectorPage` | Tools menu + modals in `programming_controls/` | zustand `channelEditor` | Tools menu |
+| Time / random slots | Slot table + preview | — | Full page, dialogs per slot, two separate providers glued by `usePolymorphicSlotFormContext` | RHF | `ClearSlotsButton` |
+| Filler list / Custom show | MRT table | Page, then the selector page; draft held in zustand between them | Page: name + embedded `ChannelLineupList` | RHF | Inline `Dialog` copied into each page |
+| Smart collection | MRT table | "Create" sends you to `/search`, save from there | Dialog, name only | RHF | `DeleteConfirmationDialog` |
+| Media source | MRT table | "Add" menu → dialog per type | Same dialog + libraries dialog | RHF | `DeleteConfirmationDialog` |
+| Transcode config | MRT table inside the FFmpeg settings tab | Page | Page | **TanStack Form** | `DeleteConfirmationDialog` |
+| Trash | Program grid | — | — | — | **"Empty Trash" with no confirmation** |
+| Settings | — | — | One form per tab | RHF | — |
+
+Shared pieces worth building on: `ChannelLineupList`, `ProgrammingSelector`, `LibraryProgramGrid`,
+`UnsavedNavigationAlert`, `DeleteConfirmationDialog`, `TypedController`,
+`NumericFormControllerText`, `CheckboxFormController`, `PaddedPaper`, `RouterTabLink`.
+
+### What design system is it?
+
+Stock **Material UI v7**, which is Material Design 2. `web/src/theme.ts` is 58 lines: six palette
+colours for light, two for dark (the rest commented out "trialing"), and nothing else. No typeface
+is loaded (MUI's Roboto stack falls through to Helvetica/Arial), no type scale, no shape, spacing or
+component defaults. Styling is 721 inline `sx` props and 12 `styled()` calls with no shared tokens.
+Colour discipline is actually good (10 hex literals in 4 files); layout, type and vocabulary are not.
+
+Observed in the screenshots:
+
+- **Headings** are improvised: h3 on Channels/Settings/System/Guide/Sources, h4 on Fillers/Custom
+  Shows/Smart Collections/Trash, an h4 "Tasks" under the h3 "System". Counts across the app:
+  h5 41, h4 21, h6 25, h3 8, h2 2, overline 7.
+- **Buttons**: 15 contained to 1 outlined, so primary and secondary actions look alike. Labels: Save
+  25, Update 4, Submit 1; Reset 3, Reset Options 3, Reset Changes, Restore Default Settings.
+- **Tab labels are system words**: XMLTV, FFMPEG, HDHR, EPG. Field labels say "FFmpeg", tabs say
+  "FFMPEG".
+- **Save bars** differ per page (see issue C3). The slot editors' Save is never disabled; Scanner has
+  no reset; the lineup editor's Save is icon-only on mobile.
+- **Delete** has three dialog implementations and one missing confirmation (Empty Trash).
+- **Dirty-state guard** fires a browser "Leave site?" on reload of any page that mounts it, with
+  nothing changed (reproduced live; issue B1).
+- **Help text** is long and set at ~11px grey under every field; the FFmpeg tab reads as a wall.
+  Several fields are explained by a paragraph where a label would do.
+- **The guide** colours each program with a saturated random hue (pink, purple, orange, green),
+  unrelated to the palette; readable but loud, and type (movie / episode / flex) is not encoded.
+- **Search page** has no heading, breadcrumb or empty state; it is two bare inputs.
+- **Media Sources** exists twice (`/media_sources` and `/settings/sources`, the latter with no tab).
+- **Nav highlight** is lost on detail pages and on Scanner, Features, transcode-config and
+  System sub-pages (exact `fullPath` match; mobile uses a prefix match, so the two disagree).
+- **Dark mode**: the TopBar toggle flips `light`→`dark` only, so from `system` the first click can
+  do nothing.
+- Known e2e warnings (`e2e/tests/knownIssues.ts`): setState-during-render on nine list routes,
+  missing list keys in the lineup editors, invalid Tabs value on `/settings` and `/settings/sources`.
+
+### Design direction (for the theme issue, D1)
+
+Tunarr is a scheduling console for a home TV network: dense tables, times, durations, channel
+numbers, and a guide that is the product's hero (the index route already redirects to it). The
+direction is "broadcast console", not "SaaS dashboard".
+
+- **Type:** one family, **IBM Plex Sans** via `@fontsource-variable/ibm-plex-sans` (self-hosted app,
+  no CDN). Tabular numerals on anything that shows a time, duration or channel number
+  (`fontVariantNumeric: 'tabular-nums'` on table cells, guide, lineup rows). Scale: body 14/1.5,
+  body2 13, h1 28/600, h2 22/600, h3 18/600, subtitle 15/500, caption 12, overline removed from use.
+  Help text 12.5px at `text.secondary`, max 72ch.
+- **Colour tokens** (`:root`-style via the theme): keep the teal brand. Light: primary `#008c93`,
+  secondary `#004b79`, background `#f5fafc` (already used in `App.tsx`, promote it), paper `#ffffff`,
+  divider `rgba(0,30,40,.12)`. Dark: primary `#2fb7c0` (passes AA on the dark paper), background
+  `#10191c`, paper `#182328`, error `#e07b6c`, warning `#f0a330`, success `#4caf7d`.
+- **Shape and spacing:** radius 6 for inputs and buttons, 10 for Paper and dialogs; `spacing(8)`.
+  Page gutter 24 desktop / 16 mobile. One page-header component (title, optional description,
+  actions right) so every list page opens the same way.
+- **Component defaults:** `Button` default variant `outlined`, `contained` reserved for the page's
+  one primary action; `TextField` size small in tables and dialogs; `Tabs` sentence case
+  (`textTransform: none`); `Tooltip` enterDelay 400; `Paper` elevation 0 with a border.
+- **Principles:** structure encodes information (a border or chip means something); copy in the
+  user's words (Guide, Transcoding, Tuner, not XMLTV, FFMPEG, HDHR); one verb per action through
+  the whole flow (Save → "Saved"); errors say what happened and what to do.
+
+---
+
+## 3. Settings today
+
+Stored in `settings.json` under `settings.{hdhr,xmltv,plexStream,ffmpeg,mediaSource}`,
+`system.{backup,logging,server}` and `featureFlags`; transcode configs and media sources are in
+SQLite; `backendUri`, locale, time format and theme are browser-local. Served by three URL styles
+(`/ffmpeg-settings`, `/settings/media-source`, `/system/settings`) with three error-body shapes and
+mixed replace/partial update semantics.
+
+Tabs: General, XMLTV, FFMPEG, Scanner, HDHR, Features. `/settings` itself renders an empty panel
+with tab value `/undefined`.
+
+| Page | Form | Save / reset | Guard | Notes |
+|---|---|---|---|---|
+| General | zustand autosave (web) + RHF (server) | "Reset Options", disabled when invalid; reset uses a different defaults function than load | no | `TODO: Handle loading and error states`; help text names `LOG_LEVEL` but the server reads `TUNARR_LOG_LEVEL` |
+| XMLTV | RHF + `useEffect(reset)` | Restore Defaults + Reset Changes; server error shown | yes | best of the set; copy source for the shell |
+| FFMPEG (668 lines) | RHF | Reset Changes; **no onError**; Save sits mid-page above the transcode table, table is inside the `<form>` | yes | blank page while `/ffmpeg-info` loads or fails |
+| Transcode config | **TanStack Form** | "Submit"; no guard; title says Edit when creating | no | two hand-rolled inputs beside `Basic*Input` |
+| Scanner | RHF | Save only | no | change needs a restart; nothing says so |
+| HDHR | RHF, copy of XMLTV | Restore + Reset; **no onError**; server reset default is 1, UI says 2 | yes | |
+| Features | RHF `values:` | Reset + Save | no | descriptions from server, not localised; `FlagKey` type missing a flag |
+
+**Fields the server reads with no UI:** `ffmpeg.scalingAlgorithm`, `ffmpeg.deinterlaceFilter`,
+`logRollConfig.rolledFileLimit`, `searchSettings.{snapshotIntervalHours,maxIndexingMemory}`, backup
+`tempDir`, cron schedules, per-config `enabled`, more than one backup output.
+**Dead fields:** `plexStream.*`, `xmltv.enableImageCache`.
+**Env-only:** ~30 `TUNARR_*` vars in `server/src/util/env.ts`; `TUNARR_BIND_ADDR`,
+`TUNARR_DATABASE_NAME`, `DATABASE_DEBUG_LOGGING`, `ENABLE_SSDP_DEBUG_LOGGING` bypass the registry;
+`TUNARR_BUILA_SHA` is a typo; several undocumented. The CLI `settings update` cannot touch `system`
+or `featureFlags`.
+
+**Two-level settings** exist for captions (global look + per-channel "Use own caption look"), audio
+languages, subtitles, stream mode and transcode config. Only captions shows the inherit/override
+relationship; the others silently override.
+
+---
+
+## 4. Issues to delegate
+
+Sizes: S under half a day, M about a day, L several days. Each row is one PR into the fork `main`
+unless noted. "Done when" is the acceptance test the agent must make pass. Agents follow CLAUDE.md
+(tests with every change, `pnpm lint-changed`, docs updated, parity-checklist row if slot-scheduler
+behaviour changes). UI PRs attach before/after screenshots from the e2e fixture
+(`cd e2e && pnpm e2e` boots a seeded server on :15173).
+
+### Wave 1: confirmed bugs (independent, start now)
+
+| Id | Issue | Size | Files | Done when |
+|---|---|---|---|---|
+| B1 | **Browser "Leave site?" fires with nothing changed.** `UnsavedNavigationAlert` calls `useBlocker` without `enableBeforeUnload`, which defaults to `true` and is evaluated independently of `shouldBlockFn` (`@tanstack/history` `onBeforeUnload`, `enableBeforeUnload ?? true`). Every page that mounts the alert (channel edit, programming, both slot editors, FFmpeg/XMLTV/HDHR settings) warns on reload or tab close. Reproduced on the deployment. | S | `web/src/components/settings/UnsavedNavigationAlert.tsx`; a vitest with a mocked `useBlocker` | `enableBeforeUnload: isDirty` (and respects `exceptTargetPaths`); test asserts the option tracks `isDirty`; reload of a clean channel edit page shows no dialog. |
+| B2 | **Empty Trash has no confirmation and is irreversible.** | S | `web/src/pages/library/TrashPage.tsx`; reuse `DeleteConfirmationDialog` | Dialog states the count and that lineup slots are replaced by flex; test renders the page and asserts the mutation is not called until confirmed. |
+| B3 | **FFmpeg settings page goes blank** while `/ffmpeg-info` loads or when it fails; saves on FFmpeg and HDHR have no `onError`. | S | `pages/settings/FfmpegSettingsPage.tsx:189`, `HdhrSettingsPage.tsx` | Page renders the form with a skeleton for the info card; a failed info call shows an inline Alert with the path field editable; failed saves show the server message in a snackbar; tests for both. |
+| B4 | **Scanner interval change needs a restart and nothing says so**; `PUT /settings/media-source` does not reschedule the scan/sync jobs. Pick one: reschedule on save (preferred) or show "restart required". | S–M | `server/src/api/settingsApi.ts` (media-source route), the job scheduler used by `ScheduleJobsStartupTask`, `pages/settings/ScannerSettingsPage.tsx`, tests | Saving a new interval reschedules `ScanLibrariesTask` (test asserts the next run moves); UI shows the next scan time. |
+| B5 | **General settings help and reset are wrong.** Help text names `LOG_LEVEL` (server reads `TUNARR_LOG_LEVEL`); Reset is disabled when the form is invalid; reset uses `getBaseFormValues` while load/save use `getDefaultFormValues`; `LogRollForm.tsx:121` labels the schedule field "Max Backups". | S | `components/settings/general/GeneralSettingsForm.tsx:377`, `LogRollForm.tsx`, `BackupForm.tsx` | One defaults function; reset always enabled when dirty; labels correct; help text correct; tests cover reset after an invalid edit. |
+| B6 | **HDHR reset default mismatch**: server reset writes `tunerCount: 1`, schema and UI say 2. Also `tunerCount` has no minimum. | S | `server/src/api/hdhrSettingsApi.ts`, `types/src/schemas/settingsSchemas.ts` | Server reset uses the schema default; `tunerCount` min 1; tests. |
+| B7 | **Dark-mode toggle from `system` can no-op.** TopBar runs `mode === 'light' ? 'dark' : 'light'`. | S | `components/TopBar.tsx`, `hooks/useTunarrTheme.ts`; drop the unread `theme.themePreference` zustand field | Toggle uses the resolved scheme; vestigial field and its persist migration removed; test. |
+| B8 | **Channel tab error dots miss fields.** The field→tab map leaves out `startTime`, `onDemand`, `transcodeConfigId`, `disableFillerOverlay`. | S | `components/channel_config/EditChannelForm.tsx` | Map derived from the form schema keys (exhaustive type), test asserts every `SaveableChannel` key is assigned. |
+| B9 | **`NewChannelPage` imports MUI `Breadcrumbs`** instead of the app's, rendering an empty trail; `/settings` index renders an empty panel. | S | `pages/channels/NewChannelPage.tsx`, `routes/settings.tsx` (redirect to `/settings/general`) | Breadcrumb shows Channels › New; `/settings` redirects; e2e known-issue entries for the Tabs warning removed. |
+| B10 | **Dead code around delete.** `ChannelsPage.tsx` inline delete dialog never opens; `FfmpegSettingsPage.tsx` keeps a delete mutation and dialog that `TranscodeConfigsTable` duplicates; `restoreTunarrDefaults` state never set; unused `usePlexStreamSettings`/`usePlexSettings` hooks. | S | those files, `hooks/settingsHooks.ts` | Removed; typecheck and lint clean. |
+
+### Wave 2: design foundation (D1 first, the rest in parallel after it)
+
+| Id | Issue | Size | Files | Done when |
+|---|---|---|---|---|
+| D1 | **A real theme.** Implement the direction in section 2: loaded Plex Sans, type scale, palette tokens for both schemes, shape, spacing, component defaults (outlined default button, sentence-case tabs, bordered Paper). Promote `#f5fafc` from `App.tsx` into `palette.background.default`; replace `PaddedPaper`'s raw 16 with `theme.spacing(2)`. | M | `web/src/theme.ts`, `web/src/App.tsx`, `components/base/PaddedPaper.tsx`, `web/package.json` (fontsource), `index.css` | Theme has `typography`, `shape`, `components`; both schemes pass AA for text on paper (a test computes contrast for the token pairs); screenshots of Channels, Guide, channel edit and Settings in both schemes attached. Fork docs note the font licence (OFL). |
+| D2 | **Page header component and heading levels.** One `PageHeader` (title, description, actions) used by every list and settings page; one heading level per page type. | S–M | new `components/base/PageHeader.tsx`; Channels, Library, Fillers, Custom Shows, Smart Collections, Trash, Media Sources, System, Settings, Search pages | Every top-level page uses it; headings follow h1 page / h2 section / h3 group; Search gets a title and empty state. |
+| D3 | **Button hierarchy and action vocabulary.** Contained only for the page's primary action; Save / Cancel / Delete / Reset changes / Restore defaults as the only labels; toast text matches the button ("Saved", "Deleted"). | S | the 25 Save sites, the 4 Update, 1 Submit, 3 Reset Options, the ~31 `enqueueSnackbar` call sites | A `strings.ts` table of action labels and toast messages used everywhere; grep shows no other label; Lingui catalog updated. |
+| D4 | **Guide program colours.** Replace the random saturated hue per program with a palette-derived categorical ramp (muted, 8 steps, both schemes) and encode type: movie, episode, flex, redirect. Current-time marker and now-playing cell get the one accent. Load `dataviz` skill for the ramp. | M | `components/guide/TvGuide.tsx` and its colour helper | Colours come from the theme; a `prefers-reduced-motion` check on the time marker; screenshot in both schemes. |
+| D5 | **Help text and copy pass.** Help text to 12.5px, `text.secondary`, max 72ch, one sentence where possible; long explanations move behind a `?` tooltip or a "Learn more" link to docs. Tab and field labels in the user's words (Guide, Transcoding, Tuner, Playback). Fix "extaction", "FFMPEG" vs "FFmpeg", "Edit Transcode Config" on create. | M | settings pages, channel edit tabs, `locales/` | No field has more than two lines of help by default; `docs/configure/` links resolve; Lingui catalogs regenerated. |
+| D6 | **Nav highlight and breadcrumbs.** Prefix match on desktop (as `BottomNavBar` already does), settings children complete, breadcrumbs on settings and system sub-pages. | S | `hooks/useNavItems.tsx`, `components/Breadcrumbs.tsx`, `components/BottomNavBar.tsx` | Visiting any route highlights exactly one drawer item; test over `routeTree.gen.ts` asserts every route maps to a nav item. |
+| D7 | **Loading and error states.** Router `defaultPendingComponent` and `defaultErrorComponent`; skeletons for tables and the channel summary; one spinner component (drop `RotatingLoopIcon` vs `LoadingIcon` vs raw `CircularProgress`). Remove the unreachable `if (error)` branches under `useSuspenseQuery`. | M | `web/src/router.ts`, `pages/ErrorPage.tsx`, list pages | Every route has pending and error UI without per-page code; e2e route sweep still green. |
+
+### Wave 3: shared form shell and consistency (after D1; C1 before C2–C5)
+
+| Id | Issue | Size | Files | Done when |
+|---|---|---|---|---|
+| C1 | **One form shell.** `SettingsForm` (or `EntityForm`): wraps RHF `FormProvider`, renders the save bar (Restore defaults left; Reset changes + Save right; Save disabled unless dirty and valid; spinner while saving), mounts `UnsavedNavigationAlert`, and routes errors to one snackbar with the server message. Add `SwitchFormController` and `SelectFormController` beside the existing `Checkbox`/`Numeric` controllers. | M | new `components/form/SettingsForm.tsx`, `components/form/SwitchFormController.tsx`, `SelectFormController.tsx`; tests with `renderWithProviders` | XMLTV page ported as the reference; tests: Save disabled when clean, enabled when dirty, reset restores defaults, blocker tracks dirty. |
+| C2 | **Port every settings page to C1.** General (server form), FFmpeg, Scanner, HDHR, Features. Delete the XMLTV/HDHR copy-pasted scaffolding and the duplicated "Every N / unit / time" schedule widget (one `ScheduleFields` used by backups and log rolling). | M | the six settings pages, `BackupForm.tsx`, `LogRollForm.tsx` | Each page is a form body only; all have the unsaved guard; `logRollSettings.spec.ts` passes; one e2e spec per page of the shape load → change one field → save → reload → field held and nothing else moved (the shape `frontend-audit-plan.md` Phase 4 asks for). |
+| C3 | **Port entity editors to C1.** Channel edit (keep the tabs; error dots stay), filler list, custom show, both slot editors (Save disabled when clean, "Reset Options" becomes "Reset changes"). | M | `EditChannelForm.tsx`, `EditFillerPage.tsx`, `EditCustomShowPage.tsx`, `TimeSlotEditorPage.tsx`, `RandomSlotEditorPage.tsx` | Same save-bar behaviour on every editor; filler and custom show get the unsaved guard; a parity-checklist row if slot-editor behaviour changes. |
+| C4 | **Transcode config form on RHF.** Replace the TanStack Form with RHF through C1 so there is one form library; drop `hooks/form.ts` and `components/form/Basic*Input` if nothing else uses them. | M | `components/settings/ffmpeg/TranscodeConfigSettingsForm.tsx`, `useTranscodeConfigFormOptions.ts`, `web/package.json` | `@tanstack/react-form` removed from deps; unsaved guard present; existing validation parity covered by tests (resolution, bitrate, hardware options). |
+| C5 | **One delete confirmation.** `DeleteConfirmationDialog` everywhere (name of the thing, consequences, error-coloured Delete); remove the inline dialogs in Fillers and Custom Shows and `ChannelDeleteDialog` if it adds nothing beyond "used by N lineups". | S | those pages | Three implementations become one; tests for each caller. |
+| C6 | **Media sources live once.** Remove `/settings/sources`; the Sources nav entry stays. Move `TaskSettingsPage` to `pages/system/`. | S | `routes/settings/sources.tsx`, `routeTree.gen.ts` (regen), `useNavItems.tsx`, `e2e/tests/routes.ts` | Route gone, e2e coverage test updated, known-issue entry removed. |
+| C7 | **Row selection and bulk actions** on Channels, Fillers, Custom Shows, Smart Collections (delete; for channels also stealth on/off). | M | the four MRT tables, `hooks/useTableSettings.ts` | Select-all + toolbar actions with one confirmation; tests. |
+
+### Wave 4: settings regrouped by task (after C2)
+
+| Id | Issue | Size | Files | Done when |
+|---|---|---|---|---|
+| S1 | **New tab set and routes**, with redirects from the old paths: **General** (web prefs, server URL, logging, backups), **Playback** (binaries + logging, HLS tuning, transcode directory, scaling and deinterlace, tonemap curve *and* its switch, transcode-config table), **Captions & audio** (subtitle extraction, HDHomeRun closed captions + appearance, audio language preferences), **Guide** (XMLTV), **Tuner** (HDHR), **Library** (scan interval, future search settings), **Experimental** (feature flags that are not playback). Each tab gets a one-line description under its heading. | M | `pages/settings/SettingsLayout.tsx`, `routes/settings/*`, `useNavItems.tsx`, `docs/configure/` | Old URLs redirect; docs sidebar matches; e2e routes updated; settings `/` redirects to General. |
+| S2 | **Add the missing fields**: scaling algorithm, deinterlace filter (Playback); rolled-file limit (General › logging); backup `tempDir`, cron expression, per-config enabled (General › backups); search snapshot interval and max indexing memory (Library, "restart required" badge). | M | relevant settings pages, `types/src/schemas/settingsSchemas.ts` unchanged, `docs/configure/` | Each field saves and reloads; e2e spec per field. |
+| S3 | **Remove dead settings** `plexStream.*` and `xmltv.enableImageCache`, the `/plex-settings` routes and `usePlexSettings`; a settings-file migration bumps `configVersion` and drops the keys. Also `channel.transcoding` and `DynamicContentConfig` from the lineup schema (types + web store), with a lineup read that tolerates the old key. | M | `SettingsDB.ts`, `settingsSchemas.ts`, `plexSettingsApi.ts`, `channelSchema.ts`, `Scheduling.ts`, web store types; migration test | Old files load; new files lack the keys; OpenAPI and web client regenerated (`regen-api` skill). |
+| S4 | **Restart-required and applies-when affordance.** A small `AppliesWhen` chip per field or group: "live", "next session", "next program", "restart". Driven by a table in `types/` so docs and UI agree. Server port and HDHR discovery already say it; add to scan interval, search settings, binaries. | S | `components/settings/AppliesWhen.tsx`, settings pages, docs | Every field in the audit table has a chip; snapshot test of the mapping. |
+| S5 | **Inherit/override affordance for per-channel settings.** Audio tracks, subtitles, stream mode and transcode config on the channel Streaming tab show the global value and an explicit "Use channel's own" switch, the pattern captions already use. | M | `components/channel_config/ChannelTranscodingConfig.tsx` and siblings | Clearing an override returns to global; the chip says "Global: …"; tests. |
+| S6 | **One settings API shape** (server). `/api/settings/{ffmpeg,xmltv,hdhr,media-source,system,feature-flags}` with partial updates, one error body `{message}`, reset endpoints either used by the UI or removed. Keep old routes as aliases for one release. | M | `server/src/api/*SettingsApi.ts`, `api/index.ts`, OpenAPI regen, web hooks | Web hooks call the new routes; contract tests per route; FORK.md entry. |
+| S7 | **Env-var registry hygiene.** Route `TUNARR_BIND_ADDR`, `TUNARR_DATABASE_NAME`, `DATABASE_DEBUG_LOGGING`, `ENABLE_SSDP_DEBUG_LOGGING` through `util/env.ts`; fix `TUNARR_BUILA_SHA`; delete unread `TUNARR_DEBUG_PROGRAM_GROUP_CHUNK_SIZE`; document the undocumented ones; let `tunarr settings update` reach `system` and `featureFlags`. Show the effective env overrides read-only on System › Status. | S–M | `server/src/util/env.ts`, `docs/getting-started/`, `cli/settings/`, `pages/system/StatusPage.tsx` | Every env var the server reads appears in the registry and the docs table; a test diffs `process.env` reads against the registry. |
+
+### Wave 5: primitives without a home (decisions, then work)
+
+| Id | Issue | Size | Files | Decision / done when |
+|---|---|---|---|---|
+| P1 | **Stream Selection Profiles: surface or shelve.** Full CRUD API, resolver at three levels, no UI, CEL expressions. Decide: (a) a Library › Stream profiles page with a tested CEL editor and the channel/filler pickers, or (b) mark the API internal and hide it from the OpenAPI spec until the dev branch needs it. Recommendation: (b) now, (a) when switchable audio needs per-program rules. | S (b) / L (a) | `streamSelectionApi.ts`, docs | Decision recorded in FORK.md; whichever path, nothing half-exposed. |
+| P2 | **Retire vestigial primitives.** `channel_fallback` table and `GET /channels/:id/fallbacks` (the Flex tab's fallback picture/music already replaced it), `externalSourceId` columns, `mikroOrmMigrations`, `defaultTranscodeConfigLegacy`; add the three missing tables to the Drizzle schema index. One migration via `new-migration` skill. | M | `server/src/db/schema/`, `StreamProgramCalculator.ts:531`, `channelsApi.ts`, migration | Migration applies to a copy of the dev DB; removed code has no callers; FORK.md entry. |
+| P3 | **"Used by" for library entities.** Filler lists, custom shows and smart collections show which channels and slots reference them, and deletion warns. Lineup references are ID-only, so this is a scan of the lineup JSON files, cached (the infinite-schedules D12 index later replaces it). | M | `server/src/db/channel/LineupRepository.ts`, new `usedBy` endpoints, the three list tables | List shows a "Used by N channels" chip; delete dialog lists them; tests with a seeded lineup. |
+| P4 | **Smart collection create flow.** "Create" today sends you to Search with no explanation. Make the Smart Collections page open the search with a banner "Build the query, then Save as collection", and let the edit dialog edit the query, not only the name. | S–M | `routes/library/smart_collections.tsx`, `components/smart_collections/*` | Create and edit both work from the collections page; tests. |
+| P5 | **Channel edit tabs become routes** (`/channels/$id/edit/{properties,flex,guide,streaming}`) so deep links and the nav highlight work, and the "Streaming" tab splits its watermark section into its own tab. | M | `routes/channels_/$channelId/edit/*`, `EditChannelForm.tsx`, `e2e/tests/routes.ts` | Old `?tab=` links redirect; e2e coverage test updated; unsaved guard spans the tabs via `exceptTargetPaths`. |
+
+### Not in scope here
+
+Data-layer items from `plans/frontend-audit-plan.md` (FE1–FE5, C1–C6) stay there; C3 above
+depends on its FE5 (query-key invalidation) being fixed first for channel delete to refresh the
+list. Infinite schedules UI waits for the dev branch. Mobile layout was not screenshotted; D1–D2
+must still be checked at 390px in the e2e fixture.
+
+---
+
+## 5. Execution notes
+
+- **Order:** Wave 1 all at once (ten S-sized PRs, one Opus agent each, worktrees). D1 alone, then
+  D2–D7 in parallel. C1 alone, then C2–C7. S1 after C2. Wave 5 after decisions P1 and P2 are taken
+  by the user.
+- **Agent brief template:** the issue row, the relevant section of this file, CLAUDE.md rules
+  (tests ship with the change; no `as any`; `!== undefined`; no unguarded `!`), the fork's PR flow
+  (`gh --repo oliviacpu/tunarr`, labels `approved` / `changes requested`), screenshots from
+  `cd e2e && pnpm e2e` for any visual change, and the rule that nothing deployment-specific goes in
+  the public repo.
+- **Verification for the whole pass:** `pnpm turbo typecheck && pnpm turbo test`,
+  `pnpm lint-changed`, the e2e route sweep green with `knownIssues.ts` shrinking (B9, C6, D7 each
+  remove entries), and a final screenshot set of every top-level page in both schemes at 1440px and
+  390px attached to a closing PR that updates `docs/` screenshots.
