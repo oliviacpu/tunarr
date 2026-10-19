@@ -254,18 +254,18 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
 
 - **Change:** Saved slow, slower and veryslow presets now appear in the editor, select labels are associated with their controls, and the unused Soundtrack field is removed in favor of Gap music.
 
-### Completion record: playback, subtitles, controls and runtime checks (2026-10-19)
+### Merged completion: playback, subtitles, controls and runtime checks (2026-10-19)
 
 - **What changed:** the completion work spans PRs #62–#77 (bounded Plex guide notifications,
   scan-worker protocol/watchdog handling, guide refreshes across midnight, caption boundaries and language,
-  and FFmpeg secret redaction). The completion record links each PR and its verified merge state.
+  and FFmpeg secret redaction). All implementation PRs were independently reviewed and merged; the completion record links their merge commits.
 - **Playback:** the selected pipeline filters determine the emitted frame rate and caption cadence;
   software, NVIDIA, VAAPI and QSV command-construction regressions cover normal and software-fallback paths.
   A caption eligibility decision is shared by a channel's HLS session and its transport-stream wrapper.
 - **Subtitles and controls:** downloaded legacy-encoded subtitles retain accents, burn-in/conversion receives
   a detected Windows-1252 override, embedded SDH flags come from the stored track, and slow/slower/veryslow
   presets are selectable with accessible labels. Now-playing text is constrained by picture width as well as height.
-- **Further completion work:** configurable read-ahead and SQLite tuning limits, x265 thread pools,
+- **Throughput and background work:** configurable read-ahead and SQLite tuning limits, x265 thread pools,
   average frame-rate selection for variable-rate files, case-insensitive subtitle discovery, per-library
   scanner notices, parallel gap asset resolution, a narrow gap-track query, cleanup of deleted gap-music
   references, queued custom-show responses and batched artwork discovery.
@@ -282,7 +282,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   contract. Query and header redaction use separate boundaries so punctuation cannot leave credential
   suffixes visible. Synthetic regression fixtures cover process errors and saved logs; this does not
   establish that any real credential was exposed. The logging fix was independently reviewed and merged in PR #66; its addressed review thread is resolved.
-- **Evidence and limits:** see `plans/fork-completion-2026-10-19.md` for historical candidate results and head-specific CI. Native Linux PR #73 and #75 validation passed on their recorded heads; final combined session-stack validation is tracked separately in the completion record.
+- **Evidence and limits:** see `plans/fork-completion-2026-10-19.md` for historical candidate results and head-specific CI. Final source head `1e615493` passed Build CI (3,706 tests passed, 2 skipped) and native Linux runtime validation (39 passed, 60 GPU cases skipped; 14 packaged-worker checks). The completion record links the exact runs and distinguishes earlier subset evidence.
   Hardware command tests do not establish GPU playback support. Client verification and a deployment soak
   remain pending. No image is published or deployed by this integration work.
 - **Upstream:** not submitted; this is personal-fork completion work.

@@ -19,9 +19,9 @@ The original checkout and its existing uncommitted files are preserved.
 | Caption fallback and maintenance | Unsupported text falls back to burn-in; repeated caption refusal warnings are suppressed per session. HLS serialization helpers move to test support; segment defaults and caption normalization are centralized. | Non-Latin fallback, timeline, playlist and session regressions. |
 | Engineering workflow | API generation retains temporary paths through server initialization; regenerated dev contracts; upstream `latest` spec restored. Rerunning a release edits its existing release notes. A Docker runtime-test stage is required by the final image and a PR/nightly/manual workflow builds it without publishing. | Production builds, generated-file reproducibility, real-binary tests, packaged worker smoke test. |
 
-The implementation PRs are being reviewed and merged individually into this personal
-fork. The map below records verified merge states; it does not imply a release or
-deployment. Release concurrency stays serialized: removing it would introduce a race
+The implementation PRs #62–#75 and #77 were independently reviewed and merged into
+this personal fork. The map below records their verified merge commits; this does
+not imply a release or deployment. Release concurrency stays serialized: removing it would introduce a race
 between checking the newest tag and moving `latest`.
 
 ## Readability and redaction follow-up
@@ -83,7 +83,18 @@ create two files distinguished only by case; it still runs on Linux.
 - Pipeline PR #75 also passed [native Linux run 39292973501](https://github.com/oliviacpu/tunarr/actions/runs/39292973501)
   at head `ce18cf8922d74f98e2ada2a0048ffe21b29aaa47`: **39 passed, 60 GPU-dependent
   cases skipped** (6 files passed, 3 skipped), plus **14/14 packaged-worker checks**.
-  This is pipeline-head evidence; final session-stack PR #77 validation remains pending.
+  This is pipeline-head evidence; the final session-stack result follows.
+- Final implementation head `1e6154938912956ac224dbdfff77149e98cf0bfc`, merged in
+  [PR #77](https://github.com/oliviacpu/tunarr/pull/77) as `4c4d8568b2624d50f001db6e3b2de54825b25904`, passed
+  [Build run 39294342810](https://github.com/oliviacpu/tunarr/actions/runs/39294342810):
+  **3,706 passed, 2 skipped** (server 3,308; web 256; shared 142), generated-contract
+  reproducibility, and server/web production builds. These are final-source CI results,
+  separate from the historical local candidate totals above.
+- The same final head passed [native Linux runtime run 39294334278](https://github.com/oliviacpu/tunarr/actions/runs/39294334278):
+  **39 passed, 60 GPU-dependent cases skipped** (6 files passed, 3 skipped), plus
+  **14/14 packaged-worker checks**. This exercises shipped FFmpeg/ffprobe, real
+  Meilisearch, subtitle/rendering cases, and the packaged linux-x64 worker lifecycle.
+  It does not establish GPU playback, ARM64 execution, or actual Plex/Apple TV behavior.
 - Production build: all five tasks passed. API specification and generated client are byte-for-byte reproducible on a second generation.
 
 ## Release and remaining work
@@ -107,9 +118,8 @@ The following require additional implementation or evidence:
 
 Before a release is accepted:
 
-1. Individual merged PRs have independent review and passing head-specific CI, and
-   PR #73 has native Linux runtime evidence. Keep later playback/session validation
-   tied to its actual tested head before treating the completed stack as validated.
+1. Implementation review, merging and native Linux validation are complete for the
+   final source head above. Retain those head-specific CI records for the release candidate.
 2. Record Apple TV/Plex results for captions, language labels, audio switching, fallback
    programs and gaps. GPU support requires testing on the corresponding hardware.
 3. Preserve the current image digest and a verified backup, including the separate search
@@ -141,4 +151,4 @@ release-image publication, or deployment is part of this work.
 | [#74](https://github.com/oliviacpu/tunarr/pull/74) | Subtitle encoding and matching | Merged `89b822d0` |
 | [#75](https://github.com/oliviacpu/tunarr/pull/75) | Pipeline frame rate and rendering | Merged `6670d01c` |
 | [#76](https://github.com/oliviacpu/tunarr/pull/76) | Final completion documentation | This record; merges after implementation |
-| [#77](https://github.com/oliviacpu/tunarr/pull/77) | Session/caption integration and read-ahead controls | Pending — open |
+| [#77](https://github.com/oliviacpu/tunarr/pull/77) | Session/caption integration and read-ahead controls | Merged `4c4d8568` |
