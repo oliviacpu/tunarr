@@ -262,6 +262,19 @@ Decisions taken by the user on 2026-10-19: **P1 shelve** (hide the stream-select
 | P4 | **Smart collection create flow.** "Create" today sends you to Search with no explanation. Make the Smart Collections page open the search with a banner "Build the query, then Save as collection", and let the edit dialog edit the query, not only the name. | S–M | `routes/library/smart_collections.tsx`, `components/smart_collections/*` | Create and edit both work from the collections page; tests. |
 | P5 | **Channel edit tabs become routes** (`/channels/$id/edit/{properties,flex,guide,streaming}`) so deep links and the nav highlight work, and the "Streaming" tab splits its watermark section into its own tab. | M | `routes/channels_/$channelId/edit/*`, `EditChannelForm.tsx`, `e2e/tests/routes.ts` | Old `?tab=` links redirect; e2e coverage test updated; unsaved guard spans the tabs via `exceptTargetPaths`. |
 
+### Follow-ups found while landing wave 1 (2026-10-19)
+
+Reported by the wave-1 agents; each is assigned to the issue that should absorb it.
+
+- **S7:** docs still name `LOG_LEVEL` (`docs/misc/troubleshooting.md` 167–182, `docs/configure/system/logging.md` 65 and 271–280, `docs/getting-started/run.md` 26) and `server/src/api/systemApi.ts:551` reads `process.env.LOG_LEVEL`; the server reads `TUNARR_LOG_LEVEL`. (B5, PR #92)
+- **C2:** the General form runs in RHF's default `onSubmit` mode with Save disabled when invalid, so field messages never show; the log-roll increment field hides itself for non-positive values and has no accessible label; `LogRollForm` keeps unguarded `currentBackupSchedule!`; `onSave`'s success handler may reset from a stale `settings` closure after changing the backend URL. (B5)
+- **C2:** `HdhrSettingsPage`'s `isPending` branch is unreachable and its error `<h1>` pattern (shared with XMLTV) should go when the pages move onto the shared shell. (B3, PR #94)
+- **S6:** `/ffmpeg-info` answers 200 with empty encoder lists when ffmpeg cannot run, while `/version` answers 500; the probe should report failure as failure. (B3)
+- **B6 leftovers, P2 or S6:** `DeepWritable<HdhrSettings>` cast in the reset route; `defaultSettings()` stores the shared `defaultHdhrSettings` object by reference. (B6, PR #93)
+- **D4:** `hooks/colorHooks.ts` picks the palette from `mode === 'dark'`, not the resolved scheme. (B7, PR #87)
+- **Test health (new item T1, S):** under load the web suite times out in `ChannelCaptionsField`, `LanguagePreferencesList`, `CustomShowSortToolsMenu` and `XmlTvSettingsPage` (the last relies on `waitFor`'s 1 s default for first render); `router.test.ts` imports the whole route tree (45–80 s under load); `ReviewLibraryTable.test.tsx` uses inline `typeof import(...)`, which CLAUDE.md forbids. Raise the per-test timeout for first-render waits, or render less, and fix the import. (B1, B5, B8, B9)
+- **FORK.md:** already fails `prettier --check` on main and is missing a blank line between two entries; every PR adds an entry at the top so parallel PRs always conflict there. Decision pending with the user: per-PR note files folded into FORK.md after each wave, and stacked branches for the dependent waves.
+
 ### Not in scope here
 
 Data-layer items from `plans/frontend-audit-plan.md` (FE1–FE5, C1–C6) stay there; C3 above
