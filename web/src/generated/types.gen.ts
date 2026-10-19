@@ -13237,6 +13237,17 @@ export type PutApiSettingsMediaSourceData = {
     url: '/api/settings/media-source';
 };
 
+export type PutApiSettingsMediaSourceErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+};
+
+export type PutApiSettingsMediaSourceError = PutApiSettingsMediaSourceErrors[keyof PutApiSettingsMediaSourceErrors];
+
 export type PutApiSettingsMediaSourceResponses = {
     /**
      * Default Response

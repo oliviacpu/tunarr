@@ -16,12 +16,15 @@ type Props = {
   onClose: () => void;
   title: string;
   body?: string;
+  /** Text of the confirm button. Defaults to "Delete". */
+  confirmLabel?: string;
   dialogProps?: Omit<DialogProps, 'open' | 'onClose'>;
 };
 
 type ContentProps = {
   title: string;
   body?: string;
+  confirmLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
   onCancel?: () => void;
@@ -30,6 +33,7 @@ type ContentProps = {
 const DeleteConfirmationDialogContent = ({
   title,
   body,
+  confirmLabel,
   onClose,
   onCancel,
   onConfirm,
@@ -56,7 +60,7 @@ const DeleteConfirmationDialogContent = ({
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" color="error" onClick={() => confirm()}>
-          <Trans>Delete</Trans>
+          {confirmLabel ?? <Trans>Delete</Trans>}
         </Button>
       </DialogActions>
     </>

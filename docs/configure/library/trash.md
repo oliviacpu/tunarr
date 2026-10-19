@@ -4,7 +4,7 @@ The Trash holds items that Tunarr scanned previously but did not find in a recen
 
 ## Emptying the Trash
 
-Clicking **Empty Trash** starts a background job and returns immediately. Tunarr stays fully responsive while it runs — the UI, the API and active streams are unaffected. The Trash page shows a progress bar and a live item count while the job drains.
+Clicking **Empty Trash** first asks you to confirm, since emptying the Trash cannot be undone. Once you confirm, it starts a background job and returns immediately. Tunarr stays fully responsive while it runs — the UI, the API and active streams are unaffected. The Trash page shows a progress bar and a live item count while the job drains.
 
 Emptying the Trash does three things:
 
