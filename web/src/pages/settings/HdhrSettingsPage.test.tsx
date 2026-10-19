@@ -1,17 +1,14 @@
 import { renderWithProviders, screen, waitFor } from '@/test/utils';
 import type { HdhrSettings } from '@tunarr/types';
-import { defaultHdhrSettings } from '@tunarr/types';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type * as Generated from '../../generated/@tanstack/react-query.gen.ts';
 import type * as Sdk from '../../generated/sdk.gen.ts';
 import HdhrSettingsPage from './HdhrSettingsPage.tsx';
 
-const saved: HdhrSettings = {
-  ...defaultHdhrSettings,
-  tunerCount: 2,
-};
+const saved: HdhrSettings = { autoDiscoveryEnabled: true, tunerCount: 4 };
 
 const { mockPutHdhrSettings } = vi.hoisted(() => ({
   mockPutHdhrSettings: vi.fn(
@@ -20,9 +17,19 @@ const { mockPutHdhrSettings } = vi.hoisted(() => ({
   ),
 }));
 
+vi.mock(
+  '../../generated/@tanstack/react-query.gen.ts',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof Generated>()),
+    getApiHdhrSettingsOptions: () => ({
+      queryKey: ['test-hdhr-settings'],
+      queryFn: () => Promise.resolve(saved),
+    }),
+  }),
+);
+
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  getApiHdhrSettings: () => Promise.resolve({ data: saved }),
   putApiHdhrSettings: (options: { body: Partial<HdhrSettings> }) =>
     mockPutHdhrSettings(options),
 }));
@@ -32,30 +39,73 @@ vi.mock('../../components/settings/UnsavedNavigationAlert.tsx', () => ({
   default: () => null,
 }));
 
-// Changes the tuner count and saves it
-async function renderAndSave() {
-  const { user } = renderWithProviders(
+async function renderPage() {
+  const rendered = renderWithProviders(
     <SnackbarProvider>
       <Suspense fallback={null}>
         <HdhrSettingsPage />
       </Suspense>
     </SnackbarProvider>,
   );
-  const tunerCount = await screen.findByLabelText('Tuner Count');
-  await waitFor(() => expect(tunerCount).toHaveValue('2'));
+  // The saved settings are in the form. The first render in a run can take
+  // longer than waitFor's default second
+  await waitFor(
+    () => expect(screen.getByLabelText('Tuner Count')).toHaveValue('4'),
+    { timeout: 10_000 },
+  );
+  const { user } = rendered;
+  const tunerCount = () => screen.getByLabelText('Tuner Count');
+  const setTunerCount = async (value: string) => {
+    await user.clear(tunerCount());
+    await user.type(tunerCount(), value);
+    await user.tab();
+  };
+  const saveButton = () => screen.getByRole('button', { name: 'Save' });
+  return { ...rendered, tunerCount, setTunerCount, saveButton };
+}
 
-  await user.clear(tunerCount);
-  await user.type(tunerCount, '4');
-  await user.tab();
-  const save = screen.getByRole('button', { name: 'Save' });
-  await waitFor(() => expect(save).toBeEnabled());
-  await user.click(save);
+// Changes the tuner count to a valid new value and saves it
+async function renderAndSave() {
+  const { user, setTunerCount, saveButton } = await renderPage();
+  await setTunerCount('2');
+  await waitFor(() => expect(saveButton()).toBeEnabled());
+  await user.click(saveButton());
   await waitFor(() => expect(mockPutHdhrSettings).toHaveBeenCalledOnce());
 }
 
 describe('HdhrSettingsPage', () => {
   beforeEach(() => {
     mockPutHdhrSettings.mockReset();
+    mockPutHdhrSettings.mockResolvedValue({ data: saved });
+  });
+
+  test('a tuner count of 0 is flagged and cannot be saved', async () => {
+    const { tunerCount, setTunerCount, saveButton } = await renderPage();
+
+    await setTunerCount('0');
+
+    await waitFor(() =>
+      expect(tunerCount()).toHaveAccessibleDescription(
+        'Tuner Count must be >= 1',
+      ),
+    );
+    expect(tunerCount()).toBeInvalid();
+    expect(saveButton()).toBeDisabled();
+  });
+
+  test('a single tuner is saved', async () => {
+    const { user, tunerCount, setTunerCount, saveButton } = await renderPage();
+
+    await setTunerCount('1');
+
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(tunerCount()).toBeValid();
+    await user.click(saveButton());
+    await waitFor(() => expect(mockPutHdhrSettings).toHaveBeenCalledOnce());
+    expect(mockPutHdhrSettings.mock.calls[0]?.[0].body).toEqual({
+      autoDiscoveryEnabled: true,
+      tunerCount: 1,
+    });
   });
 
   test("a save the server refuses shows the server's reason", async () => {

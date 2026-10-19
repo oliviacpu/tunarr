@@ -94,11 +94,12 @@ export const hdhrSettingsRouter: RouterPluginCallback = (
     },
     async (req, res) => {
       try {
-        await req.serverCtx.settings.updateSettings('hdhr', {
-          // _id: req.body._id,
-          tunerCount: 1,
-          autoDiscoveryEnabled: true,
-        });
+        // The schema's defaults, which the web page's "Restore Default
+        // Settings" button also uses
+        await req.serverCtx.settings.updateSettings(
+          'hdhr',
+          HdhrSettingsSchema.parse({}),
+        );
         const hdhr =
           req.serverCtx.settings.hdhrSettings() as DeepWritable<HdhrSettings>;
         req.serverCtx.eventService.push({

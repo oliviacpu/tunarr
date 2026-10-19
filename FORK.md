@@ -42,6 +42,115 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   acceleration line, refused save) and `HdhrSettingsPage.test.tsx` (refused save, save failing without a reason).
 - **Upstream:** not sent; upstream `main` has the same code.
 
+### Resetting the HDHomeRun settings gives 2 tuners, and a tuner count below 1 is refused (2026-10-19, PR #93)
+
+- **What you saw:** not reported from the deployment. The fork review of 2026-10-19 (B6) found that the settings
+  page's "Restore Default Settings" and a fresh install give 2 tuners, but the server's reset (`POST
+  /api/hdhr-settings`) saved 1. Any number was accepted as the tuner count, so 0, -1 or 1.5 could be saved and
+  reported to Plex as the device's `TunerCount`.
+- **Cause:** the reset route wrote a hand-written `{ tunerCount: 1, autoDiscoveryEnabled: true }` instead of the
+  schema's defaults, and `HdhrSettingsSchema.tunerCount` was a plain `z.number()`.
+- **Fix:**
+  - `hdhrSettingsApi.ts` resets to `HdhrSettingsSchema.parse({})`, so the reset and the page's defaults can't drift.
+  - `tunerCount` is `z.number().int().min(1)` (`settingsSchemas.ts`), so `PUT /api/hdhr-settings` answers 400 for 0,
+    a negative or a fraction. The OpenAPI spec now says `integer`, `minimum: 1`; the generated web client is
+    unchanged.
+  - The settings page checks `min: 1` on the field ("Tuner Count must be >= 1") instead of waiting for the 400.
+  - A settings file saved before this can hold such a value, and a value the file schema refuses makes the server
+    start on defaults for every setting. `SettingsDB.ts` reads an old one as a whole number of at least 1 (0 or
+    -3 → 1, 2.5 → 2).
+  - Tests: `hdhrSettingsApi.test.ts`, `SettingsDB.test.ts`, `HdhrSettingsPage.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
+### A new scan interval takes effect when it's saved (2026-10-19)
+
+- **What you saw:** a new **Rescan Interval (hours)** under Settings > Scanner saved, but scans kept the old timing
+  until Tunarr restarted, and the page didn't say so.
+- **Cause:** `ScheduleJobsStartupTask` reads `rescanIntervalHours` once, at startup, to schedule `ScanLibrariesTask`,
+  `SyncCollectionsTask` and `SyncCustomShowsTask`. `PUT /api/settings/media-source` only wrote `settings.json`.
+- **Fix:**
+  - `services/rescanSchedule.ts` builds the three jobs' crontabs for the startup task, and `rescheduleRescanJobs`
+    moves the jobs with `ScheduledTask.reschedule`, as the XMLTV settings save does. `settingsApi.ts` calls it after a
+    save. A scan under way finishes; the next one follows the new interval.
+  - The save refuses, with a 400, an interval that isn't a whole number of hours, 1 or more. node-schedule can't run
+    `*/0` or `*/1.5`: a refused reschedule cancels the job yet still reports its old next run, and at startup such an
+    interval threw while the jobs were being scheduled.
+  - The Scanner page shows "Next scan: <time>" from `GET /api/tasks`, refreshes it after a save, and flags an interval
+    under 1 before saving. `docs/configure/media_sources/index.md` has a new "Scheduled Scans" section.
+- **Tests:** `settingsApi.test.ts` runs the real scheduler and jobs on a fixed clock: a save moves the next scan and
+  syncs, and 0 or 1.5 hours is refused with the jobs left as they were. Also `ScheduleJobsStartupTask.test.ts` and
+  `ScannerSettingsPage.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
+### Empty Trash asks before it purges (2026-10-19, PR #89)
+
+- **What you saw:** one click on **Empty Trash** started the purge. It can't be undone: trashed programs are deleted
+  and the lineup slots that played them become flex.
+- **Cause:** the button called the empty-trash mutation directly (`TrashPage.tsx`).
+- **Fix:** the button opens the shared `DeleteConfirmationDialog`. It says all trashed items will be deleted and their
+  lineup slots replaced with flex. Its red **Empty trash** button runs the mutation; Cancel does nothing. The dialog
+  takes an optional `confirmLabel`, which defaults to "Delete". The progress bar is unchanged.
+  `docs/configure/library/trash.md` mentions the confirmation.
+- **Tests:** `TrashPage.test.tsx` (no purge before confirming, one after, then the progress bar; Cancel purges
+  nothing); `DeleteConfirmationDialog.test.tsx` (the label).
+- **Upstream:** not sent. Upstream's Trash page has the same button.
+### General settings: Reset works on an invalid value, and the log level help names `TUNARR_LOG_LEVEL` (2026-10-19)
+
+- **What you saw:** not reported from the deployment; found in the fork review (B5). The log level help told you to set
+  `LOG_LEVEL`. "Reset Options" was disabled while a field held an invalid value, the one time you need it. With no
+  log roll schedule saved, Reset left the schedule without its `type`, so the form stayed dirty and a schedule ticked
+  after that was dropped on save. A bad log roll schedule increment was reported as "Max Backups".
+- **Cause:** the server reads `TUNARR_LOG_LEVEL` (`server/src/util/env.ts`). The Reset button was disabled on
+  `!isValid`. Reset filled the form from `getBaseFormValues`, while load and save used `getDefaultFormValues`, which
+  also fills in the log roll schedule (with its `type`) and size. `LogRollForm` copied BackupForm's field name.
+- **Fix:** `GeneralSettingsForm.tsx` has one `getDefaultFormValues` for load, a successful save and Reset; Reset is
+  enabled whenever the form has changes; the help text names `TUNARR_LOG_LEVEL`. `LogRollForm.tsx` names the field
+  "Roll Schedule Increment". Tests: `GeneralSettingsForm.test.tsx`, `LogRollForm.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
+### The New Channel page shows its breadcrumbs, and Settings opens on General (2026-10-19, PR #90)
+
+- **What you saw:** the New Channel page had an empty breadcrumb trail. Opening `/settings` showed the tab bar with no
+  tab selected over an empty panel, and MUI warned that the Tabs value was invalid.
+- **Cause:** `NewChannelPage.tsx` imported MUI's `Breadcrumbs` instead of the app's `components/Breadcrumbs.tsx`, which
+  builds the trail from the URL. The settings layout route had no index child, so at `/settings` its tab value came
+  out as `'/undefined'`.
+- **Fix:** the page uses the app's `Breadcrumbs` and reads Channels › New (`useRouteName.ts` already named
+  `/channels/new`). A new index route, `routes/settings/index.tsx`, redirects `/settings` to `/settings/general` in
+  `beforeLoad`. The e2e sweep maps the new `/settings/` path and no longer expects the Tabs warning on `/settings`.
+  The `/settings/sources` warning is a separate issue and stays listed.
+- **Tests:** `NewChannelPage.test.tsx` finds the Channels link and New in the trail; `router.test.ts` loads the app's
+  route tree at `/settings` and `/settings/` and lands on `/settings/general`. Both fail without the fix.
+- **Upstream:** not sent. Both defects are in upstream's code.
+
+### Reloading or closing a clean editor no longer asks "Leave site?" (2026-10-19, PR #91)
+
+- **What you saw:** the browser's "Leave site?" dialog on reload or tab close with nothing changed, on every page that
+  warns about unsaved changes: the channel editor, the programming page, both slot editors, and the FFmpeg, XMLTV
+  and HDHR settings pages.
+- **Cause:** `UnsavedNavigationAlert` called TanStack Router's `useBlocker` without `enableBeforeUnload`, which
+  defaults to on. The browser-level handler in `@tanstack/history` reads only that option and never calls
+  `shouldBlockFn`, so the dirty check guarded in-app navigation but not reload or close.
+- **Fix:** `UnsavedNavigationAlert.tsx` passes `enableBeforeUnload: isDirty`, so the browser dialog follows the same
+  dirty state as the in-app one. In-app blocking and `exceptTargetPaths` are unchanged.
+- **Tests:** `UnsavedNavigationAlert.test.tsx` mocks `useBlocker`: the browser prompt is off for a clean form, on for
+  a dirty one, and follows `isDirty` across re-renders; `shouldBlockFn` blocks only a dirty form and lets it reach an
+  exempt path.
+### The top bar's dark mode button works the first time on a light OS (2026-10-19)
+
+- **What you saw:** until a mode was picked in settings, the first click on the top bar's moon icon did nothing on a
+  computer set to light. A second click turned dark mode on.
+- **Cause:** with no mode chosen, MUI's mode is `system`. `DarkModeButton` set `mode === 'light' ? 'dark' : 'light'`,
+  so from `system` it always set `light`, which looked the same as a light OS.
+- **Fix:** `nextColorMode(mode, resolved)` in `useTunarrTheme.ts` flips a chosen light or dark mode, and under
+  `system` flips the scheme on screen (`useColorScheme().colorScheme`). The unused `theme.themePreference` store field
+  is gone, with the load-time step that wrote it. `store/index.ts` drops the key from a stored theme on load, so it
+  is not saved again.
+- **Tests:** `useTunarrTheme.test.ts`: light to dark, dark to light, system on a light OS to dark, system on a dark OS
+  to light. `DarkModeButton.test.tsx`: with the OS scheme stubbed, one click from `system` changes the scheme both
+  ways (on the old code a light OS needed two). `store/index.test.ts`: a stored theme with `themePreference`, or from
+  before it, hydrates without it, logs no error, and is written back without it.
+- **Upstream:** not sent.
 ### Every channel form field marks its tab when it has an error (2026-10-19)
 
 - **What you saw:** nothing yet. The channel editor puts a red dot on the tab (Properties, Flex, EPG, Streaming) that
