@@ -6,3 +6,11 @@ export function tuneInCase(index) {
     secondViewer: periodic(10),
   };
 }
+
+export async function resetSession(url, request = fetch) {
+  const response = await request(url, { method: 'DELETE' });
+  await response.body?.cancel();
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Cold reset failed: HTTP ${response.status}`);
+  }
+}

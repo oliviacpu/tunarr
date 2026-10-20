@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { medianSorted } from './tune-in-stats.mjs';
-import { tuneInCase } from './tune-in-cases.mjs';
+import { resetSession, tuneInCase } from './tune-in-cases.mjs';
 
 const { values: opt } = parseArgs({
   options: {
@@ -743,7 +743,7 @@ async function measureTuneIns(base, channelId) {
     const scenario = tuneInCase(i);
     const id = channels[scenario.channelIndex];
     const cold = scenario.cold;
-    if (i >= 2 && cold) await fetch(`${base}/api/channels/${id}/sessions`, { method: 'DELETE' });
+    if (i >= 2 && cold) await resetSession(`${base}/api/channels/${id}/sessions`);
     const start = performance.now();
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 25_000);
