@@ -51,7 +51,10 @@ const DarkPalette: PaletteOptions = {
     main: '#2fb7c0',
   },
   secondary: {
-    main: '#004b79',
+    // The light secondary, #004b79, is 1.7:1 on the dark paper. This muted
+    // blue is 4.6:1. White on it is only 3.5:1, so labels on it are dark.
+    main: '#5b8fb9',
+    contrastText: 'rgba(0, 0, 0, 0.87)',
   },
   error: {
     main: '#e07b6c',
