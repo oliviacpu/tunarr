@@ -10,7 +10,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -70,7 +70,7 @@ describe('internal stream-selection API', () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  it('keeps all routes registered while excluding them from OpenAPI', () => {
+  it('keeps all routes registered while excluding them from runtime and public Latest OpenAPI', async () => {
     for (const [method, suffix] of [
       ['GET', ''],
       ['POST', ''],
@@ -85,6 +85,22 @@ describe('internal stream-selection API', () => {
     expect(document.paths).toHaveProperty('/api/public');
     expect(
       Object.keys(document.paths ?? {}).some((url) => url.startsWith(prefix)),
+    ).toBe(false);
+    const latest = z
+      .object({ paths: z.record(z.string(), z.unknown()) })
+      .parse(
+        JSON.parse(
+          await readFile(
+            new URL(
+              '../../../docs/generated/tunarr-latest-openapi.json',
+              import.meta.url,
+            ),
+            'utf8',
+          ),
+        ),
+      );
+    expect(
+      Object.keys(latest.paths).some((url) => url.startsWith(prefix)),
     ).toBe(false);
   });
 
