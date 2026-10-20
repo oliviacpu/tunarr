@@ -741,3 +741,55 @@ test('obsolete teardown cannot pause an on-demand channel during replacement loo
   expect(current).not.toBe(old);
   await manager.endSession(current);
 });
+
+test('stale wrapper teardown cannot pause an on-demand channel during replacement lookup', async () => {
+  class Wrapper extends ConcatSession {
+    protected override async startInternal() {}
+    protected override async stopInternal() {
+      this.emit('stop');
+    }
+  }
+  const factory = vi.fn((channel, opts) => new Wrapper(channel, opts));
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+    factory,
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+  const old = (
+    await manager.getOrCreateConcatSession(
+      channelUuid,
+      'old',
+      connection,
+      options,
+    )
+  ).get();
+  old.removeConnection('old');
+  old.underlyingSessionId = 'missing';
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  let release: (channel: ChannelOrmWithTranscodeConfig) => void = () => {};
+  const lookup = new Promise<ChannelOrmWithTranscodeConfig>((resolve) => {
+    release = resolve;
+  });
+  const query = vi
+    .spyOn(internals.channelDB, 'getChannelOrm')
+    .mockReturnValueOnce(lookup);
+  query.mockClear();
+  const replacement = manager.getOrCreateConcatSession(
+    channelUuid,
+    'new',
+    connection,
+    options,
+  );
+  await vi.waitFor(() => expect(query).toHaveBeenCalled());
+  expect(old.stopped).toBe(true);
+  expect(pause).not.toHaveBeenCalled();
+  release(makeChannel());
+  const current = (await replacement).get();
+  expect(current).not.toBe(old);
+  await manager.endSession(current);
+});

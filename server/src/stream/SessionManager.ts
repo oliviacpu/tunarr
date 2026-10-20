@@ -238,6 +238,7 @@ export class SessionManager {
           underlyingSessionType,
           channelId,
         );
+        this.#replacedSessions.add(wrapper);
         this.deleteSession(channelId, options.sessionType);
       }
     });
