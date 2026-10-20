@@ -196,6 +196,7 @@ const hourOptions = [
 const formatOptions = [
   { value: 'mkv', label: 'MKV' },
   { value: 'mp4', label: 'MP4' },
+  { value: 'avi', label: 'AVI', disabled: true },
 ] as const;
 
 function SelectHarness({
@@ -268,6 +269,17 @@ describe('SelectFormController', () => {
 
     await waitFor(() =>
       expect(select()).toHaveAccessibleDescription('Too late for a rebuild'),
+    );
+  });
+
+  test('a disabled option is listed but cannot be picked', async () => {
+    const { user } = renderWithProviders(<SelectHarness onSubmit={() => {}} />);
+
+    await user.click(screen.getByRole('combobox', { name: 'Output format' }));
+    const avi = await screen.findByRole('option', { name: 'AVI' });
+    expect(avi).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('option', { name: 'MP4' })).not.toHaveAttribute(
+      'aria-disabled',
     );
   });
 });

@@ -481,6 +481,8 @@ export const SwitchFormController = <
 export type SelectOption<TValue extends string | number> = {
   value: TValue;
   label: React.ReactNode;
+  /** Listed but can't be picked, such as an encoder FFmpeg lacks. */
+  disabled?: boolean;
 };
 
 /**
@@ -555,7 +557,11 @@ export const SelectFormController = <
           }
         >
           {options.map((option) => (
-            <MenuItem key={option.value} value={option.value}>
+            <MenuItem
+              key={option.value}
+              value={option.value}
+              disabled={option.disabled === true}
+            >
               {option.label}
             </MenuItem>
           ))}
