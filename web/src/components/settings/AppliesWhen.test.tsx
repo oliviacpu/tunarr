@@ -1,6 +1,7 @@
 import { renderWithProviders, screen } from '@/test/utils';
 import {
   SettingsApplicationTiming,
+  type SettingsApplicationKey,
   FfmpegSettingsApplicationGroups,
   FeatureFlagsApplicationGroups,
   FeatureFlagsSchema,
@@ -8,6 +9,9 @@ import {
 } from '@tunarr/types';
 import docs from '../../../../docs/configure/settings/applies-when.md?raw';
 import { describe, expect, test } from 'vitest';
+import { i18n } from '@lingui/core';
+import { act } from '@/test/utils';
+import { SettingsApplicationMessages } from './settingsApplicationMessages.ts';
 import { AppliesWhen } from './AppliesWhen.tsx';
 
 const labels = {
@@ -70,3 +74,45 @@ describe('settings application timing', () => {
     },
   );
 });
+
+test('extractable timing messages match the shared source registry', () => {
+  for (const setting of Object.keys(
+    SettingsApplicationTiming,
+  ) as SettingsApplicationKey[]) {
+    expect(SettingsApplicationMessages[setting].title.message).toBe(
+      SettingsApplicationTiming[setting].title,
+    );
+    expect(SettingsApplicationMessages[setting].description.message).toBe(
+      SettingsApplicationTiming[setting].description,
+    );
+  }
+});
+
+for (const [locale, title, description] of [
+  ['es', 'Preferencias del navegador', 'Los cambios se aplican de inmediato.'],
+  ['zh-CN', '浏览器偏好设置', '更改会立即应用。'],
+] as const) {
+  test(`timing title and explanation use the active ${locale} catalog`, async () => {
+    const messages = SettingsApplicationMessages.browserPreferences;
+    try {
+      act(() =>
+        i18n.loadAndActivate({
+          locale,
+          messages: {
+            [messages.title.id]: title,
+            [messages.description.id]: description,
+          },
+        }),
+      );
+      const { user } = renderWithProviders(
+        <AppliesWhen setting="browserPreferences" />,
+      );
+      const chip = screen.getByRole('button', { name: `${title}: Live` });
+      await user.tab();
+      expect(chip).toHaveFocus();
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(description);
+    } finally {
+      act(() => i18n.loadAndActivate({ locale: 'en', messages: {} }));
+    }
+  });
+}

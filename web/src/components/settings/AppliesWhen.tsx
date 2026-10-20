@@ -6,11 +6,15 @@ import type {
   SettingsApplicationWhen,
 } from '@tunarr/types';
 import { SettingsApplicationTiming } from '@tunarr/types';
+import { SettingsApplicationMessages } from './settingsApplicationMessages.ts';
 
 export function AppliesWhen({ setting }: { setting: SettingsApplicationKey }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const timing = SettingsApplicationTiming[setting];
+  const messages = SettingsApplicationMessages[setting];
+  const title = i18n._(messages.title);
+  const description = i18n._(messages.description);
   const labels: Record<SettingsApplicationWhen, string> = {
     live: t`Live`,
     'next-session': t`Next session`,
@@ -19,7 +23,7 @@ export function AppliesWhen({ setting }: { setting: SettingsApplicationKey }) {
   };
   return (
     <Tooltip
-      title={timing.description}
+      title={description}
       describeChild
       open={open}
       onOpen={() => setOpen(true)}
@@ -35,7 +39,7 @@ export function AppliesWhen({ setting }: { setting: SettingsApplicationKey }) {
         size="small"
         variant="outlined"
         label={labels[timing.when]}
-        aria-label={`${timing.title}: ${labels[timing.when]}`}
+        aria-label={`${title}: ${labels[timing.when]}`}
         tabIndex={0}
         data-settings-timing={setting}
         sx={{ alignSelf: 'flex-start', maxWidth: '100%' }}
