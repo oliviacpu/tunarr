@@ -192,6 +192,18 @@ describe('EditFillerListForm, editing a list', () => {
     await waitFor(() => expect(saveButton()).toBeDisabled());
   });
 
+  test('repeated resets keep the saved program baseline intact', async () => {
+    const { user } = renderEditor('edit');
+    await nameField();
+    for (let edit = 0; edit < 2; edit++) {
+      await user.click(removeFirstProgram());
+      expect(draft().programList).toHaveLength(1);
+      await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+      expect(draft().programList).toHaveLength(2);
+      expect(draft().originalProgramList).toHaveLength(2);
+    }
+  });
+
   test('leaving with a changed program draft asks first, and Proceed throws the draft away', async () => {
     const { user, router } = renderEditor('edit');
     await nameField();

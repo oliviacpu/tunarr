@@ -54,10 +54,17 @@ export type FillerListEditor = ProgrammingEditorState<
   ContentProgram | CustomProgram
 >;
 
+export type CustomShowEditorFormValues = {
+  name: string;
+  syncEnabled: boolean;
+  syncMediaSourceId: string;
+  syncExternalPlaylistId: string;
+};
+
 export type CustomShowEditor = ProgrammingEditorState<
   CustomShow,
   UIContentProgram // Custom shows contain content only
->;
+> & { formValues?: CustomShowEditorFormValues };
 
 export interface EditorsState {
   channelEditor: ChannelEditorState;

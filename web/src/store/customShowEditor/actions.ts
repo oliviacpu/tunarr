@@ -5,12 +5,13 @@ import {
   type CustomProgram,
   type CustomShow,
 } from '@tunarr/types';
-import { findIndex, forEach, inRange, merge } from 'lodash-es';
+import { cloneDeep, findIndex, forEach, inRange, merge } from 'lodash-es';
 import { P, match } from 'ts-pattern';
 import { Imported } from '../../helpers/constants.ts';
 import { zipWithIndex } from '../../helpers/util.ts';
 import { type AddedMedia } from '../../types/index.ts';
 import useStore from '../index.ts';
+import type { CustomShowEditorFormValues } from '../channelEditor/store.ts';
 
 export const addMediaToCurrentCustomShow = (programs: AddedMedia[]) =>
   useStore.setState(({ customShowEditor }) => {
@@ -50,6 +51,7 @@ export const setCurrentCustomShow = (
   programs: CustomProgram[],
 ) =>
   useStore.setState((state) => {
+    delete state.customShowEditor.formValues;
     state.customShowEditor.currentEntity = show;
     state.customShowEditor.originalEntity = show;
     state.customShowEditor.dirty.programs = false;
@@ -112,14 +114,22 @@ export const clearCurrentCustomShow = () =>
     state.customShowEditor = emptyEntityEditor();
   });
 
+export const setCustomShowFormValues = (values: CustomShowEditorFormValues) =>
+  useStore.setState(({ customShowEditor }) => {
+    customShowEditor.formValues = { ...values };
+  });
+
 /**
  * Throws away the draft's unsaved changes: the programs and the name kept for
  * the trip to add programs go back to how the show was saved.
  */
 export const discardCustomShowChanges = () =>
   useStore.setState(({ customShowEditor }) => {
+    delete customShowEditor.formValues;
     customShowEditor.currentEntity = customShowEditor.originalEntity;
-    customShowEditor.programList = customShowEditor.originalProgramList;
+    customShowEditor.programList = cloneDeep(
+      customShowEditor.originalProgramList,
+    );
     customShowEditor.dirty.programs = false;
   });
 
@@ -129,8 +139,11 @@ export const discardCustomShowChanges = () =>
  */
 export const markCustomShowSaved = (show: CustomShow) =>
   useStore.setState(({ customShowEditor }) => {
+    delete customShowEditor.formValues;
     customShowEditor.currentEntity = show;
     customShowEditor.originalEntity = show;
-    customShowEditor.originalProgramList = customShowEditor.programList;
+    customShowEditor.originalProgramList = cloneDeep(
+      customShowEditor.programList,
+    );
     customShowEditor.dirty.programs = false;
   });

@@ -17,6 +17,7 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  useNavigate,
 } from '@tanstack/react-router';
 import type { CustomShow } from '@tunarr/types';
 import { SnackbarProvider } from 'notistack';
@@ -43,6 +44,8 @@ vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   createCustomShow: (options: SaveOptions) => mockCreate(options),
   putApiCustomShowsById: (options: SaveOptions) => mockUpdate(options),
   getApiMediaSources: () => Promise.resolve({ data: [] }),
+  getApiPlexByMediaSourceIdPlaylists: () =>
+    Promise.resolve({ data: { result: [] } }),
 }));
 
 // The program list has its own rendering; this one shows the draft and can
@@ -97,6 +100,7 @@ const programs = [
 
 function loadDraft(entity: CustomShow, list: typeof programs) {
   useStore.setState(({ customShowEditor }) => {
+    delete customShowEditor.formValues;
     customShowEditor.currentEntity = entity;
     customShowEditor.originalEntity = entity;
     customShowEditor.programList = zipWithIndex(list);
@@ -134,9 +138,31 @@ function NewRoute() {
   );
 }
 
+function AddProgramsPage() {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        void navigate({
+          to: '/library/custom-shows/$showId/edit',
+          params: { showId: show.id },
+        })
+      }
+    >
+      Done adding
+    </button>
+  );
+}
+
 function renderEditor(mode: 'edit' | 'new') {
   const rootRoute = createRootRoute();
   const routes = [
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/library/custom-shows/$showId/programming',
+      component: AddProgramsPage,
+    }),
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/library/custom-shows/$showId/edit',
@@ -219,6 +245,54 @@ describe('EditCustomShowsForm, editing a show', () => {
     expect(mockUpdate.mock.calls[0]?.[0].body.programs).toHaveLength(2);
     await waitFor(() => expect(saveButton()).toBeDisabled());
     expect(draft().originalEntity?.name).toBe('Saturday Matinee Encore');
+  });
+
+  test('repeated resets restore the program list saved by the preceding request', async () => {
+    const { user } = renderEditor('edit');
+    await user.type(await nameField(), ' Saved');
+    await user.click(saveButton());
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    for (let edit = 0; edit < 2; edit++) {
+      await user.click(removeFirstProgram());
+      expect(draft().programList).toHaveLength(1);
+      expect(draft().originalProgramList).toHaveLength(2);
+      await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+      expect(draft().programList).toHaveLength(2);
+      expect(draft().originalProgramList).toHaveLength(2);
+    }
+  });
+
+  test('Add Media preserves an unsaved change that disables external sync', async () => {
+    const { user, queryClient } = renderEditor('edit');
+    await nameField();
+    await act(async () => {
+      queryClient.setQueryData(
+        getApiCustomShowsByIdQueryKey({ path: { id: show.id } }),
+        {
+          ...show,
+          syncMediaSourceId: 'plex-source',
+          syncExternalPlaylistId: 'playlist',
+        },
+      );
+    });
+    const sync = screen.getByRole('checkbox', {
+      name: 'Sync with external playlist',
+    });
+    await waitFor(() => expect(sync).toBeChecked());
+    await user.click(sync);
+    await user.click(
+      screen.getByRole('button', { name: 'Add programming to custom show' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: 'Done adding' }),
+    );
+    const restored = await screen.findByRole('checkbox', {
+      name: 'Sync with external playlist',
+    });
+    expect(restored).not.toBeChecked();
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(restored).toBeChecked();
   });
 
   test('leaving with a changed program draft asks first, and Proceed throws the draft away', async () => {

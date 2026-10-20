@@ -9,7 +9,7 @@ import type {
   FillerList,
   FillerListProgramming,
 } from '@tunarr/types';
-import { merge } from 'lodash-es';
+import { cloneDeep, merge } from 'lodash-es';
 import { P, match } from 'ts-pattern';
 import { Imported } from '../../helpers/constants.ts';
 
@@ -88,7 +88,9 @@ export const updateCurrentFillerList = (show: Partial<FillerList>) =>
 export const discardFillerListChanges = () =>
   useStore.setState(({ fillerListEditor }) => {
     fillerListEditor.currentEntity = fillerListEditor.originalEntity;
-    fillerListEditor.programList = fillerListEditor.originalProgramList;
+    fillerListEditor.programList = cloneDeep(
+      fillerListEditor.originalProgramList,
+    );
     fillerListEditor.dirty.programs = false;
   });
 

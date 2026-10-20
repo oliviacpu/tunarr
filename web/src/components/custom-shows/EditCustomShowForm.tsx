@@ -9,8 +9,10 @@ import {
   discardCustomShowChanges,
   markCustomShowSaved,
   moveProgramInCustomShow,
+  setCustomShowFormValues,
   updateCurrentCustomShow,
 } from '@/store/customShowEditor/actions.ts';
+import type { CustomShowEditorFormValues } from '@/store/channelEditor/store.ts';
 import { removeCustomShowProgram } from '@/store/entityEditor/util';
 import { useToasts } from '@/strings/actions';
 import type { UICondensedContentProgram } from '@/types';
@@ -55,12 +57,7 @@ import { CustomShowSortToolsMenu } from './CustomShowSortToolsMenu.tsx';
 
 dayjs.extend(relativeTime);
 
-type CustomShowForm = {
-  name: string;
-  syncEnabled: boolean;
-  syncMediaSourceId: string;
-  syncExternalPlaylistId: string;
-};
+type CustomShowForm = CustomShowEditorFormValues;
 
 type CustomShowSave = CustomShowForm & {
   programs: UICondensedContentProgram[];
@@ -123,6 +120,7 @@ export function EditCustomShowsForm({
     reset,
     getValues,
     setValue,
+    trigger,
     formState: { defaultValues },
   } = form;
 
@@ -143,16 +141,16 @@ export function EditCustomShowsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customShow, reset]);
 
-  // A name typed before going to add programs was kept in the draft. Bring it
-  // back as an unsaved change
   useEffect(() => {
-    const draftName = useStore.getState().customShowEditor.currentEntity?.name;
-    if (draftName !== undefined && draftName !== customShow.name) {
-      setValue('name', draftName, { shouldDirty: true });
+    const draft = useStore.getState().customShowEditor.formValues;
+    if (draft !== undefined) {
+      reset(draft, { keepDefaultValues: true });
     }
-    // Only when the page opens
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reset]);
+
+  useEffect(() => {
+    void trigger();
+  }, [syncEnabled, trigger]);
 
   // Fetch media sources for the dropdown
   const { data: mediaSources } = useQuery({
@@ -261,7 +259,9 @@ export function EditCustomShowsForm({
   const navToProgramming = () => {
     // The form is rebuilt when this page opens again; keep the name in the
     // draft until then
-    updateCurrentCustomShow({ name: getValues('name') });
+    const values = getValues();
+    setCustomShowFormValues(values);
+    updateCurrentCustomShow({ name: values.name });
     navigate({
       to: isNew
         ? '/library/custom-shows/new/programming'
