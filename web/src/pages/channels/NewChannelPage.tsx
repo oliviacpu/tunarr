@@ -1,8 +1,8 @@
+import { PageHeader } from '@/components/base/PageHeader';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { EditChannelForm } from '@/components/channel_config/EditChannelForm';
 import { Route } from '@/routes/channels_/new';
 import { Trans } from '@lingui/react/macro';
-import { Typography } from '@mui/material';
 
 export function NewChannelPage() {
   // The route code creates the "working channel"
@@ -13,9 +13,7 @@ export function NewChannelPage() {
       <Breadcrumbs />
       {workingChannel && (
         <div>
-          <Typography variant="h4" sx={{ mb: 2 }}>
-            <Trans>New Channel</Trans>
-          </Typography>
+          <PageHeader title={<Trans>New Channel</Trans>} />
           <EditChannelForm channel={workingChannel} isNew={true} />
         </div>
       )}

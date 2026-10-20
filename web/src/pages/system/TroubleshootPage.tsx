@@ -265,7 +265,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
     <Box>
       {/* Configuration Form */}
       <Stack spacing={2} sx={{ mb: 3 }}>
-        <Typography variant="h6">
+        <Typography variant="h2">
           <Trans>Program Playback Troubleshooter</Trans>
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -378,7 +378,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
             visibility: result?.testTranscode?.success ? 'visible' : 'hidden',
           }}
         >
-          <Typography variant="h6" sx={{ mb: 1 }}>
+          <Typography variant="h2" sx={{ mb: 1 }}>
             <Trans>Test Playback</Trans>
           </Typography>
           <Box

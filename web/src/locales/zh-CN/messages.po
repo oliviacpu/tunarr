@@ -3541,6 +3541,7 @@ msgid "Schedule programming using slots assigned a start time and duration."
 msgstr "使用指定了开始时间和时长的时段来编排节目。"
 
 #: src/hooks/useRouteName.ts
+#: src/pages/search/SearchPage.tsx
 msgid "Search"
 msgstr "搜索"
 
@@ -4364,6 +4365,10 @@ msgstr "剧集按剧名分组"
 #: src/pages/system/TroubleshootPage.tsx
 msgid "Type"
 msgstr "类型"
+
+#: src/pages/search/SearchPage.tsx
+msgid "Type to search your libraries"
+msgstr ""
 
 #: src/components/UnavailableLibraryIndicator.tsx
 #: src/components/UnavailableLibraryIndicator.tsx

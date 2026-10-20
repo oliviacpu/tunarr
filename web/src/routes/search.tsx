@@ -1,7 +1,5 @@
-import { Stack } from '@mui/material';
 import { createFileRoute } from '@tanstack/react-router';
-import { LibraryProgramGrid } from '../components/library/LibraryProgramGrid.tsx';
-import { SearchInput } from '../components/search/SearchInput.tsx';
+import { SearchPage } from '../pages/search/SearchPage.tsx';
 import { Route as RootRoute } from './__root.tsx';
 
 export const Route = createFileRoute('/search')({
@@ -11,12 +9,8 @@ export const Route = createFileRoute('/search')({
 function RouteComponent() {
   const rootLoaderData = RootRoute.useLoaderData();
   return (
-    <Stack gap={2}>
-      <SearchInput
-        initialSearchFilter={rootLoaderData?.searchRequest.filter ?? undefined}
-        showViewToggle
-      />
-      <LibraryProgramGrid disableProgramSelection />
-    </Stack>
+    <SearchPage
+      initialSearchFilter={rootLoaderData?.searchRequest.filter ?? undefined}
+    />
   );
 }

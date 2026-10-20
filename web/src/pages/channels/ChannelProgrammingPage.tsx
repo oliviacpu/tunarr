@@ -3,8 +3,9 @@ import { ChannelOptionsButton } from '@/components/channels/ChannelOptionsButton
 import { useChannelAndProgramming } from '@/hooks/useChannelLineup.ts';
 import { Route } from '@/routes/channels_/$channelId/programming/index.tsx';
 import { Trans } from '@lingui/react/macro';
-import { Alert, Box, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Paper } from '@mui/material';
 import { useEffect } from 'react';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { RouterLink } from '../../components/base/RouterLink.tsx';
 import { ChannelProgrammingConfig } from '../../components/channel_config/ChannelProgrammingConfig.tsx';
 import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert.tsx';
@@ -31,18 +32,16 @@ export default function ChannelProgrammingPage() {
 
   return (
     <div>
-      <Breadcrumbs />
-      <Stack direction="row" sx={{ mb: 2 }} alignItems="center">
-        <Typography variant="h4" sx={{ flex: 1 }}>
-          {channel.name}
-        </Typography>
-        <Box>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={channel.name}
+        actions={
           <ChannelOptionsButton
             channel={channel}
             hideItems={['programming', 'duplicate', 'delete']}
           />
-        </Box>
-      </Stack>
+        }
+      />
       {schedule && (
         <Alert sx={{ mb: 2 }} severity="info" component={Paper} elevation={1}>
           <Trans>

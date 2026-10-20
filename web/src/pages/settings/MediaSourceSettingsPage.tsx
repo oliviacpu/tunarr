@@ -1,17 +1,10 @@
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { AddMediaSourceButton } from '@/components/settings/media_source/AddMediaSourceButton.tsx';
 
 import { useMediaSources } from '@/hooks/settingsHooks.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit, Refresh, VideoLibrary } from '@mui/icons-material';
-import {
-  Box,
-  Divider,
-  IconButton,
-  Link,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { IconButton, Link, Tooltip } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { MediaSourceSettings } from '@tunarr/types';
 import { capitalize } from 'lodash-es';
@@ -195,40 +188,19 @@ export default function MediaSourceSettingsPage() {
 
   return (
     <>
-      <Stack divider={<Divider />} gap={2}>
-        <Box>
-          <Stack
-            spacing={1}
-            direction="row"
-            useFlexGap
-            sx={{ flexWrap: 'wrap' }}
-          >
-            <Typography
-              variant="h3"
-              sx={(theme) => ({
-                flexGrow: 1,
-                [theme.breakpoints.down('sm')]: {
-                  width: '100%',
-                },
-              })}
-            >
-              <Trans>Media Sources</Trans>
-            </Typography>
-            <AddMediaSourceButton />
-            <Box sx={{ flexBasis: '100%', width: 0 }}></Box>
-            <Typography sx={{ width: '60%' }}>
-              <Trans>
-                Media Sources are where Tunarr sources your content. Media can
-                come from your filesystem or a remote server, like Plex or
-                Jellyfin. At least one Media Source is necessary to create
-                channels and play media in Tunarr.
-              </Trans>
-            </Typography>
-          </Stack>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', mb: 1 }}></Box>
-          <MaterialReactTable table={table} />
-        </Box>
-      </Stack>
+      <PageHeader
+        title={<Trans>Media Sources</Trans>}
+        description={
+          <Trans>
+            Media Sources are where Tunarr sources your content. Media can come
+            from your filesystem or a remote server, like Plex or Jellyfin. At
+            least one Media Source is necessary to create channels and play
+            media in Tunarr.
+          </Trans>
+        }
+        actions={<AddMediaSourceButton />}
+      />
+      <MaterialReactTable table={table} />
       {editingMediaSource?.type === 'plex' && (
         <PlexServerEditDialog
           open
