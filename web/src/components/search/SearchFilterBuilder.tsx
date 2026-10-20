@@ -24,11 +24,13 @@ import { SearchInputToggle } from './SearchInputToggle.tsx';
 type SearchBuilderProps = {
   mediaSourceId?: MediaSourceId;
   libraryId?: string;
+  stackControlsOnMobile?: boolean;
 };
 
 export function SearchFilterBuilder({
   libraryId,
   mediaSourceId,
+  stackControlsOnMobile = false,
 }: SearchBuilderProps) {
   const { t } = useLingui();
   const formMethods = useFormContext<SearchForm>();
@@ -57,7 +59,15 @@ export function SearchFilterBuilder({
     <>
       <Stack gap={2}>
         {queryBuilderType === 'text' ? (
-          <Stack direction="row" gap={2} alignItems={'center'}>
+          <Stack
+            direction={
+              stackControlsOnMobile ? { xs: 'column', sm: 'row' } : 'row'
+            }
+            gap={2}
+            alignItems={
+              stackControlsOnMobile ? { xs: 'stretch', sm: 'center' } : 'center'
+            }
+          >
             <Controller
               name="filter.expression"
               control={formMethods.control}
@@ -129,7 +139,14 @@ export function SearchFilterBuilder({
                       fullWidth
                       {...field}
                     />
-                    <FormControl sx={{ minWidth: '96px' }}>
+                    <FormControl
+                      sx={{
+                        minWidth: '96px',
+                        alignSelf: stackControlsOnMobile
+                          ? { xs: 'flex-end', sm: 'auto' }
+                          : 'auto',
+                      }}
+                    >
                       <SearchInputToggle />
                       <FormHelperText>
                         {fieldState.error?.type === 'validExpression' ? (

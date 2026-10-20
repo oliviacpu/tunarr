@@ -1,7 +1,8 @@
-import { useLingui } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Clear, FilterList, Help, Save, Search } from '@mui/icons-material';
 import {
   Box,
+  Button,
   Dialog,
   IconButton,
   InputAdornment,
@@ -39,6 +40,8 @@ type Props = {
   initialKeywords?: string;
   initialSearchFilter?: SearchFilter;
   showViewToggle?: boolean;
+  collectionCreation?: boolean;
+  onCollectionSaved?: () => void;
 };
 
 type SearchFilterFormInput =
@@ -86,6 +89,8 @@ export const SearchInput = ({
   initialSearchFilter,
   mediaSourceId,
   showViewToggle,
+  collectionCreation,
+  onCollectionSaved,
 }: Props) => {
   const { t } = useLingui();
   const [savedInitialSearch, setInitialSearch] = useState(initialSearchFilter);
@@ -293,19 +298,30 @@ export const SearchInput = ({
             <Stack direction={'row'}>
               {showViewToggle && <ProgramViewToggleButton />}
               <Box sx={{ marginLeft: 'auto' }}>
-                <Tooltip title={t`Save as Smart Collection`}>
-                  <IconButton
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      toggleSmartCollectionModal(true);
-                    }}
+                {collectionCreation ? (
+                  <Button
+                    startIcon={<Save />}
                     disabled={!!formState.errors.filter}
+                    onClick={() => toggleSmartCollectionModal(true)}
                   >
-                    <Save />
-                  </IconButton>
-                </Tooltip>
-                <IconButton type="submit">
+                    <Trans>Save as collection</Trans>
+                  </Button>
+                ) : (
+                  <Tooltip title={t`Save as Smart Collection`}>
+                    <IconButton
+                      aria-label={t`Save as Smart Collection`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleSmartCollectionModal(true);
+                      }}
+                      disabled={!!formState.errors.filter}
+                    >
+                      <Save />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                <IconButton type="submit" aria-label={t`Search`}>
                   <Search />
                 </IconButton>
               </Box>
@@ -321,6 +337,7 @@ export const SearchInput = ({
         <CreateSmartCollectionDialog
           onClose={() => toggleSmartCollectionModal(false)}
           initialQuery={initialQuery}
+          onSaved={onCollectionSaved}
         />
       </Dialog>
     </Box>

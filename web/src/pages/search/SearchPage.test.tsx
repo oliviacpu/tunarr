@@ -27,6 +27,15 @@ function setRequest(request: Nullable<SearchRequest>) {
 describe('SearchPage', () => {
   afterEach(() => setRequest(null));
 
+  test('explains collection creation only while that flow is active', () => {
+    const { rerender } = renderWithProviders(<SearchPage creatingCollection />);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Build the query, then Save as collection',
+    );
+    rerender(<SearchPage />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   test('has a Search title', () => {
     renderWithProviders(<SearchPage />);
 
