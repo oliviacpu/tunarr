@@ -1,10 +1,10 @@
 import type { ChannelOrmWithTranscodeConfig } from '@/db/schema/derivedTypes.js';
 import type { FfmpegTranscodeSession } from '@/ffmpeg/FfmpegTrancodeSession.js';
-import { once, round } from 'lodash-es';
 import type { PassThrough, Readable } from 'node:stream';
 import { caughtErrorToError } from '../util/index.ts';
 import type { SessionOptions } from './Session.js';
 import { Session } from './Session.js';
+import { CountingPassThrough } from './TuneInTimer.ts';
 
 /**
  * Base class for a shared stream session where all participants share
@@ -52,17 +52,16 @@ export abstract class DirectStreamSession<
 
     const streamInitResult = await this.initializeStream();
 
-    this.#stream = streamInitResult.start(this.outputSink());
-
-    const onceListener = once(() => {
-      const end = performance.now();
-      this.logger.debug(
-        `Took stream ${round(end - start, 4)}ms to provide data`,
-      );
-      this.#stream?.removeListener('data', onceListener);
-    });
-
-    this.#stream.once('data', onceListener);
+    const sink = this.outputSink();
+    const output = streamInitResult.start(sink);
+    this.#stream = output.pipe(
+      new CountingPassThrough(() => {
+        this.logger.debug(
+          'Stream first output after %d ms',
+          Math.round(performance.now() - start),
+        );
+      }),
+    );
 
     return Promise.resolve(void 0);
   }

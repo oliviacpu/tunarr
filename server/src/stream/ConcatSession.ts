@@ -22,6 +22,7 @@ export class ConcatSession
   extends DirectStreamSession<ConcatSessionOptions>
   implements CaptionSession
 {
+  underlyingSessionId?: string;
   #transcodeSession?: FfmpegTranscodeSession;
   #outputSink?: PassThrough;
 
@@ -60,7 +61,10 @@ export class ConcatSession
     this.#transcodeSession = await concatStream.createSession();
 
     this.#transcodeSession.on('error', (e) => this.emit('error', e));
-    this.#transcodeSession.on('exit', () => this.emit('end'));
+    this.#transcodeSession.on('exit', () => {
+      this.emit('end');
+      void this.stop();
+    });
 
     return Promise.resolve(this.#transcodeSession);
   }
