@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { AddMediaSourceButton } from '@/components/settings/media_source/AddMediaSourceButton.tsx';
 import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { ArrowBack, ArrowForward, Edit } from '@mui/icons-material';
@@ -58,9 +59,7 @@ export default function WelcomePage() {
         }}
       />
 
-      <Typography variant="h3">
-        <Trans>Welcome to Tunarr!</Trans>
-      </Typography>
+      <PageHeader title={<Trans>Welcome to Tunarr!</Trans>} />
     </>
   );
 

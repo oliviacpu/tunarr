@@ -15,27 +15,19 @@ const allFullPaths = [
   ),
 ].filter((p): p is string => p !== undefined);
 
-// Routes that belong to no nav section: the index renders the guide and the
-// search and media detail pages are reached from elsewhere.
-const NO_NAV_ITEM = new Set(['/', '/search', '/media/$programType/$programId']);
-
 describe('navItemForPath', () => {
   test('the generated tree was read', () => {
     expect(allFullPaths.length).toBeGreaterThan(30);
   });
 
-  test.each(allFullPaths.filter((p) => !NO_NAV_ITEM.has(p)))(
-    '%s maps to a top-level nav item',
-    (fullPath) => {
-      expect(topLevelNavItemForPath(items, fullPath)).toBeDefined();
-    },
-  );
-
-  test.each([...NO_NAV_ITEM])('%s maps to no nav item', (fullPath) => {
-    expect(navItemForPath(items, fullPath)).toBeUndefined();
+  test.each(allFullPaths)('%s maps to a top-level nav item', (fullPath) => {
+    expect(topLevelNavItemForPath(items, fullPath)).toBeDefined();
   });
 
   test.each([
+    ['/', '/guide'],
+    ['/search', '/library'],
+    ['/media/movie/id', '/library'],
     ['/settings/ffmpeg/new', '/settings'],
     ['/settings/scanner', '/settings'],
     ['/system/tasks', '/system'],

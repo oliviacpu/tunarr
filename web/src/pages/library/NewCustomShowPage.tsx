@@ -3,7 +3,7 @@ import { useSuspendedStore } from '@/hooks/useSuspendedStore.ts';
 import useStore from '@/store/index.ts';
 import { Trans } from '@lingui/react/macro';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import PaddedPaper from '../../components/base/PaddedPaper.tsx';
 import { condenseCustomShowEditorPrograms } from '../../store/selectors.ts';
@@ -19,12 +19,10 @@ export function NewCustomShowPage() {
 
   return (
     <Box>
-      <Box>
-        <Breadcrumbs />
-        <Typography variant="h4" sx={{ mb: 2 }}>
-          <Trans>New Custom Show</Trans>
-        </Typography>
-      </Box>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={<Trans>New Custom Show</Trans>}
+      />
       <PaddedPaper sx={{ mb: 2 }}>
         <EditCustomShowsForm
           isNew={true}

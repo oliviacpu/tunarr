@@ -137,7 +137,7 @@ export const TopBar = () => {
         ).catch(console.error);
       }
     },
-    [copyToClipboard],
+    [copyToClipboard, t],
   );
 
   const settings = useSettings();
@@ -188,7 +188,7 @@ export const TopBar = () => {
         icon: <TextSnippet />,
       },
     ],
-    [actualBackendUri],
+    [actualBackendUri, t],
   );
 
   return (
@@ -239,13 +239,22 @@ export const TopBar = () => {
         <DarkModeButton iconOnly />
         {smallViewport ? (
           <>
-            <Button onClick={handleClick} color="inherit">
+            <IconButton
+              id="mobile-links-button"
+              aria-label={t`More links`}
+              aria-haspopup="menu"
+              aria-controls={mobileLinksOpen ? 'mobile-links-menu' : undefined}
+              aria-expanded={mobileLinksOpen ? 'true' : undefined}
+              onClick={handleClick}
+              color="inherit"
+            >
               <MoreVert />
-            </Button>
+            </IconButton>
             <StyledMenu
+              id="mobile-links-menu"
               slotProps={{
                 list: {
-                  'aria-labelledby': 'demo-customized-button',
+                  'aria-labelledby': 'mobile-links-button',
                 },
               }}
               anchorEl={anchorEl}
