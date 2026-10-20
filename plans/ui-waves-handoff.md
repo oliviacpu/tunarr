@@ -105,7 +105,8 @@ what the previous session learned that the row's agent needs.
   type scale, both palettes, outlined default buttons, flat bordered Paper). Light primary is
   `#00757c`; dark primary `#2fb7c0`; dark secondary `#5b8fb9`.
 - Settings tabs are regrouped by user task and stay tabs (no sidebar).
-- Inputs stay 14px until C2's phone evaluation says otherwise.
+- Input size: 14px from the `sm` breakpoint up; below `sm`, inputs and floating labels go to 16px
+  (decided after C2's measurement; implemented by the D8 follow-up row). Never `maximum-scale=1`.
 - P1 shelve; P2 retire (with the safety rules now in the row).
 - Fork notes for parallel PRs go to `docs/fork/changes/<date>-<slug>.md` (see its README); a
   standalone PR writes FORK.md directly.
