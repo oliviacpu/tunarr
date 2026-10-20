@@ -35,7 +35,7 @@ export const WebSettings = () => {
   return (
     <Stack spacing={2}>
       <Box>
-        <Typography variant="h5">
+        <Typography variant="h2">
           <Trans>Web Settings</Trans>
         </Typography>
         <Typography variant="subtitle2">
@@ -47,7 +47,7 @@ export const WebSettings = () => {
       </Box>
 
       <Box>
-        <Typography variant="h6" sx={{ mb: 2 }}>
+        <Typography variant="h3" sx={{ mb: 2 }}>
           <Trans>Language</Trans>
         </Typography>
         <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -73,7 +73,7 @@ export const WebSettings = () => {
       </Box>
 
       <Box>
-        <Typography variant="h6" sx={{ mb: 2 }}>
+        <Typography variant="h3" sx={{ mb: 2 }}>
           <Trans>Time Format</Trans>
         </Typography>
         <ToggleButtonGroup
@@ -102,7 +102,7 @@ export const WebSettings = () => {
       </Box>
 
       <Box>
-        <Typography variant="h6" sx={{ mb: 2 }}>
+        <Typography variant="h3" sx={{ mb: 2 }}>
           <Trans>Theme Settings</Trans>
         </Typography>
         <DarkModeButton />

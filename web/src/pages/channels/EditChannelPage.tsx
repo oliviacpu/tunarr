@@ -2,8 +2,8 @@ import type { EditChannelTabs } from '@/components/channel_config/EditChannelTab
 import { ChannelOptionsButton } from '@/components/channels/ChannelOptionsButton.tsx';
 import { useChannelSuspense } from '@/hooks/useChannels.ts';
 import { Route } from '@/routes/channels_/$channelId/edit/index.tsx';
-import { Box, LinearProgress, Stack } from '@mui/material';
-import Typography from '@mui/material/Typography';
+import { Box, LinearProgress } from '@mui/material';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import { EditChannelForm } from '../../components/channel_config/EditChannelForm.tsx';
 
@@ -22,17 +22,15 @@ export default function EditChannelPage({ initialTab }: Props) {
         <LinearProgress />
       ) : (
         <Box>
-          <Stack direction="row">
-            <Typography variant="h4" sx={{ mb: 2, flex: 1 }}>
-              {channel.name}
-            </Typography>
-            <Box>
+          <PageHeader
+            title={channel.name}
+            actions={
               <ChannelOptionsButton
                 channel={channel}
                 hideItems={['edit', 'duplicate', 'delete']}
               />
-            </Box>
-          </Stack>
+            }
+          />
           <EditChannelForm
             channel={channel}
             isNew={false}

@@ -1,9 +1,10 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, LinearProgress, Paper, Tabs, Typography } from '@mui/material';
+import { Box, LinearProgress, Paper, Tabs } from '@mui/material';
 import { Outlet, useRouterState } from '@tanstack/react-router';
 import { last, trimEnd } from 'lodash-es';
 import { Suspense } from 'react';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { RouterTabLink } from '../../components/base/RouterTabLink.tsx';
 
 type Props = {
@@ -32,17 +33,19 @@ export function SettingsLayout({ currentTab = '/general' }: Props) {
   const tab = tabs.find((tab) => tab.to === fullPath);
   return (
     <Box>
-      <Typography variant="h3" mb={2}>
-        <Trans>Settings</Trans>
-      </Typography>
-      {tab && (
-        <Breadcrumbs
-          trail={[
-            { label: t`Settings`, to: '/settings' },
-            { label: tab.label },
-          ]}
-        />
-      )}
+      <PageHeader
+        title={<Trans>Settings</Trans>}
+        breadcrumbs={
+          tab && (
+            <Breadcrumbs
+              trail={[
+                { label: t`Settings`, to: '/settings' },
+                { label: tab.label },
+              ]}
+            />
+          )
+        }
+      />
       <Paper sx={{ p: [1, 2] }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs

@@ -39,6 +39,7 @@ import {
   type MRT_ColumnDef, //if using TypeScript (optional, but recommended)
 } from 'material-react-table';
 import React, { useEffect, useMemo, useState } from 'react';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import {
   RouterButtonLink,
   RouterIconButtonLink,
@@ -521,18 +522,18 @@ export default function ChannelsPage() {
 
   return (
     <div>
-      <Box display="flex" mb={2}>
-        <Typography flexGrow={1} variant="h3">
-          <Trans>Channels</Trans>
-        </Typography>
-        <RouterButtonLink
-          to="/channels/new"
-          variant="contained"
-          startIcon={<AddCircleIcon />}
-        >
-          <Trans>New</Trans>
-        </RouterButtonLink>
-      </Box>
+      <PageHeader
+        title={<Trans>Channels</Trans>}
+        actions={
+          <RouterButtonLink
+            to="/channels/new"
+            variant="contained"
+            startIcon={<AddCircleIcon />}
+          >
+            <Trans>New</Trans>
+          </RouterButtonLink>
+        }
+      />
 
       {smallViewport ? (
         renderMobileCards()

@@ -100,7 +100,7 @@ export const SystemDebugPage = () => {
     <Stack spacing={2}>
       <Stack spacing={2}>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Typography sx={{ mb: 1, flexGrow: 1 }} variant="h5">
+          <Typography sx={{ mb: 1, flexGrow: 1 }} variant="h2">
             <Trans>Nvidia Capabilities</Trans>
           </Typography>
           {nvidiaCapabilitiesResult && (
@@ -130,7 +130,7 @@ export const SystemDebugPage = () => {
 
       <Stack spacing={2}>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Typography sx={{ mb: 1, flexGrow: 1 }} variant="h5">
+          <Typography sx={{ mb: 1, flexGrow: 1 }} variant="h2">
             <Trans>VAAPI Capabilities</Trans>
           </Typography>
           {vappiCapabilitiesResult && (
@@ -160,7 +160,7 @@ export const SystemDebugPage = () => {
 
       <Stack spacing={2}>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Typography sx={{ mb: 1, flexGrow: 1 }} variant="h5">
+          <Typography sx={{ mb: 1, flexGrow: 1 }} variant="h2">
             <Trans>System Environment</Trans>
           </Typography>
           <Button

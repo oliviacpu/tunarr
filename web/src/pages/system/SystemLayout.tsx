@@ -1,8 +1,9 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, LinearProgress, Paper, Tabs, Typography } from '@mui/material';
+import { Box, LinearProgress, Paper, Tabs } from '@mui/material';
 import { Outlet } from '@tanstack/react-router';
 import { Suspense } from 'react';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { RouterTabLink } from '../../components/base/RouterTabLink.tsx';
 
 type Props = {
@@ -31,14 +32,19 @@ export const SystemLayout = ({ currentTab }: Props) => {
   const tab = tabs.find((tab) => tab.value === currentTab);
   return (
     <Box>
-      <Typography variant="h3" mb={2}>
-        <Trans>System</Trans>
-      </Typography>
-      {tab && (
-        <Breadcrumbs
-          trail={[{ label: t`System`, to: '/system' }, { label: tab.label }]}
-        />
-      )}
+      <PageHeader
+        title={<Trans>System</Trans>}
+        breadcrumbs={
+          tab && (
+            <Breadcrumbs
+              trail={[
+                { label: t`System`, to: '/system' },
+                { label: tab.label },
+              ]}
+            />
+          )
+        }
+      />
       <Paper sx={{ p: [1, 2] }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs
