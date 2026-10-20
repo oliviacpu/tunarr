@@ -79,3 +79,10 @@ The updated streaming/API/pipeline regression run passes **799 tests**, includin
 
 The measurement harness now averages both middle observations for even sample counts; four Node tests cover even,
 odd, empty, and zero-valued samples. Recomputing the saved A/B medians leaves the table above unchanged.
+
+
+The initial A/B's periodic stress cases landed on the first channel. Review corrected that schedule without
+changing ordinary A/B alternation. A fresh balanced run passed **100/100** attempts, with **3 cold starts and
+5 second-viewer checks on each channel**; six Node tests cover scheduling and statistics. Its artifact is
+`/private/tmp/tunarr-review-balanced-100/report.json`. The earlier table remains a record of the original workload,
+not a new balanced before/after comparison.

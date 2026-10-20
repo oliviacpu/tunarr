@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { medianSorted } from './tune-in-stats.mjs';
+import { tuneInCase } from './tune-in-cases.mjs';
 
 const { values: opt } = parseArgs({
   options: {
@@ -739,8 +740,9 @@ async function measureTuneIns(base, channelId) {
   const channels = [channelId, twin.id];
   const rows = [];
   for (let i = 0; i < tuneIns; i++) {
-    const id = channels[i % 2];
-    const cold = i < 2 || i % 20 === 0;
+    const scenario = tuneInCase(i);
+    const id = channels[scenario.channelIndex];
+    const cold = scenario.cold;
     if (i >= 2 && cold) await fetch(`${base}/api/channels/${id}/sessions`, { method: 'DELETE' });
     const start = performance.now();
     const controller = new AbortController();
@@ -754,7 +756,7 @@ async function measureTuneIns(base, channelId) {
       const first = await reader.read();
       if (first.done || first.value.length === 0) throw new Error('ended without bytes');
       const firstByteMs = Math.round(performance.now() - start);
-      if (i % 10 === 0) {
+      if (scenario.secondViewer) {
         second = await fetch(`${base}/stream/channels/${id}.ts`, { signal: controller.signal });
         if (!second.ok) throw new Error(`second viewer HTTP ${second.status}`);
         const other = second.body.getReader();
@@ -762,9 +764,9 @@ async function measureTuneIns(base, channelId) {
         await other.cancel();
         if (chunk.done) throw new Error('second viewer ended without bytes');
       }
-      rows.push({ channelId: id, cold, firstByteMs });
+      rows.push({ channelId: id, cold, secondViewer: scenario.secondViewer, firstByteMs });
     } catch (error) {
-      rows.push({ channelId: id, cold, error: String(error) });
+      rows.push({ channelId: id, cold, secondViewer: scenario.secondViewer, error: String(error) });
     } finally {
       clearTimeout(deadline);
       controller.abort();
