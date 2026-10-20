@@ -4,7 +4,7 @@ Playback exposes the existing scaling algorithm and deinterlace filter. General 
 
 Backup cron expressions are validated with the existing server scheduler parser before any settings are saved or scheduled jobs are replaced; invalid expressions leave both intact.
 
-The independent scan and search forms share a single page-level unsaved-changes guard.
+The independent scan and search forms share a single page-level unsaved-changes guard. Clearing the required rolled-file retention count marks it invalid and blocks Save until a positive count is restored.
 
 These controls use existing persistence fields and settings APIs; this row adds no schema, dependency, or global audio/subtitle-default model. Per-field browser roundtrips verify that unrelated settings stay unchanged.
 

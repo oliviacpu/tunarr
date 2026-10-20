@@ -112,7 +112,7 @@ export const LogRollForm = () => {
             control={control}
             name="logging.logRollConfig.rolledFileLimit"
             prettyFieldName={t`Rolled files to keep`}
-            rules={{ min: 1 }}
+            rules={{ required: true, min: 1 }}
             TextFieldProps={{
               label: t`Rolled files to keep`,
               helperText: t`Older rolled log files past this count are deleted.`,
