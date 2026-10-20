@@ -10,6 +10,7 @@ const groups = {
     'serverPort',
     'backendAddress',
     'logging',
+    'logCategoryInheritance',
     'backups',
   ],
   playback: [
@@ -48,7 +49,7 @@ test('all settings groups expose their application timing at both widths and the
   test.setTimeout(180_000);
   const known: RegExp[] = [];
   const health = watchPageHealth(page, known);
-  expect(Object.values(groups).flat().sort()).toEqual(
+  expect([...Object.values(groups).flat(), 'logCategoryLevel'].sort()).toEqual(
     Object.keys(SettingsApplicationTiming).sort(),
   );
   for (const colorScheme of ['light', 'dark'] as const) {
@@ -62,7 +63,7 @@ test('all settings groups expose their application timing at both widths and the
         for (const setting of settings)
           await expect(
             page.locator(`[data-settings-timing="${setting}"]`),
-          ).toHaveCount(1);
+          ).toHaveCount(setting === 'logCategoryInheritance' ? 2 : 1);
         await expect(
           page.getByRole('button', { name: 'Save', exact: true }).first(),
         ).toBeDisabled();
@@ -85,6 +86,22 @@ test('all settings groups expose their application timing at both widths and the
       }
     }
   }
+  known.splice(0, known.length, ...knownIssuesFor('/settings/general'));
+  await page.goto('/web/settings/general');
+  await health.settle();
+  const category = page.getByRole('combobox', { name: 'Streaming log level' });
+  await category.click();
+  await page.getByRole('option', { name: 'debug', exact: true }).click();
+  await expect(
+    page.locator('[data-settings-timing="logCategoryLevel"]'),
+  ).toHaveCount(1);
+  await category.click();
+  await page
+    .getByRole('option', { name: 'Inherit default', exact: true })
+    .click();
+  await expect(
+    page.locator('[data-settings-timing="logCategoryInheritance"]'),
+  ).toHaveCount(2);
   known.splice(
     0,
     known.length,

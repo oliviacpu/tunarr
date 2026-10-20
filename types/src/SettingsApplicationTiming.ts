@@ -25,9 +25,22 @@ export const SettingsApplicationTiming = {
     description: 'Restart Tunarr to listen on the saved port.',
   },
   logging: {
-    title: 'Tunarr logging and log rotation',
+    title: 'Base logging and log rotation',
     when: 'live',
-    description: 'Saving updates logger levels and rotation rules immediately.',
+    description:
+      'Saving updates the base log level and rotation rules immediately.',
+  },
+  logCategoryLevel: {
+    title: 'Category log level',
+    when: 'live',
+    description:
+      'Saving an explicit category log level updates that category immediately.',
+  },
+  logCategoryInheritance: {
+    title: 'Inherited category log level',
+    when: 'restart',
+    description:
+      'Returning a category from an explicit level to Inherit requires restarting Tunarr, unless changing the base log level or rotation settings also rebuilds the loggers.',
   },
   backups: {
     title: 'Backup configuration and schedules',

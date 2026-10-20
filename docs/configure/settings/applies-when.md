@@ -9,7 +9,9 @@ Browser preferences apply as they change. Other controls apply after a successfu
 | Browser preferences | Live | Changes apply in this browser as you make them. |
 | Server address | Live | Saving changes the server this browser connects to immediately. |
 | Server port | Restart required | Restart Tunarr to listen on the saved port. |
-| Tunarr logging and log rotation | Live | Saving updates logger levels and rotation rules immediately. |
+| Base logging and log rotation | Live | Saving updates the base log level and rotation rules immediately. |
+| Category log level | Live | Saving an explicit category log level updates that category immediately. |
+| Inherited category log level | Restart required | Returning a category from an explicit level to Inherit requires restarting Tunarr, unless changing the base log level or rotation settings also rebuilds the loggers. |
 | Backup configuration and schedules | Live | Saving replaces the backup schedules immediately. A backup already running keeps its original output options. |
 | Search indexing | Restart required | Restart Tunarr to relaunch Meilisearch with the saved snapshot interval and memory limit. Environment overrides still take precedence. |
 | Library scan interval | Live | Saving reschedules library scans and collection and custom-show syncs immediately. A scan already running continues. |

@@ -92,9 +92,19 @@ exports[`settings application timing > the reviewed runtime mapping stays explic
     "title": "HLS segments and startup buffering",
     "when": "next-session",
   },
+  "logCategoryInheritance": {
+    "description": "Returning a category from an explicit level to Inherit requires restarting Tunarr, unless changing the base log level or rotation settings also rebuilds the loggers.",
+    "title": "Inherited category log level",
+    "when": "restart",
+  },
+  "logCategoryLevel": {
+    "description": "Saving an explicit category log level updates that category immediately.",
+    "title": "Category log level",
+    "when": "live",
+  },
   "logging": {
-    "description": "Saving updates logger levels and rotation rules immediately.",
-    "title": "Tunarr logging and log rotation",
+    "description": "Saving updates the base log level and rotation rules immediately.",
+    "title": "Base logging and log rotation",
     "when": "live",
   },
   "readAhead": {

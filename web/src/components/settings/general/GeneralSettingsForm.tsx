@@ -441,24 +441,34 @@ export function GeneralSettingsForm({
                     name={`logging.categoryLogLevel.${category}`}
                     control={control}
                     render={({ field }) => (
-                      <Select
-                        labelId={`${category}-log-level-label`}
-                        id={`${category}-log-level`}
-                        label={categoryLogLevelLabels[category]}
-                        {...field}
-                      >
-                        {map(
-                          CategoryLogLevelChoices,
-                          ({ value, description }) => (
-                            <MenuItem key={value} value={value}>
-                              {description}
-                            </MenuItem>
-                          ),
-                        )}
-                      </Select>
+                      <>
+                        <Select
+                          labelId={`${category}-log-level-label`}
+                          id={`${category}-log-level`}
+                          label={categoryLogLevelLabels[category]}
+                          {...field}
+                        >
+                          {map(
+                            CategoryLogLevelChoices,
+                            ({ value, description }) => (
+                              <MenuItem key={value} value={value}>
+                                {description}
+                              </MenuItem>
+                            ),
+                          )}
+                        </Select>
+                        <FormHelperText>
+                          <AppliesWhen
+                            setting={
+                              field.value === 'inherit'
+                                ? 'logCategoryInheritance'
+                                : 'logCategoryLevel'
+                            }
+                          />
+                        </FormHelperText>
+                      </>
                     )}
                   />
-                  <FormHelperText></FormHelperText>
                 </FormControl>
               </Grid>
             ))}
