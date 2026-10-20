@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
 import { readFixtureIds } from './routes.ts';
 
 test('detail and create pages expose one document heading', async ({
@@ -72,11 +71,8 @@ test('new transcode config breadcrumbs link to settings and transcoding', async 
 
 test('mobile overflow is a named menu and detail headings fit both schemes', async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(90_000);
-  mkdirSync('/private/tmp/tunarr-ui-followups-screenshots', {
-    recursive: true,
-  });
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const dark of [false, true]) {
@@ -104,7 +100,9 @@ test('mobile overflow is a named menu and detail headings fit both schemes', asy
         ),
       ).toBe(true);
       await page.screenshot({
-        path: `/private/tmp/tunarr-ui-followups-screenshots/transcode-${width}-${dark ? 'dark' : 'light'}.png`,
+        path: testInfo.outputPath(
+          `transcode-${width}-${dark ? 'dark' : 'light'}.png`,
+        ),
         fullPage: true,
         animations: 'disabled',
       });
@@ -119,7 +117,7 @@ test('mobile overflow is a named menu and detail headings fit both schemes', asy
           'true',
         );
         await page.screenshot({
-          path: `/private/tmp/tunarr-ui-followups-screenshots/overflow-${dark ? 'dark' : 'light'}.png`,
+          path: testInfo.outputPath(`overflow-${dark ? 'dark' : 'light'}.png`),
           animations: 'disabled',
         });
         await page.keyboard.press('Escape');

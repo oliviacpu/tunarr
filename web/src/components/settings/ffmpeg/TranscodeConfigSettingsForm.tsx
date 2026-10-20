@@ -189,7 +189,7 @@ export const TranscodeConfigSettingsForm = ({
             />
           </Box>
           <Box>
-            <Typography component="h3" variant="h3" sx={{ pb: 1 }}>
+            <Typography component="h2" variant="h2" sx={{ pb: 1 }}>
               <Trans>Error Options</Trans>
             </Typography>
             <TranscodeConfigErrorOptions />
