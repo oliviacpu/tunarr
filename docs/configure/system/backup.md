@@ -64,9 +64,13 @@ Run backups at regular intervals:
 
 Example: "Every 1 day at 4:00 AM"
 
+On the General settings page this is three fields: **Backup interval** (the N), **Unit** (hours or days) and, for a
+daily schedule, **Time of day**.
+
 ### Cron-Based
 
-Use a cron expression for more complex schedules:
+Use a cron expression for more complex schedules. The web UI does not edit cron schedules: set one in `settings.json`,
+and the General settings page shows it as text.
 
 ```
 0 4 * * *    # Daily at 4:00 AM

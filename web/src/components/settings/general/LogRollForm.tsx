@@ -1,56 +1,48 @@
-import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Checkbox,
   FormControl,
   FormControlLabel,
   FormHelperText,
-  Grid,
-  MenuItem,
-  Select,
   Stack,
-  Typography,
 } from '@mui/material';
-import { TimePicker } from '@mui/x-date-pickers';
 import { defaultLogRollConfig } from '@tunarr/types';
-import type { EverySchedule } from '@tunarr/types/schemas';
-import dayjs from 'dayjs';
-import { useCallback } from 'react';
-import { Controller, useFormContext } from 'react-hook-form';
+import { Controller, useFormContext, useWatch } from 'react-hook-form';
 import { formatBytes } from '../../../helpers/util.ts';
 import {
   CheckboxFormController,
   NumericFormControllerText,
 } from '../../util/TypedController.tsx';
 import type { GeneralSettingsFormData } from './GeneralSettingsForm.tsx';
+import { ScheduleFields } from './ScheduleFields.tsx';
 
 export const LogRollForm = () => {
   const { t } = useLingui();
-  const { control, watch, setValue } =
+  const { control, getValues, setValue } =
     useFormContext<GeneralSettingsFormData>();
-  const [enabled, schedule] = watch([
-    'logging.logRollConfig.enabled',
-    'logging.logRollConfig.schedule',
-  ]);
-  const currentBackupSchedule = schedule as EverySchedule | undefined;
+  const [enabled, onSchedule] = useWatch({
+    control,
+    name: ['logging.logRollConfig.enabled', 'logRollOnSchedule'],
+  });
 
-  const handleBackupTimeChange = useCallback(
-    (
-      value: dayjs.Dayjs | null,
-      originalOnChange: (...args: unknown[]) => void,
-    ) => {
-      if (!value) {
-        originalOnChange(0);
-        return;
-      }
-
-      const h = value.hour();
-      const m = value.minute();
-      const millis = dayjs.duration({ hours: h, minutes: m }).asMilliseconds();
-      originalOnChange(millis);
-    },
-    [],
-  );
+  // Ticking "Roll on schedule" with no usable schedule starts from daily at
+  // midnight. Unticking keeps the schedule, so ticking again brings it back;
+  // it is only left out of the save
+  const scheduleOnTick = () => {
+    const schedule = getValues('logging.logRollConfig.schedule');
+    if (
+      schedule?.type === 'every' &&
+      typeof schedule.increment === 'number' &&
+      schedule.increment >= 1
+    ) {
+      return;
+    }
+    setValue(
+      'logging.logRollConfig.schedule',
+      { type: 'every', increment: 1, unit: 'day', offsetMs: 0 },
+      { shouldDirty: true },
+    );
+  };
 
   return (
     <Stack gap={2}>
@@ -72,29 +64,25 @@ export const LogRollForm = () => {
       </FormControl>
       {enabled && (
         <>
-          <Grid size={{ xs: 6 }}>
+          <Stack gap={2}>
             <FormControl>
               <FormControlLabel
                 label={t`Roll on schedule`}
                 control={
                   <Controller
                     control={control}
-                    name="logging.logRollConfig.schedule.increment"
+                    name="logRollOnSchedule"
                     render={({ field }) => (
                       <Checkbox
-                        checked={(field.value ?? 0) > 0}
+                        name={field.name}
+                        inputRef={field.ref}
+                        checked={field.value}
+                        onBlur={field.onBlur}
                         onChange={(_, checked) => {
-                          field.onChange(checked ? 1 : 0);
-                          setValue(
-                            'logging.logRollConfig.schedule.unit',
-                            'day',
-                            { shouldDirty: true },
-                          );
-                          setValue(
-                            'logging.logRollConfig.schedule.offsetMs',
-                            0,
-                            { shouldDirty: true },
-                          );
+                          if (checked) {
+                            scheduleOnTick();
+                          }
+                          field.onChange(checked);
                         }}
                       />
                     )}
@@ -108,71 +96,15 @@ export const LogRollForm = () => {
                 </Trans>
               </FormHelperText>
             </FormControl>
-            {(currentBackupSchedule?.increment ?? 0) > 0 && (
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Typography>
-                  <Trans>Every</Trans>
-                </Typography>
-                <NumericFormControllerText
-                  control={control}
-                  name="logging.logRollConfig.schedule.increment"
-                  prettyFieldName={t`Roll interval`}
-                  // The rule outlives this field when it unmounts. Unticking
-                  // the schedule writes 0, and min: 1 would block every save.
-                  rules={{ min: 0 }}
-                  TextFieldProps={{
-                    sx: { width: '30%' },
-                  }}
-                />
-                <Controller
-                  control={control}
-                  name="logging.logRollConfig.schedule.unit"
-                  render={({ field }) => (
-                    <Select
-                      {...field}
-                      value={
-                        field.value === 'day' || field.value === 'hour'
-                          ? field.value
-                          : 'day'
-                      }
-                      sx={{ minWidth: '25%' }}
-                    >
-                      <MenuItem value="hour">
-                        {plural(currentBackupSchedule!.increment, {
-                          one: 'Hour',
-                          other: 'Hours',
-                        })}
-                      </MenuItem>
-                      <MenuItem value="day">
-                        {plural(currentBackupSchedule!.increment, {
-                          one: 'Day',
-                          other: 'Days',
-                        })}
-                      </MenuItem>
-                    </Select>
-                  )}
-                />
-
-                {currentBackupSchedule!.unit === 'day' && (
-                  <Controller
-                    control={control}
-                    name="logging.logRollConfig.schedule.offsetMs"
-                    render={({ field }) => (
-                      <TimePicker
-                        value={dayjs()
-                          .startOf('day')
-                          .add(currentBackupSchedule!.offsetMs)}
-                        onChange={(value) =>
-                          handleBackupTimeChange(value, field.onChange)
-                        }
-                      />
-                    )}
-                  />
-                )}
-              </Stack>
+            {onSchedule && (
+              <ScheduleFields
+                name="logging.logRollConfig.schedule"
+                intervalLabel={t`Roll interval`}
+                id="log-roll-schedule"
+              />
             )}
-          </Grid>
-          <Stack direction={'row'}>
+          </Stack>
+          <Stack direction="row">
             <FormControl fullWidth>
               <FormControlLabel
                 label={t`Roll based on size`}

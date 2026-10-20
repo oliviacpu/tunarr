@@ -1,4 +1,3 @@
-import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { SelectChangeEvent } from '@mui/material';
 import {
@@ -7,27 +6,21 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  Stack,
   TextField,
-  Typography,
 } from '@mui/material';
-import { TimePicker } from '@mui/x-date-pickers';
-import type { EverySchedule } from '@tunarr/types/schemas';
-import dayjs from 'dayjs';
-import { first } from 'lodash-es';
-import { Controller, useFormContext } from 'react-hook-form';
+import { Controller, useFormContext, useWatch } from 'react-hook-form';
 import { NumericFormControllerText } from '../../util/TypedController.tsx';
 import type { GeneralSettingsFormData } from './GeneralSettingsForm.tsx';
+import { ScheduleFields } from './ScheduleFields.tsx';
 
 export const BackupForm = () => {
   const { t } = useLingui();
-  const { control, watch, setValue } =
-    useFormContext<GeneralSettingsFormData>();
+  const { control, setValue } = useFormContext<GeneralSettingsFormData>();
 
-  const backupsValue = watch('backup');
-  const currentBackupSchedule = first(backupsValue.configurations)?.schedule as
-    | EverySchedule
-    | undefined;
+  const gzip = useWatch({
+    control,
+    name: 'backup.configurations.0.outputs.0.gzip',
+  });
 
   function handleArchiveFormatUpdate(ev: SelectChangeEvent) {
     if (ev.target.value === 'zip' || ev.target.value === 'tar') {
@@ -49,24 +42,9 @@ export const BackupForm = () => {
     }
   }
 
-  function handleBackupTimeChange(
-    value: dayjs.Dayjs | null,
-    originalOnChange: (...args: unknown[]) => void,
-  ) {
-    if (!value) {
-      originalOnChange(0);
-      return;
-    }
-
-    const h = value.hour();
-    const m = value.minute();
-    const millis = dayjs.duration({ hours: h, minutes: m }).asMilliseconds();
-    originalOnChange(millis);
-  }
-
   return (
     <>
-      <Grid size={{ xs: 6 }}>
+      <Grid size={{ xs: 12, sm: 6 }}>
         <Controller
           control={control}
           name="backup.configurations.0.outputs.0.outputPath"
@@ -80,7 +58,7 @@ export const BackupForm = () => {
           )}
         />
       </Grid>
-      <Grid size={{ xs: 3 }}>
+      <Grid size={{ xs: 6, sm: 3 }}>
         <NumericFormControllerText
           control={control}
           name="backup.configurations.0.outputs.0.maxBackups"
@@ -92,9 +70,9 @@ export const BackupForm = () => {
           }}
         />
       </Grid>
-      <Grid size={{ xs: 3 }}>
+      <Grid size={{ xs: 6, sm: 3 }}>
         <FormControl fullWidth>
-          <InputLabel>
+          <InputLabel id="backup-archive-format-label">
             <Trans>Archive format</Trans>
           </InputLabel>
           <Controller
@@ -103,12 +81,9 @@ export const BackupForm = () => {
             render={({ field }) => (
               <Select
                 {...field}
-                value={
-                  field.value === 'tar' &&
-                  backupsValue.configurations[0].outputs[0].gzip
-                    ? 'targz'
-                    : field.value
-                }
+                labelId="backup-archive-format-label"
+                id="backup-archive-format"
+                value={field.value === 'tar' && gzip ? 'targz' : field.value}
                 label={t`Archive format`}
                 onChange={(ev) => handleArchiveFormatUpdate(ev)}
               >
@@ -120,66 +95,12 @@ export const BackupForm = () => {
           />
         </FormControl>
       </Grid>
-      <Grid size={{ xs: 6 }}>
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <Typography>
-            <Trans>Every</Trans>
-          </Typography>
-          <NumericFormControllerText
-            control={control}
-            name="backup.configurations.0.schedule.increment"
-            prettyFieldName={t`Backup interval`}
-            rules={{ min: 1 }}
-            TextFieldProps={{
-              sx: { width: '30%' },
-            }}
-          />
-          <Controller
-            control={control}
-            name="backup.configurations.0.schedule.unit"
-            render={({ field }) => (
-              <Select
-                {...field}
-                value={
-                  field.value === 'day' || field.value === 'hour'
-                    ? field.value
-                    : 'day'
-                }
-                sx={{ minWidth: '25%' }}
-              >
-                <MenuItem value="hour">
-                  {plural(currentBackupSchedule!.increment, {
-                    one: 'Hour',
-                    other: 'Hours',
-                  })}
-                </MenuItem>
-                <MenuItem value="day">
-                  {plural(currentBackupSchedule!.increment, {
-                    one: 'Day',
-                    other: 'Days',
-                  })}
-                </MenuItem>
-              </Select>
-            )}
-          />
-
-          {currentBackupSchedule!.unit === 'day' && (
-            <Controller
-              control={control}
-              name="backup.configurations.0.schedule.offsetMs"
-              render={({ field }) => (
-                <TimePicker
-                  value={dayjs()
-                    .startOf('day')
-                    .add(currentBackupSchedule!.offsetMs)}
-                  onChange={(value) =>
-                    handleBackupTimeChange(value, field.onChange)
-                  }
-                />
-              )}
-            />
-          )}
-        </Stack>
+      <Grid size={{ xs: 12 }}>
+        <ScheduleFields
+          name="backup.configurations.0.schedule"
+          intervalLabel={t`Backup interval`}
+          id="backup-schedule"
+        />
       </Grid>
     </>
   );
