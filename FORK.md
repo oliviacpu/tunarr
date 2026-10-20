@@ -26,6 +26,33 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### The web UI has a theme: IBM Plex Sans, a type scale, and colours that pass AA in both schemes (2026-10-19)
+
+- **What you saw:** stock Material UI. No font was loaded, so Roboto's stack fell through to Helvetica or Arial.
+  Page titles (h3) were 48px, button and tab labels were in capitals, and in the light scheme the teal links and
+  button labels were 4.06:1 on white, below WCAG AA's 4.5:1. The warning orange was 2.2:1 and the info grey 2.6:1.
+  The dark scheme set only its primary colour, on MUI's grey `#121212` page.
+- **Cause:** `web/src/theme.ts` set six light palette colours and two dark ones and nothing else. `App.tsx` hard-coded
+  the light page background.
+- **Fix:** issue D1 of `plans/ui-primitives-and-settings-audit-2026-10-19.md` (section 2, "Design direction").
+  - Font: IBM Plex Sans, bundled from `@fontsource-variable/ibm-plex-sans` (SIL Open Font License; noted in
+    `docs/dev/contributing.md`) and imported in `main.tsx`. Scale: body 14px, body2 13, h1 28 down to h6 14 at weight
+    600, subtitles 15 and 13, caption and overline 12, buttons 14 in sentence case. Help text under fields is 12.5px,
+    secondary colour, at most 72 characters wide. Table cells use tabular numerals.
+  - Light: primary `#00757c` (5.5:1 on white), page `#f5fafc` from the palette, paper white, a teal-grey divider.
+    Warning darkens to `#a46100` and info to `#676e88` so both read as text. Dark: primary `#2fb7c0`, page `#10191c`,
+    paper `#182328`, error `#e07b6c`, warning `#f0a330`, success `#4caf7d`, info `#94a6c4`.
+  - Inputs and buttons have 6px corners, Paper and dialogs 10px. Paper is flat (elevation 0) with a 1px divider
+    border, which includes the list tables. Surfaces that ask for an elevation (app bar, drawer, menus, dialogs) keep
+    their shadow and get no border. Standard and filled Alerts draw no border.
+  - Buttons default to outlined, so only an explicit `variant="contained"` is filled. Tabs are sentence case. Tooltips
+    wait 400ms. `PaddedPaper` pads by `theme.spacing(2)`.
+- **Tests:** `theme.test.ts` computes WCAG contrast for every colour used as text (body and secondary text, primary,
+  error, warning, success, info) on the page and paper backgrounds in both schemes, and for contained button labels;
+  the old primary and warning fail it. It also checks the font and the outlined button default.
+  `PaddedPaper.test.tsx` checks the padding follows the theme's spacing.
+- **Upstream:** not sent.
+
 ### Live TV's `stream.m3u8` keeps 15 minutes of segments (2026-10-19, PR #96)
 
 - **What you saw:** nothing on screen yet. The cost grew with a session's age. `stream.m3u8` listed every segment since

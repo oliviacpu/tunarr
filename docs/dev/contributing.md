@@ -415,6 +415,14 @@ Key directories:
 - **Zustand** for state management
 - **React Hook Form** + **Zod** for forms
 
+The theme lives in `web/src/theme.ts`: the type scale, the colours for the light and dark schemes, and the component
+defaults. `web/src/theme.test.ts` fails if a text colour falls below WCAG AA contrast (4.5:1) on the page or paper
+background in either scheme.
+
+The UI font is IBM Plex Sans, from `@fontsource-variable/ibm-plex-sans`. It is licensed under the SIL Open Font License
+1.1; the licence text is in `web/node_modules/@fontsource-variable/ibm-plex-sans/LICENSE` after `pnpm i`. The font files
+are part of the web build, so the UI loads no fonts from the internet.
+
 Key directories:
 
 - `routes/` - File-based routing
