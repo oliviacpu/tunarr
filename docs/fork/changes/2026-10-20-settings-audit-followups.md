@@ -1,4 +1,4 @@
-### Failed FFmpeg probes report a failure (2026-10-20)
+### Failed FFmpeg probes report a failure (2026-10-20, PR #136)
 
 - **What you saw:** unavailable FFmpeg returned a successful capability response with empty encoder lists. Default tuner settings also shared one mutable object between settings instances.
 - **Cause:** the API replaced failed probe results with empty arrays, and the default settings factory returned the exported tuner defaults by reference.
