@@ -20,11 +20,196 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 - **ffmpeg:** the image's `/usr/bin/ffmpeg` and `/usr/bin/ffprobe` are jellyfin-ffmpeg (see below). The base image's
   ErsatzTV ffmpeg 7.1.1 stays at `/usr/local/bin/ffmpeg`. To fall back to it without a new image, set the FFmpeg paths
   to `/usr/local/bin/ffmpeg` and `/usr/local/bin/ffprobe`. The settings page hides them in a container, so use the API
-  (`PUT /api/ffmpeg-settings`) or `tunarr settings update`. To bump jellyfin-ffmpeg, change `jellyfin_ffmpeg_version` and
+  (`PUT /api/settings/ffmpeg`) or `tunarr settings update`. To bump jellyfin-ffmpeg, change `jellyfin_ffmpeg_version` and
   `jellyfin_ffmpeg_sha256` in the `Dockerfile`. The digest is the release asset's:
   `gh api repos/jellyfin/jellyfin-ffmpeg/releases/tags/v<version> --jq '.assets[] | select(.name | test("portable_linux64-gpl")) | .digest'`.
 
 ## Changes in this fork
+
+### Failed FFmpeg probes report a failure (2026-10-20, PR #136)
+
+- **What you saw:** unavailable FFmpeg returned a successful capability response with empty encoder lists. Default tuner settings also shared one mutable object between settings instances.
+- **Cause:** the API replaced failed probe results with empty arrays, and the default settings factory returned the exported tuner defaults by reference.
+- **Fix:** approved S6/B6 audit follow-ups. Return a structured server error when a capability probe fails; keep successful results intact. The API reads the hardware probe's Result; existing capability callers keep their empty-list fallback. Create an independent tuner configuration for each settings file. S6 removes the obsolete reset route and its readonly cast separately.
+- **Tests:** API success/failure cases, an actual executable failing its hardware probe while the capability fallback stays intact, and independent default-settings instances; regenerated API contracts add the FFmpeg error response while preserving P1's hidden management routes, with the public latest spec synchronized to the versioned spec.
+- **Upstream:** not sent.
+
+### Separate HLS field helpers on phones (2026-10-20, PR #144)
+
+- **What you saw:** At 390px, the HLS segment-length helper overlapped the next field's label, and the segments-before-playback helper overlapped the start-up burst label.
+- **Cause:** The field stack defined its column direction only from the `sm` breakpoint, so MUI did not apply its spacing at `xs`.
+- **Fix:** Start the column direction at `xs`, preserving the existing row layout from `md`.
+- **Tests:** The new geometry regression fails before the fix with a 9px helper/label overlap. It passes afterward at 390px and 1440px in light and dark themes, with viewport screenshots for all four combinations. The ten existing playback settings tests, web/e2e typechecks, scoped lint and quick preflight validate the change.
+- **Upstream:** Fork-only mobile layout follow-up under the approved S2/D8 audit scope (PR #85); no upstream submission.
+
+### E2E follow-up locators and fixture cleanup (2026-10-20, PR #143)
+
+- **What you saw:** broad delete/tuner locators matched unintended controls, and saved channel/logging edits leaked into later specs expecting the seed baseline.
+- **Cause:** older accessible names and fixture cleanup did not match the integrated settings/editor behavior.
+- **Fix:** use the descriptive filler delete name and exact tuner label. Restore edited channel names, guide titles and watermarks in `finally`, preserving other current fields and omitting start-time/on-demand resets. General and timing tests establish their logging-category baseline and restore only their own values, using explicit null for originally absent values. The channel API does not clear omitted optional fields, so originally absent guide titles/watermarks return to the editor's equivalent blank/disabled state. Test-only T1 follow-up; no runtime or test-infrastructure changes.
+- **Tests:** the five affected specs pass together with one worker (16 tests including seed); e2e typecheck, scoped lint and quick preflight pass.
+- **Upstream:** not sent.
+
+### Stream Selection Profile management stays internal (2026-10-20, PR #123)
+
+Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue P1, approved by the maintainer 2026-10-19 (PR #85).
+
+- **What you saw:** generated API documentation and the web client exposed profile CRUD and CEL validation despite
+  there being no profile editor in the UI.
+- **Cause:** the routes had public OpenAPI schemas.
+- **Fix:** mark the six routes internal with the existing Swagger `hide` metadata and regenerate the spec/client.
+  The public Latest specification mirrors the regenerated development specification; historical specifications stay unchanged.
+  Server routes, persistence, profile resolution and stream evaluation remain functional; a profile UI needs its
+  own design.
+- **Tests:** `streamSelectionApi.test.ts` checks that every route remains registered while runtime and public Latest OpenAPI omit them, then
+  exercises profile CRUD and expression validation against a migrated database. Existing resolver/evaluator tests
+  verify stream selection still works.
+- **Upstream:** not sent.
+
+### Settings share one API shape (2026-10-20, PR #121)
+
+Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue S6, approved by the maintainer 2026-10-19 (PR #85).
+
+- **What you saw:** settings routes mixed `/ffmpeg-settings`, `/system/settings` and `/settings/media-source`, with
+  different error bodies. Some partial writes reset omitted fields to defaults or replaced whole nested objects.
+- **Cause:** each settings router had its own update schema, merge behavior and errors.
+- **Fix:** canonical GET/PUT routes use `/api/settings/{ffmpeg,xmltv,hdhr,media-source,system,feature-flags}`.
+  Update schemas have no implicit defaults; nested values are preserved when omitted, arrays replace whole lists,
+  and documented optional system values can be cleared with null. Errors use `{message}`. The web and e2e fixture
+  use canonical routes. Old GET/PUT routes remain deprecated aliases for one release; unused POST reset routes are
+  removed explicitly. The UI still stages Restore defaults locally. The shared media-source schema now requires
+  whole-hour rescan intervals of at least one; old files normalize legacy values without losing other settings.
+- **Tests:** contracts for all six sections, legacy aliases, partial/invalid/nested writes, consistent errors,
+  extraction and scheduling effects, removed resets, update-schema coverage and legacy settings-file reads.
+- **Upstream:** not sent.
+
+### Settings options and filler delete actions are localized (2026-10-20, PR #138)
+
+- **What you saw:** several settings choices and feature descriptions bypassed translation, and filler delete buttons lacked an accessible name identifying their list.
+- **Cause:** those surfaces still used plain strings or unnamed icon actions.
+- **Fix:** stream mode, watermark position, error screen/audio choices and known feature names/descriptions use Lingui. Unknown flags keep the server's supplied copy so an older frontend can describe a newer flag. Filler delete buttons have localized, list-specific names. Stored values and API metadata are unchanged; catalogs are refreshed after integration.
+- **Tests:** localized option/flag rendering, unknown-flag fallback and accessible filler deletion regressions.
+- **Upstream:** not sent.
+
+### Guide redirect names, mobile times and sliver dividers (2026-10-20, PR #137)
+
+- **What you saw:** redirect cells displayed a channel UUID, mobile cells omitted their times and time left, and compact program dividers used one hard-coded shadow in both themes.
+- **Cause:** the guide read the redirect ID instead of its supplied name, a viewport condition returned a boolean, and the compact divider bypassed the active palette.
+- **Fix:** show the supplied channel name, render times at the existing width thresholds, and use the theme divider. Remove the empty, unreferenced controls file. The guide ramp, accent and paused styling stay the same.
+- **Tests:** guide unit regressions and browser checks cover names, mobile times, both themed dividers and horizontal containment at 390px/1440px; typechecks, lint, quick preflight and the production bundle are recorded in the PR.
+- **Upstream:** not sent.
+
+### Missing detail entities use the existing not-found page (2026-10-20, PR #135)
+
+- **What you saw:** missing smart collections, media sources/libraries and transcode configurations reached the error page; missing media details could render blank.
+- **Cause:** detail loaders did not consistently translate missing lookups, while cached router matches could render before a fresh existence check finished.
+- **Fix:** await the existing not-found helper in detail loaders, including media details. Missing responses use not-found UI; unexpected failures preserve the server message and retry controls. Detail components keep their query subscriptions without an immediate duplicate mount refetch. Remove only unreachable outer suspense loading branches, retaining lazy custom-show preview loading. No API or schema change.
+- **Tests:** lookup success/400/404/500, deferred preview loading, cached revisits after 404/500, and one lookup per visit across all six detail branches; route sweeps, typechecks and the existing preflight/bundle procedure are recorded in the PR.
+- **Upstream:** not sent.
+
+### Channel edit tabs have addresses (2026-10-20, PR #134)
+
+- **What you saw:** channel tabs shared one edit URL, history did not step through tabs, and Streaming also held watermark controls.
+- **Cause:** local tab state replaced a query parameter instead of navigating between routes.
+- **Fix:** Properties, Flex, Guide, Streaming and Watermark are child routes under one persistent edit form. Tabs and browser history preserve unsaved values. Legacy `?tab=epg` and `?tab=ffmpeg` links redirect to Guide and Streaming. Only tab paths for the same channel bypass the unsaved guard; leaving or changing channel still asks first. Watermark behavior is unchanged in its own tab.
+- **Tests:** real-router and browser regressions cover all five routes, history, redirects, shared saves, field errors, persistence and Cancel/Proceed, plus both themes at 390px/1440px and existing subtitle editing.
+- **Upstream:** not sent.
+
+### Settings explain when saved values apply (2026-10-20, PR #133)
+
+- **What you saw:** settings did not consistently explain whether saving affected current work, a later program/session, a browser reload or server startup.
+- **Cause:** runtime read boundaries were spread across settings helpers and services rather than one checked mapping.
+- **Fix:** a shared types registry drives Live, Next program, Next session, Reload required and Restart required chips, with extractable Lingui titles/tooltips and matching docs. Typed maps cover editable FFmpeg fields and feature flags. Browser server-address changes require reloading that browser page. HLS Direct reads its format for new playlists/program streams, including active viewers; a stream already running retains its format. Caption delivery remains session-bound and caption styling program-bound. Category logging distinguishes explicit live levels from inherited levels that require a restart unless base/rotation settings rebuild the logger. Existing persistence and runtime application behavior are unchanged; global channel defaults remain separate.
+- **Tests:** registry snapshots, exhaustive field/flag mappings, exact documentation/message comparisons, keyboard tooltips and Spanish/Chinese rendering. The HLS Direct correction passes all 12 timing regressions, types/shared builds, web typecheck and quick preflight; earlier browser checks cover all task tabs at 390px/1440px in both themes.
+- **Upstream:** not sent.
+
+### Guide zoom buttons use minus, duration, plus order (2026-10-20, PR #132)
+
+- **What you saw:** the plus magnifier appeared before the duration and the minus magnifier after it.
+- **Cause:** the grouped controls retained their original ordering.
+- **Fix:** put the minus magnifier on the left and the plus magnifier on the right, as requested. Zoom behavior and limits are unchanged.
+- **Tests:** the guide regression checks button order, duration changes and the existing limits.
+- **Upstream:** not sent.
+
+### Detail headings and navigation follow the current task (2026-10-20, PR #131)
+
+- **What you saw:** several detail/create pages skipped their document heading, the mobile overflow action had no accessible name, and Guide/Search/media destinations did not always select a navigation task.
+- **Cause:** older page headers and prefix matching remained outside the shared page/navigation conventions.
+- **Fix:** use PageHeader on library/source details and Welcome, retain a single h1 below Settings, and use a named overflow IconButton with menu state. Root selects Guide; Search and media details select Library. Transcode editor breadcrumbs include Settings and the canonical Playback destination after the task-tab regrouping. Section headings retain their correct peer/nested levels.
+- **Tests:** generated-route navigation coverage, heading levels, explicit breadcrumbs and mobile menu behavior; detail-page browser captures, typechecks, lint and the production bundle are recorded in the PR.
+- **Upstream:** not sent.
+
+### UI audit tests wait for their actual asynchronous work (2026-10-20, PR #130)
+
+- **What you saw:** cold-render timeouts, a pruning-floor assertion based on a short sleep, and browser fixture port collisions across worktrees.
+- **Cause:** first-render assertions used a one-second wait, segment deletion was fire-and-forget, and fixtures hard-coded their ports.
+- **Fix:** give asynchronous form mounts explicit waits, await pruning/save completion, and replace an inline import type. Keep the existing test limit and two-worker guidance for expensive language-picker tests. A validated `TUNARR_E2E_PORT_OFFSET` isolates parallel browser fixtures without sharing their data directories.
+- **Tests:** affected component/HLS suites, default/offset/invalid-port regressions, and browser fixture startup with an offset.
+- **Upstream:** not sent.
+
+### Smart Collections support query creation and editing (2026-10-20, PR #129)
+
+- **What you saw:** Create opened Search without explaining the next step, and Edit changed only a collection's name.
+- **Cause:** Search had no collection-creation context and the edit dialog omitted the stored query.
+- **Fix:** Create opens Search with an instruction and visible Save as collection action, then returns to the list. Edit loads/saves name, keywords and filter using the existing text and visual builders. Clearing a filter uses the existing API representation; invalid filters cannot save. Cancel and background refetches preserve unsaved edits.
+- **Tests:** parsing, clearing and dirty-input unit regressions; browser create/edit, both builders, reload persistence, validation, Cancel/navigation and 390px/1440px light/dark layouts; typechecks, lint and bundle checks are recorded in the PR.
+- **Upstream:** not sent.
+
+### Help and bug-report links describe the running fork (2026-10-20, PR #128)
+
+- **What you saw:** help opened upstream documentation and the error page prepared upstream reports for fork behavior.
+- **Cause:** destinations were hard-coded to upstream.
+- **Fix:** link help and Search syntax to checked-in fork documentation and prepare reports in the fork repository, retaining the existing environment/error fields. This fork has no separately published documentation site.
+- **Tests:** documentation files/headings resolve and error-report links retain their prefilled fields while targeting the fork.
+- **Upstream:** not sent.
+
+### Library items show which channels use them (2026-10-20, PR #127)
+
+- **What you saw:** filler lists, custom shows and smart collections gave no channel-specific usage or delete warning.
+- **Cause:** lineup JSON and relational filler attachments had no shared reference view.
+- **Fix:** three bulk usage endpoints scan saved slots/items, filler attachments and offline music, returning unique channels and one-based slot positions. A cached scan invalidates on relevant channel, lineup and attachment changes; superseded scans retry even if they fail. Table chips and single/bulk delete warnings share the data. Refreshing cached references shows loading, and errors show unavailable rather than zero; deletion stays available. No schema migration or persistent scheduling index.
+- **Tests:** SQLite/lineup fixtures cover every reference kind, deduplication, invalidation and scan races; API tests cover all three endpoints and static-path precedence. Component and browser tests cover named warnings, refresh loading and deletion at 390px/1440px in both themes. Build/typecheck, lint and bundle results are recorded in the PR.
+- **Upstream:** not sent.
+
+### Retired settings leave persisted and generated contracts (2026-10-20, PR #126)
+
+- **What you saw:** settings and API docs retained unused Plex streaming/XMLTV image-cache fields, and channel/lineup contracts exposed retired transcoding/dynamic-content fields.
+- **Cause:** schemas and endpoints outlived their runtime consumers.
+- **Fix:** settings-file version 2 strips the unused keys on the main-thread startup write while preserving active sections. Remove Plex settings endpoints/types, the XMLTV image-cache flag, channel transcoding wire field and dynamic-content schema/store field. Legacy lineup reads strip the retired key. The historical SQL channel column remains; this row adds no SQL migration.
+- **Tests:** settings-file upgrade/reload, legacy lineup reads, affected schema/API tests and regenerated contract checks.
+- **Upstream:** not sent.
+
+### Missing settings controls use their existing persistence fields (2026-10-20, PR #124)
+
+- **What you saw:** saved scaling/deinterlace choices, rolled-file retention, backup schedule controls and search-index settings had no complete UI.
+- **Cause:** the settings forms exposed only part of the existing model.
+- **Fix:** Playback exposes scaling/deinterlace; General exposes retention and backup temporary directories, cron expressions and per-configuration switches; Library exposes search snapshot intervals and optional indexing memory. An empty memory field restores the automatic limit. Validate active backup cron schedules with outputs before persistence or job replacement, preserving both on failure; disabled/output-free schedules remain editable. Scan/search forms share one navigation guard, and an empty required retention count blocks Save. No new persistence model or dependency.
+- **Tests:** per-field save/reload roundtrips preserve unrelated settings; cron validation preserves scheduled jobs, optional memory clears, retention validation and combined dirty guards have regressions.
+- **Upstream:** not sent.
+
+### Legacy external source columns retire after transactional backfill (2026-10-20, PR #122)
+
+- **What you saw:** external IDs kept source-name columns beside media-source UUIDs, and migration-time drops could precede the startup backfill.
+- **Cause:** the source-ID transition retained both representations and relied on a later fixer.
+- **Fix:** one registered migration resolves source-dependent IDs by source type and UUID/name, backfills null media-source IDs, then drops obsolete columns/indexes in the same transaction. Independent IDs may remain null. Unresolved/ambiguous sources stop with table/count diagnostics; uniqueness failures roll back. Converters and fixers use replacement IDs. Root program/grouping backfills, clip fallbacks and MikroORM history remain; three existing tables enter the Drizzle schema index. Freeze legacy transcode defaults in a migration-only helper while the runtime fixer uses the equivalent current factory. Startup synchronizes old migration history and stops after an incomplete upgrade.
+- **Tests:** upgrade and MikroORM-only fixtures cover resolution, already-linked/independent IDs, rollback, retained clip fallbacks, root backfills, exact defaults and bootstrap failure. A separate migrated dev-fixture backup preserves counts and foreign-key integrity; final checks are recorded in the PR.
+- **Upstream:** not sent.
+
+### Settings tabs are grouped by task (2026-10-20, PR #118)
+
+- **What you saw:** settings were organized by backend implementation rather than the task being configured.
+- **Cause:** FFmpeg, captions, search and optional flags were grouped under their older pages.
+- **Fix:** General, Playback, Captions & audio, Guide, Tuner, Library and Experimental each explain their purpose. Playback and captions retain independent core/flag saves under one page-level dirty guard. Optional flag/environment queries fail independently; cached forms and unsaved edits remain visible with retry warnings. Feature saves send only the active group's fields. Legacy settings/config bookmarks redirect to canonical task tabs; breadcrumbs, caption guidance, docs and route coverage match. The missing controls are recorded separately under S2; global channel defaults remain separate future work.
+- **Tests:** routes/redirects, independent/cached query failures, shared dirty guards, active-group-only saves and canonical breadcrumb browser regressions.
+- **Upstream:** not sent.
+
+### Environment overrides and the settings CLI share one registry (2026-10-20, PR #117)
+
+- **What you saw:** overrides were undocumented or bypassed the registry, logging/build names drifted, and the CLI updated only nested settings.
+- **Cause:** runtime reads, build metadata, validation and docs evolved separately.
+- **Fix:** centralize/document runtime reads and logger overrides, support `TUNARR_BUILD_SHA` while retaining `TUNARR_BUILD`, parse inlined booleans consistently and remove the unused chunk variable. The settings CLI validates `system` and `featureFlags` as well as nested settings while preserving internal file state. Status shows an explicitly selected, parsed set of safe overrides; credentials, paths and platform/build metadata are omitted.
+- **Tests:** registry/docs/direct-read coverage, inlined boolean precedence, safe override filtering and atomic CLI validation; environment-sensitive suites, typechecks, lint and builds are recorded in the PR.
+- **Upstream:** not sent.
 
 ### Select several channels, filler lists, custom shows or smart collections and act on them at once (2026-10-20, PR #109)
 
@@ -83,7 +268,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 - **What you saw:** the guide duration and its zoom controls were in separate groups, with Show Stealth between
   them on wide screens and unrelated controls between them when the header wrapped.
 - **Cause:** the duration belonged to the start-time group while the zoom buttons belonged to navigation.
-- **Fix:** the zoom-in button, duration and zoom-out button share one row that stays together when the header wraps.
+- **Fix:** the zoom controls and duration share one row that stays together when the header wraps.
   The group and both buttons have translated accessible names.
 - **Tests:** `GuidePage.test.tsx` checks the control order, rendered guide range and persisted duration while zooming
   in and out, including the existing one-hour and eight-hour limits.
@@ -603,16 +788,16 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
 - **Measured** with stream-repro, `main` and this change side by side: 30 minutes, 2 s segments, eight clips of 15 to
   50 s, `--rewind 15`, and the report's playlist poller, now `repro.mjs --poll-playlist`:
 
-  | | `main` | This change |
-  | --- | --- | --- |
-  | Capture | 914 segments, 55 program joins of one tag each, no findings | The same, joins at the same segments |
-  | Poller | 1,724 polls, 0 violations; `MEDIA-SEQUENCE` 0→894, discontinuity sequence 0→54 | 1,732 polls, 0 violations, the same ranges |
-  | Rewind 15 segments | Target found, no 404s | The same |
-  | `stream.m3u8` | 943 entries (134 KB) at minute 30 and growing | 450 entries (64 KB) from minute 15 on |
-  | Written to it, minutes 15–30 | 47 MB, more each minute | 30 MB, 2 MB a minute |
-  | ffmpeg peak RSS (9.0.2), median per 10 minutes | 130–133 MB | 130–132 MB |
-  | Program start to first listed segment, after minute 20 | 2.84 s | 2.83 s |
-  | Cold tune-in, "HLS session ready" (median of 5, interleaved) | 313 ms | 314 ms |
+  |                                                              | `main`                                                                         | This change                                |
+  | ------------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------ |
+  | Capture                                                      | 914 segments, 55 program joins of one tag each, no findings                    | The same, joins at the same segments       |
+  | Poller                                                       | 1,724 polls, 0 violations; `MEDIA-SEQUENCE` 0→894, discontinuity sequence 0→54 | 1,732 polls, 0 violations, the same ranges |
+  | Rewind 15 segments                                           | Target found, no 404s                                                          | The same                                   |
+  | `stream.m3u8`                                                | 943 entries (134 KB) at minute 30 and growing                                  | 450 entries (64 KB) from minute 15 on      |
+  | Written to it, minutes 15–30                                 | 47 MB, more each minute                                                        | 30 MB, 2 MB a minute                       |
+  | ffmpeg peak RSS (9.0.2), median per 10 minutes               | 130–133 MB                                                                     | 130–132 MB                                 |
+  | Program start to first listed segment, after minute 20       | 2.84 s                                                                         | 2.83 s                                     |
+  | Cold tune-in, "HLS session ready" (median of 5, interleaved) | 313 ms                                                                         | 314 ms                                     |
 
   - FFmpeg 9.0.2 keeps about 170 B per entry, so memory can't show here. The report's benchmark at the window's size,
     in the fork's image: jellyfin-ffmpeg 8.1.3 peaks at 54 MB (48 MB with an empty playlist, 585 MB at 24 hours
@@ -620,7 +805,8 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
     playlist's (54–76 s at 24 hours before). Each rewrite stays at 65 KB.
   - Also fixed in stream-repro: with `--rewind`, a long capture's analysis (one ffprobe per segment, about 2.5 minutes
     for 914) blocked the event loop past the server's keep-alive, and the rewind's first request failed with `fetch
-    failed`. It now rewinds before the analysis.
+failed`. It now rewinds before the analysis.
+
 - **Upstream:** not sent. Upstream's playlist reader parses the whole file on every request, so the flag alone would
   break its served playlists (report section 3(a)). The ffmpeg side is worth an upstream issue once this has run for a
   while.
@@ -645,7 +831,7 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
 
 - **What you saw:** not reported from the deployment. The fork review of 2026-10-19 (B6) found that the settings
   page's "Restore Default Settings" and a fresh install give 2 tuners, but the server's reset (`POST
-  /api/hdhr-settings`) saved 1. Any number was accepted as the tuner count, so 0, -1 or 1.5 could be saved and
+/api/hdhr-settings`) saved 1. Any number was accepted as the tuner count, so 0, -1 or 1.5 could be saved and
   reported to Plex as the device's `TunerCount`.
 - **Cause:** the reset route wrote a hand-written `{ tunerCount: 1, autoDiscoveryEnabled: true }` instead of the
   schema's defaults, and `HdhrSettingsSchema.tunerCount` was a plain `z.number()`.
@@ -693,6 +879,7 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
 - **Tests:** `TrashPage.test.tsx` (no purge before confirming, one after, then the progress bar; Cancel purges
   nothing); `DeleteConfirmationDialog.test.tsx` (the label).
 - **Upstream:** not sent. Upstream's Trash page has the same button.
+
 ### General settings: Reset works on an invalid value, and the log level help names `TUNARR_LOG_LEVEL` (2026-10-19)
 
 - **What you saw:** not reported from the deployment; found in the fork review (B5). The log level help told you to set
@@ -735,6 +922,7 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
 - **Tests:** `UnsavedNavigationAlert.test.tsx` mocks `useBlocker`: the browser prompt is off for a clean form, on for
   a dirty one, and follows `isDirty` across re-renders; `shouldBlockFn` blocks only a dirty form and lets it reach an
   exempt path.
+
 ### The top bar's dark mode button works the first time on a light OS (2026-10-19)
 
 - **What you saw:** until a mode was picked in settings, the first click on the top bar's moon icon did nothing on a
@@ -750,6 +938,7 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
   ways (on the old code a light OS needed two). `store/index.test.ts`: a stored theme with `themePreference`, or from
   before it, hydrates without it, logs no error, and is written back without it.
 - **Upstream:** not sent.
+
 ### Every channel form field marks its tab when it has an error (2026-10-19)
 
 - **What you saw:** nothing yet. The channel editor puts a red dot on the tab (Properties, Flex, EPG, Streaming) that
@@ -761,6 +950,7 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
   not inputs on any tab and go to Properties. Test: `channelFieldTabs.test.ts` checks the map against
   `SaveableChannelSchema.shape` and checks that an error marks the right tab.
 - **Upstream:** not sent; upstream `main`'s field lists have the same gaps.
+
 ### Dead delete dialogs and settings hooks removed from the web app (2026-10-19, PR #86)
 
 - **What you saw:** nothing; cleanup from the 2026-10-19 fork review.
@@ -898,7 +1088,6 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved
 - **Tests:** covered by the local completion candidate; this branch is independently checked in CI.
 - **Upstream:** not submitted; personal fork.
 
-
 Newest first. Each one is its own commit with a test, so it could be sent upstream later on its own
 (`git cherry-pick <commit>` onto a branch from `upstream/main`).
 
@@ -1010,6 +1199,7 @@ Newest first. Each one is its own commit with a test, so it could be sent upstre
   - `MediaSourceScanCoordinator.test.ts`: an already-queued sync is logged at info, not error.
   - Each new test fails with its fix reverted.
 - **Upstream:** not sent.
+
 ### A program's captions end where the next item starts, and each segment names its own program's language (2026-10-19)
 
 - **What you saw:** found in code review, not on the deployment.
@@ -3548,7 +3738,6 @@ once accepted when another job is running. Acceptance and completion use an expl
 job handle; requests joining the same show share its job and retain priority. Scanner
 validation warnings run once per library. The duplicate-case artwork test skips
 when the filesystem cannot create two distinct files differing only in case. This follow-up depends on scan-worker watchdog PR #63.
-
 
 ### Safer channel switching and less tune-in setup work (2026-10-20)
 
