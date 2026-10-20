@@ -98,7 +98,7 @@ export class ProgramConverter {
           ({
             id: eid.externalKey,
             type: eid.sourceType,
-            sourceId: eid.externalSourceId ?? undefined,
+            sourceId: eid.mediaSourceId ?? undefined,
           }) satisfies Identifier,
       ),
       tags: [],
@@ -273,12 +273,12 @@ export class ProgramConverter {
       externalIds: seq.collect(program.externalIds, (eid) => {
         if (
           isValidMultiExternalIdType(eid.sourceType) &&
-          isNonEmptyString(eid.externalSourceId)
+          isNonEmptyString(eid.mediaSourceId)
         ) {
           return {
             type: 'multi',
             source: eid.sourceType,
-            sourceId: eid.mediaSourceId ?? eid.externalSourceId,
+            sourceId: eid.mediaSourceId,
             id: eid.externalKey,
           } satisfies ExternalId;
         } else if (isValidSingleExternalIdType(eid.sourceType)) {

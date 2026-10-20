@@ -204,7 +204,7 @@ export default function WelcomePage() {
                     severity="warning"
                     action={
                       <RouterButtonLink
-                        to={`/settings/ffmpeg`}
+                        to={`/settings/playback`}
                         color="inherit"
                         startIcon={<Edit />}
                       >

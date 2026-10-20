@@ -24,7 +24,7 @@ test('successful detail visits perform one existence lookup per navigation', asy
       heading: /^Library:/,
     },
     {
-      path: `/settings/ffmpeg/${ids.transcodeConfigId}`,
+      path: `/settings/playback/${ids.transcodeConfigId}`,
       api: `/api/transcode_configs/${ids.transcodeConfigId}`,
       heading: /^Edit transcode config:/,
     },

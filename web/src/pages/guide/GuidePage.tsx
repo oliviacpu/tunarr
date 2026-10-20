@@ -147,21 +147,21 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
                 sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
               >
                 <IconButton
-                  aria-label={t`Zoom in`}
-                  disabled={zoomInDisabled}
-                  onClick={zoomIn}
-                >
-                  <ZoomInIcon />
-                </IconButton>
-                <Typography>
-                  {dayjs.duration(end.diff(start)).humanize()}
-                </Typography>
-                <IconButton
                   aria-label={t`Zoom out`}
                   disabled={zoomOutDisabled}
                   onClick={zoomOut}
                 >
                   <ZoomOutIcon />
+                </IconButton>
+                <Typography>
+                  {dayjs.duration(end.diff(start)).humanize()}
+                </Typography>
+                <IconButton
+                  aria-label={t`Zoom in`}
+                  disabled={zoomInDisabled}
+                  onClick={zoomIn}
+                >
+                  <ZoomInIcon />
                 </IconButton>
               </Stack>
               {!dayjs().isBetween(start, end) && (

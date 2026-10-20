@@ -8,14 +8,14 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import type {
   Channel,
   SaveableChannel,
   SubtitlePreference,
 } from '@tunarr/types';
 import { isEmpty, isEqual, isNil, keys, map, omit, reject } from 'lodash-es';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import type { DeepRequired, NonEmptyArray } from 'ts-essentials';
 import {
@@ -28,8 +28,13 @@ import ChannelEpgConfig from './ChannelEpgConfig.tsx';
 import { ChannelFlexConfig } from './ChannelFlexConfig.tsx';
 import { ChannelPropertiesEditor } from './ChannelPropertiesEditor.tsx';
 import ChannelTranscodingConfig from './ChannelTranscodingConfig.tsx';
+import ChannelWatermarkConfig from './ChannelWatermarkConfig.tsx';
 import { tabsWithErrors } from './channelFieldTabs.ts';
-import { ChannelEditorTabs, useChannelTabLabels } from './channelFieldTabs.ts';
+import {
+  ChannelEditTabPaths,
+  ChannelEditorTabs,
+  useChannelTabLabels,
+} from './channelFieldTabs.ts';
 import {
   EditChannelTabPanel,
   type EditChannelTabs,
@@ -41,7 +46,7 @@ function getDefaultFormValues(
 ): DeepRequired<Omit<SaveableChannel, 'captions'>> &
   Pick<SaveableChannel, 'captions'> {
   return {
-    ...omit(channel, ['fallback', 'programCount', 'transcoding', 'sessions']),
+    ...omit(channel, ['fallback', 'programCount', 'sessions']),
     streamMode: channel.streamMode ?? 'hls',
     fillerCollections: channel.fillerCollections ?? [],
     fillerRepeatCooldown:
@@ -103,15 +108,17 @@ function getDefaultFormValues(
 export function EditChannelForm({
   channel,
   isNew,
-  initialTab,
+  activeTab,
+  children,
 }: EditChannelFormProps) {
   const navigate = useNavigate({
     from: isNew ? '/channels/new' : '/channels/$channelId/edit',
   });
   const toasts = useToasts();
-  const [currentTab, setCurrentTab] = useState<EditChannelTabs>(
-    initialTab ?? 'properties',
-  );
+  const router = useRouter();
+  const [newChannelTab, setNewChannelTab] =
+    useState<EditChannelTabs>('properties');
+  const currentTab = activeTab ?? newChannelTab;
 
   const form = useForm<SaveableChannel>({
     mode: 'onTouched',
@@ -217,15 +224,14 @@ export function EditChannelForm({
   };
 
   const handleChange = (_: React.SyntheticEvent, newValue: EditChannelTabs) => {
-    if (newValue !== currentTab) {
-      setCurrentTab(newValue);
-      // Don't enable routing for new channel, yet.
-      if (!isNew) {
-        navigate({
-          replace: true,
-          search: { tab: newValue === 'properties' ? undefined : newValue },
-        }).catch(console.warn);
-      }
+    if (newValue === currentTab) return;
+    if (isNew) {
+      setNewChannelTab(newValue);
+    } else {
+      navigate({
+        to: ChannelEditTabPaths[newValue],
+        params: { channelId: channel.id },
+      }).catch(console.warn);
     }
   };
 
@@ -239,6 +245,8 @@ export function EditChannelForm({
         key={tab}
         disabled={isNew && tab !== currentTab && !formIsValid}
         value={tab}
+        id={`channel-tab-${tab}`}
+        aria-controls={`channel-tabpanel-${tab}`}
         label={
           <Badge
             color="error"
@@ -272,22 +280,49 @@ export function EditChannelForm({
           createChannelMutation.isPending || updateChannelMutation.isPending
         }
         isNew={isNew}
+        exceptTargetPaths={
+          isNew
+            ? undefined
+            : ChannelEditorTabs.map(
+                (tab) =>
+                  router.buildLocation({
+                    to: ChannelEditTabPaths[tab],
+                    params: { channelId: channel.id },
+                  }).pathname,
+              )
+        }
         // The page moves on once the channel exists, so a change made while
         // it is being created would be lost
         disabled={createChannelMutation.isPending}
       >
-        <EditChannelTabPanel value="properties" currentValue={currentTab}>
-          <ChannelPropertiesEditor />
-        </EditChannelTabPanel>
-        <EditChannelTabPanel value="flex" currentValue={currentTab}>
-          <ChannelFlexConfig />
-        </EditChannelTabPanel>
-        <EditChannelTabPanel value="epg" currentValue={currentTab}>
-          <ChannelEpgConfig />
-        </EditChannelTabPanel>
-        <EditChannelTabPanel value="ffmpeg" currentValue={currentTab}>
-          <ChannelTranscodingConfig />
-        </EditChannelTabPanel>
+        {children ? (
+          <Box
+            role="tabpanel"
+            id={`channel-tabpanel-${currentTab}`}
+            aria-labelledby={`channel-tab-${currentTab}`}
+            sx={{ p: { xs: 1, sm: 3 } }}
+          >
+            {children}
+          </Box>
+        ) : (
+          <>
+            <EditChannelTabPanel value="properties" currentValue={currentTab}>
+              <ChannelPropertiesEditor />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="flex" currentValue={currentTab}>
+              <ChannelFlexConfig />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="guide" currentValue={currentTab}>
+              <ChannelEpgConfig />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="streaming" currentValue={currentTab}>
+              <ChannelTranscodingConfig />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="watermark" currentValue={currentTab}>
+              <ChannelWatermarkConfig />
+            </EditChannelTabPanel>
+          </>
+        )}
       </SettingsForm>
     </Paper>
   );
@@ -295,5 +330,6 @@ export function EditChannelForm({
 type EditChannelFormProps = {
   channel: Channel;
   isNew: boolean;
-  initialTab?: EditChannelTabs;
+  activeTab?: EditChannelTabs;
+  children?: ReactNode;
 };

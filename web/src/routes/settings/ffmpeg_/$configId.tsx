@@ -1,18 +1,11 @@
-import { orNotFound } from '@/helpers/routeLoaders.ts';
-import { EditTranscodeConfigSettingsPage } from '@/pages/settings/EditTranscodeConfigSettingsPage';
-import { createFileRoute } from '@tanstack/react-router';
-import { getApiTranscodeConfigsByIdOptions } from '../../../generated/@tanstack/react-query.gen.ts';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/settings/ffmpeg_/$configId')({
-  gcTime: 0,
-  loader: ({ params, context }) => {
-    return orNotFound(
-      context.queryClient.fetchQuery(
-        getApiTranscodeConfigsByIdOptions({
-          path: { id: params.configId },
-        }),
-      ),
-    );
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: '/settings/playback/$configId',
+      params,
+      replace: true,
+    });
   },
-  component: EditTranscodeConfigSettingsPage,
 });

@@ -118,7 +118,7 @@ export const ChannelSummaryQuickStats = ({ channelId }: Props) => {
             <Trans>
               Transcode Config{' '}
               <RouterLink
-                to={`/settings/ffmpeg/$configId`}
+                to={`/settings/playback/$configId`}
                 params={{ configId: transcodeConfig?.id ?? '' }}
               >
                 {' '}

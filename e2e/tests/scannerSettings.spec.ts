@@ -12,7 +12,7 @@ test('a changed rescan interval saves, survives a reload and moves nothing else'
   page,
 }) => {
   const before = await savedSettings<MediaSourceSettings>(page, SETTINGS_URL);
-  await page.goto('/web/settings/scanner');
+  await page.goto('/web/settings/library');
   const interval = page.getByLabel('Rescan interval (hours)');
   await expect(interval).toHaveValue(String(before.rescanIntervalHours));
   await expect(saveButton(page)).toBeDisabled();

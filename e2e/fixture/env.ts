@@ -1,11 +1,15 @@
 import path from 'node:path';
 
 // Ports sit away from the dev defaults (8000, 5173, 7700) so the suite can
-// run while a dev server is up.
+// run while a dev server is up. Each parallel worktree can choose an offset.
+const portOffset = Number(process.env.TUNARR_E2E_PORT_OFFSET ?? 0);
+if (!Number.isInteger(portOffset) || portOffset < 0 || portOffset > 47535) {
+  throw new Error('TUNARR_E2E_PORT_OFFSET must be an integer from 0 to 47535');
+}
 
-export const SERVER_PORT = 18000;
-export const SEARCH_PORT = 17700;
-export const WEB_PORT = 15173;
+export const SERVER_PORT = 18000 + portOffset;
+export const SEARCH_PORT = 17700 + portOffset;
+export const WEB_PORT = 15173 + portOffset;
 
 export const SERVER_URL = `http://localhost:${SERVER_PORT}`;
 export const WEB_URL = `http://localhost:${WEB_PORT}`;

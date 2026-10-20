@@ -40,6 +40,13 @@ const metadata: GetApiSystemFeatureFlagsResponse['metadata'] = [
     envOverride: false,
   },
   {
+    key: 'webvttSidecarEnabled',
+    displayName: 'WebVTT Sidecar Subtitles',
+    description: 'Enable subtitle sidecars.',
+    category: 'experimental',
+    envOverride: false,
+  },
+  {
     key: 'disableVulkan',
     displayName: 'Disable Vulkan (NVIDIA)',
     description: 'Disable Vulkan-based processing.',
@@ -96,7 +103,7 @@ describe('FeaturesSettingsPage', () => {
     server.flags = savedFlags;
     mockPutFlags.mockReset();
     mockPutFlags.mockImplementation((options: { body: FlagsBody }) => {
-      server.flags = { ...savedFlags, ...options.body };
+      server.flags = { ...(server.flags ?? savedFlags), ...options.body };
       return Promise.resolve({ data: { flags: server.flags, metadata } });
     });
   });
@@ -107,12 +114,61 @@ describe('FeaturesSettingsPage', () => {
     expect(flag('Proxy Artwork')).toBeDisabled();
     expect(screen.getByText('Set by environment variable')).toBeInTheDocument();
     expect(flag('XMLTV Credit Images')).toBeEnabled();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Disable Vulkan (NVIDIA)' }),
+    ).not.toBeInTheDocument();
     expect(flag('XMLTV Credit Images')).toHaveAccessibleDescription(
       'Enable embedding images of people in the xmltv credits.',
     );
   });
 
-  test('a switched flag is saved with the others, and the saved form is clean', async () => {
+  test('playback shows its flags and preserves flags from other tabs on save', async () => {
+    const { user } = renderWithProviders(
+      <SnackbarProvider>
+        <Suspense fallback={null}>
+          <FeaturesSettingsPage group="playback" />
+        </Suspense>
+      </SnackbarProvider>,
+    );
+    const vulkan = await screen.findByRole('checkbox', {
+      name: 'Disable Vulkan (NVIDIA)',
+    });
+    expect(
+      screen.queryByRole('checkbox', { name: 'XMLTV Credit Images' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'WebVTT Sidecar Subtitles' }),
+    ).not.toBeInTheDocument();
+    await user.click(vulkan);
+    server.flags = { ...savedFlags, xmltvCreditImagesEnabled: true };
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockPutFlags).toHaveBeenCalledOnce());
+    expect(mockPutFlags).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { disableVulkan: true } }),
+    );
+    expect(server.flags.xmltvCreditImagesEnabled).toBe(true);
+  });
+
+  test('captions shows only its subtitle flag', async () => {
+    renderWithProviders(
+      <SnackbarProvider>
+        <Suspense fallback={null}>
+          <FeaturesSettingsPage group="captions-audio" />
+        </Suspense>
+      </SnackbarProvider>,
+    );
+    expect(
+      await screen.findByRole('checkbox', { name: 'WebVTT Sidecar Subtitles' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'XMLTV Credit Images' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Disable Vulkan (NVIDIA)' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('a switched flag is saved with its group, and the saved form is clean', async () => {
     const { user, flag, saveButton } = await renderPage();
     expect(saveButton()).toBeDisabled();
 
@@ -121,9 +177,11 @@ describe('FeaturesSettingsPage', () => {
     await user.click(saveButton());
 
     await waitFor(() => expect(mockPutFlags).toHaveBeenCalledOnce());
-    expect(mockPutFlags.mock.calls[0]?.[0]).toMatchObject({
-      body: { ...savedFlags, xmltvCreditImagesEnabled: true },
-    });
+    expect(mockPutFlags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { proxyArtwork: true, xmltvCreditImagesEnabled: true },
+      }),
+    );
     expect(await screen.findByText('Saved')).toBeInTheDocument();
     await waitFor(() => expect(saveButton()).toBeDisabled());
     expect(flag('XMLTV Credit Images')).toBeChecked();
@@ -135,11 +193,11 @@ describe('FeaturesSettingsPage', () => {
   test('Reset changes puts the saved flags back', async () => {
     const { user, flag, saveButton } = await renderPage();
 
-    await user.click(flag('Disable Vulkan (NVIDIA)'));
-    expect(flag('Disable Vulkan (NVIDIA)')).toBeChecked();
+    await user.click(flag('XMLTV Credit Images'));
+    expect(flag('XMLTV Credit Images')).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Reset changes' }));
 
-    expect(flag('Disable Vulkan (NVIDIA)')).not.toBeChecked();
+    expect(flag('XMLTV Credit Images')).not.toBeChecked();
     await waitFor(() => expect(saveButton()).toBeDisabled());
     expect(mockPutFlags).not.toHaveBeenCalled();
   });

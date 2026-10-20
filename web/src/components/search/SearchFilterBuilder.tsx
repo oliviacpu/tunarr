@@ -1,3 +1,4 @@
+import { docsUrl } from '@/helpers/docsLinks.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Clear, Help } from '@mui/icons-material';
 import {
@@ -24,11 +25,13 @@ import { SearchInputToggle } from './SearchInputToggle.tsx';
 type SearchBuilderProps = {
   mediaSourceId?: MediaSourceId;
   libraryId?: string;
+  stackControlsOnMobile?: boolean;
 };
 
 export function SearchFilterBuilder({
   libraryId,
   mediaSourceId,
+  stackControlsOnMobile = false,
 }: SearchBuilderProps) {
   const { t } = useLingui();
   const formMethods = useFormContext<SearchForm>();
@@ -57,7 +60,15 @@ export function SearchFilterBuilder({
     <>
       <Stack gap={2}>
         {queryBuilderType === 'text' ? (
-          <Stack direction="row" gap={2} alignItems={'center'}>
+          <Stack
+            direction={
+              stackControlsOnMobile ? { xs: 'column', sm: 'row' } : 'row'
+            }
+            gap={2}
+            alignItems={
+              stackControlsOnMobile ? { xs: 'stretch', sm: 'center' } : 'center'
+            }
+          >
             <Controller
               name="filter.expression"
               control={formMethods.control}
@@ -77,10 +88,7 @@ export function SearchFilterBuilder({
                           <span>
                             <Trans>
                               Could not parse this filter expression. Check the{' '}
-                              <Link
-                                href="https://tunarr.com/misc/search"
-                                target="_blank"
-                              >
+                              <Link href={docsUrl('search')} target="_blank">
                                 documentation
                               </Link>{' '}
                               for information about filter expressions.
@@ -129,7 +137,14 @@ export function SearchFilterBuilder({
                       fullWidth
                       {...field}
                     />
-                    <FormControl sx={{ minWidth: '96px' }}>
+                    <FormControl
+                      sx={{
+                        minWidth: '96px',
+                        alignSelf: stackControlsOnMobile
+                          ? { xs: 'flex-end', sm: 'auto' }
+                          : 'auto',
+                      }}
+                    >
                       <SearchInputToggle />
                       <FormHelperText>
                         {fieldState.error?.type === 'validExpression' ? (

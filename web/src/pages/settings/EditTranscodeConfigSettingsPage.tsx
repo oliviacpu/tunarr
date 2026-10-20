@@ -2,7 +2,7 @@ import { TranscodeConfigSettingsForm } from '@/components/settings/ffmpeg/Transc
 
 import { getApiTranscodeConfigsByIdOptions } from '@/generated/@tanstack/react-query.gen.ts';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { Route } from '@/routes/settings/ffmpeg_/$configId';
+import { Route } from '@/routes/settings/playback_/$configId';
 
 export const EditTranscodeConfigSettingsPage = () => {
   const { configId } = Route.useParams();

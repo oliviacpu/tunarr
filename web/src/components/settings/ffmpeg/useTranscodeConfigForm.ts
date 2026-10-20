@@ -83,7 +83,7 @@ export function useTranscodeConfigForm({ initialConfig, isNew }: Options) {
       // the config a second time
       onSuccess: (created) =>
         navigate({
-          to: '/settings/ffmpeg/$configId',
+          to: '/settings/playback/$configId',
           params: { configId: created.id },
           replace: true,
           ignoreBlocker: true,

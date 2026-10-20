@@ -42,6 +42,7 @@ await generateEnvModule([
   'NODE_ENV',
   'TUNARR_VERSION',
   'TUNARR_BUILD',
+  'TUNARR_BUILD_SHA',
   'TUNARR_EDGE_BUILD',
 ]);
 const define = {

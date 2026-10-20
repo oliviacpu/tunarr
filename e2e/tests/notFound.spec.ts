@@ -28,6 +28,7 @@ for (const path of [
   `/media_sources/${MISSING_ID}`,
   `/media_sources/${MISSING_ID}/libraries/${MISSING_ID}`,
   `/settings/ffmpeg/${MISSING_ID}`,
+  `/settings/playback/${MISSING_ID}`,
   `/media/movie/${MISSING_ID}`,
   `/media/show/${MISSING_ID}`,
   `/library/fillers/${MISSING_ID}/edit`,
@@ -67,52 +68,67 @@ test('a failed detail lookup keeps the route error UI rather than showing not fo
   await expect(notFoundHeading(page)).toHaveCount(0);
 });
 
-for (const status of [404, 500]) {
-  test(`a cached entity awaits a fresh lookup and handles ${status}`, async ({
-    page,
-  }) => {
-    const { smartCollectionId } = readFixtureIds();
-    const path = `/web/library/smart_collections/${smartCollectionId}`;
-    await page.goto(path);
-    await expect(
-      page.getByRole('heading', { name: /^Smart Collection:/ }),
-    ).toBeVisible();
-    await page
-      .getByRole('button', { name: 'Channels', exact: true })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/web\/channels$/);
-    await expect(
-      page.getByRole('heading', { name: 'Channels', exact: true }),
-    ).toBeVisible();
-    await page.route(`**/api/smart_collections/${smartCollectionId}`, (route) =>
-      route.fulfill({
-        status,
-        contentType: 'application/json',
-        headers: { 'Access-Control-Allow-Origin': WEB_URL },
-        body: JSON.stringify({
-          message: status === 404 ? 'Not found' : 'Lookup failed',
+for (const kind of ['smart collection', 'transcode config'] as const) {
+  for (const status of [404, 500]) {
+    test(`a cached ${kind} awaits a fresh lookup and handles ${status}`, async ({
+      page,
+    }) => {
+      const ids = readFixtureIds();
+      const target =
+        kind === 'smart collection'
+          ? {
+              id: ids.smartCollectionId,
+              path: `/library/smart_collections/${ids.smartCollectionId}`,
+              api: `/api/smart_collections/${ids.smartCollectionId}`,
+              heading: /^Smart Collection:/,
+            }
+          : {
+              id: ids.transcodeConfigId,
+              path: `/settings/playback/${ids.transcodeConfigId}`,
+              api: `/api/transcode_configs/${ids.transcodeConfigId}`,
+              heading: /^Edit transcode config:/,
+            };
+      await page.goto(`/web${target.path}`);
+      await expect(
+        page.getByRole('heading', { name: target.heading }),
+      ).toBeVisible();
+      await page
+        .getByRole('button', { name: 'Channels', exact: true })
+        .first()
+        .click();
+      await expect(page).toHaveURL(/\/web\/channels$/);
+      await expect(
+        page.getByRole('heading', { name: 'Channels', exact: true }),
+      ).toBeVisible();
+      await page.route(`**${target.api}`, (route) =>
+        route.fulfill({
+          status,
+          contentType: 'application/json',
+          headers: { 'Access-Control-Allow-Origin': WEB_URL },
+          body: JSON.stringify({
+            message: status === 404 ? 'Not found' : 'Lookup failed',
+          }),
         }),
-      }),
-    );
-    await page.goBack();
-    await expect(page).toHaveURL(new RegExp(`${smartCollectionId}$`));
-    if (status === 404) {
-      await expect(notFoundHeading(page)).toBeVisible();
-      await expect(
-        page.getByText('Looks like something went wrong.'),
-      ).toHaveCount(0);
-    } else {
-      await expect(
-        page.getByText('Looks like something went wrong.'),
-      ).toBeVisible({ timeout: 15_000 });
-      await expect(
-        page.getByText('Lookup failed', { exact: true }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole('button', { name: 'Try again', exact: true }),
-      ).toBeVisible();
-      await expect(notFoundHeading(page)).toHaveCount(0);
-    }
-  });
+      );
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`${target.id}$`));
+      if (status === 404) {
+        await expect(notFoundHeading(page)).toBeVisible();
+        await expect(
+          page.getByText('Looks like something went wrong.'),
+        ).toHaveCount(0);
+      } else {
+        await expect(
+          page.getByText('Looks like something went wrong.'),
+        ).toBeVisible({ timeout: 15_000 });
+        await expect(
+          page.getByText('Lookup failed', { exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole('button', { name: 'Try again', exact: true }),
+        ).toBeVisible();
+        await expect(notFoundHeading(page)).toHaveCount(0);
+      }
+    });
+  }
 }
