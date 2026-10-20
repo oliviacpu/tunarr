@@ -1,3 +1,4 @@
+import type * as MediaSourceLibraryHooks from '../hooks/media-sources/mediaSourceLibraryHooks.ts';
 import type { MediaSourceLibrary, MediaSourceSettings } from '@tunarr/types';
 import { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -11,9 +12,9 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 vi.mock('../hooks/media-sources/mediaSourceLibraryHooks.ts', async () => {
-  const actual = await vi.importActual<
-    typeof import('../hooks/media-sources/mediaSourceLibraryHooks.ts')
-  >('../hooks/media-sources/mediaSourceLibraryHooks.ts');
+  const actual = await vi.importActual<typeof MediaSourceLibraryHooks>(
+    '../hooks/media-sources/mediaSourceLibraryHooks.ts',
+  );
   return {
     ...actual,
     useUpdateLibraryMutation: () => ({ mutate: updateMutateMock }),

@@ -65,6 +65,10 @@ export class SettingsDBFactory {
     // has already written this file before it spawns any workers.
     if (isMainThread) {
       db.update((data) => {
+        if (data.version < CURRENT_VERSION) {
+          // The file schema has stripped the retired keys during read.
+          data.version = CURRENT_VERSION;
+        }
         data.migration.isFreshSettings = freshSettings;
         // Redefine thie variable... it came before "isFreshSettings".
         // If this is a fresh run, mark legacyMigration as false
@@ -92,10 +96,6 @@ export class SettingsDBFactory {
       ),
     );
     SettingsDBFactory.INSTANCES.set(actualPath, settingsDB);
-
-    if (db.data.version < CURRENT_VERSION) {
-      // We need to perform a migration
-    }
 
     return settingsDB;
   }
