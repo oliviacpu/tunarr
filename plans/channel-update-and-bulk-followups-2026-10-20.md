@@ -35,7 +35,10 @@ PATCH or make every channel property optional. Keep start-time omission and on-d
 unchanged, along with the client's current preservation workaround until the later batch PR.
 
 Replace relation rows only when that property is present, within the existing immediate
-transaction. An empty subtitle list must delete without attempting an empty insert. Preserve
+transaction. An empty subtitle list must delete without attempting an empty insert. The shared
+editor payload also serves channel creation, whose defaults include an empty subtitle array:
+guard empty inserts in `saveChannel` as well as `updateChannel`, and test ordinary creation
+with `[]`. Preserve
 relation IDs when the property is absent. Do not rename the existing `langugeCode` wire key.
 S5's future channel-mode work must build on and test these omission semantics separately.
 
@@ -123,7 +126,7 @@ has been given for C7a only; the batch routes and their supporting changes remai
 
 | Row | PR                                                                                      | Required evidence                                                                                                                                                                                                                                                                                                                                                                                               |
 | --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C7a | Relation preservation, explicit-empty write validation and current-editor serialization | Real repository tests for omitted, empty and replacement values for both relations; absent relation IDs survive; schema accepts explicit empty arrays and rejects malformed rows; editor clear → save → reload removes subtitles while unrelated edits preserve them; start-time and on-demand regressions remain green.                                                                                        |
+| C7a | Relation preservation, explicit-empty write validation and current-editor serialization | Real repository tests for omitted, empty and replacement values for both relations; channel creation with empty subtitle preferences succeeds without an empty insert; absent relation IDs survive; schema accepts explicit empty arrays and rejects malformed rows; editor clear → save → reload removes subtitles while unrelated edits preserve them; start-time and on-demand regressions remain green.     |
 | C7b | Batch stealth contract, server orchestration and table integration                      | Invalid/duplicate/oversize input causes no writes; mixed existing/missing and no-op IDs; transaction failure; unrelated channel fields and relation IDs unchanged; one XMLTV/M3U publication per changed chunk; independent publication failures; client mixed failures, unknown transport outcome and confirmation/busy behavior.                                                                              |
 | C7c | Batch channel deletion contract and table integration                                   | Mixed existing/missing IDs; one deletion fails while others finish; marking failure; transaction failure plus restoration failure; post-commit redirect failure; real M3U disk/memory-cache failures; overlapping scheduled guide publication; committed outcomes stay truthful; no automatic destructive retry; one publication per successful chunk; existing single routes and list bulk actions still work. |
 
