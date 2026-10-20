@@ -50,6 +50,7 @@ export const ProgramPage = () => {
       },
     }),
     enabled: isTerminalItemType(programType),
+    refetchOnMount: false,
   });
 
   const parentQuery = useQuery({
@@ -59,6 +60,7 @@ export const ProgramPage = () => {
       },
     }),
     enabled: isGroupingItemType(programType),
+    refetchOnMount: false,
   });
 
   const programData = query?.data ?? parentQuery?.data;

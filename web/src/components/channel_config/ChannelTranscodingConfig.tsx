@@ -24,34 +24,34 @@ import { ChannelAudioTracksField } from './ChannelAudioTracksField.tsx';
 import { ChannelCaptionsField } from './ChannelCaptionsField.tsx';
 import { ChannelSubtitlePreferencesTable } from './ChannelSubtitlePreferencesTable.tsx';
 
-const ChannelStreamModeOptions: {
-  value: ChannelStreamMode;
-  label: string;
-}[] = [
-  {
-    value: 'hls',
-    label: 'HLS (recommended)',
-  },
-  {
-    value: 'hls_slower',
-    label: 'HLS Alt',
-  },
-  {
-    value: 'hls_direct_v2',
-    label: 'HLS Direct v2',
-  },
-  {
-    value: 'hls_direct',
-    label: 'HLS Direct',
-  },
-  {
-    value: 'mpegts',
-    label: 'MPEG-TS (legacy)',
-  },
-] as const;
-
 export default function ChannelTranscodingConfig() {
   const { t } = useLingui();
+  const ChannelStreamModeOptions: {
+    value: ChannelStreamMode;
+    label: string;
+  }[] = [
+    {
+      value: 'hls',
+      label: t`HLS (recommended)`,
+    },
+    {
+      value: 'hls_slower',
+      label: t`HLS Alt`,
+    },
+    {
+      value: 'hls_direct_v2',
+      label: t`HLS Direct v2`,
+    },
+    {
+      value: 'hls_direct',
+      label: t`HLS Direct`,
+    },
+    {
+      value: 'mpegts',
+      label: t`MPEG-TS (legacy)`,
+    },
+  ] as const;
+
   const channel = useStore((s) => s.channelEditor.currentEntity);
   const transcodeConfigs = useTranscodeConfigs();
   const { control, watch } = useChannelFormContext();

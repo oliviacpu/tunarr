@@ -19,7 +19,7 @@ import { isMissingEntityError } from './apiError.ts';
 // Loads one thing a page is about. When it doesn't exist the loader throws
 // notFound(), so the router shows its not-found page; any other failure goes
 // to the router's error page.
-async function orNotFound<T>(load: Promise<T>): Promise<T> {
+export async function orNotFound<T>(load: Promise<T>): Promise<T> {
   try {
     return await load;
   } catch (error) {
