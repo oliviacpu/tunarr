@@ -24,6 +24,10 @@ Printing or persisting FFmpeg logs to disk is useful when debugging streaming is
 
 When using the HLS Direct stream mode in a channel (see [channel stream modes](../channels/transcoding.md#hls-direct)), use this setting to change the output container format for the stream.
 
+### Scaling and deinterlacing
+
+**Scaling algorithm** selects how FFmpeg resizes video: Bicubic, Fast bilinear, Lanczos, or Spline. **Deinterlace filter** selects the FFmpeg filter for interlaced video, or None. Both are under **Settings > Playback**.
+
 ### HDR Tone-map Curve
 
 The curve used to convert HDR programs to SDR when [HDR tonemapping](transcode_config.md#hdr-tonemapping) is enabled on the software pipeline. It is a matter of taste:

@@ -47,7 +47,7 @@ function useSettingsTabs() {
       label: t`Library`,
       value: '/library',
       to: '/settings/library',
-      description: t`Control how often Tunarr scans your media libraries.`,
+      description: t`Configure library scans and search indexing.`,
     },
     {
       label: t`Experimental`,
