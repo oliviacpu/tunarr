@@ -97,6 +97,10 @@ test('guide uses redirect names, shows mobile times and themes compact dividers'
         cell.getByText(/\d{1,2}:\d{2}.* - \d{1,2}:\d{2}/),
       ).toBeVisible();
       await expect(cell.getByText(/left$/)).toBeVisible();
+      await expect(cell.getByText(/left$/)).toHaveCSS(
+        'font-variant-numeric',
+        'tabular-nums',
+      );
       const sliver = page.getByTitle('Short break', { exact: true });
       await expect(sliver).toBeVisible();
       shadows.push(
