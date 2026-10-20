@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { useSystemState } from '@/hooks/useSystemSettings.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { ExpandMore } from '@mui/icons-material';
@@ -6,6 +7,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
   Button,
   Divider,
@@ -16,6 +18,7 @@ import {
   MenuItem,
   Link as MuiLink,
   Select,
+  Skeleton,
   Stack,
   Switch,
   TextField,
@@ -63,12 +66,58 @@ const TonemapAlgorithmNames: Record<TonemapAlgorithm, string> = {
   reinhard: 'Reinhard',
 };
 
-export default function FfmpegSettingsPage() {
+// What probing the configured ffmpeg found. It loads on its own, so a slow or
+// failed probe never hides the paths that fix it
+function FfmpegProbeStatus({ isInContainer }: { isInContainer: boolean }) {
   const { t } = useLingui();
-  const { data: ffmpegSettings, error } = useFfmpegSettings();
   const ffmpegInfo = useQuery({
     ...getApiFfmpegInfoOptions(),
   });
+
+  // Saving invalidates this query but keeps the old data, so a re-probe has to
+  // show as probing too; isFetching covers the first load and refetches
+  if (ffmpegInfo.isFetching) {
+    return <Skeleton variant="rounded" height={48} />;
+  }
+
+  // The server answers with no encoders when it can't run ffmpeg at all
+  if (
+    ffmpegInfo.isError ||
+    ffmpegInfo.data === undefined ||
+    (isEmpty(ffmpegInfo.data.videoEncoders) &&
+      isEmpty(ffmpegInfo.data.audioEncoders))
+  ) {
+    const reason = ffmpegInfo.isError
+      ? getApiErrorMessage(ffmpegInfo.error)
+      : undefined;
+    return (
+      <Alert severity="warning">
+        {isInContainer
+          ? t`FFmpeg could not be probed.`
+          : t`FFmpeg could not be probed. Check that the FFmpeg executable path below points to a working ffmpeg, then save.`}
+        {reason !== undefined && (
+          <Box component="span" sx={{ display: 'block', mt: 1 }}>
+            {reason}
+          </Box>
+        )}
+      </Alert>
+    );
+  }
+
+  const { hardwareAccelerationTypes } = ffmpegInfo.data;
+  const supported = hardwareAccelerationTypes.join(', ');
+  return (
+    <Typography variant="body2" color="text.secondary">
+      {isEmpty(hardwareAccelerationTypes)
+        ? t`FFmpeg is working. It reports no hardware acceleration.`
+        : t`FFmpeg is working. Hardware acceleration it supports: ${supported}`}
+    </Typography>
+  );
+}
+
+export default function FfmpegSettingsPage() {
+  const { t } = useLingui();
+  const { data: ffmpegSettings, error } = useFfmpegSettings();
 
   const queryClient = useQueryClient();
   const systemState = useSystemState();
@@ -154,6 +203,15 @@ export default function FfmpegSettingsPage() {
         },
       });
     },
+    onError: (error) => {
+      const message = getApiErrorMessage(error);
+      snackbar.enqueueSnackbar(
+        message !== undefined
+          ? t`Could not save settings. ${message}`
+          : t`Could not save settings`,
+        { variant: 'error' },
+      );
+    },
   });
 
   const updateFfmpegSettings: SubmitHandler<
@@ -167,8 +225,12 @@ export default function FfmpegSettingsPage() {
     });
   };
 
-  if (error || ffmpegInfo.isPending || ffmpegInfo.isError) {
-    return <div></div>;
+  if (error) {
+    return (
+      <Alert severity="error">
+        {getApiErrorMessage(error) ?? error.message}
+      </Alert>
+    );
   }
 
   return (
@@ -177,6 +239,7 @@ export default function FfmpegSettingsPage() {
         <Trans>Global Options</Trans>
       </Typography>
       <Stack spacing={3} useFlexGap sx={{ mb: 2 }}>
+        <FfmpegProbeStatus isInContainer={systemState.data.isInContainer} />
         {!systemState.data.isInContainer && (
           <>
             <FormControl fullWidth>

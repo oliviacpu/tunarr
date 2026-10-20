@@ -9,6 +9,8 @@ Tunarr requires FFmpeg for transcoding / remuxing content when outputting channe
 
 Configure FFmpeg and FFprobe executable paths. Generally, both executables reside in the same directory. We recommend using a [specially built FFmpeg 7.1.1](https://github.com/ErsatzTV/ErsatzTV-ffmpeg/releases/tag/7.1.1) provided by ErsatzTV.
 
+Above the paths, the page shows the hardware acceleration the configured FFmpeg supports. If Tunarr can't run FFmpeg, a warning appears there instead. Correct the path and save, and Tunarr probes FFmpeg again.
+
 ## Global FFmpeg options
 
 ### Logging

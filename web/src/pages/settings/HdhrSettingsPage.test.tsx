@@ -1,5 +1,6 @@
 import { renderWithProviders, screen, waitFor } from '@/test/utils';
 import type { HdhrSettings } from '@tunarr/types';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -63,6 +64,15 @@ async function renderPage() {
   return { ...rendered, tunerCount, setTunerCount, saveButton };
 }
 
+// Changes the tuner count to a valid new value and saves it
+async function renderAndSave() {
+  const { user, setTunerCount, saveButton } = await renderPage();
+  await setTunerCount('2');
+  await waitFor(() => expect(saveButton()).toBeEnabled());
+  await user.click(saveButton());
+  await waitFor(() => expect(mockPutHdhrSettings).toHaveBeenCalledOnce());
+}
+
 describe('HdhrSettingsPage', () => {
   beforeEach(() => {
     mockPutHdhrSettings.mockReset();
@@ -96,5 +106,35 @@ describe('HdhrSettingsPage', () => {
       autoDiscoveryEnabled: true,
       tunerCount: 1,
     });
+  });
+
+  test("a save the server refuses shows the server's reason", async () => {
+    mockPutHdhrSettings.mockRejectedValue(
+      new AxiosError('Request failed', 'ERR_BAD_REQUEST', undefined, null, {
+        data: { message: 'Tuner count must be at least 1' },
+        status: 400,
+        statusText: 'Bad Request',
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+      }),
+    );
+
+    await renderAndSave();
+
+    expect(
+      await screen.findByText(
+        'Could not save settings. Tuner count must be at least 1',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  test('a save that fails without a reason still says so', async () => {
+    mockPutHdhrSettings.mockRejectedValue(new Error('Network Error'));
+
+    await renderAndSave();
+
+    expect(
+      await screen.findByText('Could not save settings'),
+    ).toBeInTheDocument();
   });
 });
