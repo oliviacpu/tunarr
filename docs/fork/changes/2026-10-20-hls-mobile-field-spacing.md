@@ -1,4 +1,4 @@
-### Separate HLS field helpers on phones (2026-10-20, PR pending)
+### Separate HLS field helpers on phones (2026-10-20, PR #144)
 
 - **What you saw:** At 390px, the HLS segment-length helper overlapped the next field's label, and the segments-before-playback helper overlapped the start-up burst label.
 - **Cause:** The field stack defined its column direction only from the `sm` breakpoint, so MUI did not apply its spacing at `xs`.
