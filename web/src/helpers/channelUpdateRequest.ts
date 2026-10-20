@@ -39,7 +39,6 @@ export function toStealthUpdateRequest(
     ...omit(channel, [
       'fallback',
       'programCount',
-      'transcoding',
       'sessions',
       'startTime',
       'onDemand',
