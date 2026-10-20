@@ -22,6 +22,10 @@ Select the library with your Filler content, then select "ADD MOVIE" for each it
 
 Expand the menu on the right to view a summary of your changes, then select "ADD ITEMS" followed by "SAVE". 
 
+Save is enabled once the name or the programs have changed, and needs at least one program. "Reset changes" puts back
+the saved name and programs. Leaving the page with unsaved changes asks first; going to "ADD MEDIA" and back keeps
+them.
+
 ![Filler menu](/assets/library-filler-menu.png)
 
 ![Filler add items](/assets/library-filler-additems.png)

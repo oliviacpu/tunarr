@@ -13,7 +13,6 @@ type XmlTvSettings = {
   refreshHours: number;
   refreshStartHour: number;
   outputPath: string;
-  enableImageCache: boolean;
   useShowPoster: boolean;
   publicUrl: string;
 };

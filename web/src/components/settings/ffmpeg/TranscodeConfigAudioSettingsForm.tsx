@@ -288,7 +288,7 @@ export const TranscodeConfigAudioSettingsForm = ({
           <Typography sx={{ mb: 1 }}>
             <Trans>Loudnorm Options</Trans>
           </Typography>
-          <Stack direction={{ sm: 'column', md: 'row' }} spacing={2}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
             {loudnormFields.map(({ name, label, helperText }) => (
               <NumericFormControllerText
                 key={name}

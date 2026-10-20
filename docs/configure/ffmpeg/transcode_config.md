@@ -53,10 +53,11 @@ Hardware acceleration offloads video encoding and decoding from the CPU to dedic
 !!! info "Linux with Intel GPU: VAAPI vs QSV"
     If you are running Tunarr on Linux with an Intel GPU, **VAAPI is the recommended choice** over QSV. VAAPI is generally more stable, better tested with Tunarr. QSV may work for some users but can produce compatibility issues with certain codecs and bit depths.
 
-When **VAAPI** or **QSV** is selected, additional options appear:
+When **VAAPI** or **QSV** is selected, the device path option appears:
 
-- **VAAPI Driver** — Select the driver your system uses (`system`, `ihd`, `i965`, `radeonsi`, `nouveau`). Leave as `system` unless you know you need a specific driver.
 - **VAAPI Device Path** — Path to the DRI render device (default: `/dev/dri/renderD128`). Change this only if your device is at a non-standard path (e.g., `/dev/dri/renderD129` when multiple GPUs are present).
+
+The VAAPI driver is stored as `vaapiDriver` in the transcode configuration and defaults to `system`; the form does not expose a driver selector.
 
 When **VAAPI** is selected, Tunarr will automatically use hardware-accelerated pad filters (`pad_vaapi`, or `pad_opencl` as a fallback) for letterboxing and pillarboxing operations. This keeps padding on the GPU and avoids a round-trip to software. If your hardware does not support these filters or you observe artifacts, you can force software padding by setting `TUNARR_DISABLE_VAAPI_PAD=true`.
 

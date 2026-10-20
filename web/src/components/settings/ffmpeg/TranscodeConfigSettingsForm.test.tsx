@@ -212,7 +212,7 @@ describe('TranscodeConfigSettingsForm validation', () => {
     await user.type(bitrate, 'fast');
 
     await waitFor(() => expect(bitrate).toBeInvalid());
-    expect(bitrate).toHaveAccessibleDescription(/expected number/);
+    expect(bitrate).toHaveAccessibleDescription('Enter a number.');
     expect(saveButton()).toBeDisabled();
   });
 
@@ -224,7 +224,8 @@ describe('TranscodeConfigSettingsForm validation', () => {
     await user.type(threads, 'all');
 
     await waitFor(() => expect(threads).toBeInvalid());
-    expect(threads).toHaveAccessibleDescription(/expected number/);
+    expect(threads).toHaveAccessibleDescription(/^Enter a number\./);
+    expect(threads).not.toHaveAccessibleDescription(/NaN/);
     expect(saveButton()).toBeDisabled();
   });
 
@@ -270,7 +271,7 @@ describe('TranscodeConfigSettingsForm validation', () => {
 
     await waitFor(() => expect(bitrate).toBeInvalid());
     expect(bitrate).toHaveValue('4000k');
-    expect(bitrate).toHaveAccessibleDescription(/expected number/);
+    expect(bitrate).toHaveAccessibleDescription('Enter a number.');
     expect(saveButton()).toBeDisabled();
   });
 

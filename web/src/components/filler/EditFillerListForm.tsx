@@ -1,22 +1,23 @@
-import { useActions } from '@/strings/actions';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { SettingsForm } from '@/components/form/SettingsForm.tsx';
+import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { removeFillerListProgram } from '@/store/entityEditor/util.ts';
 import {
   clearCurrentFillerList,
-  resetFillerList,
+  discardFillerListChanges,
+  resetFillerListEditor,
   setCurrentFillerList,
   updateCurrentFillerList,
 } from '@/store/fillerListEditor/action.ts';
-import { Delete, Save, Tv, Undo } from '@mui/icons-material';
+import { useToasts } from '@/strings/actions';
+import { Trans, useLingui } from '@lingui/react/macro';
+import { Delete, Tv } from '@mui/icons-material';
 import { Button, Divider, Stack, TextField, Tooltip } from '@mui/material';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import type { FillerList } from '@tunarr/types';
-import { isEmpty } from 'lodash-es';
-import { useCallback } from 'react';
-import type { SubmitHandler } from 'react-hook-form';
+import { isEmpty, isEqual } from 'lodash-es';
+import { useCallback, useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   postApiFillerLists,
@@ -25,112 +26,142 @@ import {
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import useStore from '../../store/index.ts';
 import type { UIFillerListProgram } from '../../types/index.ts';
-import { LoadingIcon } from '../base/LoadingIcon.tsx';
 import ChannelLineupList from '../channel_config/ChannelLineupList.tsx';
 
-type FillerListMutationArgs = {
-  id?: string;
+type FillerListFormValues = {
   name: string;
+};
+
+type FillerListSave = FillerListFormValues & {
   programs: UIFillerListProgram[];
 };
 
-type FillerListFormType = Omit<FillerListMutationArgs, 'id'>;
-
 type EditFillerListFormProps = {
+  /** The list as it is saved, or the starting values of a new one. */
   fillerList: FillerList;
-  fillerListPrograms: UIFillerListProgram[];
   isNew: boolean;
 };
 
+/**
+ * The filler list editor: the list's name, and its programs, which live in
+ * the store's filler list draft so the add-programs page can add to them.
+ * Changes to that draft count as unsaved changes of the form.
+ */
 export function EditFillerListForm({
   fillerList,
-  fillerListPrograms,
   isNew,
 }: EditFillerListFormProps) {
   const { t } = useLingui();
-  const actions = useActions();
-  const queryClient = useQueryClient();
+  const toasts = useToasts();
   const navigate = useNavigate();
-  const {
-    programList,
-    dirty: { programs: programsDirty },
-  } = useStore((s) => s.fillerListEditor);
+  const programList = useStore((s) => s.fillerListEditor.programList);
+  const programsDirty = useStore((s) => s.fillerListEditor.dirty.programs);
 
-  const {
-    control,
-    handleSubmit,
-    getValues,
-    formState: { isValid, isDirty, isSubmitting },
-  } = useForm<FillerListFormType>({
-    mode: 'onChange',
+  const form = useForm<FillerListFormValues>({
+    mode: 'onTouched',
     defaultValues: {
-      name: fillerList?.name ?? '',
+      name: fillerList.name,
     },
   });
+  const {
+    control,
+    getValues,
+    setValue,
+    reset,
+    formState: { defaultValues },
+  } = form;
 
-  const saveShowMutation = useMutation({
-    mutationKey: ['fillers', isNew ? 'new' : fillerList.id],
-    mutationFn: async ({ name, programs }: FillerListMutationArgs) => {
-      if (isNew) {
-        return postApiFillerLists({
-          body: { name, programs },
-          throwOnError: true,
-        });
-      } else {
-        return putApiFillerListsById({
+  useEffect(() => {
+    const loaded = { name: fillerList.name };
+    if (!isEqual(loaded, defaultValues)) {
+      reset(loaded);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillerList.name, reset]);
+
+  // A name typed before going to add programs was kept in the draft. Bring it
+  // back as an unsaved change
+  useEffect(() => {
+    const draftName = useStore.getState().fillerListEditor.currentEntity?.name;
+    if (draftName !== undefined && draftName !== fillerList.name) {
+      setValue('name', draftName, { shouldDirty: true });
+    }
+    // Only when the page opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveMutation = useSettingsMutation({
+    form,
+    mutation: {
+      mutationKey: ['fillers', isNew ? 'new' : fillerList.id],
+      mutationFn: async ({ name, programs }: FillerListSave) => {
+        if (isNew) {
+          const { data } = await postApiFillerLists({
+            body: { name, programs },
+            throwOnError: true,
+          });
+          return data;
+        }
+        const { data } = await putApiFillerListsById({
           path: { id: fillerList.id },
           body: { name, programs },
           throwOnError: true,
         });
-      }
+        return data;
+      },
+      onSuccess: async (data, { name, programs }) => {
+        if (isNew) {
+          // The draft counts as unsaved until it is emptied, which happens
+          // after the page has gone
+          await navigate({ to: '/library/fillers', ignoreBlocker: true });
+          resetFillerListEditor();
+        } else {
+          setCurrentFillerList({ ...fillerList, ...data, name }, programs);
+        }
+      },
     },
-    onSuccess: async ({ data }, variables) => {
-      await queryClient.invalidateQueries({
-        predicate: invalidateTaggedQueries('Filler Lists'),
-      });
-
-      setCurrentFillerList(
-        {
-          ...fillerList,
-          ...data,
-        },
-        variables.programs,
-      );
-
-      if (isNew) {
-        clearCurrentFillerList();
-        navigate({ to: '/library/fillers' }).catch(console.warn);
-      }
-    },
-    onError: (e) => console.error(e),
+    toFormValues: (_saved, { name }) => ({ name }),
+    invalidate: { predicate: invalidateTaggedQueries('Filler Lists') },
+    failureMessage: toasts.couldNotSave,
   });
-
-  const saveFiller: SubmitHandler<FillerListFormType> = (data) => {
-    return saveShowMutation.mutateAsync({
-      id: fillerList?.id,
-      name: data.name,
-      programs: programList,
-    });
-  };
 
   const deleteProgramAtIndex = useCallback((idx: number) => {
     removeFillerListProgram(idx);
   }, []);
 
   const navToProgramming = () => {
-    if (isNew) {
-      updateCurrentFillerList(getValues());
-    }
+    // The form is rebuilt when this page opens again; keep the name in the
+    // draft until then
+    updateCurrentFillerList({ name: getValues('name') });
     navigate({
       to: isNew
         ? '/library/fillers/new/programming'
         : `/library/fillers/$fillerId/programming`,
-      params: { fillerId: fillerList?.id },
+      params: { fillerId: fillerList.id },
     }).catch(console.warn);
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit(saveFiller, console.error)}>
+    <SettingsForm
+      form={form}
+      onSubmit={({ name }) =>
+        saveMutation.mutate({ name, programs: programList })
+      }
+      isNew={isNew}
+      isSubmitting={saveMutation.isPending}
+      hasOtherChanges={programsDirty}
+      onDiscardChanges={discardFillerListChanges}
+      // A filler list needs at least one program
+      saveDisabled={programList.length === 0}
+      // The programs are saved from the draft as they were when Save was
+      // pressed, so they must not change until the save is done
+      disabled={saveMutation.isPending}
+      // Adding programs edits the same draft on its own page
+      exceptTargetPaths={[
+        '/library/fillers/new/programming',
+        '/library/fillers/$fillerId/programming',
+      ]}
+    >
       <Stack gap={2}>
         <Controller
           control={control}
@@ -159,21 +190,10 @@ export function EditFillerListForm({
               onClick={() => clearCurrentFillerList()}
               startIcon={<Delete />}
               variant="outlined"
-              disabled={isEmpty(fillerListPrograms)}
+              disabled={isEmpty(programList)}
             >
               <Trans>Clear All</Trans>
             </Button>
-            {programsDirty && (
-              <Button
-                disableRipple
-                component="button"
-                onClick={() => resetFillerList()}
-                startIcon={<Undo />}
-                variant="outlined"
-              >
-                {actions.resetChanges}
-              </Button>
-            )}
             <Tooltip
               title={t`Add TV Shows or Movies to filler`}
               placement="right"
@@ -183,26 +203,11 @@ export function EditFillerListForm({
                 component="button"
                 onClick={() => navToProgramming()}
                 startIcon={<Tv />}
-                variant="contained"
+                variant="outlined"
               >
                 <Trans>Add Media</Trans>
               </Button>
             </Tooltip>
-            <Button
-              disabled={
-                !isValid ||
-                isSubmitting ||
-                (!isDirty && !programsDirty) ||
-                fillerListPrograms.length === 0
-              }
-              variant="contained"
-              type="submit"
-              startIcon={
-                saveShowMutation.isPending ? <LoadingIcon /> : <Save />
-              }
-            >
-              {actions.save}
-            </Button>
           </Stack>
           <ChannelLineupList
             type="selector"
@@ -219,6 +224,6 @@ export function EditFillerListForm({
           />
         </Box>
       </Stack>
-    </Box>
+    </SettingsForm>
   );
 }

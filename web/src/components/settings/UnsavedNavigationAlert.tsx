@@ -28,7 +28,12 @@ export default function UnsavedNavigationAlert({
 }: Props) {
   const actions = useActions();
   const { proceed, status, reset } = useBlocker({
-    shouldBlockFn: ({ next }) => {
+    shouldBlockFn: ({ current, next }) => {
+      // Staying on the same page, such as switching the channel editor's tab
+      // (it only changes the query string), keeps the form and its changes
+      if (next.pathname === current.pathname) {
+        return false;
+      }
       if (exceptTargetPaths && !isEmpty(exceptTargetPaths)) {
         for (const excludedTarget of exceptTargetPaths) {
           if (next.fullPath === excludedTarget) {
