@@ -313,6 +313,12 @@ must still be checked at 390px in the e2e fixture. PRs in a parallel wave write 
 
 - **Wave 1 status (2026-10-19):** all ten PRs merged (#86–#95), each reviewed by Claude and Codex with CI green.
 - **Wave 2 status (2026-10-20):** D1–D7 merged (#98–#104).
+- **Wave 3 status (2026-10-20):** C1–C7 merged (#106–#109, #111, #112, #115), with
+  General schedule, guide controls, mobile input/spacing and transcode follow-ups (#113, #116, #119, #120).
+  Notes folded into FORK.md; release build and guarded deployment pending.
+- **Wave 4 status (2026-10-20):** S1/S2/S6/S7 PRs prepared; S3/S4 in progress.
+  S5 design approved and merged in #114; its implementation remains separate.
+- **Wave 5 status (2026-10-20):** P1/P2 PRs prepared; P3/P4 in progress; P5 pending.
 - **Order:** Wave 1 all at once (ten S-sized PRs, one Opus agent each, worktrees). D1 alone, then
   D2–D7 in parallel. C1 alone, then C2–C7. S1 after C2. Wave 5 after decisions P1 and P2 are taken
   by the user.

@@ -17,14 +17,14 @@ starting anything.
 | 3 | C6 sources route | merged, #106 |
 | 3 | C7 bulk actions | merged, #109 |
 | 3 | C4 transcode form on RHF | merged, #111 |
-| 3 | C2 settings pages on the shell | PR #112, reviewed, Codex-clean after three fix rounds, waiting on its last build; merge main in first if GitHub says CONFLICTING |
-| 3 | C3 editors on the shell | PR in progress (agent launched 2026-10-20) |
-| 4 | S1–S7 | not started; S1 needs C2; S5 is a design decision first |
-| 5 | P1–P5 | not started; P1 shelve and P2 retire were approved 2026-10-19 |
+| 3 | C2 settings pages on the shell | merged, #112; General schedule follow-ups in #113 |
+| 3 | C3 editors on the shell | merged, #115 |
+| 3 | Phone and guide follow-ups | merged, #116, #119, #120 |
+| 4 | S1–S7 | S1 #118, S2 #124, S6 #121, S7 #117 prepared; S3/S4 in progress. S5 design #114 approved and merged; implementation stays separate |
+| 5 | P1–P5 | P1 #123 and P2 #122 prepared; P3/P4 in progress; P5 pending |
 
 Release `oliviacpu-2026.10.20` was tagged at the wave-2 fold-in (waves 1–2 plus C5/C6) and the
-fork image built from it. After wave 3 lands: run the wave-3 fold-in (move every note in `docs/fork/changes/` except its
-`README.md` into FORK.md, update this file and the plan's wave status), tag `oliviacpu-2026.10.21`
+fork image built from it. Wave 3 and its note fold-in are complete. Next: tag `oliviacpu-2026.10.21`
 (or `.20.2` if the same day), wait for the fork-image workflow (its build of the newest `oliviacpu-`
 tag also moves `ghcr.io/oliviacpu/tunarr:latest`, which is what the seedbox runs; see FORK.md's
 first section), then deploy to the box (the user asked for this explicitly: `~/apps/tunarr` on the
@@ -37,9 +37,9 @@ session that does it).
 Each row's full text and acceptance test is in the plan; this lists the order, the dependencies and
 what the previous session learned that the row's agent needs.
 
-### Wave 3, remaining
+### Wave 3, complete
 
-1. **C3, port the entity editors** (M, Opus). In progress. Channel edit (keep tabs and error dots),
+1. **C3, port the entity editors** (M, Opus). Merged in #115. Channel edit (keep tabs and error dots),
    filler list, custom show, both slot editors (Save disabled when clean). Same shell and rules as
    C2: `isSubmitting={mutation.isPending}`, `mode: 'onTouched'`, the guarded load effect, tests mock
    `UnsavedNavigationAlert` and never click a disabled Save, fields locked (`fieldset` disabled +
@@ -77,7 +77,9 @@ what the previous session learned that the row's agent needs.
 
 ### Also open
 
-- **Wave-3 follow-ups** (assign to the row named, or to a small S PR):
+- **Wave-3 follow-ups completed:** D8 and XMLTV spacing in #119, General schedules in #113,
+  transcode phone layout/validation/docs/dependency cleanup in #120, and pending-save Reset in #115.
+  The original findings are retained below for reference:
   - D8 (new, S, Sonnet): 16px inputs and floating labels below the `sm` breakpoint only (`MuiInputBase`,
     `MuiInputLabel`, the MUI X picker input base), 14px from `sm` up; never `maximum-scale=1`. C2's
     measurement: labels go from 10.5px to 12px, nothing scrolls sideways at 390px.
@@ -97,7 +99,8 @@ what the previous session learned that the row's agent needs.
 
 - The wave-1 and wave-2 follow-up lists in the plan (T1 test health; the small D-row leftovers;
   the error page's bug-report link targeting upstream; docs links to tunarr.com).
-- After wave 3: a fold-in PR (see Working rules) and a release tag.
+- Wave-3 notes are folded into FORK.md. The release tag, image build and guarded deployment are
+  pending; record their verified outcome after deployment.
 
 ## Decisions already taken (do not reopen)
 
