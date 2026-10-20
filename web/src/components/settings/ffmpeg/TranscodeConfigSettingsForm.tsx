@@ -78,7 +78,7 @@ export const TranscodeConfigSettingsForm = ({
               <Breadcrumbs
                 trail={[
                   { label: t`Settings`, to: '/settings' },
-                  { label: t`Transcoding`, to: '/settings/ffmpeg' },
+                  { label: t`Playback`, to: '/settings/playback' },
                   { label: isNew ? t`New transcode config` : configName },
                 ]}
               />

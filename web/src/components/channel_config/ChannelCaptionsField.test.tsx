@@ -95,6 +95,9 @@ describe('ChannelCaptionsField', () => {
   test('a channel without its own settings saves none', async () => {
     const { save } = await renderField(null);
 
+    expect(
+      screen.getByText(/closed captions on in Captions & audio settings\./),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText('Text color')).not.toBeInTheDocument();
     expect(await save()).toBeNull();
   });

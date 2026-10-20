@@ -124,7 +124,7 @@ export function ChannelCaptionsField() {
               <Trans>
                 Try caption options on this channel alone, from its next
                 program. It needs HLS, subtitles, and closed captions on in
-                Transcoding settings.
+                Captions &amp; audio settings.
               </Trans>
             </Typography>
             <FormControl fullWidth>

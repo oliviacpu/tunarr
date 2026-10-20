@@ -166,6 +166,15 @@ afterEach(() => {
 });
 
 describe('TranscodeConfigSettingsForm title', () => {
+  test('links its breadcrumb to the canonical Playback settings tab', async () => {
+    renderForm('edit');
+    expect(
+      await screen.findByRole('link', { name: 'Playback' }),
+    ).toHaveAttribute('href', '/settings/playback');
+    expect(
+      screen.queryByRole('link', { name: 'Transcoding' }),
+    ).not.toBeInTheDocument();
+  });
   test('error options is a peer of the other settings sections', async () => {
     renderForm('edit');
     expect(
