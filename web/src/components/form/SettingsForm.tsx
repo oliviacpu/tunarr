@@ -226,7 +226,7 @@ function SaveBar<
           </Button>
         )}
         {isDirty && (
-          <Button variant="outlined" onClick={resetChanges}>
+          <Button variant="outlined" onClick={resetChanges} disabled={saving}>
             {actions.resetChanges}
           </Button>
         )}

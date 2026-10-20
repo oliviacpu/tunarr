@@ -14,8 +14,8 @@ import type {
   SaveableChannel,
   SubtitlePreference,
 } from '@tunarr/types';
-import { isEmpty, isNil, keys, map, reject } from 'lodash-es';
-import { useState } from 'react';
+import { isEmpty, isEqual, isNil, keys, map, reject } from 'lodash-es';
+import { useEffect, useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import type { DeepRequired, NonEmptyArray } from 'ts-essentials';
 import {
@@ -114,9 +114,21 @@ export function EditChannelForm({
   );
 
   const form = useForm<SaveableChannel>({
-    mode: 'onChange',
+    mode: 'onTouched',
     defaultValues: getDefaultFormValues(channel),
   });
+
+  const {
+    reset,
+    formState: { defaultValues },
+  } = form;
+  useEffect(() => {
+    const loaded = getDefaultFormValues(channel);
+    if (!isEqual(loaded, defaultValues)) {
+      reset(loaded);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel, reset]);
 
   // The channel list, every loaded channel and their lineups
   const invalidate = { predicate: invalidateTaggedQueries('Channels') };

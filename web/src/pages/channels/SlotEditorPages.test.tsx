@@ -198,10 +198,7 @@ beforeEach(() => {
   });
 });
 
-describe.each([
-  ['time', 'Time slot editor'],
-  ['random', 'Random slot editor'],
-] as const)('%s slots: %s', (editor) => {
+describe.each(['time', 'random'] as const)('%s slot editor', (editor) => {
   test('Save is disabled until one valid change, then saves the schedule', async () => {
     const { user } = renderEditor(editor);
     const days = await daysField();
@@ -209,6 +206,7 @@ describe.each([
 
     await user.clear(days);
     await user.type(days, '30');
+    await user.tab();
     await waitFor(() => expect(saveButton()).toBeEnabled());
     await user.click(saveButton());
 

@@ -160,6 +160,7 @@ describe('EditChannelForm, editing a channel', () => {
     expect(saveButton()).toBeDisabled();
 
     await user.type(name, ' Late');
+    await user.tab();
     await waitFor(() => expect(saveButton()).toBeEnabled());
     await user.click(saveButton());
 
@@ -172,13 +173,40 @@ describe('EditChannelForm, editing a channel', () => {
     await waitFor(() => expect(saveButton()).toBeDisabled());
   });
 
+  test('editing during an update preserves the newer value as unsaved', async () => {
+    let finish: () => void = () => {};
+    mockUpdate.mockImplementation(
+      ({ body }) =>
+        new Promise((resolve) => {
+          finish = () => resolve({ data: { ...channel, ...body } });
+        }),
+    );
+    const { user } = renderEditor('edit');
+    const name = await nameField();
+    await user.type(name, ' Late');
+    await user.tab();
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+    expect(name).toBeEnabled();
+    await user.type(name, ' Edition');
+    finish();
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(name).toHaveValue('Movie Night Late Edition');
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(name).toHaveValue('Movie Night Late');
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+  });
+
   test('an invalid change keeps Save disabled', async () => {
     const { user } = renderEditor('edit');
     const name = await nameField();
     await user.type(name, ' Late');
+    await user.tab();
     await waitFor(() => expect(saveButton()).toBeEnabled());
 
     await user.clear(name);
+    await user.tab();
 
     await waitFor(() => expect(saveButton()).toBeDisabled());
     expect(
@@ -191,6 +219,7 @@ describe('EditChannelForm, editing a channel', () => {
     const { user } = renderEditor('edit');
 
     await user.type(await nameField(), ' Late');
+    await user.tab();
     await user.click(saveButton());
 
     expect(
@@ -201,6 +230,7 @@ describe('EditChannelForm, editing a channel', () => {
   test('switching tabs with unsaved changes keeps them and does not ask to leave', async () => {
     const { user, router } = renderEditor('edit');
     await user.type(await nameField(), ' Late');
+    await user.tab();
 
     await user.click(screen.getByRole('tab', { name: 'Flex' }));
 
@@ -218,6 +248,7 @@ describe('EditChannelForm, editing a channel', () => {
   test('leaving with unsaved changes asks first', async () => {
     const { user, router } = renderEditor('edit');
     await user.type(await nameField(), ' Late');
+    await user.tab();
 
     void router.navigate({ to: '/channels' });
 
@@ -235,6 +266,7 @@ describe('EditChannelForm, a new channel', () => {
     await waitFor(() => expect(saveButton()).toBeEnabled());
 
     await user.clear(name);
+    await user.tab();
     await waitFor(() => expect(saveButton()).toBeDisabled());
   });
 
@@ -249,7 +281,9 @@ describe('EditChannelForm, a new channel', () => {
     const { user, router } = renderEditor('new');
     const name = await nameField();
     await user.clear(name);
+    await user.tab();
     await user.type(name, 'Cartoons');
+    await user.tab();
 
     await user.click(saveButton());
 
@@ -278,7 +312,9 @@ describe('EditChannelForm, a new channel', () => {
     const { user } = renderEditor('new');
     const name = await nameField();
     await user.clear(name);
+    await user.tab();
     await user.type(name, 'Cartoons');
+    await user.tab();
 
     await user.click(saveButton());
 

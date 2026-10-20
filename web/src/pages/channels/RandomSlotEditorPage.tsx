@@ -78,6 +78,7 @@ export default function RandomSlotEditorPage() {
   const hasExistingTimeSlotSchedule = channelSchedule.schedule?.type === 'time';
 
   const randomSlotForm = useForm<RandomSlotForm>({
+    mode: 'onTouched',
     defaultValues:
       channelSchedule.schedule?.type === 'random'
         ? {

@@ -20,3 +20,4 @@ Everything the time-slot and random-slot schedulers do that infinite schedules m
 | Weekly and daily periods, DST handling | `TimeSlotService.ts` (#1445) | unverified | D20 stores an IANA zone, so infinite schedules should exceed classic here. Classic has open DST bugs (#1445) |
 | Seeded, repeatable regeneration (`scheduleSeed`) | `RegenerateChannelLineupCommand.ts` | unverified | |
 | Generate then hand-edit a fixed lineup | Slot editors | won't port | D16. Fixed programming becomes a manual lineup |
+| Slot editor Save requires valid unsaved options or a refreshed preview; Reset changes restores saved options and lineup | `TimeSlotEditorPage.tsx`, `RandomSlotEditorPage.tsx` (UI audit C3) | unverified | Includes navigation protection for unsaved previews. |

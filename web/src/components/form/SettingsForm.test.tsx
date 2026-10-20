@@ -194,6 +194,18 @@ describe('SettingsForm', () => {
     expect(name()).toHaveValue('Tunarr');
   });
 
+  test('Reset changes cannot discard a draft while its save is pending', () => {
+    const onDiscardChanges = vi.fn();
+    renderForm({
+      isSubmitting: true,
+      hasOtherChanges: true,
+      onDiscardChanges,
+    });
+    const reset = screen.getByRole('button', { name: 'Reset changes' });
+    expect(reset).toBeDisabled();
+    expect(onDiscardChanges).not.toHaveBeenCalled();
+  });
+
   test('the unsaved guard follows whether the form has changes', async () => {
     const { user, name } = renderForm({
       exceptTargetPaths: ['/settings/hdhr'],

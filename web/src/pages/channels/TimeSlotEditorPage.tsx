@@ -141,11 +141,11 @@ export default function TimeSlotEditorPage() {
   const [isCalculatingSlots, toggleIsCalculatingSlots] = useToggle(false);
 
   const formMethods = useForm<TimeSlotForm>({
+    mode: 'onTouched',
     defaultValues:
       channelSchedule.schedule?.type === 'time'
         ? convertToViewModel(channelSchedule.schedule)
         : defaultTimeSlotSchedule,
-    // mode: 'all',
   });
 
   const {

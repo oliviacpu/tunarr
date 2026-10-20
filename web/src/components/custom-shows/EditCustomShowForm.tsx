@@ -286,6 +286,7 @@ export function EditCustomShowsForm({
       onSubmit={(data) =>
         saveShowMutation.mutate({ ...data, programs: customShowPrograms })
       }
+      isNew={isNew}
       isSubmitting={saveShowMutation.isPending}
       hasOtherChanges={customShowProgrammingChanged}
       onDiscardChanges={discardCustomShowChanges}

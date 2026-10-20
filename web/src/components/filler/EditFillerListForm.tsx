@@ -16,7 +16,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useNavigate } from '@tanstack/react-router';
 import type { FillerList } from '@tunarr/types';
-import { isEmpty } from 'lodash-es';
+import { isEmpty, isEqual } from 'lodash-es';
 import { useCallback, useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
@@ -63,7 +63,21 @@ export function EditFillerListForm({
       name: fillerList.name,
     },
   });
-  const { control, getValues, setValue } = form;
+  const {
+    control,
+    getValues,
+    setValue,
+    reset,
+    formState: { defaultValues },
+  } = form;
+
+  useEffect(() => {
+    const loaded = { name: fillerList.name };
+    if (!isEqual(loaded, defaultValues)) {
+      reset(loaded);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillerList.name, reset]);
 
   // A name typed before going to add programs was kept in the draft. Bring it
   // back as an unsaved change
@@ -133,6 +147,7 @@ export function EditFillerListForm({
       onSubmit={({ name }) =>
         saveMutation.mutate({ name, programs: programList })
       }
+      isNew={isNew}
       isSubmitting={saveMutation.isPending}
       hasOtherChanges={programsDirty}
       onDiscardChanges={discardFillerListChanges}
