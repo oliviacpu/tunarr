@@ -1,5 +1,6 @@
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { Trans } from '@lingui/react/macro';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack } from '@mui/material';
 import { createFileRoute } from '@tanstack/react-router';
 import { ProgramViewToggleButton } from '../../../components/base/ProgramViewToggleButton.tsx';
 import Breadcrumbs from '../../../components/Breadcrumbs.tsx';
@@ -23,24 +24,21 @@ export const Route = createFileRoute('/media_sources_/$mediaSourceId/')({
   },
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 function MediaSourceBrowserPage() {
   const { mediaSourceId } = Route.useParams();
   const { data: mediaSource } = useMediaSource(mediaSourceId);
 
   return (
     <Box>
-      <Breadcrumbs thisRouteName={mediaSource.name} />
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h4" sx={{ display: 'inline-flex', width: '100%' }}>
-          <span>
-            <Trans>Media Source: "{mediaSource.name}"</Trans>
-          </span>
-          <ProgramViewToggleButton sx={{ ml: { sm: undefined, md: 'auto' } }} />
-        </Typography>
-        <Typography>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs thisRouteName={mediaSource.name} />}
+        title={<Trans>Media Source: "{mediaSource.name}"</Trans>}
+        description={
           <Trans>Search is currently scoped to this Media Source.</Trans>
-        </Typography>
-      </Box>
+        }
+        actions={<ProgramViewToggleButton />}
+      />
       <Stack gap={2}>
         <SearchInput />
         <LibraryProgramGrid mediaSource={mediaSource} disableProgramSelection />

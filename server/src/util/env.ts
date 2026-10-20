@@ -1,11 +1,10 @@
 import { BUILD_ENV, BUILD_ENV_KEYS } from '@/generated/env.js';
-import { TruthyQueryParam } from '../types/schemas.ts';
+import { TruthyQueryParam } from '@tunarr/types/schemas';
 import type { Nullable } from '../types/util.ts';
-import { isNonEmptyString, parseIntOrNull } from './index.ts';
 
 // Internal
 const BUILD_ENV_VAR = 'TUNARR_VERSION';
-const COMMIT_SHA_ENV_VAR = 'TUNARR_BUILA_SHA';
+const COMMIT_SHA_ENV_VAR = 'TUNARR_BUILD_SHA';
 export const BASE_IMAGE_TAG_ENV_VAR = 'TUNARR_BUILD_BASE_TAG';
 const IS_EDGE_BUILD_ENV_VAR = 'TUNARR_EDGE_BUILD';
 
@@ -51,11 +50,19 @@ const DISABLE_VULKAN = 'TUNARR_DISABLE_VULKAN';
 const DISABLE_VAAPI_PAD = 'TUNARR_DISABLE_VAAPI_PAD';
 
 // Debug vars
-const DEBUG__PROGRAM_GROUPING_UPDATE_CHUNK_SIZE =
-  'TUNARR_DEBUG_PROGRAM_GROUP_CHUNK_SIZE';
 const PRINT_ROUTES_ENV_VAR = 'TUNARR_SERVER_PRINT_ROUTES';
 
 export const TUNARR_ENV_VARS = {
+  LEGACY_BUILD_ENV_VAR: 'TUNARR_BUILD',
+  DATABASE_NAME: 'TUNARR_DATABASE_NAME',
+  DATABASE_DEBUG_LOGGING: 'DATABASE_DEBUG_LOGGING',
+  SSDP_DEBUG_LOGGING: 'ENABLE_SSDP_DEBUG_LOGGING',
+  NODE_ENV: 'NODE_ENV',
+  APPDATA: 'APPDATA',
+  HOME: 'HOME',
+  CONTAINER: 'CONTAINER',
+  CONTAINER_LOWERCASE: 'container',
+
   SQLITE_CACHE_KIB: 'TUNARR_SQLITE_CACHE_KIB',
   SQLITE_MMAP_BYTES: 'TUNARR_SQLITE_MMAP_BYTES',
   DB_WARMUP_MAX_BYTES: 'TUNARR_DB_WARMUP_MAX_BYTES',
@@ -77,7 +84,6 @@ export const TUNARR_ENV_VARS = {
   SEARCH_MAX_RAM,
   SEARCH_REDUCE_INDEXER_MEMORY_USAGE,
   SEARCH_MAX_INDEXING_THREADS,
-  DEBUG__PROGRAM_GROUPING_UPDATE_CHUNK_SIZE,
   LOG_LEVEL_ENV_VAR,
   BASIC_AUTH_USER_ENV_VAR,
   BASIC_AUTH_PASSWORD_ENV_VAR,
@@ -94,19 +100,29 @@ export const TUNARR_ENV_VARS = {
   CORS_ORIGINS_ENV_VAR,
 } as const;
 
-type ValidEnvVar = (typeof TUNARR_ENV_VARS)[keyof typeof TUNARR_ENV_VARS];
+type RegisteredEnvVar = (typeof TUNARR_ENV_VARS)[keyof typeof TUNARR_ENV_VARS];
+export const LOGGER_ENV_PREFIX = 'TUNARR_LOG_LEVEL_' as const;
+export type ValidEnvVar =
+  | RegisteredEnvVar
+  | `${typeof LOGGER_ENV_PREFIX}${string}`;
 
-export function getEnvVar(name: ValidEnvVar): Nullable<string> {
+export function getRawEnvVar(name: ValidEnvVar): Nullable<string> {
   if (BUILD_ENV_KEYS.has(name)) {
     return BUILD_ENV[name] ?? null;
   }
-  const val = process.env[name];
-  return isNonEmptyString(val) ? val : null;
+  return process.env[name] ?? null;
+}
+
+export function getEnvVar(name: ValidEnvVar): Nullable<string> {
+  const val = getRawEnvVar(name);
+  return typeof val === 'string' && val.trim().length > 0 ? val : null;
 }
 
 export const getNumericEnvVar = (name: ValidEnvVar) => {
   const strValue = getEnvVar(name);
-  return strValue ? parseIntOrNull(strValue) : null;
+  if (!strValue) return null;
+  const parsed = parseInt(strValue);
+  return isNaN(parsed) ? null : parsed;
 };
 
 export const getBooleanEnvVar = (
@@ -115,7 +131,24 @@ export const getBooleanEnvVar = (
 ) => {
   const strValue = getEnvVar(name);
   if (strValue) {
-    return TruthyQueryParam.catch(defaultValue).parse(process.env[name]);
+    return TruthyQueryParam.catch(defaultValue).parse(strValue);
   }
   return defaultValue;
 };
+
+export function getFeatureFlagEnvVar(name: string): string | null {
+  const registered = Object.values(TUNARR_ENV_VARS).find(
+    (value) => value === name,
+  );
+  if (registered === undefined)
+    throw new Error(`Unregistered feature flag env var: ${name}`);
+  const value = getRawEnvVar(registered);
+  return value === '' ? null : value;
+}
+
+export function getLoggerEnvironmentNames(): ValidEnvVar[] {
+  return Object.keys(process.env).filter(
+    (name): name is `${typeof LOGGER_ENV_PREFIX}${string}` =>
+      name.startsWith(LOGGER_ENV_PREFIX),
+  );
+}

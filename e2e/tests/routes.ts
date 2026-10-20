@@ -68,6 +68,13 @@ export const ROUTES: Record<string, RouteTarget> = {
   '/channels/$channelId': eachChannel(''),
   '/channels/$channelId/': eachChannel('/'),
   '/channels/$channelId/edit': eachChannel('/edit'),
+  '/channels/$channelId/edit/': eachChannel('/edit/'),
+  '/channels/$channelId/edit/properties': eachChannel('/edit/properties'),
+  '/channels/$channelId/edit/flex': eachChannel('/edit/flex'),
+  '/channels/$channelId/edit/guide': eachChannel('/edit/guide'),
+  '/channels/$channelId/edit/streaming': eachChannel('/edit/streaming'),
+  '/channels/$channelId/edit/watermark': eachChannel('/edit/watermark'),
+
   '/channels/$channelId/watch': (ids) => [
     `/channels/${first(ids.channelIds)}/watch`,
   ],

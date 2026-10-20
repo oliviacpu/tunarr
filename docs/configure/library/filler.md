@@ -53,3 +53,11 @@ When using slot-based scheduling tools ([Slot Editor](/configure/scheduling/rand
     These filler types are only available in slot-based schedulers. When adding filler directly to a channel via the Flex tab, the filler is used to fill flex time only.
 
 For details on mid-roll breaks, see the [Mid-Roll Breaks](/configure/scheduling/mid-roll-breaks) scheduling guide.
+
+## Channel References
+
+The Usage column shows how many channels reference each filler list. Hover over the chip to see channel names and any slot positions. This includes lists attached on a channel’s Flex tab, slot filler, scheduled filler items, and offline music.
+
+Deleting a list warns with the affected channel names and slots, including bulk deletion. The warning does not prevent deletion; review the affected channels afterward.
+
+Slot positions are numbered from 1 within the channel’s saved schedule. A channel counts once even if it references the same item several times. References refresh after channel or programming changes. If references cannot be loaded, the interface says so instead of reporting that the item is unused.

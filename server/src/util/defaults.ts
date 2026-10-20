@@ -2,7 +2,11 @@ import { isUndefined } from 'lodash-es';
 import path from 'node:path';
 import { globalOptions } from '../globals.ts';
 import { isRunningInContainer } from './containerUtil.ts';
-import { DATABASE_LOCATION_ENV_VAR } from './env.ts';
+import {
+  DATABASE_LOCATION_ENV_VAR,
+  getEnvVar,
+  TUNARR_ENV_VARS,
+} from './env.ts';
 import { isNonEmptyString } from './index.js';
 import type { LogLevels } from './logging/LoggerFactory.ts';
 import { getEnvironmentLogLevel } from './logging/LoggerFactory.ts';
@@ -12,12 +16,12 @@ function getRuntimeSpecificPrefix(): string {
   if (isRunningInContainer()) {
     // Making a lot of assumptions here...
     prefix = '/config';
-  } else if (process.env.APPDATA) {
-    prefix = `${process.env.APPDATA}`;
+  } else if (getEnvVar(TUNARR_ENV_VARS.APPDATA)) {
+    prefix = `${getEnvVar(TUNARR_ENV_VARS.APPDATA)}`;
   } else if (process.platform === 'darwin') {
-    prefix = `${process.env.HOME}/Library/Preferences`;
+    prefix = `${getEnvVar(TUNARR_ENV_VARS.HOME)}/Library/Preferences`;
   } else {
-    prefix = `${process.env.HOME}/.local/share`;
+    prefix = `${getEnvVar(TUNARR_ENV_VARS.HOME)}/.local/share`;
   }
   return prefix;
 }
@@ -34,7 +38,7 @@ export function getDefaultLogLevel(useEnvVar: boolean = true): LogLevels {
 }
 
 export function getDefaultDatabaseDirectory(): string {
-  const env = process.env[DATABASE_LOCATION_ENV_VAR];
+  const env = getEnvVar(DATABASE_LOCATION_ENV_VAR);
   if (isNonEmptyString(env)) {
     return env;
   }
@@ -47,6 +51,6 @@ export function getDefaultDatabaseDirectory(): string {
 export function getDefaultDatabaseName() {
   return path.join(
     globalOptions().databaseDirectory,
-    process.env['TUNARR_DATABASE_NAME'] ?? 'db.db',
+    getEnvVar(TUNARR_ENV_VARS.DATABASE_NAME) ?? 'db.db',
   );
 }

@@ -19,6 +19,7 @@ const collections = [
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
   getApiSmartCollections: () => Promise.resolve({ data: collections }),
+  getApiSmartCollectionsUsedBy: () => Promise.resolve({ data: {} }),
   deleteApiSmartCollectionsById: (opts: { path: { id: string } }) =>
     mockDeleteCollection(opts),
 }));
