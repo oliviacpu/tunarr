@@ -6,6 +6,7 @@ import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { describe, expect, test } from 'vitest';
 import type { GeneralSettingsFormData } from './GeneralSettingsForm.tsx';
 import { ScheduleFields } from './ScheduleFields.tsx';
+import { BackupForm } from './BackupForm.tsx';
 
 const ThreeAm = 3 * 60 * 60 * 1000;
 
@@ -21,9 +22,13 @@ const dailyAtThree: Schedule = {
 function Harness({
   schedule,
   editableCron = false,
+  backupForm = false,
+  hasOutputs = true,
 }: {
   schedule: Schedule;
   editableCron?: boolean;
+  backupForm?: boolean;
+  hasOutputs?: boolean;
 }) {
   const form = useForm<GeneralSettingsFormData>({
     defaultValues: {
@@ -34,14 +39,16 @@ function Harness({
         configurations: [
           {
             enabled: true,
-            outputs: [
-              {
-                type: 'file',
-                outputPath: '',
-                archiveFormat: 'tar',
-                maxBackups: 3,
-              },
-            ],
+            outputs: hasOutputs
+              ? [
+                  {
+                    type: 'file',
+                    outputPath: '',
+                    archiveFormat: 'tar',
+                    maxBackups: 3,
+                  },
+                ]
+              : [],
             schedule,
           },
         ],
@@ -68,12 +75,16 @@ function Harness({
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <FormProvider {...form}>
-        <ScheduleFields
-          name="backup.configurations.0.schedule"
-          intervalLabel="Backup interval"
-          id="backup-schedule"
-          editableCron={editableCron}
-        />
+        {backupForm ? (
+          <BackupForm />
+        ) : (
+          <ScheduleFields
+            name="backup.configurations.0.schedule"
+            intervalLabel="Backup interval"
+            id="backup-schedule"
+            editableCron={editableCron}
+          />
+        )}
         <output data-testid="valid">{String(form.formState.isValid)}</output>
         <output data-testid="held">{JSON.stringify(held)}</output>
       </FormProvider>
@@ -210,5 +221,48 @@ describe('ScheduleFields', () => {
       'Runs on the cron schedule 0 3 * * *, set in settings.json.',
     );
     expect(screen.queryByLabelText('Backup interval')).not.toBeInTheDocument();
+  });
+
+  test('disabling an empty cron backup clears its error and enabling it restores the requirement', async () => {
+    const { user } = renderWithProviders(
+      <Harness schedule={{ type: 'cron', cron: '' }} backupForm />,
+    );
+    const cron = screen.getByRole('textbox', { name: 'Cron expression' });
+    const enabled = screen.getByRole('checkbox', {
+      name: 'Enable this backup schedule',
+    });
+    await waitFor(() => expect(cron).toBeInvalid());
+    expect(screen.getByTestId('valid')).toHaveTextContent('false');
+
+    await user.click(enabled);
+    await waitFor(() => expect(cron).not.toBeInvalid());
+    expect(screen.getByTestId('valid')).toHaveTextContent('true');
+
+    await user.click(enabled);
+    await waitFor(() => expect(cron).toBeInvalid());
+    expect(screen.getByTestId('valid')).toHaveTextContent('false');
+    await user.type(cron, '0 3 * * *');
+    await waitFor(() =>
+      expect(screen.getByTestId('valid')).toHaveTextContent('true'),
+    );
+  });
+
+  test('an empty cron backup with no outputs does not block saving', async () => {
+    renderWithProviders(
+      <Harness
+        schedule={{ type: 'cron', cron: '' }}
+        backupForm
+        hasOutputs={false}
+      />,
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Enable this backup schedule' }),
+    ).toBeChecked();
+    await waitFor(() =>
+      expect(screen.getByTestId('valid')).toHaveTextContent('true'),
+    );
+    expect(
+      screen.getByRole('textbox', { name: 'Cron expression' }),
+    ).not.toBeInvalid();
   });
 });
