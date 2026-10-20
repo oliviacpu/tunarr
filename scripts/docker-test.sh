@@ -88,7 +88,7 @@ fi
 # directory.
 repro_container=
 run_repro() {
-  local script=.claude/skills/stream-repro/scripts/repro.mjs
+  local script_dir=.claude/skills/stream-repro/scripts
   local arg has_hwaccel=0
   for arg in "$@"; do
     case "$arg" in
@@ -115,7 +115,7 @@ run_repro() {
   trap 'docker rm -f "$repro_container" >/dev/null 2>&1 || true' EXIT
   docker compose "${files[@]}" run -d --no-deps --name "$repro_container" \
     --entrypoint sleep tunarr infinity >/dev/null
-  docker cp "$script" "$repro_container:/tmp/repro.mjs"
+  docker cp "$script_dir/." "$repro_container:/tmp/"
 
   local status=0 interrupted=0
   # On Ctrl-C, `docker exec` can exit 0, so record the interrupt ourselves and
