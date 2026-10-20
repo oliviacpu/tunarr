@@ -139,9 +139,31 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
                   label={t`Guide Start Time`}
                 />
               </FormControl>
-              <Typography>
-                {dayjs.duration(end.diff(start)).humanize()}
-              </Typography>
+              <Stack
+                role="group"
+                aria-label={t`Guide zoom`}
+                direction="row"
+                alignItems="center"
+                sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+              >
+                <IconButton
+                  aria-label={t`Zoom in`}
+                  disabled={zoomInDisabled}
+                  onClick={zoomIn}
+                >
+                  <ZoomInIcon />
+                </IconButton>
+                <Typography>
+                  {dayjs.duration(end.diff(start)).humanize()}
+                </Typography>
+                <IconButton
+                  aria-label={t`Zoom out`}
+                  disabled={zoomOutDisabled}
+                  onClick={zoomOut}
+                >
+                  <ZoomOutIcon />
+                </IconButton>
+              </Stack>
               {!dayjs().isBetween(start, end) && (
                 <Tooltip title={t`Reset to current date/time`} placement="top">
                   <IconButton onClick={handleNavigationReset}>
@@ -165,12 +187,6 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
                   <Restore />
                 </IconButton>
               )}
-              <IconButton disabled={zoomInDisabled} onClick={zoomIn}>
-                <ZoomInIcon />
-              </IconButton>
-              <IconButton disabled={zoomOutDisabled} onClick={zoomOut}>
-                <ZoomOutIcon />
-              </IconButton>
               <IconButton
                 disabled={navigationDisabled}
                 onClick={navigateBackward}
