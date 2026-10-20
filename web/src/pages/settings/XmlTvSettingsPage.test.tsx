@@ -116,6 +116,17 @@ describe('XmlTvSettingsPage', () => {
     expect(saveButton()).toBeDisabled();
   });
 
+  test('settings saved with a guide too short for the timer still cannot be saved after another change', async () => {
+    server.settings = { ...saved, refreshHours: 24 };
+    const { user, saveButton, refreshTimer } = await renderPage('24');
+    await waitFor(() => expect(refreshTimer()).toBeInvalid());
+
+    await user.click(screen.getByRole('checkbox', { name: 'Use show poster' }));
+
+    await screen.findByRole('button', { name: 'Reset changes' });
+    expect(saveButton()).toBeDisabled();
+  });
+
   test('a longer guide clears it, and both are saved', async () => {
     const { user, setField, saveButton, refreshTimer } = await renderPage();
     await setField('Refresh interval (hours)', '12');
@@ -179,6 +190,111 @@ describe('XmlTvSettingsPage', () => {
     ).toHaveAccessibleDescription(
       expect.stringContaining('/api/xmltv.xml, not from this file.'),
     );
+  });
+
+  test('Restore defaults is not offered while the settings are the defaults', async () => {
+    await renderPage();
+
+    expect(
+      screen.queryByRole('button', { name: 'Restore defaults' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('Restore defaults fills in the defaults, keeps the output path, and can be undone', async () => {
+    server.settings = {
+      ...saved,
+      refreshHours: 6,
+      refreshStartHour: 3,
+      publicUrl: 'https://tv.example.com',
+    };
+    const { user, saveButton, refreshTimer } = await renderPage('6');
+    const startHour = () =>
+      screen.getByRole('combobox', { name: 'Refreshes start at' });
+    expect(startHour()).toHaveTextContent('03:00');
+
+    await user.click(screen.getByRole('button', { name: 'Restore defaults' }));
+
+    expect(refreshTimer()).toHaveValue('4');
+    expect(startHour()).toHaveTextContent('00:00');
+    expect(
+      screen.getByLabelText('Public address for guide pictures'),
+    ).toHaveValue('');
+    expect(screen.getByLabelText('XMLTV output path')).toHaveValue(
+      '/data/xmltv.xml',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Restore defaults' }),
+    ).not.toBeInTheDocument();
+    // Nothing is saved yet, so it is a change like any other
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+
+    expect(refreshTimer()).toHaveValue('6');
+    expect(startHour()).toHaveTextContent('03:00');
+    expect(
+      screen.getByRole('button', { name: 'Restore defaults' }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    expect(mockPutXmlTvSettings).not.toHaveBeenCalled();
+  });
+
+  test('restored defaults are saved with Save', async () => {
+    server.settings = { ...saved, refreshHours: 6, refreshStartHour: 3 };
+    const { user, saveButton } = await renderPage('6');
+
+    await user.click(screen.getByRole('button', { name: 'Restore defaults' }));
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPutXmlTvSettings).toHaveBeenCalledOnce());
+    expect(mockPutXmlTvSettings.mock.calls[0]?.[0].body).toEqual({
+      ...defaultXmlTvSettings,
+      outputPath: '/data/xmltv.xml',
+    });
+  });
+
+  test('the refresh start hour is saved as a number, and the saved form is clean', async () => {
+    // The server keeps what it is sent
+    mockPutXmlTvSettings.mockImplementation(({ body }) => {
+      server.settings = { ...saved, ...body };
+      return Promise.resolve({ data: server.settings });
+    });
+    const { user, saveButton } = await renderPage();
+
+    await user.click(
+      screen.getByRole('combobox', { name: 'Refreshes start at' }),
+    );
+    await user.click(await screen.findByRole('option', { name: '05:00' }));
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPutXmlTvSettings).toHaveBeenCalledOnce());
+    expect(mockPutXmlTvSettings.mock.calls[0]?.[0].body.refreshStartHour).toBe(
+      5,
+    );
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    expect(
+      screen.getByRole('combobox', { name: 'Refreshes start at' }),
+    ).toHaveTextContent('05:00');
+    expect(
+      screen.queryByRole('button', { name: 'Reset changes' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('Save cannot be pressed again while a save is in flight', async () => {
+    // The server never answers
+    mockPutXmlTvSettings.mockReturnValue(new Promise(() => {}));
+    const { user, setField, saveButton } = await renderPage();
+
+    await setField('Refresh interval (hours)', '6');
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    expect(saveButton()).toHaveAttribute('aria-busy', 'true');
+    expect(mockPutXmlTvSettings).toHaveBeenCalledOnce();
   });
 
   test("a save the server refuses shows the server's reason", async () => {
