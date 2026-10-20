@@ -134,7 +134,12 @@ export default function XmlTvSettingsPage() {
           )}
         />
       </FormControl>
-      <Stack spacing={2} direction={{ sm: 'column', md: 'row' }} sx={{ my: 2 }}>
+      <Stack
+        spacing={2}
+        useFlexGap
+        direction={{ xs: 'column', md: 'row' }}
+        sx={{ my: 2 }}
+      >
         <NumericFormControllerText
           control={control}
           name="programmingHours"

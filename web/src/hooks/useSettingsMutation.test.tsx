@@ -34,6 +34,7 @@ type HarnessProps = {
   toFormValues?: (saved: Values, sent: Values) => Values;
   onSuccess?: (saved: Values) => void;
   invalidate?: InvalidateQueryFilters;
+  failureMessage?: string;
 };
 
 function Harness({
@@ -41,6 +42,7 @@ function Harness({
   toFormValues = (saved) => saved,
   onSuccess,
   invalidate,
+  failureMessage,
 }: HarnessProps) {
   const form = useForm<Values>({
     defaultValues: { name: 'Tunarr', host: 'localhost' },
@@ -50,6 +52,7 @@ function Harness({
     mutation: { mutationFn: save, onSuccess },
     toFormValues,
     invalidate,
+    failureMessage,
   });
   return (
     <SettingsForm
@@ -214,6 +217,20 @@ describe('useSettingsMutation', () => {
     expect(name()).toHaveValue('Tunarr Live');
     expect(
       screen.getByRole('button', { name: 'Reset changes' }),
+    ).toBeInTheDocument();
+  });
+
+  test('an editor that is not a settings page names its own failure', async () => {
+    await renderAndSave(
+      {
+        save: () => Promise.reject(serverRefuses('Channel number in use.')),
+        failureMessage: 'Could not save',
+      },
+      'Tunarr Live',
+    );
+
+    expect(
+      await screen.findByText('Could not save: Channel number in use.'),
     ).toBeInTheDocument();
   });
 

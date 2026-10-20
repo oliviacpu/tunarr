@@ -10,6 +10,9 @@ In this example, we want "Yu-Gi-Oh! Duel Monsters" to always air at 10am each da
 
 ![Time Slots example](../../assets/scheduling-tools-time_slots_example.png)
 
+Save is enabled once a slot or setting has changed, or after "Refresh Preview" made a new lineup. "Reset changes" puts
+back the saved slots and lineup, and leaving the editor with unsaved changes asks first.
+
 See below for an example of our current schedule. Please note that as we have only selected two time slots for the entire day, "Batman Beyond" being our last scheduled show will continue airing until the following day at 10am when the next scheduled episode of "Yu-Gi-Oh! Duel Monsters" is set to air.
 
 ![Time Slots preview](../../assets/scheduling-tools-time_slots_preview.png)
