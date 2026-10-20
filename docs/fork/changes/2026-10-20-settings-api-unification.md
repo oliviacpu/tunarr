@@ -1,4 +1,4 @@
-### Settings share one API shape (2026-10-20, PR pending)
+### Settings share one API shape (2026-10-20, PR #121)
 
 Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue S6, approved by the maintainer 2026-10-19 (PR #85).
 
