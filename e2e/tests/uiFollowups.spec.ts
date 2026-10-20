@@ -80,7 +80,7 @@ test('guide, search and media details keep one task selected', async ({
   }
 });
 
-test('new transcode config breadcrumbs link to settings and transcoding', async ({
+test('new transcode config breadcrumbs link to settings and playback', async ({
   page,
 }) => {
   await page.goto('/web/settings/ffmpeg/new');
@@ -89,8 +89,8 @@ test('new transcode config breadcrumbs link to settings and transcoding', async 
     breadcrumbs.getByRole('link', { name: 'Settings', exact: true }),
   ).toHaveAttribute('href', '/web/settings');
   await expect(
-    breadcrumbs.getByRole('link', { name: 'Transcoding', exact: true }),
-  ).toHaveAttribute('href', '/web/settings/ffmpeg');
+    breadcrumbs.getByRole('link', { name: 'Playback', exact: true }),
+  ).toHaveAttribute('href', '/web/settings/playback');
   await expect(
     breadcrumbs.getByText('New transcode config', { exact: true }),
   ).toBeVisible();

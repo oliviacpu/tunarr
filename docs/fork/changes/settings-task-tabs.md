@@ -6,5 +6,6 @@ Playback contains FFmpeg paths and logging, HLS settings, the HDR tone-map curve
 
 Bookmarks to the former FFmpeg, XMLTV, HDHR, Scanner, and Features routes redirect to their new homes, including transcode-config creation and edit links. The documentation sidebar and route coverage use the same grouping.
 The transcode-config breadcrumb points directly to Playback, and channel caption guidance names Captions & audio.
+Optional feature saves submit only the active group's fields, preserving newer values changed in another tab. A concurrent Experimental change while saving Playback is covered alongside query-isolation and shared dirty-guard regressions; the breadcrumb browser check uses the canonical Playback destination.
 
 Design: [S1 in the approved UI audit](../../../plans/ui-primitives-and-settings-audit-2026-10-19.md), approved in fork PR #85. This row adds no missing S2 fields or global channel-default model.
