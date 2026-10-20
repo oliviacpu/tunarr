@@ -40,6 +40,8 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   - `HlsSession.getHlsOptions` asks for 15 minutes of segments, `ceil(900 / segment seconds)`: 450 at 2 s, and 225 at
     4 s and in HLS Direct v2 (`HlsPlaylistWindowSeconds` and `hlsPlaylistWindowSize` in `ffmpeg/builder/constants.ts`).
     Both formats write the options' list size.
+  - A session that `TUNARR_SESSION_STALENESS_MS` keeps alive unread for more than 10 minutes gets a window of its
+    staleness plus 5 minutes instead, so ffmpeg never drops a segment the reader hasn't seen.
   - `append_list` and `discont_start` stay. `delete_segments` stays off, so `HlsSession` still deletes segment files.
   - Since #84 the playlist reader keeps the session's history by segment number. The served playlists count segments
     and program changes from the session's start, as before.
@@ -50,9 +52,9 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   - `HlsOutputFormat.test.ts`, `HlsDirectOutputFormat.test.ts`, `BasePipelineBuilder.test.ts`: `-hls_list_size` comes
     from the options and defaults to the window; `append_list` stays and `delete_segments` stays off. A concat
     (`hls_slower`) build still writes its own 25.
-  - `HlsSession.test.ts`: the window for each mode and segment length, handed to each program's ffmpeg. A 45-minute
-    simulated session whose file is ffmpeg's 450-entry window, across 83 programs (each a new ffmpeg) with read-ahead
-    bursts and short last segments, polled like a player while pruning runs. Every served playlist's
+  - `HlsSession.test.ts`: the window for each mode, segment length and staleness, handed to each program's ffmpeg. A
+    45-minute simulated session whose file is ffmpeg's 450-entry window, across 83 programs (each a new ffmpeg) with
+    read-ahead bursts and short last segments, polled like a player while pruning runs. Every served playlist's
     `MEDIA-SEQUENCE` is its first segment, both sequences only go forward, and each segment's discontinuity number and
     program date-time are those of the whole session's playlist.
   - `HlsAppendWindow.local.test.ts` (real ffmpeg, `pnpm test:local`, skipped without ffmpeg): three programs append to
@@ -61,7 +63,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
     program's first segment, none sits after the header, and a dropped entry's tag leaves with it. It passes on FFmpeg
     9.0.2, and the same flags wrote identical playlists on the image's 8.1.3 and 7.1.1. It belongs in the real-binary
     CI job (T28).
-  - 11 of the 15 new unit tests fail with `main`'s source. The others pin the flags that stay and `hls_slower`'s output.
+  - 13 of the 17 new unit tests fail with `main`'s source. The others pin the flags that stay and `hls_slower`'s output.
 - **Measured** with stream-repro, `main` and this change side by side: 30 minutes, 2 s segments, eight clips of 15 to
   50 s, `--rewind 15`, and the report's playlist poller, now `repro.mjs --poll-playlist`:
 

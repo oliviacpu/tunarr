@@ -851,8 +851,11 @@ export class HlsSession
       // of rewriting it after each segment and of reading it back in at each
       // program start stays the same however long the session runs
       // (plans/hls-playlist-growth-2026-10-19.md). #playlistReader keeps the
-      // session's history.
-      hlsListSize: hlsPlaylistWindowSize(hlsTime),
+      // session's history. A longer staleness gets a longer window.
+      hlsListSize: hlsPlaylistWindowSize(
+        hlsTime,
+        this.sessionOptions.stalenessMs,
+      ),
       deleteThreshold: null,
       appendSegments: true,
     };

@@ -199,5 +199,17 @@ describe('HlsOutputFormat', () => {
       expect(hlsPlaylistWindowSize(7)).toBe(129);
       expect(hlsPlaylistWindowSize(10)).toBe(90);
     });
+
+    // A session nobody asks for lives as long as its staleness. The window
+    // outlasts that, so ffmpeg never drops a segment the reader hasn't seen.
+    test('outlasts a staleness raised past 10 minutes', () => {
+      // The default staleness, two minutes
+      expect(hlsPlaylistWindowSize(2, 120_000)).toBe(450);
+      expect(hlsPlaylistWindowSize(2, 10 * 60_000)).toBe(450);
+      // 30 minutes, plus 5
+      expect(hlsPlaylistWindowSize(2, 30 * 60_000)).toBe(1050);
+      expect(hlsPlaylistWindowSize(4, 30 * 60_000)).toBe(525);
+      expect(hlsPlaylistWindowSize(2, NaN)).toBe(450);
+    });
   });
 });

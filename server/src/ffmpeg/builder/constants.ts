@@ -28,12 +28,29 @@ export type HlsOptions = {
 // MediaPlaylistReader keeps the session's history itself.
 export const HlsPlaylistWindowSeconds = 15 * 60;
 
+// A session nobody asks for lives until its staleness runs out, then until
+// the cleanup task's next run a minute later, while ffmpeg keeps up to 90 s
+// ahead. With a staleness raised past 10 minutes
+// (TUNARR_SESSION_STALENESS_MS), the window covers that much plus this, so
+// ffmpeg never drops a segment the reader hasn't seen.
+const UnreadSessionMarginSeconds = 5 * 60;
+
 /**
  * The -hls_list_size that keeps HlsPlaylistWindowSeconds of segments of
- * `segmentSeconds` each: 450 at 2 s, 225 at 4 s
+ * `segmentSeconds` each (450 at 2 s, 225 at 4 s), or more when the session's
+ * `stalenessMs` lets it go unread for longer
  */
-export function hlsPlaylistWindowSize(segmentSeconds: number) {
-  return Math.ceil(HlsPlaylistWindowSeconds / segmentSeconds);
+export function hlsPlaylistWindowSize(
+  segmentSeconds: number,
+  stalenessMs?: number,
+) {
+  const unreadSeconds =
+    stalenessMs !== undefined && Number.isFinite(stalenessMs)
+      ? stalenessMs / 1000 + UnreadSessionMarginSeconds
+      : 0;
+  return Math.ceil(
+    Math.max(HlsPlaylistWindowSeconds, unreadSeconds) / segmentSeconds,
+  );
 }
 
 export const defaultHlsOptions: DeepRequired<HlsOptions> = {

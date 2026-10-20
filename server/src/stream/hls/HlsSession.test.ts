@@ -1146,6 +1146,17 @@ describe('HlsSession', () => {
         hlsListSize({ streamMode: 'hls_direct_v2', segmentSeconds: 2 }),
       ).toBe(225);
     });
+
+    // TUNARR_SESSION_STALENESS_MS can keep a session nobody reads alive for
+    // longer than the window: ffmpeg would drop segments the reader never saw
+    test('outlasts a longer staleness', () => {
+      expect(hlsListSize({ segmentSeconds: 2, stalenessMs: 120_000 })).toBe(
+        450,
+      );
+      expect(hlsListSize({ segmentSeconds: 2, stalenessMs: 30 * 60_000 })).toBe(
+        1050,
+      );
+    });
   });
 
   describe('getMasterPlaylist', () => {
