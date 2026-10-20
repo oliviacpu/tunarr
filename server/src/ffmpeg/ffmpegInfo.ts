@@ -25,7 +25,7 @@ import {
 } from 'lodash-es';
 import NodeCache from 'node-cache';
 import { format } from 'node:util';
-import { attempt, isNonEmptyString, parseIntOrNull } from '../util/index.ts';
+import { isNonEmptyString, parseIntOrNull } from '../util/index.ts';
 import { redactSecrets } from '../util/redactSecrets.ts';
 import { FfmpegCapabilities } from './builder/capabilities/FfmpegCapabilities.ts';
 
@@ -239,7 +239,11 @@ export class FfmpegInfo {
   }
 
   async getHwAccels() {
-    const res = await attempt(async () => {
+    return (await this.getHwAccelsResult()).getOrElse(() => []);
+  }
+
+  async getHwAccelsResult() {
+    return Result.attemptAsync(async () => {
       const out = await cacheGetOrSet(
         FfmpegInfo.resultCache,
         this.cacheKey('HWACCELS'),
@@ -248,8 +252,6 @@ export class FfmpegInfo {
 
       return reject(map(drop(split(out, '\n'), 1), trim), (s) => isEmpty(s));
     });
-
-    return isError(res) ? [] : res;
   }
 
   async getOptions() {

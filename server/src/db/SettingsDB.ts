@@ -139,7 +139,7 @@ export const defaultSettings = (dbBasePath: string): SettingsFile => ({
   },
   settings: {
     clientId: uuidv4(),
-    hdhr: defaultHdhrSettings,
+    hdhr: HdhrSettingsSchema.parse({}),
     xmltv: defaultXmlTvSettings(dbBasePath),
     ffmpeg: defaultFfmpegSettings,
     mediaSource: defaultGlobalMediaSourceSettings,

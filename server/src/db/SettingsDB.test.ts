@@ -108,6 +108,17 @@ describe('legacy HDHR tuner count', () => {
   });
 });
 
+test('default settings own their tuner configuration', () => {
+  const first = defaultSettings('/tmp/first');
+  const second = defaultSettings('/tmp/second');
+  first.settings.hdhr.tunerCount = 17;
+  first.settings.hdhr.autoDiscoveryEnabled = false;
+  expect(second.settings.hdhr).toEqual(HdhrSettingsSchema.parse({}));
+  expect(defaultSettings('/tmp/third').settings.hdhr).toEqual(
+    HdhrSettingsSchema.parse({}),
+  );
+});
+
 describe('legacy media rescan interval', () => {
   test.each([
     [0, 1],
