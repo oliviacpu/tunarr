@@ -793,3 +793,42 @@ test('stale wrapper teardown cannot pause an on-demand channel during replacemen
   expect(current).not.toBe(old);
   await manager.endSession(current);
 });
+
+test('conditional retirement preserves a viewer registered while startup held the channel lock', async () => {
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+  );
+  const session = (
+    await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+  ).get();
+  session.removeConnection('old');
+  let release: () => void = () => {};
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.spyOn(session, 'started', 'get').mockReturnValue(false);
+  const startup = vi.spyOn(session, 'start').mockImplementation(() => ready);
+  const stop = vi.spyOn(session, 'stop');
+  const joining = manager.getOrCreateHlsSession(channelUuid, 'new', connection);
+  await vi.waitFor(() => expect(startup).toHaveBeenCalled());
+  const retiring = manager.endSessionInBackground(session, { ifUnused: true });
+  release();
+  expect((await joining).isSuccess()).toBe(true);
+  await retiring;
+  expect(manager.getHlsSession(channelUuid)).toBe(session);
+  expect(session.isKnownConnection('new')).toBe(true);
+  expect(stop).not.toHaveBeenCalled();
+  await manager.endSession(session);
+});
+
+test('conditional retirement still removes an unused session', async () => {
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+  );
+  const session = (
+    await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+  ).get();
+  session.removeConnection('old');
+  await manager.endSessionInBackground(session, { ifUnused: true });
+  expect(manager.getHlsSession(channelUuid)).toBeUndefined();
+});

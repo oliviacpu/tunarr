@@ -172,9 +172,17 @@ export class SessionManager {
    * and lets its stop (which can wait up to 30s for ffmpeg) finish in the
    * background.
    */
-  async endSessionInBackground(session: Session): Promise<void> {
+  async endSessionInBackground(
+    session: Session,
+    options: { ifUnused?: boolean } = {},
+  ): Promise<void> {
     const { id, sessionType } = session.keyObj;
-    const removed = await this.removeSession(id, sessionType, session);
+    const removed = await this.removeSession(
+      id,
+      sessionType,
+      session,
+      options.ifUnused,
+    );
     removed?.stop().catch((e) => {
       this.logger.error(
         this.getLoggerContext(id, e),
@@ -187,11 +195,13 @@ export class SessionManager {
     id: string,
     sessionType: SessionType,
     expected?: Session,
+    ifUnused = false,
   ): Promise<Maybe<Session>> {
     const lock = await this.#sessionLocker.getOrCreateLock(id);
     return lock.runExclusive(() => {
       const session = this.getSession(id, sessionType);
       if (expected !== undefined && session !== expected) return;
+      if (ifUnused && session && session.numConnections() > 0) return;
       delete this.#sessions[sessionCacheKey(id, sessionType)];
       return session;
     });
@@ -474,6 +484,13 @@ export class SessionManager {
           });
         }
 
+        if (session.hasError || session.stoppingOrStopped) {
+          throw (
+            session.error ?? new GenericError('Session ended during startup')
+          );
+        }
+        // Registration and conditional retirement must use the same channel lock.
+        session.addConnection(token, connection);
         return session;
       });
 
@@ -490,14 +507,6 @@ export class SessionManager {
         'Session obtained: %s',
         timer.summary(),
       );
-      if (session.hasError || session.stoppingOrStopped) {
-        throw (
-          session.error ??
-          new GenericError('Session reported error but had none set.')
-        );
-      }
-
-      session.addConnection(token, connection);
       this.eventService.push({
         type: 'stream',
         action: 'connection_add',

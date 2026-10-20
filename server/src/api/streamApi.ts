@@ -176,7 +176,7 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
             session.numConnections() === 0
           ) {
             void req.serverCtx.sessionManager
-              .endSessionInBackground(session)
+              .endSessionInBackground(session, { ifUnused: true })
               .catch((error: unknown) =>
                 logger.error(error, 'Could not retire timed-out session'),
               );
@@ -210,7 +210,7 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
                 session.numConnections() === 0
               ) {
                 void req.serverCtx.sessionManager
-                  .endSessionInBackground(session)
+                  .endSessionInBackground(session, { ifUnused: true })
                   .catch((error: unknown) =>
                     logger.error(error, 'Could not retire timed-out session'),
                   );
