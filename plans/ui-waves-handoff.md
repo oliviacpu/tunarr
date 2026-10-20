@@ -24,8 +24,7 @@ starting anything.
 | 5 | P1–P5 | P1 #123 and P2 #122 prepared; P3/P4 in progress; P5 pending |
 
 Release `oliviacpu-2026.10.20` was tagged at the wave-2 fold-in (waves 1–2 plus C5/C6) and the
-fork image built from it. After wave 3 lands: run the wave-3 fold-in (move every note in `docs/fork/changes/` except its
-`README.md` into FORK.md, update this file and the plan's wave status), tag `oliviacpu-2026.10.21`
+fork image built from it. Wave 3 and its note fold-in are complete. Next: tag `oliviacpu-2026.10.21`
 (or `.20.2` if the same day), wait for the fork-image workflow (its build of the newest `oliviacpu-`
 tag also moves `ghcr.io/oliviacpu/tunarr:latest`, which is what the seedbox runs; see FORK.md's
 first section), then deploy to the box (the user asked for this explicitly: `~/apps/tunarr` on the
