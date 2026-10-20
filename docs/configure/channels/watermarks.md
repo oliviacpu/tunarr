@@ -2,7 +2,7 @@
 
 Channels can have watermarks to aid in recreating a classic TV experience.
 
-Open the channel editor's **Watermark** tab to configure the overlay. Existing channels also have a direct `/channels/<id>/edit/watermark` address.
+Open the channel editor's **Watermark** tab to enable and configure its overlay. These controls are separate from **Streaming**; the HLS Direct stream modes still disable watermarks.
 
 ![](../../assets/watermark_form.png)
 
