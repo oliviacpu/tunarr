@@ -7,6 +7,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { render, screen } from '@testing-library/react';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
+import { StyledMenu } from './components/base/StyledMenu.tsx';
 import { Theme } from './theme.ts';
 
 type Rgba = { r: number; g: number; b: number; a: number };
@@ -234,5 +235,22 @@ describe('Theme', () => {
       expect(helper.color).not.toBe(light.text.secondary);
       expect(paper.borderTopColor).not.toBe(light.divider);
     });
+  });
+
+  it('keeps the flat-Paper border off styled menus', () => {
+    const anchorEl = document.createElement('div');
+    document.body.appendChild(anchorEl);
+    render(
+      createElement(
+        ThemeProvider,
+        { theme: Theme },
+        createElement(StyledMenu, { open: true, anchorEl }, 'menu content'),
+      ),
+    );
+    const paper = document.querySelector('.MuiMenu-paper');
+    if (paper === null) {
+      throw new Error('The menu paper did not render');
+    }
+    expect(getComputedStyle(paper).borderStyle).toBe('none');
   });
 });

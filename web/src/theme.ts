@@ -181,6 +181,18 @@ export const Theme = createTheme({
         }),
       },
     },
+    // Menus and popovers render flat Paper (StyledMenu passes elevation 0 and
+    // draws its own shadow), so they must not pick up the flat-Paper border.
+    MuiMenu: {
+      styleOverrides: {
+        paper: { border: 0 },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: { border: 0 },
+      },
+    },
     MuiDialog: {
       styleOverrides: {
         paper: {
