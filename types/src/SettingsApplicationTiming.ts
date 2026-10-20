@@ -75,9 +75,9 @@ export const SettingsApplicationTiming = {
   },
   hlsDirectOutput: {
     title: 'HLS Direct output format',
-    when: 'next-session',
+    when: 'next-program',
     description:
-      'Tune in again to obtain a playlist and stream using the saved container format.',
+      'New HLS Direct playlists and program streams use the saved container format. A stream already running keeps its original format.',
   },
   videoFilters: {
     title: 'Video scaling, deinterlacing and tone mapping',

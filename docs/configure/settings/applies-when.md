@@ -17,7 +17,7 @@ Browser preferences apply as they change. Other controls apply after a successfu
 | Library scan interval | Live | Saving reschedules library scans and collection and custom-show syncs immediately. A scan already running continues. |
 | FFmpeg and FFprobe executable paths | Next program | New probes and processes use the saved executable paths. Processes already running continue with their original binaries. |
 | FFmpeg logging | Next program | New program FFmpeg processes use the saved logging destination and level. Processes already running keep their logging options. |
-| HLS Direct output format | Next session | Tune in again to obtain a playlist and stream using the saved container format. |
+| HLS Direct output format | Next program | New HLS Direct playlists and program streams use the saved container format. A stream already running keeps its original format. |
 | Video scaling, deinterlacing and tone mapping | Next program | The next program pipeline reads the saved scaling, deinterlace and tone-map settings. A program already transcoding keeps its pipeline. |
 | HLS read-ahead thread limit | Next program | The next HLS program transcode reads the saved read-ahead thread limit. A transcode already running keeps its thread count. |
 | HLS segments and startup buffering | Next session | New HLS sessions read the saved segment length and initial segment count. New MPEG-TS wrapper sessions read the startup burst. |

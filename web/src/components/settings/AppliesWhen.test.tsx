@@ -58,6 +58,7 @@ describe('settings application timing', () => {
     ['logging', 'Live'],
     ['captionsEnabled', 'Next session'],
     ['videoFilters', 'Next program'],
+    ['hlsDirectOutput', 'Next program'],
     ['backendAddress', 'Reload required'],
     ['serverPort', 'Restart required'],
   ] as const)(

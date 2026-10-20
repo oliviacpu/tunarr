@@ -83,9 +83,9 @@ exports[`settings application timing > the reviewed runtime mapping stays explic
     "when": "live",
   },
   "hlsDirectOutput": {
-    "description": "Tune in again to obtain a playlist and stream using the saved container format.",
+    "description": "New HLS Direct playlists and program streams use the saved container format. A stream already running keeps its original format.",
     "title": "HLS Direct output format",
-    "when": "next-session",
+    "when": "next-program",
   },
   "hlsSession": {
     "description": "New HLS sessions read the saved segment length and initial segment count. New MPEG-TS wrapper sessions read the startup burst.",
