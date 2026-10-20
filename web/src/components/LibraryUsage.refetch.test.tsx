@@ -66,7 +66,7 @@ test.each([false, true])(
     ).not.toBeInTheDocument();
     expect(screen.queryByText('1 · Old channel')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Delete', exact: true }),
+      screen.getByRole('button', { name: 'Delete' }),
     ).toBeEnabled();
     resolve({
       data: {
