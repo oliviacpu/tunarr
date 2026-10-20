@@ -24,11 +24,15 @@ const noSchedule: Schedule = {
 
 // The schedule the form holds is printed under the fields
 function Harness({
+  enabled = true,
   onSchedule = true,
   schedule = hourly,
+  maxFileSizeBytes = 0,
 }: {
+  enabled?: boolean;
   onSchedule?: boolean;
   schedule?: Schedule;
+  maxFileSizeBytes?: number;
 }) {
   const form = useForm<GeneralSettingsFormData>({
     defaultValues: {
@@ -42,9 +46,9 @@ function Harness({
         logsDirectory: '/config/logs',
         useEnvVarLevel: false,
         logRollConfig: {
-          enabled: true,
+          enabled,
           rolledFileLimit: 3,
-          maxFileSizeBytes: 0,
+          maxFileSizeBytes,
           schedule,
         },
       },
@@ -133,5 +137,52 @@ describe('LogRollForm', () => {
     expect(screen.getByRole('combobox', { name: 'Unit' })).toHaveTextContent(
       'Hours',
     );
+  });
+
+  test('turning rolling on with neither a schedule nor a size limit starts from the defaults', async () => {
+    const { user } = renderWithProviders(
+      <Harness
+        enabled={false}
+        onSchedule={false}
+        schedule={noSchedule}
+        maxFileSizeBytes={0}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Enable log file rolling' }),
+    );
+
+    expect(rollOnSchedule()).toBeChecked();
+    expect(heldSchedule()).toEqual({
+      type: 'every',
+      unit: 'day',
+      increment: 1,
+      offsetMs: 0,
+    });
+    expect(
+      screen.getByRole('checkbox', { name: 'Roll based on size' }),
+    ).toBeChecked();
+    expect(screen.getByLabelText('Max file size (bytes)')).toHaveValue(
+      String(50 * 1024 * 1024),
+    );
+  });
+
+  test('turning rolling on keeps a size limit that is already set', async () => {
+    const { user } = renderWithProviders(
+      <Harness
+        enabled={false}
+        onSchedule={false}
+        schedule={noSchedule}
+        maxFileSizeBytes={1024}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Enable log file rolling' }),
+    );
+
+    expect(rollOnSchedule()).not.toBeChecked();
+    expect(screen.getByLabelText('Max file size (bytes)')).toHaveValue('1024');
   });
 });

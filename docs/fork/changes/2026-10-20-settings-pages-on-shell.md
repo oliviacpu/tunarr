@@ -24,7 +24,10 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue C2, approved
     stops being valid, and the field says why once you have left it. General's server URL field now shows its error.
   - General: the form fills in from the saved settings with the server URL as stored when the save returns, so a new
     URL stays in the field. "Roll on schedule" is its own field; unticking it hides the schedule and leaves it out of
-    the save, ticking it again brings the schedule back, and with no schedule it starts daily at midnight.
+    the save, ticking it again brings the schedule back (a cron schedule included), and with no schedule it starts
+    daily at midnight. With log rolling off, its hidden fields no longer hold up Save and neither the schedule nor the
+    size limit is sent; turning rolling back on with neither set starts from the defaults (daily at midnight, 50 MB).
+    Turning backups off no longer leaves Save disabled by a hidden backup interval.
   - New `web/src/components/settings/general/ScheduleFields.tsx` replaces both schedule copies: a labelled interval
     ("Backup interval" / "Roll interval", required and at least 1), a labelled unit (hours or days; a unit only
     settings.json sets stays listed) and a labelled "Time of day" for daily schedules. It wraps on a phone. A cron

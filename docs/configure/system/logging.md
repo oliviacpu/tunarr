@@ -137,7 +137,8 @@ Log rolling is on by default. Tunarr rotates the log every day at midnight, or s
 | **Schedule** | Every 1 day at midnight | Time-based rotation |
 
 Under **Settings > General > Logging**, tick **Roll on schedule** to set the schedule: **Roll interval** (the N),
-**Unit** (hours or days) and, for a daily schedule, **Time of day**.
+**Unit** (hours or days) and, for a daily schedule, **Time of day**. Turning log rolling off does not keep the schedule
+or the size limit; turning it back on with neither set starts from the defaults, daily at midnight and 50 MB.
 
 Size and schedule rotation can be combined. The log rotates when either one triggers, so heavy logging at `debug` or `trace` can rotate out older days early.
 

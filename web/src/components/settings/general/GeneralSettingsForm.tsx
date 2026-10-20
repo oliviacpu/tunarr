@@ -134,16 +134,23 @@ function toUpdateRequest(
   data: GeneralSettingsFormData,
 ): UpdateSystemSettingsRequest {
   const { logRollConfig, categoryLogLevel } = data.logging;
+  // With rolling off the server reads neither the schedule nor the size
+  // limit, and the page hides both, so neither is sent
+  const rolling = logRollConfig.enabled;
   return {
     logging: {
       logLevel: data.logLevel === 'env' ? undefined : data.logLevel,
       useEnvVarLevel: data.logLevel === 'env',
       logRollConfig: {
         ...logRollConfig,
-        maxFileSizeBytes: logRollConfig.maxFileSizeBytes
-          ? Math.max(0, logRollConfig.maxFileSizeBytes)
-          : undefined,
-        schedule: data.logRollOnSchedule ? logRollConfig.schedule : undefined,
+        maxFileSizeBytes:
+          rolling && logRollConfig.maxFileSizeBytes
+            ? Math.max(0, logRollConfig.maxFileSizeBytes)
+            : undefined,
+        schedule:
+          rolling && data.logRollOnSchedule
+            ? logRollConfig.schedule
+            : undefined,
       },
       categoryLogLevel: {
         scheduling:

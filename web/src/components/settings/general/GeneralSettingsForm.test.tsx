@@ -354,4 +354,44 @@ describe('GeneralSettingsForm', () => {
     const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
     expect(sent?.backup).toEqual({ configurations: [] });
   });
+
+  test('turning log rolling off stops an invalid roll interval holding up Save, and sends neither schedule nor size', async () => {
+    const rolling = {
+      ...systemSettings,
+      logging: {
+        ...systemSettings.logging,
+        logRollConfig: {
+          enabled: true,
+          rolledFileLimit: 3,
+          maxFileSizeBytes: 50 * 1024 * 1024,
+          schedule: {
+            type: 'every',
+            increment: 1,
+            unit: 'hour',
+            offsetMs: 0,
+          },
+        },
+      },
+    } satisfies SystemSettings;
+    const { user, saveButton } = await renderForm(rolling);
+
+    await user.clear(screen.getByLabelText('Roll interval'));
+    await user.tab();
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Enable log file rolling' }),
+    );
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
+    const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
+    expect(sent?.logging?.logRollConfig).toEqual({
+      enabled: false,
+      rolledFileLimit: 3,
+      maxFileSizeBytes: undefined,
+      schedule: undefined,
+    });
+  });
 });

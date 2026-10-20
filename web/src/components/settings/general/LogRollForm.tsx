@@ -10,12 +10,11 @@ import { defaultLogRollConfig } from '@tunarr/types';
 import { useEffect } from 'react';
 import { Controller, useFormContext, useWatch } from 'react-hook-form';
 import { formatBytes } from '../../../helpers/util.ts';
-import {
-  CheckboxFormController,
-  NumericFormControllerText,
-} from '../../util/TypedController.tsx';
+import { NumericFormControllerText } from '../../util/TypedController.tsx';
 import type { GeneralSettingsFormData } from './GeneralSettingsForm.tsx';
 import { ScheduleFields } from './ScheduleFields.tsx';
+
+const DefaultMaxFileSize = defaultLogRollConfig().maxFileSizeBytes ?? 0;
 
 export const LogRollForm = () => {
   const { t } = useLingui();
@@ -26,15 +25,18 @@ export const LogRollForm = () => {
     name: ['logging.logRollConfig.enabled', 'logRollOnSchedule'],
   });
 
-  // Unticked, the schedule is not sent, so it must not hold up Save. Once its
-  // fields have left the page, check that part of the form again: fields no
-  // longer on the page pass, so their errors clear and Save follows the
-  // fields that are sent
+  // Hidden fields are not sent: with rolling off, none of the log rolling
+  // fields; with "Roll on schedule" unticked, the schedule. So they must not
+  // hold up Save. Once they have left the page, check that part of the form
+  // again: fields no longer on the page pass, so their errors clear and Save
+  // follows the fields that are sent
   useEffect(() => {
-    if (!onSchedule) {
+    if (!enabled) {
+      void trigger('logging.logRollConfig');
+    } else if (!onSchedule) {
       void trigger('logging.logRollConfig.schedule');
     }
-  }, [onSchedule, trigger]);
+  }, [enabled, onSchedule, trigger]);
 
   // Ticking "Roll on schedule" with no usable schedule starts from daily at
   // midnight. Unticking keeps the schedule, so ticking again brings it back;
@@ -57,15 +59,44 @@ export const LogRollForm = () => {
     );
   };
 
+  // Rolling saved while off keeps neither a schedule nor a size limit, so
+  // turning it on with neither set starts from the defaults: daily at
+  // midnight, and at the default size limit
+  const rollingOnTick = () => {
+    const size = getValues('logging.logRollConfig.maxFileSizeBytes');
+    if (getValues('logRollOnSchedule') || (size ?? 0) > 0) {
+      return;
+    }
+    scheduleOnTick();
+    setValue('logRollOnSchedule', true, { shouldDirty: true });
+    setValue('logging.logRollConfig.maxFileSizeBytes', DefaultMaxFileSize, {
+      shouldDirty: true,
+    });
+  };
+
   return (
     <Stack gap={2}>
       <FormControl>
         <FormControlLabel
           label={t`Enable log file rolling`}
           control={
-            <CheckboxFormController
+            <Controller
               control={control}
               name="logging.logRollConfig.enabled"
+              render={({ field }) => (
+                <Checkbox
+                  name={field.name}
+                  inputRef={field.ref}
+                  checked={field.value}
+                  onBlur={field.onBlur}
+                  onChange={(_, checked) => {
+                    if (checked) {
+                      rollingOnTick();
+                    }
+                    field.onChange(checked);
+                  }}
+                />
+              )}
             />
           }
         />
@@ -129,11 +160,7 @@ export const LogRollForm = () => {
                       <Checkbox
                         checked={(field.value ?? 0) > 0}
                         onChange={(_, checked) =>
-                          field.onChange(
-                            checked
-                              ? defaultLogRollConfig().maxFileSizeBytes
-                              : 0,
-                          )
+                          field.onChange(checked ? DefaultMaxFileSize : 0)
                         }
                       />
                     )}
