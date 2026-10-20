@@ -34,7 +34,10 @@ const metadata: GetApiSystemFeatureFlagsResponse['metadata'] =
 
 // What the server has; a save changes it as the server would
 const { server, mockPutFlags } = vi.hoisted(() => ({
-  server: { flags: null as Flags | null },
+  server: {
+    flags: null as Flags | null,
+    metadata: [] as GetApiSystemFeatureFlagsResponse['metadata'],
+  },
   mockPutFlags: vi.fn(),
 }));
 
@@ -44,7 +47,8 @@ vi.mock(
     ...(await importOriginal<typeof Generated>()),
     getApiSystemFeatureFlagsOptions: () => ({
       queryKey: ['test-feature-flags'],
-      queryFn: () => Promise.resolve({ flags: server.flags, metadata }),
+      queryFn: () =>
+        Promise.resolve({ flags: server.flags, metadata: server.metadata }),
     }),
     getApiSystemFeatureFlagsQueryKey: () => ['test-feature-flags'],
   }),
@@ -128,11 +132,35 @@ describe('FeaturesSettingsPage', () => {
 
   beforeEach(() => {
     server.flags = savedFlags;
+    server.metadata = metadata;
     mockPutFlags.mockReset();
     mockPutFlags.mockImplementation((options: { body: FlagsBody }) => {
       server.flags = { ...savedFlags, ...options.body };
       return Promise.resolve({ data: { flags: server.flags, metadata } });
     });
+  });
+
+  test('renders server copy for an additive flag absent from the loaded bundle', async () => {
+    const futureFlags = { ...savedFlags, futureFeature: true };
+    server.flags = futureFlags;
+    server.metadata = [
+      ...metadata,
+      {
+        ...FeatureFlagMetadata[0],
+        key: 'futureFeature',
+        displayName: 'New server feature',
+        description: 'Description from the upgraded server.',
+        envOverride: false,
+      },
+    ];
+
+    await renderPage();
+
+    const flag = screen.getByRole('checkbox', { name: 'New server feature' });
+    expect(flag).toBeChecked();
+    expect(flag).toHaveAccessibleDescription(
+      'Description from the upgraded server.',
+    );
   });
 
   test('a flag an environment variable sets cannot be switched here', async () => {

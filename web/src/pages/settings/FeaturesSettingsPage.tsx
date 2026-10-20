@@ -53,30 +53,37 @@ function FlagSection({
         {title}
       </Typography>
       <Stack spacing={2}>
-        {flags.map((meta) => (
-          <Stack
-            key={meta.key}
-            direction="row"
-            alignItems="flex-start"
-            spacing={1}
-          >
-            <SwitchFormController
-              control={control}
-              name={meta.key}
-              label={i18n._(featureFlagMessages[meta.key].displayName)}
-              helperText={i18n._(featureFlagMessages[meta.key].description)}
-              // The environment variable wins over the saved value
-              disabled={meta.envOverride}
-            />
-            {meta.envOverride && (
-              <Chip
-                label={<Trans>Set by environment variable</Trans>}
-                size="small"
-                sx={{ mt: 1 }}
+        {flags.map((meta) => {
+          const messages = featureFlagMessages[meta.key];
+          return (
+            <Stack
+              key={meta.key}
+              direction="row"
+              alignItems="flex-start"
+              spacing={1}
+            >
+              <SwitchFormController
+                control={control}
+                name={meta.key}
+                label={
+                  messages ? i18n._(messages.displayName) : meta.displayName
+                }
+                helperText={
+                  messages ? i18n._(messages.description) : meta.description
+                }
+                // The environment variable wins over the saved value
+                disabled={meta.envOverride}
               />
-            )}
-          </Stack>
-        ))}
+              {meta.envOverride && (
+                <Chip
+                  label={<Trans>Set by environment variable</Trans>}
+                  size="small"
+                  sx={{ mt: 1 }}
+                />
+              )}
+            </Stack>
+          );
+        })}
       </Stack>
     </Box>
   );
