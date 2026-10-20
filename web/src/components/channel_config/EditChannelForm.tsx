@@ -41,7 +41,7 @@ function getDefaultFormValues(
 ): DeepRequired<Omit<SaveableChannel, 'captions'>> &
   Pick<SaveableChannel, 'captions'> {
   return {
-    ...omit(channel, ['fallback', 'programCount', 'transcoding', 'sessions']),
+    ...omit(channel, ['fallback', 'programCount', 'sessions']),
     streamMode: channel.streamMode ?? 'hls',
     fillerCollections: channel.fillerCollections ?? [],
     fillerRepeatCooldown:
