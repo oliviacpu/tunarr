@@ -2,7 +2,7 @@
 
 Channels can have watermarks to aid in recreating a classic TV experience.
 
-![](/assets/watermark_form.png)
+![](../../assets/watermark_form.png)
 
 There are many ways to customize watermarks for a channel. Here are some details on specific options:
 

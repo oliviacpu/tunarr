@@ -97,3 +97,29 @@ test('the fork issue form searches and assigns the fork owner', () => {
   expect(bugReportTemplate).not.toContain('chrisbenincasa/tunarr/issues');
   expect(bugReportTemplate).not.toContain('  - chrisbenincasa');
 });
+
+test('linked documentation resources stay inside the checked-in docs', () => {
+  const files = new Set(
+    Object.keys(import.meta.glob('../../../docs/**/*.{md,html,png,svg}')).map(
+      (file) => file.slice(DocsSource.length),
+    ),
+  );
+  for (const page of Object.values(DocsPages)) {
+    const file = page.split('#')[0] ?? '';
+    const markdown = docsPageAt(file);
+    if (markdown === undefined) {
+      throw new Error(`No docs page for ${page}`);
+    }
+    for (const match of markdown.matchAll(/\[[^\]]*\]\(([^\s)]+)\)/g)) {
+      const target = match[1];
+      if (target === undefined || /^(?:[a-z]+:|#)/i.test(target)) {
+        continue;
+      }
+      expect(target, `${file}: ${target}`).not.toMatch(/^\//);
+      const resolved = new URL(target, `https://docs.example/${file}`);
+      expect(files, `${file}: ${target}`).toContain(
+        decodeURIComponent(resolved.pathname.slice(1)),
+      );
+    }
+  }
+});
