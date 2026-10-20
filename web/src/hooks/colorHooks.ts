@@ -1,5 +1,3 @@
-// import colors from '@mui/material/colors';
-import { useColorScheme } from '@mui/material';
 import { common } from '@mui/material/colors';
 import type { ChannelProgram } from '@tunarr/types';
 import type Color from 'colorjs.io';
@@ -10,10 +8,12 @@ import {
   RandomPastelsDarkMode,
 } from '../helpers/colors.ts';
 import { getProgramGroupingKey } from '../helpers/programUtil.ts';
+import { useIsDarkMode } from './useTunarrTheme.ts';
 
+// The scheme on screen, not the stored mode: under 'system' on a dark OS the
+// mode is 'system' but the scheme is dark.
 const useRandomColorPalette = () => {
-  const isDarkMode = useColorScheme().mode === 'dark';
-  return isDarkMode ? RandomPastelsDarkMode : RandomPastels;
+  return useIsDarkMode() ? RandomPastelsDarkMode : RandomPastels;
 };
 
 export const useRandomProgramBackgroundColor = () => {
