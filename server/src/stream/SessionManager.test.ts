@@ -7,7 +7,7 @@ import type { OnDemandChannelService } from '@/services/OnDemandChannelService.j
 import type { Logger } from '@/util/logging/LoggerFactory.js';
 import type { DeepRequired } from 'ts-essentials';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ConcatSession } from './ConcatSession.ts';
+import { ConcatSession } from './ConcatSession.ts';
 import type { HlsSessionOptions } from './hls/HlsSession.ts';
 
 // Mock modules that create circular dependency chains through Inversify
@@ -53,6 +53,10 @@ class StubHlsSession extends BaseHlsSession<HlsSessionOptions> {
       deleteThreshold: null,
       appendSegments: true,
     };
+  }
+
+  markError() {
+    this.state = 'error';
   }
 
   // Skip all real startup work — just mark as started
@@ -109,6 +113,7 @@ function makeSessionManager(
     channel: ChannelOrmWithTranscodeConfig,
     options: HlsSessionOptions,
   ) => StubHlsSession,
+  concatFactory = vi.fn(),
 ) {
   const channelDB: Partial<IChannelDB> = {
     getChannelOrm: vi.fn().mockResolvedValue(makeChannel()),
@@ -133,15 +138,15 @@ function makeSessionManager(
   };
 
   // Construct SessionManager directly, bypassing Inversify
-  const manager = new (SessionManager as any)(
+  const manager = new SessionManager(
     channelDB,
     onDemandService,
-    hlsFactory,
+    hlsFactory as unknown as ConstructorParameters<typeof SessionManager>[2],
     vi.fn(), // hlsSlowerSessionFactory — not used in these tests
-    vi.fn(), // concatSessionFactory
+    concatFactory, // concatSessionFactory
     eventService,
     settingsDB,
-  ) as SessionManager;
+  );
 
   // Override the @InjectLogger() property with a noop mock so
   // tests don't require an initialized LoggerFactory.
@@ -586,5 +591,114 @@ describe('SessionManager', () => {
       // because #connections is non-empty when the timer fires
       expect(manager.getHlsSession(channelUuid)).toBe(session);
     });
+  });
+});
+
+describe('tune-in recovery', () => {
+  test.each(['endSession', 'endSessionInBackground'] as const)(
+    '%s of an old instance preserves its replacement',
+    async (method) => {
+      const manager = makeSessionManager(
+        (channel, opts) => new StubHlsSession(channel, opts),
+      );
+      const old = (
+        await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+      ).get();
+      await manager.endSession(old);
+      const current = (
+        await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+      ).get();
+      await manager[method](old);
+      expect(manager.getHlsSession(channelUuid)).toBe(current);
+      expect(current.started).toBe(true);
+      await manager.endSession(current);
+    },
+  );
+
+  test('an errored session is replaced instead of reused', async () => {
+    const manager = makeSessionManager(
+      (channel, opts) => new StubHlsSession(channel, opts),
+    );
+    const old = (
+      await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+    ).get();
+    (old as unknown as StubHlsSession).markError();
+    const result = await manager.getOrCreateHlsSession(
+      channelUuid,
+      'new',
+      connection,
+    );
+    expect(result.isSuccess()).toBe(true);
+    expect(result.get()).not.toBe(old);
+    await manager.endSession(result.get());
+  });
+
+  test('a wrapper waiting for its first backing session survives a second tune', async () => {
+    class Wrapper extends ConcatSession {
+      protected override async startInternal() {}
+      protected override async stopInternal() {
+        this.emit('stop');
+      }
+    }
+    const factory = vi.fn((channel, opts) => new Wrapper(channel, opts));
+    const manager = makeSessionManager(
+      (channel, opts) => new StubHlsSession(channel, opts),
+      factory,
+    );
+    const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+    const one = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'one',
+        connection,
+        options,
+      )
+    ).get();
+    const two = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'two',
+        connection,
+        options,
+      )
+    ).get();
+    expect(two).toBe(one);
+    expect(factory).toHaveBeenCalledOnce();
+    await manager.endSession(one);
+  });
+
+  test('a wrapper bound to a missing backing instance is replaced', async () => {
+    class Wrapper extends ConcatSession {
+      protected override async startInternal() {}
+      protected override async stopInternal() {
+        this.emit('stop');
+      }
+    }
+    const factory = vi.fn((channel, opts) => new Wrapper(channel, opts));
+    const manager = makeSessionManager(
+      (channel, opts) => new StubHlsSession(channel, opts),
+      factory,
+    );
+    const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+    const old = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'one',
+        connection,
+        options,
+      )
+    ).get();
+    old.underlyingSessionId = 'previous-backing-instance';
+    const current = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'two',
+        connection,
+        options,
+      )
+    ).get();
+    expect(current).not.toBe(old);
+    expect(current.started).toBe(true);
+    await manager.endSession(current);
   });
 });

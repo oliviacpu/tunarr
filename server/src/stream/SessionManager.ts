@@ -1,3 +1,4 @@
+import { TuneInTimer } from './TuneInTimer.ts';
 import { hdhrCaptionsEnabled } from './captions/hdhrCaptionsEnabled.ts';
 import { Result } from '@/types/result.js';
 import type { Maybe } from '@/types/util.js';
@@ -157,7 +158,11 @@ export class SessionManager {
     // Stop outside the channel lock. A stop can wait up to 30s for ffmpeg to
     // exit, and each session has its own directory, so a new tune-in on this
     // channel need not wait for it.
-    const session = await this.removeSession(id, sessionType);
+    const session = await this.removeSession(
+      id,
+      sessionType,
+      idOrSession instanceof Session ? idOrSession : undefined,
+    );
     await session?.stop();
   }
 
@@ -168,7 +173,7 @@ export class SessionManager {
    */
   async endSessionInBackground(session: Session): Promise<void> {
     const { id, sessionType } = session.keyObj;
-    const removed = await this.removeSession(id, sessionType);
+    const removed = await this.removeSession(id, sessionType, session);
     removed?.stop().catch((e) => {
       this.logger.error(
         this.getLoggerContext(id, e),
@@ -180,10 +185,12 @@ export class SessionManager {
   private async removeSession(
     id: string,
     sessionType: SessionType,
+    expected?: Session,
   ): Promise<Maybe<Session>> {
     const lock = await this.#sessionLocker.getOrCreateLock(id);
     return lock.runExclusive(() => {
       const session = this.getSession(id, sessionType);
+      if (expected !== undefined && session !== expected) return;
       delete this.#sessions[sessionCacheKey(id, sessionType)];
       return session;
     });
@@ -215,13 +222,22 @@ export class SessionManager {
         options.sessionType,
       );
       const underlying = this.getSession(channelId, underlyingSessionType);
-      if (isUndefined(underlying) || underlying.stoppingOrStopped) {
+      const wrapper = this.getSession(
+        channelId,
+        options.sessionType,
+      ) as Maybe<ConcatSession>;
+      if (
+        wrapper?.underlyingSessionId !== undefined &&
+        (underlying?.instanceId !== wrapper.underlyingSessionId ||
+          underlying.stoppingOrStopped ||
+          underlying.hasError)
+      ) {
         this.logger.debug(
           'No underlying session of type %s found for existing concat session (channel id = %s). Removing dangling session and recreating',
           underlyingSessionType,
           channelId,
         );
-        this.deleteSession(channelId, underlyingSessionType);
+        this.deleteSession(channelId, options.sessionType);
       }
     });
 
@@ -332,9 +348,12 @@ export class SessionManager {
     sessionType: SessionType,
     sessionFactory: (channel: ChannelOrmWithTranscodeConfig) => TSession,
   ): Promise<Result<TSession, TypedError>> {
+    const timer = new TuneInTimer();
     const lock = await this.#sessionLocker.getOrCreateLock(channelId);
+    let reused = true;
     try {
       const session = await lock.runExclusive(async () => {
+        timer.mark('lock');
         let session = this.getSession(
           channelId,
           sessionType,
@@ -342,7 +361,9 @@ export class SessionManager {
 
         // A stopping session keeps its own working directory until its
         // process exits, so a replacement can start alongside it.
-        if (isNil(session) || session.stoppingOrStopped) {
+        if (isNil(session) || session.stoppingOrStopped || session.hasError) {
+          reused = false;
+          if (session) this.deleteSession(channelId, sessionType);
           const channel = await this.channelDB.getChannelOrm(channelId);
 
           if (!channel?.transcodeConfig) {
@@ -350,6 +371,7 @@ export class SessionManager {
           }
 
           session = sessionFactory(channel);
+          timer.mark('factory');
 
           this.addSession(channel.uuid, session.sessionType, session);
 
@@ -450,7 +472,20 @@ export class SessionManager {
         return session;
       });
 
-      if (session.hasError) {
+      if (!session.isConcatSession()) {
+        const wrapper = this.getSession(
+          channelId,
+          concatSessionTypeForSessionType(sessionType),
+        ) as Maybe<ConcatSession>;
+        if (wrapper) wrapper.underlyingSessionId = session.instanceId;
+      }
+      timer.mark('startup');
+      this.logger.debug(
+        { sessionId: session.instanceId, channelId, sessionType, reused },
+        'Session obtained: %s',
+        timer.summary(),
+      );
+      if (session.hasError || session.stoppingOrStopped) {
         throw (
           session.error ??
           new GenericError('Session reported error but had none set.')
@@ -507,6 +542,8 @@ export class SessionManager {
     lastConnection: StreamConnectionDetails,
   ) {
     try {
+      const current = this.getSession(session.keyObj.id, session.sessionType);
+      if (current !== undefined && current !== session) return;
       const now = +dayjs();
       let sessionToCheck = session;
       let pauseTime = lastConnection.lastHeartbeat ?? now;
