@@ -1,6 +1,6 @@
 # How Filler Is Chosen
 
-When a channel reaches [Flex](/configure/channels/flex) time, Tunarr fills the gap one clip at a time. It picks a filler list, then picks a clip from that list, plays it, and repeats until the gap is full or nothing else fits.
+When a channel reaches [Flex](../channels/flex.md) time, Tunarr fills the gap one clip at a time. It picks a filler list, then picks a clip from that list, plays it, and repeats until the gap is full or nothing else fits.
 
 ## The four dials
 

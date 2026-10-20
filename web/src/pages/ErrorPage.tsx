@@ -1,3 +1,4 @@
+import { ForkBugReportUrl } from '@/helpers/forkLinks.ts';
 import { describeError } from '@/helpers/apiError';
 import { useBrowserInfo } from '@/hooks/useBrowserInfo';
 import { Trans } from '@lingui/react/macro';
@@ -26,7 +27,7 @@ export function ErrorPage({ error, resetRoute }: Props) {
   const message = describeError(error);
 
   const bugReportLink = useMemo(() => {
-    const url = new URL(`https://github.com/chrisbenincasa/tunarr/issues/new`);
+    const url = new URL(ForkBugReportUrl);
     let browserString = browser.getBrowserName();
     if (browser.getBrowserVersion()) {
       browserString += ` (${browser.getBrowserVersion()})`;

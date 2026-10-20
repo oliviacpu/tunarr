@@ -1,3 +1,4 @@
+import { ForkDocsUrl } from '@/helpers/forkLinks.ts';
 import { useLingui } from '@lingui/react/macro';
 import DiscordIcon from '@/assets/icon_clyde_black_RGB.svg?react';
 import {
@@ -183,7 +184,7 @@ export const TopBar = () => {
       },
       {
         name: t`Documentation`,
-        path: 'https://tunarr.com/',
+        path: ForkDocsUrl,
         visible: true,
         icon: <TextSnippet />,
       },
