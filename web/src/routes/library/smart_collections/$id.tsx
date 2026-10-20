@@ -48,9 +48,10 @@ export const Route = createFileRoute('/library/smart_collections/$id')({
 function RouteComponent() {
   const { id } = Route.useParams();
   const { filter, query } = Route.useLoaderData();
-  const { data: smartCollection } = useSuspenseQuery(
-    getApiSmartCollectionsByIdOptions({ path: { id } }),
-  );
+  const { data: smartCollection } = useSuspenseQuery({
+    ...getApiSmartCollectionsByIdOptions({ path: { id } }),
+    refetchOnMount: false,
+  });
   return (
     <Stack gap={2}>
       <PageHeader

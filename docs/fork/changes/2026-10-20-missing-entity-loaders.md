@@ -7,3 +7,5 @@
 - **Upstream:** Fork-only follow-up to approved audit D7 (approval PR #85); no upstream submission.
 
 Review follow-up: the newly handled existence loaders await stale-aware fetchQuery rather than accepting stale cached entities from ensureQueryData. These detail routes also leave caching to React Query, with no retained router match: otherwise the router remounts a cached component while its loader runs in the background, and observer cancellation can replace a 404 with CancelledError. Browser regressions revisit a cached real collection after its lookup begins returning 404 or 500: the first uses not-found UI, while the second shows the actual server message and retains retry controls. Fresh query data may still be reused.
+
+The detail components keep their query subscriptions but skip an immediate mount refetch of the result their loader just fetched. Shared query defaults remain unchanged. Request-count coverage checks one ID lookup per visit across all six detail lookup branches, including a second navigation that still performs a fresh existence check.
