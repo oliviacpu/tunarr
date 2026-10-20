@@ -3,7 +3,7 @@ import { useFillerListWithProgramming } from '@/hooks/useFillerLists.ts';
 import { Route } from '@/routes/library/fillers_/$fillerId/edit.tsx';
 import { Trans } from '@lingui/react/macro';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import PaddedPaper from '../../components/base/PaddedPaper.tsx';
 
@@ -13,13 +13,11 @@ export default function EditFillerPage() {
 
   return (
     <Box>
-      <Breadcrumbs />
       <Box>
-        <Box>
-          <Typography variant="h4" sx={{ mb: 2 }}>
-            <Trans>Edit Filler List</Trans>
-          </Typography>
-        </Box>
+        <PageHeader
+          breadcrumbs={<Breadcrumbs />}
+          title={<Trans>Edit Filler List</Trans>}
+        />
         <PaddedPaper sx={{ mb: 2 }}>
           <EditFillerListForm fillerList={fillerList} isNew={false} />
         </PaddedPaper>

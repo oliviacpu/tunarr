@@ -5,7 +5,7 @@ import useStore from '@/store/index.ts';
 import { Trans } from '@lingui/react/macro';
 import { LinearProgress } from '@mui/material';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import PaddedPaper from '../../components/base/PaddedPaper.tsx';
 import { condenseCustomShowEditorPrograms } from '../../store/selectors.ts';
@@ -23,12 +23,10 @@ export default function EditCustomShowPage({ isNew }: Props) {
     <LinearProgress />
   ) : (
     <Box>
-      <Box>
-        <Breadcrumbs />
-        <Typography variant="h4" sx={{ mb: 2 }}>
-          {isNew ? <Trans>New Custom Show</Trans> : customShow.name}
-        </Typography>
-      </Box>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={isNew ? <Trans>New Custom Show</Trans> : customShow.name}
+      />
       <PaddedPaper sx={{ mb: 2 }}>
         <EditCustomShowsForm
           isNew={false}

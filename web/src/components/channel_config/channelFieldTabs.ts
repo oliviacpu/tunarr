@@ -6,21 +6,19 @@ import type { EditChannelTabs } from './EditChannelTabPanel.tsx';
 export const ChannelEditorTabs: readonly EditChannelTabs[] = [
   'properties',
   'flex',
-  'epg',
-  'ffmpeg',
+  'guide',
+  'streaming',
+  'watermark',
 ];
 
-/**
- * The label each channel editor tab shows. The values are older names kept in
- * `?tab=` links: "epg" is the Guide tab and "ffmpeg" the Streaming tab.
- */
 export function useChannelTabLabels(): Record<EditChannelTabs, string> {
   const { t } = useLingui();
   return {
     properties: t`Properties`,
     flex: t`Flex`,
-    epg: t`Guide`,
-    ffmpeg: t`Streaming`,
+    guide: t`Guide`,
+    streaming: t`Streaming`,
+    watermark: t`Watermark`,
   };
 }
 
@@ -44,16 +42,16 @@ export const ChannelFieldTabs: Record<keyof SaveableChannel, EditChannelTabs> =
     fillerCollections: 'flex',
     fillerRepeatCooldown: 'flex',
     disableFillerOverlay: 'flex',
-    stealth: 'epg',
-    guideFlexTitle: 'epg',
-    guideMinimumDuration: 'epg',
-    streamMode: 'ffmpeg',
-    transcodeConfigId: 'ffmpeg',
-    watermark: 'ffmpeg',
-    subtitlesEnabled: 'ffmpeg',
-    subtitlePreferences: 'ffmpeg',
-    audioTracks: 'ffmpeg',
-    captions: 'ffmpeg',
+    stealth: 'guide',
+    guideFlexTitle: 'guide',
+    guideMinimumDuration: 'guide',
+    streamMode: 'streaming',
+    transcodeConfigId: 'streaming',
+    watermark: 'watermark',
+    subtitlesEnabled: 'streaming',
+    subtitlePreferences: 'streaming',
+    audioTracks: 'streaming',
+    captions: 'streaming',
   };
 
 /**
@@ -71,4 +69,23 @@ export function tabsWithErrors(
     }
   }
   return tabs;
+}
+
+export const ChannelEditTabPaths = {
+  properties: '/channels/$channelId/edit/properties',
+  flex: '/channels/$channelId/edit/flex',
+  guide: '/channels/$channelId/edit/guide',
+  streaming: '/channels/$channelId/edit/streaming',
+  watermark: '/channels/$channelId/edit/watermark',
+} as const satisfies Record<EditChannelTabs, string>;
+
+export function channelTabFromPath(pathname: string): EditChannelTabs {
+  const lastSegment = pathname.replace(/\/+$/, '').split('/').pop();
+  return ChannelEditorTabs.find((tab) => tab === lastSegment) ?? 'properties';
+}
+
+export function legacyChannelTab(tab: string | undefined): EditChannelTabs {
+  if (tab === 'epg') return 'guide';
+  if (tab === 'ffmpeg') return 'streaming';
+  return ChannelEditorTabs.find((value) => value === tab) ?? 'properties';
 }

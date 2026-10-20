@@ -28,14 +28,21 @@ import pino, {
 } from 'pino';
 import type { PrettyOptions } from 'pino-pretty';
 import pretty from 'pino-pretty';
-import { TUNARR_ENV_VARS } from '../env.ts';
+import {
+  getEnvVar,
+  LOGGER_ENV_PREFIX,
+  TUNARR_ENV_VARS,
+  type ValidEnvVar,
+} from '../env.ts';
 import type { SerializedLogger } from './LoggerWrapper.ts';
 import { RootLoggerWrapper } from './LoggerWrapper.ts';
 import { RollingLogDestination } from './RollingDestination.ts';
 
-export function getEnvironmentLogLevel(envVar?: string): Maybe<LogLevels> {
+export function getEnvironmentLogLevel(envVar?: ValidEnvVar): Maybe<LogLevels> {
   const envLevel = trim(
-    toLower(process.env[envVar ?? TUNARR_ENV_VARS.LOG_LEVEL_ENV_VAR]),
+    toLower(
+      getEnvVar(envVar ?? TUNARR_ENV_VARS.LOG_LEVEL_ENV_VAR) ?? undefined,
+    ),
   );
   if (isNonEmptyString(envLevel)) {
     if (ValidLogLevels.includes(envLevel)) {
@@ -196,7 +203,7 @@ class LoggerFactoryImpl {
     const { className } = args;
     opts ??= {};
     const levelOverride = getEnvironmentLogLevel(
-      `TUNARR_LOG_LEVEL_${className.toUpperCase()}`,
+      `${LOGGER_ENV_PREFIX}${className.toUpperCase()}`,
     );
     const child = this.rootLogger.child(args, opts);
     if (levelOverride) {

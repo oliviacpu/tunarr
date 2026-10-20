@@ -103,10 +103,21 @@ export async function bootstrapTunarr(
   if (isMainThread) {
     // not the first run, use the copy migrator
     if (hasTunarrDb) {
+      await conn.syncMigrationTablesIfNecessary();
       await DBAccess.instance.migrateExistingDatabase(conn.name);
     } else {
       await conn.syncMigrationTablesIfNecessary();
       await conn.runDBMigrations();
+    }
+
+    // Copy migrations can replace the connection, so check the current handle.
+    const pendingMigrations = await DBAccess.instance
+      .getOrCreateConnection(conn.name)
+      .pendingDatabaseMigrations();
+    if (pendingMigrations.length > 0) {
+      throw new Error(
+        `Database migrations did not complete: ${pendingMigrations.map((migration) => migration.name).join(', ')}. Startup has stopped to preserve the database. Check the migration errors in the server logs before retrying the upgrade.`,
+      );
     }
 
     const dbDirContents = await fs.readdir(opts.databaseDirectory);
