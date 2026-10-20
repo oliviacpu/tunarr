@@ -7,7 +7,7 @@ import { save, saveButton, savedSettings } from './settingsForm.ts';
 
 type HdhrSettings = { autoDiscoveryEnabled: boolean; tunerCount: number };
 
-const SETTINGS_URL = `${SERVER_URL}/api/hdhr-settings`;
+const SETTINGS_URL = `${SERVER_URL}/api/settings/hdhr`;
 
 test('a changed tuner count saves, survives a reload and moves nothing else', async ({
   page,

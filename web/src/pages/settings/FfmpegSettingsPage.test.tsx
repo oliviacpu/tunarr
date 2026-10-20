@@ -48,13 +48,13 @@ const { server, mockPutFfmpegSettings } = vi.hoisted(() => ({
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  getApiFfmpegSettings: () => Promise.resolve({ data: server.settings }),
+  getApiSettingsFfmpeg: () => Promise.resolve({ data: server.settings }),
   getApiSystemState: () =>
     Promise.resolve({
       data: { isDocker: false, isPodman: false, isInContainer: false },
     }),
   getApiFfmpegInfo: () => server.ffmpegInfo(),
-  putApiFfmpegSettings: (options: { body: Partial<FfmpegSettings> }) =>
+  putApiSettingsFfmpeg: (options: { body: Partial<FfmpegSettings> }) =>
     mockPutFfmpegSettings(options),
 }));
 

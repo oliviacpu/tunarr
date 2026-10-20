@@ -1,16 +1,20 @@
 import type { RouterPluginCallback } from '@/types/serverType.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
-import type { HdhrSettings } from '@tunarr/types';
-import { BaseErrorSchema } from '@tunarr/types/api';
+import {
+  BaseErrorSchema,
+  UpdateHdhrSettingsRequestSchema,
+} from '@tunarr/types/api';
 import { HdhrSettingsSchema } from '@tunarr/types/schemas';
 import { isError } from 'lodash-es';
-import type { DeepWritable } from 'ts-essentials';
+
+import { registerSettingsAliases } from './settingsRoutes.ts';
 
 export const hdhrSettingsRouter: RouterPluginCallback = (
   fastify,
   _opts,
   done,
 ) => {
+  registerSettingsAliases(fastify, { '/hdhr-settings': '/settings/hdhr' });
   const logger = LoggerFactory.child({
     caller: import.meta,
     className: 'HdhrSettingsApi',
@@ -43,7 +47,7 @@ export const hdhrSettingsRouter: RouterPluginCallback = (
     {
       schema: {
         tags: ['Settings'],
-        body: HdhrSettingsSchema,
+        body: UpdateHdhrSettingsRequestSchema,
         response: {
           200: HdhrSettingsSchema,
           500: BaseErrorSchema,
@@ -52,7 +56,10 @@ export const hdhrSettingsRouter: RouterPluginCallback = (
     },
     async (req, res) => {
       try {
-        await req.serverCtx.settings.updateSettings('hdhr', req.body);
+        await req.serverCtx.settings.updateSettings('hdhr', {
+          ...req.serverCtx.settings.hdhrSettings(),
+          ...req.body,
+        });
         const hdhr = req.serverCtx.settings.hdhrSettings();
         req.serverCtx.eventService.push({
           type: 'settings-update',
@@ -77,54 +84,6 @@ export const hdhrSettingsRouter: RouterPluginCallback = (
           },
           level: 'error',
         });
-      }
-    },
-  );
-
-  fastify.post(
-    '/hdhr-settings',
-    {
-      schema: {
-        tags: ['Settings'],
-        response: {
-          200: HdhrSettingsSchema,
-          500: BaseErrorSchema,
-        },
-      },
-    },
-    async (req, res) => {
-      try {
-        // The schema's defaults, which the web page's "Restore Default
-        // Settings" button also uses
-        await req.serverCtx.settings.updateSettings(
-          'hdhr',
-          HdhrSettingsSchema.parse({}),
-        );
-        const hdhr =
-          req.serverCtx.settings.hdhrSettings() as DeepWritable<HdhrSettings>;
-        req.serverCtx.eventService.push({
-          type: 'settings-update',
-          message: 'HDHR configuration reset.',
-          module: 'hdhr',
-          detail: {
-            action: 'reset',
-          },
-          level: 'warning',
-        });
-        return res.send(hdhr);
-      } catch (err) {
-        logger.error(err);
-        req.serverCtx.eventService.push({
-          type: 'settings-update',
-          message: 'Error reseting HDHR configuration',
-          module: 'hdhr',
-          detail: {
-            action: 'reset',
-            error: isError(err) ? err.message : 'unknown',
-          },
-          level: 'error',
-        });
-        return res.status(500).send({ message: 'error' });
       }
     },
   );

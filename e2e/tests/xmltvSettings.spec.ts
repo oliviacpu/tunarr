@@ -18,7 +18,7 @@ type XmlTvSettings = {
   publicUrl: string;
 };
 
-const SETTINGS_URL = `${SERVER_URL}/api/xmltv-settings`;
+const SETTINGS_URL = `${SERVER_URL}/api/settings/xmltv`;
 
 const savedSettings = async (page: Page) => {
   const res = await page.request.get(SETTINGS_URL);

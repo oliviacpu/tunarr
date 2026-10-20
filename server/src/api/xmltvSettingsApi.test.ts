@@ -255,13 +255,9 @@ describe('XMLTV settings API', () => {
     });
   });
 
-  it('a reset goes back to midnight and every 4 hours', async () => {
+  it('removes the unused reset endpoint', async () => {
     const res = await app.inject({ method: 'POST', url: '/xmltv-settings' });
-
-    expect(res.statusCode).toBe(200);
-    expect(stored).toMatchObject({ refreshHours: 4, refreshStartHour: 0 });
-    expect(job.reschedule).toHaveBeenCalledExactlyOnceWith(
-      '0 0 0,4,8,12,16,20 * * *',
-    );
+    expect(res.statusCode).toBe(404);
+    expect(job.reschedule).not.toHaveBeenCalled();
   });
 });

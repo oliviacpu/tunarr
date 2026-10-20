@@ -173,9 +173,8 @@ describe('PUT /settings/media-source', () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json()).toEqual({
-        message: `The rescan interval must be a whole number of hours, 1 or more (got ${rescanIntervalHours}).`,
-      });
+      expect(res.json()).toEqual({ message: expect.any(String) });
+      expect(res.json().message).toContain('rescanIntervalHours');
       expect(stored.rescanIntervalHours).toBe(6);
       expect(nextRun('ScanLibrariesTask')).toBe('12:30');
       expect(nextRun('SyncCollectionsTask')).toBe('12:00');

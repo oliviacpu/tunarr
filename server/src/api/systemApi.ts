@@ -50,6 +50,7 @@ import { getEnvVar, TUNARR_ENV_VARS } from '../util/env.ts';
 import type { FeatureFlagService } from '../services/FeatureFlagService.ts';
 import { streamFileBackwards } from '../util/fsUtil.ts';
 import { take } from '../util/streams.ts';
+import { registerSettingsAliases } from './settingsRoutes.ts';
 
 function buildFeatureFlagsResponse(featureFlagService: FeatureFlagService) {
   const flags = featureFlagService.getAll();
@@ -70,6 +71,11 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
   fastify,
   // eslint-disable-next-line @typescript-eslint/require-await
 ) => {
+  registerSettingsAliases(fastify, {
+    '/system/settings': '/settings/system',
+    '/system/feature-flags': '/settings/feature-flags',
+    '/system/settings/backup': '/system/settings/backup',
+  });
   const logger = LoggerFactory.child({ className: 'SystemApiRouter' });
 
   fastify.get(
@@ -224,17 +230,42 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
           });
         });
 
-        if (!isUndefined(req.body.backup)) {
-          system.backup = req.body.backup;
-          scheduleBackupJobs(req.body.backup);
+        if (req.body.backup?.configurations !== undefined) {
+          system.backup = { configurations: req.body.backup.configurations };
+          scheduleBackupJobs(system.backup);
         }
 
         ifDefined(req.body.server, (server) => {
-          system.server = server;
+          if (server.port !== undefined) {
+            system.server.port = server.port;
+          }
+          ifDefined(server.searchSettings, (search) => {
+            if (search.snapshotIntervalHours !== undefined) {
+              system.server.searchSettings.snapshotIntervalHours =
+                search.snapshotIntervalHours;
+            }
+            if (search.maxIndexingMemory === null) {
+              delete system.server.searchSettings.maxIndexingMemory;
+            } else if (search.maxIndexingMemory !== undefined) {
+              system.server.searchSettings.maxIndexingMemory =
+                search.maxIndexingMemory;
+            }
+          });
         });
 
-        ifDefined(req.body.logging?.logRollConfig, (logging) => {
-          system.logging.logRollConfig = logging;
+        ifDefined(req.body.logging?.logRollConfig, (rolling) => {
+          const { schedule, maxFileSizeBytes, ...other } = rolling;
+          Object.assign(system.logging.logRollConfig, other);
+          if (schedule === null) {
+            delete system.logging.logRollConfig.schedule;
+          } else if (schedule !== undefined) {
+            system.logging.logRollConfig.schedule = schedule;
+          }
+          if (maxFileSizeBytes === null) {
+            delete system.logging.logRollConfig.maxFileSizeBytes;
+          } else if (maxFileSizeBytes !== undefined) {
+            system.logging.logRollConfig.maxFileSizeBytes = maxFileSizeBytes;
+          }
         });
 
         return file;
@@ -250,6 +281,7 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
     '/system/settings/backup',
     {
       schema: {
+        deprecated: true,
         tags: ['System', 'Settings'],
         body: UpdateBackupSettingsRequestSchema,
         response: {

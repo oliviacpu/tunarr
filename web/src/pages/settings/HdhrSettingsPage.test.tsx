@@ -21,7 +21,7 @@ vi.mock(
   '../../generated/@tanstack/react-query.gen.ts',
   async (importOriginal) => ({
     ...(await importOriginal<typeof Generated>()),
-    getApiHdhrSettingsOptions: () => ({
+    getApiSettingsHdhrOptions: () => ({
       queryKey: ['test-hdhr-settings'],
       queryFn: () => Promise.resolve(saved),
     }),
@@ -30,7 +30,7 @@ vi.mock(
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiHdhrSettings: (options: { body: Partial<HdhrSettings> }) =>
+  putApiSettingsHdhr: (options: { body: Partial<HdhrSettings> }) =>
     mockPutHdhrSettings(options),
 }));
 

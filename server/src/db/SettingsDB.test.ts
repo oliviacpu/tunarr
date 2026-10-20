@@ -107,3 +107,22 @@ describe('legacy HDHR tuner count', () => {
     expect(parsed.settings.hdhr.tunerCount).toBe(2);
   });
 });
+
+describe('legacy media rescan interval', () => {
+  test.each([
+    [0, 1],
+    [0.5, 1],
+    [2.5, 2],
+    [1e300, Number.MAX_SAFE_INTEGER],
+  ])(
+    'normalizes %s hours to %s without losing other settings',
+    (hours, expected) => {
+      const file = defaultSettings('/tmp/tunarr-test');
+      file.settings.mediaSource.rescanIntervalHours = hours;
+      file.settings.ffmpeg.hdhrClosedCaptions = true;
+      const parsed = SettingsFileSchema.parse(file);
+      expect(parsed.settings.mediaSource.rescanIntervalHours).toBe(expected);
+      expect(parsed.settings.ffmpeg.hdhrClosedCaptions).toBe(true);
+    },
+  );
+});

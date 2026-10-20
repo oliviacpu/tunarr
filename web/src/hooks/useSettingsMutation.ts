@@ -37,7 +37,7 @@ export type UseSettingsMutationOptions<
   };
   /**
    * The save's mutation options, as the generated client makes them, e.g.
-   * `putApiXmltvSettingsMutation()`. Their own `onMutate`, `onSuccess` and
+   * `putApiSettingsXmltvMutation()`. Their own `onMutate`, `onSuccess` and
    * `onError` still run, after this hook's.
    */
   mutation: UseMutationOptions<TData, TError, TVariables, TContext>;

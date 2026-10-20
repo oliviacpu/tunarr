@@ -13,7 +13,7 @@ import {
 
 test.describe.configure({ mode: 'serial' });
 
-const SETTINGS_URL = `${SERVER_URL}/api/system/settings`;
+const SETTINGS_URL = `${SERVER_URL}/api/settings/system`;
 
 type SystemSettings = {
   logging: { categoryLogLevel?: Record<string, string | null> };
@@ -66,14 +66,14 @@ const save = async (page: Page) => {
   const saved = page.waitForResponse(
     (res) =>
       res.request().method() === 'PUT' &&
-      res.url().endsWith('/api/system/settings'),
+      res.url().endsWith('/api/settings/system'),
   );
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect((await saved).ok()).toBe(true);
 };
 
 const savedLogRollConfig = async (page: Page) => {
-  const res = await page.request.get(`${SERVER_URL}/api/system/settings`);
+  const res = await page.request.get(`${SERVER_URL}/api/settings/system`);
   const body = (await res.json()) as {
     logging: {
       logRollConfig: {

@@ -9,16 +9,16 @@ import { useEffect } from 'react';
 import type { Control, SubmitHandler } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import {
-  getApiSystemFeatureFlagsOptions,
-  getApiSystemFeatureFlagsQueryKey,
-  putApiSystemFeatureFlagsMutation,
+  getApiSettingsFeatureFlagsOptions,
+  getApiSettingsFeatureFlagsQueryKey,
+  putApiSettingsFeatureFlagsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
-import type { GetApiSystemFeatureFlagsResponse } from '../../generated/types.gen.ts';
+import type { GetApiSettingsFeatureFlagsResponse } from '../../generated/types.gen.ts';
 
-type FlagFormValues = GetApiSystemFeatureFlagsResponse['flags'];
+type FlagFormValues = GetApiSettingsFeatureFlagsResponse['flags'];
 type FlagKey = keyof FlagFormValues;
 
-type MetaEntry = GetApiSystemFeatureFlagsResponse['metadata'][number];
+type MetaEntry = GetApiSettingsFeatureFlagsResponse['metadata'][number];
 type FlagMeta = MetaEntry & { key: FlagKey };
 
 // The server describes each flag; one this page has no value for is left out
@@ -76,7 +76,7 @@ export default function FeaturesSettingsPage() {
   const { t } = useLingui();
   // The route's loader fetches the flags, and the router's pending and error
   // components cover loading and failure
-  const { data } = useSuspenseQuery(getApiSystemFeatureFlagsOptions());
+  const { data } = useSuspenseQuery(getApiSettingsFeatureFlagsOptions());
 
   const form = useForm<FlagFormValues>({ defaultValues: data.flags });
   const {
@@ -97,9 +97,9 @@ export default function FeaturesSettingsPage() {
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiSystemFeatureFlagsMutation(),
+    mutation: putApiSettingsFeatureFlagsMutation(),
     toFormValues: (saved) => saved.flags,
-    invalidate: { queryKey: getApiSystemFeatureFlagsQueryKey() },
+    invalidate: { queryKey: getApiSettingsFeatureFlagsQueryKey() },
   });
 
   const save: SubmitHandler<FlagFormValues> = (flags) => {
