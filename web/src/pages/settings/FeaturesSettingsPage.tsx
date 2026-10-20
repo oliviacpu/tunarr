@@ -106,7 +106,7 @@ export default function FeaturesSettingsPage({
         aria-label={t`Loading optional features`}
       />
     );
-  if (query.isError)
+  if (query.data === undefined)
     return (
       <Alert
         severity="warning"
@@ -120,11 +120,28 @@ export default function FeaturesSettingsPage({
       </Alert>
     );
   return (
-    <FeatureFlagsForm
-      data={query.data}
-      group={group}
-      onDirtyChange={onDirtyChange}
-    />
+    <>
+      {query.isError && (
+        <Alert
+          severity="warning"
+          action={
+            <Button onClick={() => void query.refetch()}>
+              <Trans>Try again</Trans>
+            </Button>
+          }
+        >
+          <Trans>
+            Optional feature settings could not be refreshed. Your unsaved edits
+            are kept.
+          </Trans>
+        </Alert>
+      )}
+      <FeatureFlagsForm
+        data={query.data}
+        group={group}
+        onDirtyChange={onDirtyChange}
+      />
+    </>
   );
 }
 

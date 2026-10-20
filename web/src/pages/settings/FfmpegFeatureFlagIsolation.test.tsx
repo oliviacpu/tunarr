@@ -1,5 +1,13 @@
-import { renderWithProviders, screen, waitFor, within } from '@/test/utils';
+import {
+  renderWithProviders,
+  screen,
+  waitFor,
+  within,
+  act,
+} from '@/test/utils';
 import { defaultFfmpegSettings } from '@tunarr/types';
+import { QueryClient } from '@tanstack/react-query';
+import { getApiSystemFeatureFlagsQueryKey } from '../../generated/@tanstack/react-query.gen.ts';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -36,13 +44,17 @@ vi.mock('../../components/settings/ffmpeg/TranscodeConfigsTable.tsx', () => ({
   TranscodeConfigsTable: () => null,
 }));
 
-function renderPage(section: 'playback' | 'captions-audio') {
+function renderPage(
+  section: 'playback' | 'captions-audio',
+  queryClient?: QueryClient,
+) {
   return renderWithProviders(
     <SnackbarProvider>
       <Suspense fallback={<div>Core settings suspended</div>}>
         <FfmpegSettingsPage section={section} />
       </Suspense>
     </SnackbarProvider>,
+    { queryClient },
   );
 }
 
@@ -192,5 +204,59 @@ for (const section of ['playback', 'captions-audio'] as const) {
     await waitFor(() =>
       expect(screen.getByTestId('navigation-guard')).toHaveTextContent('false'),
     );
+  });
+}
+
+for (const section of ['playback', 'captions-audio'] as const) {
+  test(`${section} preserves unsaved flags and its guard across background failure and retry`, async () => {
+    const data: GetApiSystemFeatureFlagsResponse = {
+      flags: {
+        proxyArtwork: false,
+        tonemapEnabled: false,
+        webvttSidecarEnabled: false,
+        xmltvCreditImagesEnabled: false,
+        disableSearchSnapshotInBackup: false,
+        disableVulkan: false,
+        disableVaapiPad: false,
+      },
+      metadata: [
+        {
+          key:
+            section === 'playback' ? 'tonemapEnabled' : 'webvttSidecarEnabled',
+          displayName: 'Optional test feature',
+          description: 'Optional feature.',
+          category: 'experimental',
+          envOverride: false,
+        },
+      ],
+    };
+    flagsRequest.mockResolvedValue({ data });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    const { user } = renderPage(section, client);
+    const flag = await screen.findByRole('checkbox', {
+      name: 'Optional test feature',
+    });
+    await user.click(flag);
+    flagsRequest.mockRejectedValue(new Error('Background flags unavailable'));
+    await act(async () => {
+      await client.refetchQueries({
+        queryKey: getApiSystemFeatureFlagsQueryKey(),
+      });
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Your unsaved edits are kept.',
+    );
+    expect(flag).toBeInTheDocument();
+    expect(flag).toBeChecked();
+    expect(screen.getByTestId('navigation-guard')).toHaveTextContent('true');
+    flagsRequest.mockResolvedValue({ data });
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+    );
+    expect(flag).toBeChecked();
+    expect(screen.getByTestId('navigation-guard')).toHaveTextContent('true');
   });
 }
