@@ -21,13 +21,15 @@
     a show keeps its colour across reloads.
   - `typeStyle(palette, type)` encodes the type without relying on colour. Movies, episodes, tracks and other videos
     keep their ramp colour and get their `ProgramTypeIcon` (14px) before the title in cells at least 64px wide.
-    Cells from 24px show the title without it, so narrow cells keep their letters; slivers show neither. Flex gaps and "No programming scheduled" take the page background, `text.secondary`
-    and a dashed divider outline. Redirects are the secondary colour at 16%
-    over the paper with an arrow before the title. Only programs open the details dialog, so only they get the hand
-    cursor.
+    Cells from 24px show the title without it, so narrow cells keep their letters; slivers show neither. Flex gaps
+    and "No programming scheduled" take the page background, `text.secondary` and a dashed divider outline.
+    Redirects are the secondary colour at 16% over the paper with an arrow before the title. Only programs open the
+    details dialog, so only they get the hand cursor.
   - The now-playing cell gets a 2px primary ring, and the time marker (now `TvGuideNowMarker.tsx`) keeps primary.
     Nothing else on the grid uses primary. The marker jumps instead of gliding when the system asks for reduced
     motion, and block and column width transitions stop too.
+  - The guide reads palette values through `useActivePalette()` (`hooks/useTunarrTheme.ts`), the palette of the
+    scheme on screen, because with CSS variables on `theme.palette` stays on the light scheme.
   - Header lines use the theme divider. Times on the grid use tabular numerals.
   - Dark secondary is `#5b8fb9` (4.6:1 on the paper), with dark label text (5.4:1), since white on it is only 3.5:1.
   - `colorHooks.ts` reads the resolved scheme (`useIsDarkMode`), so the lineup editor, mid-roll rows and slot
@@ -47,4 +49,6 @@
   primary. `colorHooks.test.tsx`: `system` on a dark OS picks the dark set (fails on the old code), and on a light OS
   the light set. `theme.test.ts` adds `secondary.contrastText` on `secondary.main` at 4.5:1 and a non-text list with
   `secondary.main` on the paper at 3:1; the contrast helpers moved to `web/src/test/contrast.ts`.
+  `useTunarrTheme.test.ts`: under a CSS-variables theme, `useActivePalette()` returns the dark palette in dark mode
+  and the light one in light mode (the first fails when it returns `theme.palette`).
 - **Upstream:** not sent.

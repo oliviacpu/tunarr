@@ -35,13 +35,13 @@ describe('TvGuideItem', () => {
     expect(style.cursor).toBe('default');
   });
 
-  test('rings the now-playing cell in primary', () => {
-    const style = renderItem({ nowPlaying: true });
+  test('draws the ring it is given', () => {
+    const style = renderItem({ ringColor: palette.primary.main });
     expect(style.boxShadow).toContain(palette.primary.main);
   });
 
-  test('does not ring a cell that is not on air', () => {
-    const style = renderItem({ nowPlaying: false });
+  test('draws no ring without one', () => {
+    const style = renderItem({});
     expect(style.boxShadow).not.toContain(palette.primary.main);
   });
 
@@ -58,12 +58,17 @@ describe('TvGuideItem', () => {
 });
 
 describe('TvGuideCell', () => {
-  function renderCell(type: GuideCellType, pixelWidth: number | undefined) {
+  function renderCell(
+    type: GuideCellType,
+    pixelWidth: number | undefined,
+    nowPlaying = false,
+  ) {
     return renderWithProviders(
       <TvGuideCell
         left={0}
         width={20}
         pixelWidth={pixelWidth}
+        nowPlaying={nowPlaying}
         cellStyle={typeStyle(palette, type, 'show.a')}
         title="The Title"
         subtitle="S01E01 - Pilot"
@@ -107,6 +112,26 @@ describe('TvGuideCell', () => {
     expect(container.querySelector('svg')).toBeNull();
     expect(screen.queryByText('The Title')).not.toBeInTheDocument();
     expect(screen.getByTitle('The Title')).toBeInTheDocument();
+  });
+
+  test('rings the now-playing cell in the primary colour', () => {
+    const { container } = renderCell('movie', 100, true);
+    const cell = container.firstElementChild;
+    if (cell === null) {
+      throw new Error('The cell did not render');
+    }
+    expect(getComputedStyle(cell).boxShadow).toContain(palette.primary.main);
+  });
+
+  test('does not ring a cell that is not on air', () => {
+    const { container } = renderCell('movie', 100, false);
+    const cell = container.firstElementChild;
+    if (cell === null) {
+      throw new Error('The cell did not render');
+    }
+    expect(getComputedStyle(cell).boxShadow).not.toContain(
+      palette.primary.main,
+    );
   });
 
   test('shows text without the icon before the grid is measured', () => {

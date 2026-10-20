@@ -1,6 +1,7 @@
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { Box } from '@mui/material';
 import type { ReactNode } from 'react';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
 import { ProgramTypeIcon } from '../base/ProgramTypeIcon.tsx';
 import type { GuideCellStyle, GuideGlyph } from './guideColors.ts';
 import { TvGuideItem } from './TvGuideItem.tsx';
@@ -57,9 +58,11 @@ export function TvGuideCell({
   title,
   subtitle,
   pixelWidth,
+  nowPlaying,
   children,
   ...item
 }: Props) {
+  const palette = useActivePalette();
   const compact = pixelWidth !== undefined && pixelWidth < CompactBlockPx;
   const glyph =
     pixelWidth !== undefined && pixelWidth >= GlyphBlockPx
@@ -70,6 +73,7 @@ export function TvGuideCell({
       {...item}
       cellStyle={cellStyle}
       compact={compact}
+      ringColor={nowPlaying ? palette.primary.main : undefined}
       title={compact ? title : undefined}
     >
       {compact ? null : (

@@ -1,5 +1,6 @@
 import type { Palette, Theme as MuiTheme } from '@mui/material';
 import { decomposeColor, hslToRgb } from '@mui/material/styles';
+import { schemePaletteOf } from '../hooks/useTunarrTheme.ts';
 import { Theme } from '../theme.ts';
 
 // Helpers for tests that check colour pairings against WCAG contrast.
@@ -53,28 +54,13 @@ export function contrastRatio(foreground: string, background: string): number {
 
 export type Scheme = 'light' | 'dark';
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const isPalette = (value: unknown): value is Palette =>
-  isRecord(value) &&
-  isRecord(value['text']) &&
-  isRecord(value['background']) &&
-  isRecord(value['primary']);
-
-/**
- * A scheme's finished palette. createTheme keeps each scheme's palette on the
- * theme; MUI only types `colorSchemes` when CSS variables are on, so narrow it
- * here.
- */
+/** A scheme's finished palette; throws if the theme has none. */
 export function schemePalette(
   scheme: Scheme,
   theme: MuiTheme = Theme,
 ): Palette {
-  const schemes = 'colorSchemes' in theme ? theme.colorSchemes : undefined;
-  const system = isRecord(schemes) ? schemes[scheme] : undefined;
-  const palette = isRecord(system) ? system['palette'] : undefined;
-  if (!isPalette(palette)) {
+  const palette = schemePaletteOf(theme, scheme);
+  if (palette === undefined) {
     throw new Error(`The theme has no ${scheme} palette`);
   }
   return palette;

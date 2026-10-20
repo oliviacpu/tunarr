@@ -25,6 +25,7 @@ import { extractProgramGrandparent } from '../../helpers/programUtil.ts';
 import { isNonEmptyString } from '../../helpers/util';
 import { useChannelsSuspense } from '../../hooks/useChannels.ts';
 import { useServerEvents } from '../../hooks/useServerEvents.ts';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
 import { useTvGuides, useTvGuidesPrefetch } from '../../hooks/useTvGuide';
 import type { Maybe, Nullable } from '../../types/util.ts';
 import PaddedPaper from '../base/PaddedPaper';
@@ -76,6 +77,9 @@ type Props = {
 export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
   const { t } = useLingui();
   const theme = useTheme();
+  // Guide colours are computed from palette values, so they read the palette
+  // of the scheme on screen (theme.palette stays light under CSS variables).
+  const palette = useActivePalette();
   // Workaround for issue with page jumping on-zoom or nav caused by collapsing
   // div when loading new guide data
   const ref = useRef<HTMLDivElement | null>(null);
@@ -300,11 +304,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
             title={title}
             subtitle={episodeTitle}
             onClick={() => handleModalOpen(program)}
-            cellStyle={typeStyle(
-              theme.palette,
-              cellType,
-              guideColorKey(program),
-            )}
+            cellStyle={typeStyle(palette, cellType, guideColorKey(program))}
             nowPlaying={isPlaying}
             paused={program.isPaused}
             clickable={isProgramCell(cellType)}
@@ -348,7 +348,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
         <TvGuideItem
           left={left}
           width={width}
-          cellStyle={typeStyle(theme.palette, 'flex')}
+          cellStyle={typeStyle(palette, 'flex')}
         >
           <Box
             sx={{
@@ -533,11 +533,11 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
                     minWidth: 0,
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
-                    borderLeft: `1px solid ${theme.palette.divider}`,
+                    borderLeft: `1px solid ${palette.divider}`,
                     fontVariantNumeric: 'tabular-nums',
                     pl: 1,
                     '&:last-child': {
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: `1px solid ${palette.divider}`,
                     },
                   }}
                   key={slot}

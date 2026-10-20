@@ -1,4 +1,5 @@
-import { Box, useMediaQuery, useTheme } from '@mui/material';
+import { Box, useMediaQuery } from '@mui/material';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
 
 export const ReducedMotionQuery = '(prefers-reduced-motion: reduce)';
 
@@ -15,7 +16,7 @@ type Props = {
  * unless the user asks the system for reduced motion.
  */
 export function TvGuideNowMarker({ progress, label }: Props) {
-  const theme = useTheme();
+  const palette = useActivePalette();
   const reduceMotion = useMediaQuery(ReducedMotionQuery);
 
   return (
@@ -36,8 +37,8 @@ export function TvGuideNowMarker({ progress, label }: Props) {
         <Box
           sx={{
             position: 'relative',
-            background: theme.palette.primary.main,
-            color: theme.palette.primary.contrastText,
+            background: palette.primary.main,
+            color: palette.primary.contrastText,
             minWidth: '50px',
             width: 'max-content',
             px: 1,
@@ -64,7 +65,7 @@ export function TvGuideNowMarker({ progress, label }: Props) {
           sx={{
             position: 'relative',
             width: '2px',
-            background: theme.palette.primary.main,
+            background: palette.primary.main,
             height: '100%',
             mt: '-2px',
           }}

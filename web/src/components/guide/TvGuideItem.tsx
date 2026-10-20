@@ -6,7 +6,7 @@ const ItemOnlyProps = new Set<PropertyKey>([
   'cellStyle',
   'left',
   'compact',
-  'nowPlaying',
+  'ringColor',
   'paused',
   'clickable',
 ]);
@@ -24,23 +24,14 @@ export const TvGuideItem = styled(TvGuideGridChild, {
   // stay visible instead of collapsing into their borders.
   compact?: boolean;
 
-  // The program on air now. It takes the guide's one accent, a primary ring.
-  nowPlaying?: boolean;
+  // The program on air now gets a ring in the guide's one accent (primary).
+  ringColor?: string;
 
   // A paused program (on-demand channel) is striped with its own colour.
   paused?: boolean;
 
   clickable?: boolean;
-}>(({
-  theme,
-  left,
-  width,
-  cellStyle,
-  compact,
-  nowPlaying,
-  paused,
-  clickable,
-}) => {
+}>(({ left, width, cellStyle, compact, ringColor, paused, clickable }) => {
   const stripes = (base: string, stripe: string) =>
     `repeating-linear-gradient(-45deg,
       ${base},
@@ -56,11 +47,12 @@ export const TvGuideItem = styled(TvGuideGridChild, {
     : cellStyle.hoverBackground;
 
   const ringWidth = compact ? 1 : 2;
-  const boxShadow = nowPlaying
-    ? `inset 0 0 0 ${ringWidth}px ${theme.palette.primary.main}`
-    : compact
-      ? 'inset -1px 0 0 rgba(0, 0, 0, 0.3)'
-      : undefined;
+  const boxShadow =
+    ringColor !== undefined
+      ? `inset 0 0 0 ${ringWidth}px ${ringColor}`
+      : compact
+        ? 'inset -1px 0 0 rgba(0, 0, 0, 0.3)'
+        : undefined;
 
   return {
     display: 'flex',
