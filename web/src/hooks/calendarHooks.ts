@@ -72,6 +72,10 @@ export function useGetProgramsForDayFunc(channelId: string) {
       programList.reduce((duration, program) => duration + program.duration, 0),
     [programList],
   );
+  const cycleBoundaries = useMemo(
+    () => [...offsets, cycleDuration],
+    [cycleDuration, offsets],
+  );
 
   return useCallback(
     (day: dayjs.Dayjs) => {
@@ -87,10 +91,10 @@ export function useGetProgramsForDayFunc(channelId: string) {
       }
       const channelProgress = (+start - channel.startTime) % cycleDuration;
 
-      const targetIndex =
-        offsets.length === 1
-          ? 0
-          : seq.binarySearchRange(offsets, channelProgress);
+      const targetIndex = seq.binarySearchRange(
+        cycleBoundaries,
+        channelProgress,
+      );
 
       if (targetIndex === null) {
         return [];
@@ -137,7 +141,7 @@ export function useGetProgramsForDayFunc(channelId: string) {
 
       return calendarPrograms;
     },
-    [channel.startTime, cycleDuration, offsets, programList],
+    [channel.startTime, cycleBoundaries, cycleDuration, offsets, programList],
   );
 }
 
