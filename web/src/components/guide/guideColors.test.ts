@@ -22,6 +22,7 @@ import {
   isProgramCell,
   rampStep,
   typeStyle,
+  channelProgramStyle,
 } from './guideColors.ts';
 
 const schemes: Scheme[] = ['light', 'dark'];
@@ -36,6 +37,61 @@ const hueDistance = (a: number, b: number) => {
 const guideProgram = (
   program: ReturnType<typeof makeContentProgram>,
 ): TvGuideProgram => ({ ...program, start: 0, stop: 1000, isPaused: false });
+
+describe('channelProgramStyle', () => {
+  it.each(schemes)(
+    'shares guide colours and show grouping with lineup/calendar entries in %s',
+    (scheme) => {
+      const palette = schemePalette(scheme);
+      const show = makeShowGrouping('shared-show');
+      const first = makeContentProgram(
+        makeEpisode({ uuid: 'ep-1', show }),
+        1000,
+      );
+      const second = makeContentProgram(
+        makeEpisode({ uuid: 'ep-2', show }),
+        1000,
+      );
+      const custom = {
+        type: 'custom',
+        id: first.id,
+        customShowId: 'custom-1',
+        index: 0,
+        duration: 1000,
+        program: first,
+      } as const;
+      const expected = typeStyle(
+        palette,
+        'episode',
+        guideColorKey(guideProgram(first)),
+      );
+      expect(channelProgramStyle(palette, first)).toEqual(expected);
+      expect(channelProgramStyle(palette, second)).toEqual(expected);
+      expect(channelProgramStyle(palette, custom)).toEqual(expected);
+      expect(
+        channelProgramStyle(palette, { type: 'flex', duration: 1000 }),
+      ).toEqual(typeStyle(palette, 'flex'));
+      expect(
+        channelProgramStyle(palette, {
+          type: 'redirect',
+          channel: 'channel-1',
+          channelNumber: 1,
+          channelName: 'Test channel',
+          duration: 1000,
+        }),
+      ).toEqual(typeStyle(palette, 'redirect'));
+      expect(
+        channelProgramStyle(palette, {
+          type: 'filler',
+          id: 'id-1',
+          fillerListId: 'list-1',
+          fillerType: 'mid',
+          duration: 1000,
+        }),
+      ).toEqual(typeStyle(palette, 'content', 'filler.list-1'));
+    },
+  );
+});
 
 describe('guideRamp', () => {
   it.each(schemes)('has %s distinct steps in the %s scheme', (scheme) => {

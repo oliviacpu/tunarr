@@ -24,14 +24,14 @@ import weekOfYear from 'dayjs/plugin/weekOfYear';
 import { range } from 'lodash-es';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { P, match } from 'ts-pattern';
-import { getTextContrast } from '../../helpers/colors.ts';
 import { programSeasonAndEpisode } from '../../helpers/formatters.ts';
 import { extractProgramGrandparent } from '../../helpers/programUtil.ts';
 import { useGetProgramsForDayFunc } from '../../hooks/calendarHooks.ts';
-import { useRandomProgramBackgroundColor } from '../../hooks/colorHooks.ts';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
 import { useDayjs } from '../../hooks/useDayjs.ts';
 import { useSuspendedStore } from '../../hooks/useSuspendedStore.ts';
 import ProgramDetailsDialog from '../programs/ProgramDetailsDialog.tsx';
+import { channelProgramStyle } from '../guide/guideColors.ts';
 
 dayjs.extend(weekOfYear);
 dayjs.extend(dayOfYear);
@@ -120,7 +120,7 @@ export const ProgramWeekCalendarView = ({
     [calendarState, onChange],
   );
 
-  const randomBackgroundColor = useRandomProgramBackgroundColor();
+  const palette = useActivePalette();
 
   const getProgramsForDay = (day: dayjs.Dayjs) => {
     return seq.collect(
@@ -133,7 +133,7 @@ export const ProgramWeekCalendarView = ({
         const px = (calHeight ?? 0) * (duration / OneDayMillis);
         const dataRows = Math.floor((px - 8) / 15);
 
-        const bgColor = randomBackgroundColor(program);
+        const cellStyle = channelProgramStyle(palette, program);
         return (
           <Paper
             key={+actualStartTime}
@@ -143,12 +143,12 @@ export const ProgramWeekCalendarView = ({
               left: 0,
               width: '90%',
               height: `${height}%`,
-              backgroundColor: bgColor.toString(),
+              backgroundColor: cellStyle.background,
               borderRadius: '5px',
               zIndex: 100,
-              border: '1px solid black',
+              border: `1px solid ${palette.divider}`,
               cursor: 'pointer',
-              color: (theme) => getTextContrast(bgColor, theme.palette.mode),
+              color: cellStyle.color,
               overflow: 'hidden',
               lineHeight: 1,
               px: 0.5,
@@ -284,7 +284,7 @@ export const ProgramWeekCalendarView = ({
   };
 
   return (
-    <Stack sx={{ width: '100%' }} gap={2}>
+    <Stack sx={{ width: '100%', fontVariantNumeric: 'tabular-nums' }} gap={2}>
       <Stack direction="row">
         <Button onClick={() => goToToday()} variant="contained">
           <Trans>Today</Trans>

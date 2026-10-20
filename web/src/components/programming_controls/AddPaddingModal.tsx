@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { Expand as PaddingIcon } from '@mui/icons-material';
 import {
   Button,
@@ -31,6 +32,7 @@ const AddPaddingModalContent = ({
   onClose,
 }: Omit<AddPaddingModalProps, 'open'>) => {
   const { t } = useLingui();
+  const actions = useActions();
   const [currentPadding, setCurrentPadding] = useState<StartTimePadding | null>(
     null,
   );
@@ -83,9 +85,7 @@ const AddPaddingModalContent = ({
         </FormGroup>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button
           onClick={() => {
             padStartTimes(currentPadding);

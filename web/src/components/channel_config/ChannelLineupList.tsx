@@ -18,7 +18,6 @@ import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
 import ListItemText from '@mui/material/ListItemText';
 import { type Channel, type ChannelProgram } from '@tunarr/types';
-import Color from 'colorjs.io';
 import dayjs, { type Dayjs } from 'dayjs';
 import { findIndex, isString, isUndefined, maxBy, sumBy } from 'lodash-es';
 import React, {
@@ -39,9 +38,9 @@ import {
   groupMidRollItems,
   type FlatDisplayItem,
 } from '../../helpers/midRollGrouping.ts';
-import { channelProgramUniqueId, grayBackground } from '../../helpers/util.ts';
+import { channelProgramUniqueId } from '../../helpers/util.ts';
 import { useChannelListItemIcon } from '../../hooks/channel_config/useChannelItemIcon.tsx';
-import { useRandomProgramBackgroundColor } from '../../hooks/colorHooks.ts';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
 import { moveProgramInCurrentChannel } from '../../store/channelEditor/actions.ts';
 import useStore, { type State } from '../../store/index.ts';
 import { materializedProgramListSelector } from '../../store/selectors.ts';
@@ -53,6 +52,7 @@ import {
 import AddFlexModal from '../programming_controls/AddFlexModal.tsx';
 import AddRedirectModal from '../programming_controls/AddRedirectModal.tsx';
 import ProgramDetailsDialog from '../programs/ProgramDetailsDialog.tsx';
+import { channelProgramStyle } from '../guide/guideColors.ts';
 import { ChannelLineupListItem } from './ChannelLineupListItem.tsx';
 import { MidRollGroupRow } from './MidRollGroupRow.tsx';
 
@@ -206,15 +206,12 @@ const ProgramListItem = ({
   }
 
   const icon = useChannelListItemIcon(program);
-  const bgColorPicker = useRandomProgramBackgroundColor();
-  const backgroundColor =
-    program.type === 'flex'
-      ? new Color(grayBackground(theme.palette.mode))
-      : bgColorPicker(program);
+  const palette = useActivePalette();
 
   return (
     <ChannelLineupListItem
-      backgroundColor={backgroundColor}
+      cellStyle={channelProgramStyle(palette, program)}
+      dividerColor={palette.divider}
       isDragging={isDragging}
       enableDrag={enableDrag}
       program={program}
@@ -520,7 +517,14 @@ export default function ChannelLineupList(props: Props) {
     return (
       <Box width="100%">
         {showProgramCount && (
-          <Box sx={{ width: '100%', mb: 1, textAlign: 'right' }}>
+          <Box
+            sx={{
+              width: '100%',
+              mb: 1,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
             <Typography variant="caption" sx={{ flexGrow: 1, mr: 2 }}>
               <Plural
                 value={programList.length}

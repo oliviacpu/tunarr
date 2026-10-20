@@ -13,11 +13,10 @@ import Color from 'colorjs.io';
 import dayjs from 'dayjs';
 import { isUndefined } from 'lodash-es';
 import { useMemo, type CSSProperties } from 'react';
-import { getTextContrast } from '../../helpers/colors.ts';
 import type { MidRollGroup } from '../../helpers/midRollGrouping.ts';
-import { grayBackground } from '../../helpers/util.ts';
 import { useChannelListItemIcon } from '../../hooks/channel_config/useChannelItemIcon.tsx';
-import { useRandomProgramBackgroundColor } from '../../hooks/colorHooks.ts';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
+import { channelProgramStyle } from '../guide/guideColors.ts';
 
 type Props = {
   group: MidRollGroup;
@@ -92,13 +91,9 @@ export function MidRollGroupRow({
     );
   }
 
-  const bgColorPicker = useRandomProgramBackgroundColor();
-  const backgroundColor =
-    parentProgram.type === 'flex'
-      ? new Color(grayBackground(theme.palette.mode))
-      : bgColorPicker(parentProgram);
-  const bgHex = backgroundColor.toString({ format: 'hex' });
-  const bgDarker = new Color(backgroundColor.clone().darken(0.1));
+  const palette = useActivePalette();
+  const cellStyle = channelProgramStyle(palette, parentProgram);
+  const backgroundColor = new Color(cellStyle.background);
 
   const segmentBarParts = useMemo(() => {
     // Everything in the group that is not a segment of the program itself is
@@ -133,19 +128,14 @@ export function MidRollGroupRow({
       style={style}
       divider
       sx={{
-        color: getTextContrast(bgDarker, theme.palette.mode),
-        background: bgHex,
+        color: cellStyle.color,
+        background: cellStyle.background,
+        fontVariantNumeric: 'tabular-nums',
         '&:hover': {
-          background: new Color(
-            backgroundColor
-              .clone()
-              .lighten(theme.palette.mode === 'dark' ? 0.025 : 0.05),
-          ).toString({ format: 'hex' }),
+          background: cellStyle.hoverBackground,
         },
         borderBottom: 'thin solid',
-        borderBottomColor: new Color(
-          backgroundColor.clone().darken(0.2),
-        ).toString({ format: 'hex' }),
+        borderBottomColor: palette.divider,
         cursor: 'pointer',
         position: 'relative',
         pr: '48px',

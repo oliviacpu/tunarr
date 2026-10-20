@@ -1,5 +1,5 @@
 import type { Palette } from '@mui/material';
-import type { TerminalProgram, TvGuideProgram } from '@tunarr/types';
+import type { ChannelProgram, TerminalProgram } from '@tunarr/types';
 import Color from 'colorjs.io';
 import { extractProgramGrandparent } from '../../helpers/programUtil.ts';
 
@@ -186,7 +186,9 @@ export function typeStyle(
   }
 }
 
-export function guideCellType(program: TvGuideProgram): GuideCellType {
+type GuideColorProgram = Exclude<ChannelProgram, { type: 'filler' }>;
+
+export function guideCellType(program: GuideColorProgram): GuideCellType {
   switch (program.type) {
     case 'content':
       return program.program.type;
@@ -204,7 +206,7 @@ export function guideCellType(program: TvGuideProgram): GuideCellType {
  * tracks), the program itself for movies and other videos. Custom-show
  * entries follow the program they wrap.
  */
-export function guideColorKey(program: TvGuideProgram): string {
+export function guideColorKey(program: GuideColorProgram): string {
   switch (program.type) {
     case 'content': {
       const grandparent = extractProgramGrandparent(program.program);
@@ -227,4 +229,14 @@ export function guideColorKey(program: TvGuideProgram): string {
     case 'redirect':
       return `redirect.${program.channel}`;
   }
+}
+
+export function channelProgramStyle(
+  palette: Palette,
+  program: ChannelProgram,
+): GuideCellStyle {
+  if (program.type === 'filler') {
+    return typeStyle(palette, 'content', `filler.${program.fillerListId}`);
+  }
+  return typeStyle(palette, guideCellType(program), guideColorKey(program));
 }

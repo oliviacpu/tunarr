@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import {
@@ -50,6 +51,7 @@ export const EditMediaSourceLibrariesDialog = ({
   onClose,
 }: Props) => {
   const dayjs = useDayjs();
+  const actions = useActions();
   const { data: libraries } = useMediaSourceLibraries(mediaSource?.id ?? '', {
     enabled: !isNil(mediaSource),
   });
@@ -183,8 +185,8 @@ export const EditMediaSourceLibrariesDialog = ({
         </List>
       </DialogContent>
       <DialogActions>
-        <Button variant="contained" onClick={() => onClose()}>
-          <Trans>Close</Trans>
+        <Button variant="outlined" onClick={() => onClose()}>
+          {actions.close}
         </Button>
       </DialogActions>
     </Dialog>
