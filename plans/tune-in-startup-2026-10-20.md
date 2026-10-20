@@ -75,7 +75,7 @@ correlate with Tunarr and Plex logs. Do not infer client startup time from serve
 Independent PR review identified and regression-tested two additional races: obsolete stop callbacks during the
 asynchronous replacement lookup, and timeout retirement racing a newly registered viewer. Replaced instances now
 remain excluded from pause callbacks; connection registration and conditional idle retirement share the channel lock.
-The updated streaming/API/pipeline regression run passes **798 tests**.
+The updated streaming/API/pipeline regression run passes **799 tests**, including both program-session and wrapper replacement gaps.
 
 The measurement harness now averages both middle observations for even sample counts; four Node tests cover even,
 odd, empty, and zero-valued samples. Recomputing the saved A/B medians leaves the table above unchanged.
