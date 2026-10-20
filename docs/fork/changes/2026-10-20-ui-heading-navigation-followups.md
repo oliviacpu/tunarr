@@ -1,4 +1,4 @@
-### Detail headings and navigation follow-ups (2026-10-20, D2/D6)
+### Detail headings and navigation follow-ups (2026-10-20, PR #131)
 
 - **What you saw:** New/edit library items, smart collections, source browsers and Welcome skipped the document heading. The mobile overflow action looked like an outlined button and had no name. Guide's root route, Search and media details did not select a navigation task; new transcode configuration breadcrumbs omitted Settings.
 - **Cause:** Detail pages retained older Typography headers, the overflow used a plain Button, and prefix navigation matching had no aliases for destinations outside the section URLs. The transcode editor relied on incomplete generic route names.
