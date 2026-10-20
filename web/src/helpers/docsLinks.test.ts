@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { DocsPage } from './docsLinks.ts';
 import { DocsPages, docsUrl } from './docsLinks.ts';
+import bugReportTemplate from '../../../.github/ISSUE_TEMPLATE/bug_report.yaml?raw';
 
 // Every docs page in the repository, keyed by its path under docs/
 const DocsSource = '../../../docs/';
@@ -86,4 +87,13 @@ describe('DocsPages', () => {
       'https://github.com/oliviacpu/tunarr/blob/main/docs/configure/channels/transcoding.md#stream-mode',
     );
   });
+});
+
+test('the fork issue form searches and assigns the fork owner', () => {
+  expect(bugReportTemplate).toContain(
+    'https://github.com/oliviacpu/tunarr/issues',
+  );
+  expect(bugReportTemplate).toContain('  - oliviacpu');
+  expect(bugReportTemplate).not.toContain('chrisbenincasa/tunarr/issues');
+  expect(bugReportTemplate).not.toContain('  - chrisbenincasa');
 });
