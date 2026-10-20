@@ -40,6 +40,7 @@ import Hls from 'hls.js';
 import { useSnackbar } from 'notistack';
 import { useCallback, useRef, useState } from 'react';
 import { match, P } from 'ts-pattern';
+import { stackedAccordionSx } from '../../components/base/stackedAccordionSx.ts';
 import { ProgramSearchAutocomplete } from '../../components/ProgramSearchAutocomplete.tsx';
 import {
   getApiTranscodeConfigsOptions,
@@ -264,7 +265,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
     <Box>
       {/* Configuration Form */}
       <Stack spacing={2} sx={{ mb: 3 }}>
-        <Typography variant="h6">
+        <Typography variant="h2">
           <Trans>Program Playback Troubleshooter</Trans>
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -377,7 +378,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
             visibility: result?.testTranscode?.success ? 'visible' : 'hidden',
           }}
         >
-          <Typography variant="h6" sx={{ mb: 1 }}>
+          <Typography variant="h2" sx={{ mb: 1 }}>
             <Trans>Test Playback</Trans>
           </Typography>
           <Box
@@ -426,7 +427,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
             )}
 
             {/* System Info */}
-            <Accordion defaultExpanded>
+            <Accordion defaultExpanded disableGutters sx={stackedAccordionSx}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography variant="subtitle1">
                   <Trans>System Info</Trans>
@@ -484,7 +485,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
 
             {/* Media Info */}
             {result.mediaInfo && (
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded disableGutters sx={stackedAccordionSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="subtitle1">
                     <Trans>Media Info</Trans>
@@ -719,7 +720,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
 
             {/* Stream Selection */}
             {result.streamSelection && (
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded disableGutters sx={stackedAccordionSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="subtitle1">
                     <Trans>Stream Selection</Trans>
@@ -838,7 +839,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
 
             {/* Transcode Config */}
             {result.transcodeConfig && (
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded disableGutters sx={stackedAccordionSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="subtitle1">
                     <Trans>Transcode Config</Trans>
@@ -898,7 +899,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
 
             {/* Pipeline */}
             {result.pipeline && (
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded disableGutters sx={stackedAccordionSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="subtitle1">
                     <Trans>Pipeline</Trans>
@@ -946,7 +947,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
 
             {/* Test Transcode Result */}
             {result.testTranscode && (
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded disableGutters sx={stackedAccordionSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="subtitle1">
                     <Trans>Test Transcode</Trans>
@@ -982,7 +983,7 @@ export const TroubleshootPage = ({ initialProgram }: Props) => {
 
             {/* FFmpeg Log */}
             {result.ffmpegLog && (
-              <Accordion>
+              <Accordion disableGutters sx={stackedAccordionSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="subtitle1">
                     <Trans>FFmpeg Log</Trans>

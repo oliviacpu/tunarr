@@ -25,7 +25,7 @@ import {
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import useStore from '../../store/index.ts';
 import type { UIFillerListProgram } from '../../types/index.ts';
-import { RotatingLoopIcon } from '../base/LoadingIcon.tsx';
+import { LoadingIcon } from '../base/LoadingIcon.tsx';
 import ChannelLineupList from '../channel_config/ChannelLineupList.tsx';
 
 type FillerListMutationArgs = {
@@ -198,7 +198,7 @@ export function EditFillerListForm({
               variant="contained"
               type="submit"
               startIcon={
-                saveShowMutation.isPending ? <RotatingLoopIcon /> : <Save />
+                saveShowMutation.isPending ? <LoadingIcon /> : <Save />
               }
             >
               {actions.save}

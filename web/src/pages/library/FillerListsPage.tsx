@@ -31,6 +31,7 @@ import {
 } from 'material-react-table';
 import { useSnackbar } from 'notistack';
 import { useCallback, useMemo, useState } from 'react';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import {
   deleteApiFillerListsByIdMutation,
@@ -214,32 +215,28 @@ export default function FillerListsPage() {
 
   return (
     <Box>
-      <Breadcrumbs />
       {renderConfirmationDialog()}
-      <Box display="flex" mb={2} alignItems="flex-start">
-        <Box flexDirection={'column'} flexGrow={1}>
-          <Typography flexGrow={1} variant="h4">
-            <Trans>Filler Lists</Trans>
-          </Typography>
-          <Typography maxWidth={'800px'}>
-            <Trans>
-              Filler lists are collections of videos that you may want to play
-              during 'flex' time segments. Flex is time within a channel that
-              does not have a program scheduled (usually used for padding).
-            </Trans>
-          </Typography>
-        </Box>
-
-        <Button
-          component={RouterLink}
-          to="/library/fillers/new"
-          variant="contained"
-          startIcon={<AddCircleIcon />}
-          sx={{ alignSelf: 'end' }}
-        >
-          <Trans>New</Trans>
-        </Button>
-      </Box>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={<Trans>Filler Lists</Trans>}
+        description={
+          <Trans>
+            Filler lists are collections of videos that you may want to play
+            during 'flex' time segments. Flex is time within a channel that does
+            not have a program scheduled (usually used for padding).
+          </Trans>
+        }
+        actions={
+          <Button
+            component={RouterLink}
+            to="/library/fillers/new"
+            variant="contained"
+            startIcon={<AddCircleIcon />}
+          >
+            <Trans>New</Trans>
+          </Button>
+        }
+      />
 
       <TableContainer component={Paper} sx={{ width: '100%' }}>
         <MaterialReactTable table={table} />

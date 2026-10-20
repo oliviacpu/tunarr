@@ -7,6 +7,7 @@ import type {
   GetApiMediaLibrariesByLibraryIdProgramsResponse,
   GetApiMediaSourcesResponse,
   CreateChannelV2Response,
+  GetApiFfmpegSettingsResponse,
   GetApiTranscodeConfigsResponse,
   PostApiChannelsByIdProgrammingData,
   PostApiFillerListsData,
@@ -15,9 +16,11 @@ import type {
   PostApiMediaSourcesResponse,
   PostApiSmartCollectionsData,
   PostApiSmartCollectionsResponse,
+  PutApiFfmpegSettingsData,
 } from '../../web/src/generated/types.gen.ts';
 import { api } from './api.ts';
 import { FIXTURE_IDS_FILE } from './env.ts';
+import { resolveFfmpegBinaries } from './ffmpeg.ts';
 import { FILLER_DIR, MOVIES_DIR, SHOWS_DIR } from './media.ts';
 
 type NewChannel = Extract<
@@ -140,7 +143,24 @@ function contentItem(program: LibraryProgram): LineupItem {
   return { type: 'content', id: program.id, duration: program.duration };
 }
 
+// Point the server at the fixture's ffmpeg and ffprobe before anything is
+// scanned, since the local scanner probes each clip with ffprobe.
+async function setFixtureFfmpeg() {
+  const { ffmpeg, ffprobe } = resolveFfmpegBinaries();
+  const current = await api<GetApiFfmpegSettingsResponse>(
+    'GET',
+    '/ffmpeg-settings',
+  );
+  await api('PUT', '/ffmpeg-settings', {
+    ...current,
+    ffmpegExecutablePath: ffmpeg,
+    ffprobeExecutablePath: ffprobe,
+  } satisfies PutApiFfmpegSettingsData['body']);
+}
+
 export async function seed(): Promise<FixtureIds> {
+  await setFixtureFfmpeg();
+
   const moviesSourceId = await addLocalSource(
     'E2E Movies',
     'movies',

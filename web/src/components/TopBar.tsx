@@ -204,12 +204,17 @@ export const TopBar = () => {
         <RouterLink underline="none" color="inherit" to="/guide">
           <TunarrLogo style={{ marginTop: '0.4em', width: '40px' }} />
         </RouterLink>
+        {/* The wordmark is not a heading: each page's PageHeader owns the h1. */}
         <Typography
-          variant="h6"
-          component="h1"
+          variant="subtitle1"
+          component="span"
           noWrap
           color="inherit"
-          sx={{ pl: 1 }}
+          sx={(theme) => ({
+            pl: 1,
+            fontSize: theme.typography.pxToRem(18),
+            fontWeight: 600,
+          })}
         >
           <RouterLink underline="none" color="inherit" to="/guide">
             Tunarr

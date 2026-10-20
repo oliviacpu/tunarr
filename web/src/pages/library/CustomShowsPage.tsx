@@ -15,7 +15,6 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import TableContainer from '@mui/material/TableContainer';
-import Typography from '@mui/material/Typography';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { type CustomShow } from '@tunarr/types';
@@ -28,6 +27,7 @@ import {
 } from 'material-react-table';
 import { useSnackbar } from 'notistack';
 import React, { useCallback, useMemo, useState } from 'react';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { RouterButtonLink } from '../../components/base/RouterButtonLink.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import { deleteCustomShowMutation } from '../../generated/@tanstack/react-query.gen.ts';
@@ -199,36 +199,26 @@ export default function CustomShowsPage() {
 
   return (
     <Box>
-      <Breadcrumbs />
-      <Box
-        display="flex"
-        mb={2}
-        alignItems="flex-start"
-        flexDirection={{ xs: 'column', md: 'row' }}
-      >
-        <Box flexDirection={'column'} flexGrow={1}>
-          <Typography variant="h4">
-            <Trans>Custom Shows</Trans>
-          </Typography>
-
-          <Typography maxWidth={'800px'}>
-            <Trans>
-              Custom Shows are sequences of videos that represent a episodes of
-              a virtual TV show. When you add these shows to a channel, the
-              schedule tools will treat the videos as if they belonged to a
-              single TV show.
-            </Trans>
-          </Typography>
-        </Box>
-        <RouterButtonLink
-          to="/library/custom-shows/new"
-          variant="contained"
-          startIcon={<AddCircleIcon />}
-          sx={{ alignSelf: 'end' }}
-        >
-          <Trans>New</Trans>
-        </RouterButtonLink>
-      </Box>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={<Trans>Custom Shows</Trans>}
+        description={
+          <Trans>
+            Custom Shows are sequences of videos that represent a episodes of a
+            virtual TV show. When you add these shows to a channel, the schedule
+            tools will treat the videos as if they belonged to a single TV show.
+          </Trans>
+        }
+        actions={
+          <RouterButtonLink
+            to="/library/custom-shows/new"
+            variant="contained"
+            startIcon={<AddCircleIcon />}
+          >
+            <Trans>New</Trans>
+          </RouterButtonLink>
+        }
+      />
       <TableContainer component={Paper} sx={{ width: '100%' }}>
         <MaterialReactTable table={table} />
       </TableContainer>

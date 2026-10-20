@@ -4,13 +4,7 @@ import {
 } from '@/helpers/inlineModalUtil.ts';
 import type { Nullable } from '@/types/util';
 import { Trans } from '@lingui/react/macro';
-import {
-  Box,
-  CircularProgress,
-  Grid,
-  LinearProgress,
-  Typography,
-} from '@mui/material';
+import { Box, Grid, LinearProgress, Typography } from '@mui/material';
 import type {
   InfiniteData,
   UseInfiniteQueryResult,
@@ -41,6 +35,7 @@ import {
   useResizeObserver,
 } from 'usehooks-ts';
 import { TopBarPadddingPx } from '../../helpers/constants.ts';
+import { LoadingIcon } from '../base/LoadingIcon.tsx';
 import { InlineModal } from '../InlineModal.tsx';
 import { AlphanumericFilters } from './AlphanumericFilters.tsx';
 
@@ -401,7 +396,8 @@ export function MediaItemGrid<PageDataType, ItemType>(
         ></div>
       )}
       {isFetchingNextPage && (
-        <CircularProgress
+        <LoadingIcon
+          size={40}
           color="primary"
           sx={{ display: 'block', margin: '2em auto' }}
         />

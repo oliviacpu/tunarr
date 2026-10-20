@@ -44,7 +44,7 @@ import {
   useUpdateMediaSource,
 } from '../../../hooks/media-sources/mediaSourceHooks.ts';
 import type { CommonDialogProps } from '../../../types/CommonDialogProps.ts';
-import { RotatingLoopIcon } from '../../base/LoadingIcon.tsx';
+import { LoadingIcon } from '../../base/LoadingIcon.tsx';
 
 type Props = CommonDialogProps & {
   source?: LocalMediaSource;
@@ -295,7 +295,7 @@ const LocalMediaEditDialogContent = ({ onClose, source }: Props) => {
                     endAdornment: isEmpty(
                       currentPath,
                     ) ? null : currentPathCheckLoading ? (
-                      <RotatingLoopIcon />
+                      <LoadingIcon />
                     ) : !pathIsValid ? (
                       <CloudOff color="error" />
                     ) : (

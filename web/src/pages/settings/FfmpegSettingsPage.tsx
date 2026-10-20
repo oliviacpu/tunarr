@@ -120,7 +120,7 @@ export default function FfmpegSettingsPage() {
   const { t } = useLingui();
   const actions = useActions();
   const toasts = useToasts();
-  const { data: ffmpegSettings, error } = useFfmpegSettings();
+  const { data: ffmpegSettings } = useFfmpegSettings();
 
   const queryClient = useQueryClient();
   const systemState = useSystemState();
@@ -228,17 +228,9 @@ export default function FfmpegSettingsPage() {
     });
   };
 
-  if (error) {
-    return (
-      <Alert severity="error">
-        {getApiErrorMessage(error) ?? error.message}
-      </Alert>
-    );
-  }
-
   return (
     <Box component="form" onSubmit={handleSubmit(updateFfmpegSettings)}>
-      <Typography variant="h5" sx={{ mb: 2 }}>
+      <Typography variant="h2" sx={{ mb: 2 }}>
         <Trans>Global Options</Trans>
       </Typography>
       <Stack spacing={3} useFlexGap sx={{ mb: 2 }}>
@@ -483,12 +475,12 @@ export default function FfmpegSettingsPage() {
         </FormControl>
       </Stack>
       <Divider sx={{ my: 1 }} />
-      <Typography variant="h5" sx={{ mb: 2 }}>
+      <Typography variant="h2" sx={{ mb: 2 }}>
         <Trans>Audio &amp; Subtitle Options</Trans>
       </Typography>
       <Stack spacing={3} sx={{ mb: 2 }}>
         <Box>
-          <Typography variant="h6">
+          <Typography variant="h3">
             <Trans>Subtitles</Trans>
           </Typography>
           <FormControl fullWidth>
@@ -628,7 +620,7 @@ export default function FfmpegSettingsPage() {
         </Box>
 
         <Divider />
-        <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
+        <Typography variant="h3" sx={{ mt: 2, mb: 1 }}>
           <Trans>Audio Language Preferences</Trans>
         </Typography>
         <Typography variant="subtitle1" sx={{ mb: 2 }}>
@@ -676,7 +668,7 @@ export default function FfmpegSettingsPage() {
       </Stack>
       <Divider sx={{ mt: 2 }} />
 
-      <Typography variant="h5" sx={{ mt: 2, mb: 1 }}>
+      <Typography variant="h2" sx={{ mt: 2, mb: 1 }}>
         <Trans>Transcoding Configs</Trans>
       </Typography>
       <Typography variant="subtitle1">

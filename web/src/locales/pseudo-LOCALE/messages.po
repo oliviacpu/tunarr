@@ -3539,6 +3539,7 @@ msgid "Schedule programming using slots assigned a start time and duration."
 msgstr ""
 
 #: src/hooks/useRouteName.ts
+#: src/pages/search/SearchPage.tsx
 msgid "Search"
 msgstr ""
 
@@ -4361,6 +4362,10 @@ msgstr ""
 #: src/pages/system/TroubleshootPage.tsx
 #: src/pages/system/TroubleshootPage.tsx
 msgid "Type"
+msgstr ""
+
+#: src/pages/search/SearchPage.tsx
+msgid "Type to search your libraries"
 msgstr ""
 
 #: src/components/UnavailableLibraryIndicator.tsx

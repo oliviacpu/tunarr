@@ -1,5 +1,5 @@
 import { useActions } from '@/strings/actions';
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon';
+import { LoadingIcon } from '@/components/base/LoadingIcon';
 import { isNonEmptyString, isValidUrlWithError, toggle } from '@/helpers/util';
 import { useMediaSourceBackendStatus } from '@/hooks/media-sources/useMediaSourceBackendStatus';
 import { t } from '@lingui/core/macro';
@@ -248,7 +248,7 @@ export function PlexServerEditDialog({ open, onClose, server }: Props) {
                   }
                   InputProps={{
                     endAdornment: serverStatusLoading ? (
-                      <RotatingLoopIcon />
+                      <LoadingIcon />
                     ) : serverStatus?.healthy ? (
                       <CloudDoneOutlined color="success" />
                     ) : (

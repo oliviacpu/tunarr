@@ -37,7 +37,7 @@ export default function XmlTvSettingsPage() {
   const toasts = useToasts();
   const [restoreTunarrDefaults, setRestoreTunarrDefaults] = useState(false);
   const { backendUri } = useSettings();
-  const { data, error } = useXmlTvSettings();
+  const { data } = useXmlTvSettings();
   const snackbar = useSnackbar();
 
   const {
@@ -97,11 +97,6 @@ export default function XmlTvSettingsPage() {
       },
     });
   };
-
-  // TODO: Handle this better - show the bug page.
-  if (error) {
-    return <h1>XML: {error.message}</h1>;
-  }
 
   return (
     <Box component="form" onSubmit={handleSubmit(updateXmlTvSettings)}>

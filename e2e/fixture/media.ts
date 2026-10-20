@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { MEDIA_DIR } from './env.ts';
+import { resolveFfmpegBinaries } from './ffmpeg.ts';
 
 type Clip = {
   file: string;
@@ -54,11 +55,12 @@ export function ensureMedia() {
     return;
   }
 
+  const { ffmpeg } = resolveFfmpegBinaries();
   for (const clip of CLIPS) {
     const out = path.join(MEDIA_DIR, clip.file);
     mkdirSync(path.dirname(out), { recursive: true });
     execFileSync(
-      'ffmpeg',
+      ffmpeg,
       [
         '-y',
         '-loglevel',

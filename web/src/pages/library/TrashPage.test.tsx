@@ -62,6 +62,15 @@ describe('TrashPage', () => {
     });
   });
 
+  test('has exactly one h1, the page title', () => {
+    renderPage();
+
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent('Trash');
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+  });
+
   test('Empty Trash asks for confirmation before purging anything', async () => {
     const { user } = renderPage();
 

@@ -261,3 +261,31 @@ export const ChannelNowPlayingCard = ({ channelId }: Props) => {
     </Card>
   );
 };
+
+// Shaped like the card, for while the channel's now-playing program loads
+export const ChannelNowPlayingCardSkeleton = () => {
+  return (
+    <Card
+      aria-busy="true"
+      data-testid="now-playing-skeleton"
+      sx={{
+        display: 'flex',
+        width: '100%',
+        flexDirection: ['column', 'row'],
+      }}
+    >
+      <Skeleton
+        variant="rectangular"
+        height={350}
+        animation="wave"
+        sx={{ width: ['100%', '75%'], flexShrink: 0 }}
+      />
+      <CardContent sx={{ flex: 1 }}>
+        <Skeleton variant="text" sx={{ typography: 'h4' }} width="70%" />
+        <Skeleton variant="text" sx={{ typography: 'h5' }} width="90%" />
+        <Skeleton variant="text" width="60%" />
+        <Skeleton variant="text" width="50%" />
+      </CardContent>
+    </Card>
+  );
+};

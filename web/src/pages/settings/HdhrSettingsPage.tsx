@@ -36,7 +36,7 @@ export default function HdhrSettingsPage() {
   const [restoreTunarrDefaults, setRestoreTunarrDefaults] =
     React.useState<boolean>(false);
 
-  const { data, isPending, error } = useHdhrSettings();
+  const { data } = useHdhrSettings();
 
   const {
     reset,
@@ -89,19 +89,6 @@ export default function HdhrSettingsPage() {
       },
     });
   };
-
-  if (isPending) {
-    return (
-      <h1>
-        <Trans>HDHR: Loading...</Trans>
-      </h1>
-    );
-  } else if (error) {
-    return <h1>HDHR: {error.message}</h1>;
-    {
-      /* Error messages are technical */
-    }
-  }
 
   return (
     <Box component="form" onSubmit={handleSubmit(updateHdhrSettings)}>

@@ -23,6 +23,7 @@ import dayjs, { duration } from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import { useCallback, useState } from 'react';
 import { useInterval, useToggle } from 'usehooks-ts';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import NoChannelsCreated from '../../components/channel_config/NoChannelsCreated.tsx';
 import { TvGuide } from '../../components/guide/TvGuide.tsx';
 import { roundCurrentTime } from '../../helpers/util.ts';
@@ -118,71 +119,71 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
 
   return (
     <>
-      <Typography variant="h3" mb={2}>
-        <Trans>Guide</Trans>
-      </Typography>
-      <Stack direction={{ xs: 'column', sm: 'row' }}>
-        <Stack
-          flexGrow={1}
-          alignItems={'center'}
-          justifyContent={'flex-start'}
-          direction={{ xs: 'column', sm: 'row' }}
-          sx={{ my: 1 }}
-          spacing={2}
-        >
-          <FormControl sx={{ m: 1, minWidth: 120 }}>
-            <DateTimePicker
-              // TODO: Replace with the earliest time the XMLTV was generated
-              minDateTime={roundCurrentTime(15)}
-              value={start}
-              onChange={(v) => handleDayChange(v)}
-              label={t`Guide Start Time`}
-            />
-          </FormControl>
-          <Typography>{dayjs.duration(end.diff(start)).humanize()}</Typography>
-          {!dayjs().isBetween(start, end) && (
-            <Tooltip title={t`Reset to current date/time`} placement="top">
-              <IconButton onClick={handleNavigationReset}>
-                <History />
-              </IconButton>
-            </Tooltip>
-          )}
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={showStealth}
-                onChange={(_, checked) => setShowStealth(checked)}
+      <PageHeader
+        title={<Trans>Guide</Trans>}
+        actions={
+          <>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              useFlexGap
+              sx={{ flexWrap: 'wrap' }}
+            >
+              <FormControl sx={{ minWidth: 120 }}>
+                <DateTimePicker
+                  // TODO: Replace with the earliest time the XMLTV was generated
+                  minDateTime={roundCurrentTime(15)}
+                  value={start}
+                  onChange={(v) => handleDayChange(v)}
+                  label={t`Guide Start Time`}
+                />
+              </FormControl>
+              <Typography>
+                {dayjs.duration(end.diff(start)).humanize()}
+              </Typography>
+              {!dayjs().isBetween(start, end) && (
+                <Tooltip title={t`Reset to current date/time`} placement="top">
+                  <IconButton onClick={handleNavigationReset}>
+                    <History />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showStealth}
+                    onChange={(_, checked) => setShowStealth(checked)}
+                  />
+                }
+                label={t`Show Stealth`}
               />
-            }
-            label={t`Show Stealth`}
-          />
-        </Stack>
-        <Stack
-          flexGrow={1}
-          alignItems={'center'}
-          justifyContent={{ xs: 'center', sm: 'right' }}
-          direction={'row'}
-          sx={{ my: 1 }}
-        >
-          {duration !== DefaultDuration && (
-            <IconButton onClick={reset}>
-              <Restore />
-            </IconButton>
-          )}
-          <IconButton disabled={zoomInDisabled} onClick={zoomIn}>
-            <ZoomInIcon />
-          </IconButton>
-          <IconButton disabled={zoomOutDisabled} onClick={zoomOut}>
-            <ZoomOutIcon />
-          </IconButton>
-          <IconButton disabled={navigationDisabled} onClick={navigateBackward}>
-            <ArrowBackIos />
-          </IconButton>
-          <IconButton onClick={navigateForward}>
-            <ArrowForwardIos />
-          </IconButton>
-        </Stack>
-      </Stack>
+            </Stack>
+            <Stack direction="row" alignItems="center">
+              {duration !== DefaultDuration && (
+                <IconButton onClick={reset}>
+                  <Restore />
+                </IconButton>
+              )}
+              <IconButton disabled={zoomInDisabled} onClick={zoomIn}>
+                <ZoomInIcon />
+              </IconButton>
+              <IconButton disabled={zoomOutDisabled} onClick={zoomOut}>
+                <ZoomOutIcon />
+              </IconButton>
+              <IconButton
+                disabled={navigationDisabled}
+                onClick={navigateBackward}
+              >
+                <ArrowBackIos />
+              </IconButton>
+              <IconButton onClick={navigateForward}>
+                <ArrowForwardIos />
+              </IconButton>
+            </Stack>
+          </>
+        }
+      />
       <TvGuide
         channelId={channelId}
         start={start}
