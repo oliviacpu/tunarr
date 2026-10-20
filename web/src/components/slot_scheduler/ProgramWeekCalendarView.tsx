@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import {
   ChevronLeft,
@@ -247,7 +248,8 @@ export const ProgramWeekCalendarView = ({
     return (
       <Box
         key={`week_header_${idx}`}
-        sx={{ textAlign: 'center', width: `${DayWidth}px`, flexGrow: 1 }}
+        data-week-header={idx}
+        sx={{ textAlign: 'center', flex: `1 0 ${DayWidth}px` }}
       >
         <Typography component="span">
           {localeData.weekdaysShort()[idx]}
@@ -284,8 +286,14 @@ export const ProgramWeekCalendarView = ({
   };
 
   return (
-    <Stack sx={{ width: '100%', fontVariantNumeric: 'tabular-nums' }} gap={2}>
-      <Stack direction="row">
+    <Stack
+      sx={{ width: '100%', minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
+      gap={2}
+    >
+      <Stack
+        direction="row"
+        sx={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}
+      >
         <Button onClick={() => goToToday()} variant="contained">
           <Trans>Today</Trans>
         </Button>
@@ -302,7 +310,7 @@ export const ProgramWeekCalendarView = ({
         >
           {getCalendarHeader()}
         </Typography>
-        <Box alignSelf={'flex-end'}>
+        <Box sx={{ display: 'flex', flexShrink: 0 }}>
           <IconButton onClick={() => setBlockHeight((prev) => prev - 8)}>
             <ZoomOut />
           </IconButton>
@@ -311,103 +319,145 @@ export const ProgramWeekCalendarView = ({
           </IconButton>
         </Box>
       </Stack>
-      <Stack direction="row">
-        <Box sx={{ width: `${blockHeight}px` }}></Box>
-        <Stack
-          sx={{
-            '--Grid-borderWidth': '1px',
-            flex: 1,
-          }}
-          direction="row"
-        >
-          {range(0, 7).map((idx) => renderWeekHeader(idx))}
-        </Stack>
-      </Stack>
-      <Stack direction="row">
-        <Stack sx={{ width: `${blockHeight}px` }}>
-          {range(0, 24).map((hour) => (
+      <Box
+        role="region"
+        aria-label={t`Week calendar`}
+        tabIndex={0}
+        sx={{ overflowX: 'auto', minWidth: 0 }}
+      >
+        <Box sx={{ minWidth: blockHeight + LeftDividerWidth + 7 * DayWidth }}>
+          <Stack direction="row">
             <Box
               sx={{
-                height: `${blockHeight}px`,
-                lineHeight: 1,
+                width: blockHeight + LeftDividerWidth,
+                flexShrink: 0,
+                position: 'sticky',
+                left: 0,
+                zIndex: 1,
+                backgroundColor: 'background.paper',
               }}
-              key={`side_hour_${hour}`}
-            >
-              <Box
-                component="span"
-                sx={{ position: 'relative', top: '-6px', fontSize: '0.9rem' }}
-              >
-                {hour === 0
-                  ? null
-                  : fmt.format(startOfWeek.hour(hour).toDate())}
-              </Box>
-            </Box>
-          ))}
-        </Stack>
-        <Stack
-          sx={{
-            '--Grid-borderWidth': '1px',
-            borderColor: 'divider',
-            overflowY: 'scroll',
-            flex: 1,
-          }}
-          direction="row"
-          ref={calRef}
-        >
-          <Stack sx={{ width: `${LeftDividerWidth}px` }}>
-            {range(0, 24).map((idx) => (
-              <Box
-                key={`divider_small_${idx}`}
-                sx={{
-                  height: `${blockHeight}px`,
-                  '--Grid-borderWidth': '1px',
-                  borderTop: 'var(--Grid-borderWidth) solid',
-                  borderColor: 'divider',
-                }}
-              ></Box>
-            ))}
-          </Stack>
-
-          {range(0, 7).map((idx) => (
+            ></Box>
             <Stack
-              key={`week_${idx}`}
               sx={{
-                minWidth: `${DayWidth}px`,
                 '--Grid-borderWidth': '1px',
-                borderTop: 'var(--Grid-borderWidth) solid',
-                borderLeft: 'var(--Grid-borderWidth) solid',
-                borderColor: 'divider',
-                zIndex: 0,
-                position: 'relative',
-                flexGrow: 1,
+                flex: 1,
+                minWidth: 0,
+              }}
+              direction="row"
+            >
+              {range(0, 7).map((idx) => renderWeekHeader(idx))}
+            </Stack>
+          </Stack>
+          <Stack direction="row">
+            <Stack
+              sx={{
+                width: blockHeight,
+                flexShrink: 0,
+                position: 'sticky',
+                left: 0,
+                zIndex: 1,
+                backgroundColor: 'background.paper',
               }}
             >
               {range(0, 24).map((hour) => (
                 <Box
                   sx={{
                     height: `${blockHeight}px`,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    position: 'relative',
+                    lineHeight: 1,
                   }}
-                  key={`week_${idx}_hour_${hour}`}
-                ></Box>
+                  key={`side_hour_${hour}`}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      position: 'relative',
+                      top: '-6px',
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    {hour === 0
+                      ? null
+                      : fmt.format(startOfWeek.hour(hour).toDate())}
+                  </Box>
+                </Box>
               ))}
-              <Box
+            </Stack>
+            <Stack
+              sx={{
+                '--Grid-borderWidth': '1px',
+                borderColor: 'divider',
+                minWidth: 0,
+                flex: 1,
+              }}
+              direction="row"
+              ref={calRef}
+            >
+              <Stack
                 sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
+                  width: LeftDividerWidth,
+                  flexShrink: 0,
+                  position: 'sticky',
+                  left: blockHeight,
+                  zIndex: 1,
+                  backgroundColor: 'background.paper',
                 }}
               >
-                {getProgramsForDay(startOfWeek.add(idx, 'days'))}
-              </Box>
+                {range(0, 24).map((idx) => (
+                  <Box
+                    key={`divider_small_${idx}`}
+                    sx={{
+                      height: `${blockHeight}px`,
+                      '--Grid-borderWidth': '1px',
+                      borderTop: 'var(--Grid-borderWidth) solid',
+                      borderColor: 'divider',
+                    }}
+                  ></Box>
+                ))}
+              </Stack>
+
+              {range(0, 7).map((idx) => (
+                <Stack
+                  key={`week_${idx}`}
+                  data-week-column={idx}
+                  sx={{
+                    minWidth: `${DayWidth}px`,
+                    '--Grid-borderWidth': '1px',
+                    borderTop: 'var(--Grid-borderWidth) solid',
+                    borderLeft: 'var(--Grid-borderWidth) solid',
+                    borderColor: 'divider',
+                    zIndex: 0,
+                    position: 'relative',
+                    flex: `1 0 ${DayWidth}px`,
+                  }}
+                >
+                  {range(0, 24).map((hour) => (
+                    <Box
+                      sx={{
+                        height: `${blockHeight}px`,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        position: 'relative',
+                      }}
+                      key={`week_${idx}_hour_${hour}`}
+                    ></Box>
+                  ))}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                    }}
+                  >
+                    {getProgramsForDay(startOfWeek.add(idx, 'days'))}
+                  </Box>
+                </Stack>
+              ))}
             </Stack>
-          ))}
-        </Stack>
-      </Stack>
+          </Stack>
+        </Box>
+      </Box>
       {(openProgramDetails?.type === 'content' ||
         (openProgramDetails?.type === 'custom' && openProgramDetails?.id)) && (
         <ProgramDetailsDialog
