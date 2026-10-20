@@ -73,6 +73,7 @@ export function TvGuideCell({
       {...item}
       cellStyle={cellStyle}
       compact={compact}
+      dividerColor={palette.divider}
       ringColor={nowPlaying ? palette.primary.main : undefined}
       title={compact ? title : undefined}
     >

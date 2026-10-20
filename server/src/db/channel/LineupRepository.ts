@@ -1,3 +1,4 @@
+import { invalidateLibraryReferences } from '../libraryReferenceRevision.ts';
 import { globalOptions } from '@/globals.js';
 import { FileSystemService } from '@/services/FileSystemService.js';
 import { KEYS } from '@/types/inject.js';
@@ -278,6 +279,8 @@ export class LineupRepository {
       LineupRepository.applyUpdateLineupRequest(newLineup, data);
     });
 
+    invalidateLibraryReferences();
+
     if (isDefined(newLineup.items)) {
       const newDur = sum(newLineup.items.map((item) => item.durationMs));
       await this.updateChannelDuration(channelId, newDur);
@@ -338,9 +341,10 @@ export class LineupRepository {
     >,
   >(id: string, key: Key, conf: Lineup[Key]): Promise<void> {
     const lineupDb = await this.getFileDb(id);
-    return await lineupDb.update((existing) => {
+    await lineupDb.update((existing) => {
       existing[key] = conf;
     });
+    invalidateLibraryReferences();
   }
 
   async setChannelPrograms(

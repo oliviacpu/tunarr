@@ -1,3 +1,5 @@
+import { LibraryUsageDetails, UsedByChip } from '@/components/LibraryUsage.tsx';
+import { useLibraryUsage } from '@/hooks/useLibraryUsage.ts';
 import {
   BulkActionsToolbar,
   SelectedNames,
@@ -39,6 +41,7 @@ const showName = (show: CustomShow) => show.name;
 
 export default function CustomShowsPage() {
   const { t } = useLingui();
+  const usage = useLibraryUsage('customShows');
   const toasts = useToasts();
   const { data: customShows } = useCustomShows();
   const queryClient = useQueryClient();
@@ -141,8 +144,15 @@ export default function CustomShowsPage() {
         accessorKey: 'contentCount',
         filterVariant: 'range',
       },
+      {
+        header: t`Usage`,
+        id: 'usage',
+        Cell: ({ row }) => <UsedByChip id={row.original.id} usage={usage} />,
+        enableSorting: false,
+        enableColumnFilter: false,
+      },
     ],
-    [t],
+    [t, usage],
   );
 
   const table = useMaterialReactTable({
@@ -208,6 +218,17 @@ export default function CustomShowsPage() {
       </TableContainer>
       <DeleteConfirmationDialog
         open={deletingShow !== undefined}
+        details={
+          <LibraryUsageDetails
+            kind="customShows"
+            open={deletingShow !== undefined}
+            items={
+              deletingShow === undefined
+                ? []
+                : [{ id: deletingShow.id, name: deletingShow.name }]
+            }
+          />
+        }
         onClose={() => setDeleteConfirmationId(undefined)}
         title={t`Delete Custom Show "${deletingShow?.name}"?`}
         body={t`Deleting a custom show removes its programming from channels that use it. This cannot be undone.`}
@@ -228,7 +249,16 @@ export default function CustomShowsPage() {
           other:
             'Deleting these custom shows removes their programming from channels that use them. This cannot be undone.',
         })}`}
-        details={<SelectedNames items={bulkDelete.named} />}
+        details={
+          <>
+            <SelectedNames items={bulkDelete.named} />
+            <LibraryUsageDetails
+              kind="customShows"
+              open={bulkDelete.dialogProps.open}
+              items={bulkDelete.named}
+            />
+          </>
+        }
       />
     </Box>
   );

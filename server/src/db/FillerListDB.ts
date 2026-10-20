@@ -1,3 +1,4 @@
+import { invalidateLibraryReferences } from './libraryReferenceRevision.ts';
 import { KEYS } from '@/types/inject.js';
 import { seq } from '@tunarr/shared/util';
 import type {
@@ -291,6 +292,7 @@ export class FillerDB implements IFillerListDB {
       tx.delete(FillerShow).where(eq(FillerShow.uuid, id)).run();
     });
 
+    invalidateLibraryReferences();
     return;
   }
 
