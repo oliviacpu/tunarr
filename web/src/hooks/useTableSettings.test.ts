@@ -1,6 +1,13 @@
-import { act, renderHook } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
-import { useSelectableTableSettings } from './useTableSettings.ts';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { createElement, StrictMode } from 'react';
+import type { PropsWithChildren } from 'react';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import useStore from '../store/index.ts';
+import { useSettings } from '../store/settings/selectors.ts';
+import {
+  useSelectableTableSettings,
+  useTableSettings,
+} from './useTableSettings.ts';
 
 type Row = { id: string; name: string };
 
@@ -17,6 +24,137 @@ function renderSelection(data: Row[] = rows) {
     { initialProps: { data } },
   );
 }
+
+const initialTableSettings = useStore.getState().settings.ui.tableSettings;
+
+beforeEach(() => {
+  useStore.setState(({ settings }) => {
+    settings.ui.tableSettings = {};
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  useStore.setState(({ settings }) => {
+    settings.ui.tableSettings = initialTableSettings;
+  });
+  vi.restoreAllMocks();
+});
+
+function SettingsSubscriber() {
+  useSettings();
+  return null;
+}
+
+function StrictSettings({ children }: PropsWithChildren) {
+  return createElement(
+    StrictMode,
+    null,
+    createElement(SettingsSubscriber),
+    children,
+  );
+}
+
+describe('useTableSettings', () => {
+  test('composes batched updates without notifying subscribers during render', () => {
+    const errors = vi.spyOn(console, 'error');
+    const { result } = renderHook(() => useTableSettings('PreferencesTest'), {
+      wrapper: StrictSettings,
+    });
+    expect(
+      useStore.getState().settings.ui.tableSettings.PreferencesTest,
+    ).toBeUndefined();
+
+    act(() => {
+      result.current.paginationState.setter((prev) => ({
+        ...prev,
+        pageIndex: prev.pageIndex + 1,
+      }));
+      result.current.paginationState.setter((prev) => ({
+        ...prev,
+        pageIndex: prev.pageIndex + 1,
+      }));
+      result.current.colVisibilityState.setter((prev) => ({
+        ...prev,
+        name: false,
+      }));
+      result.current.colVisibilityState.setter((prev) => ({
+        ...prev,
+        number: false,
+      }));
+      result.current.sortState.setter((prev) => [
+        ...prev,
+        { id: 'name', desc: false },
+      ]);
+      result.current.sortState.setter((prev) => [
+        ...prev,
+        { id: 'number', desc: true },
+      ]);
+    });
+
+    const expected = {
+      pagination: { pageIndex: 2, pageSize: 10 },
+      columnModel: { name: false, number: false },
+      sortState: [
+        { id: 'name', desc: false },
+        { id: 'number', desc: true },
+      ],
+    };
+    expect(result.current.paginationState.current).toEqual(expected.pagination);
+    expect(result.current.colVisibilityState.current).toEqual(
+      expected.columnModel,
+    );
+    expect(result.current.sortState.current).toEqual(expected.sortState);
+    expect(
+      useStore.getState().settings.ui.tableSettings.PreferencesTest,
+    ).toEqual(expected);
+    expect(errors.mock.calls).toEqual([]);
+  });
+
+  test('functional updates compose with direct values and persist for a new mount', () => {
+    const { result, unmount } = renderHook(() =>
+      useTableSettings('PreferencesTest'),
+    );
+    act(() => {
+      result.current.paginationState.setter({ pageIndex: 3, pageSize: 25 });
+      result.current.paginationState.setter((prev) => ({
+        ...prev,
+        pageIndex: prev.pageIndex + 1,
+      }));
+      result.current.colVisibilityState.setter({ name: false });
+      result.current.colVisibilityState.setter((prev) => ({
+        ...prev,
+        number: false,
+      }));
+      result.current.sortState.setter([{ id: 'name', desc: false }]);
+      result.current.sortState.setter((prev) => [
+        ...prev,
+        { id: 'number', desc: true },
+      ]);
+    });
+    const expected =
+      useStore.getState().settings.ui.tableSettings.PreferencesTest;
+    expect(expected).toEqual({
+      pagination: { pageIndex: 4, pageSize: 25 },
+      columnModel: { name: false, number: false },
+      sortState: [
+        { id: 'name', desc: false },
+        { id: 'number', desc: true },
+      ],
+    });
+    unmount();
+    const remounted = renderHook(() => useTableSettings('PreferencesTest'));
+    expect(remounted.result.current.paginationState.current).toEqual(
+      expected?.pagination,
+    );
+    expect(remounted.result.current.colVisibilityState.current).toEqual(
+      expected?.columnModel,
+    );
+    expect(remounted.result.current.sortState.current).toEqual(
+      expected?.sortState,
+    );
+  });
+});
 
 describe('useSelectableTableSettings', () => {
   test('turns on page-scoped selection without the MRT banner', () => {
