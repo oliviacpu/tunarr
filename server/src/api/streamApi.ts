@@ -18,9 +18,10 @@ import type { FastifyReply } from 'fastify';
 import { isArray, isNil, isNumber, isUndefined } from 'lodash-es';
 import fs from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { CountingPassThrough, TuneInTimer } from '../stream/TuneInTimer.ts';
+import { TuneInTimer } from '../stream/TuneInTimer.ts';
+import { TuneInConnection } from '../stream/TuneInConnection.ts';
+import type { ConcatSession } from '../stream/ConcatSession.ts';
 import { format } from 'node:util';
-import { match } from 'ts-pattern';
 import { v4 } from 'uuid';
 import z from 'zod/v4';
 import { markSegmentsForCaptions } from '../stream/captions/ProgramCaptions.ts';
@@ -139,122 +140,118 @@ export const streamApi: RouterPluginAsyncCallback = async (fastify) => {
     },
     async (req, res) => {
       const timer = new TuneInTimer();
-      const channel = await req.serverCtx.channelDB.getChannel(req.params.id);
-      if (isNil(channel)) {
-        return res.status(404).send('Channel not found.');
-      }
-
-      const lineup = await req.serverCtx.channelDB.loadLineup(channel.uuid);
-
-      const mode = req.query.streamMode ?? channel.streamMode;
       const token = req.query.token ?? v4();
       const who = {
-        channel: channel.number,
+        channel: req.params.id,
         token,
         ip: req.ip,
         userAgent: req.headers['user-agent'],
       };
-
-      const sessionResult =
-        await req.serverCtx.sessionManager.getOrCreateConcatSession(
-          channel.uuid,
-          token,
-          {
-            ip: req.ip,
-            userAgent: req.headers['user-agent'],
-          },
-          {
-            audioOnly: req.query.audioOnly,
-            sessionType: `${mode}_concat`,
-          },
-        );
-
-      if (sessionResult.isFailure()) {
-        // The tune-ins that matter most: nothing was ever sent.
-        logger.warn(
-          who,
-          'Tune-in failed after %d ms, no byte was sent: %s',
-          timer.elapsedMs(),
-          sessionResult.error.type ?? 'unknown error',
-        );
-        return match(sessionResult.error.type)
-          .with('channel_not_found', () =>
-            res.status(404).send('Channel not found.'),
-          )
-          .with('generic_error', () =>
-            res.status(500).send('Unable to start session'),
-          )
-          .with('transcode_config_not_found', () =>
-            res.status(404).send('Transcode config not found'),
-          )
-          .with(undefined, () =>
-            res
-              .status(500)
-              .send(`Unknown error occurred. Check logs for details`),
-          )
-          .exhaustive();
-      }
-
-      const session = sessionResult.get();
-      timer.mark('session');
-
-      if (lineup.onDemandConfig) {
-        await req.serverCtx.onDemandChannelService.resumeChannel(channel.uuid);
-      }
-
-      // We have to create an intermediate stream between the raw one
-      // and the response so that nothing messes up the backing raw stream
-      // when the request closes (i.e. anything that might happen internal
-      // in fastify on the send).
-      // TODO: We could probably record periodic heartbeats by listening
-      // to the data event on this piped stream. Just debounce them!
-      // One line per tune-in with its timing, so slow or failed tune-ins can
-      // be read off Tunarr's own log instead of the tuner's (Plex's).
-      const piped = session.rawStream!.pipe(
-        new CountingPassThrough(() => {
+      let session: ConcatSession | undefined;
+      let handedOff = false;
+      const tuneIn = new TuneInConnection(
+        res.raw,
+        () => {
           timer.mark('first byte');
-          logger.info(who, 'Tune-in: %s', timer.summary());
-        }),
+          logger.info(
+            {
+              ...who,
+              sessionId: session?.instanceId,
+              underlyingSessionId: session?.underlyingSessionId,
+            },
+            'Tune-in: %s',
+            timer.summary(),
+          );
+        },
+        (reason, bytes) => {
+          logger.info(
+            { ...who, sessionId: session?.instanceId, reason, bytes },
+            'Stream closed after %d ms%s',
+            timer.elapsedMs(),
+            timer.has('first byte') ? '' : ' (no byte was ever sent)',
+          );
+          if (
+            reason === 'startup timeout' &&
+            session &&
+            session.numConnections() === 0
+          ) {
+            void req.serverCtx.sessionManager
+              .endSessionInBackground(session, { ifUnused: true })
+              .catch((error: unknown) =>
+                logger.error(error, 'Could not retire timed-out session'),
+              );
+          }
+        },
       );
-
-      piped.on('close', () => {
-        logger.info(
-          who,
-          'Stream closed after %d s, %d MB sent%s',
-          Math.round(timer.elapsedMs() / 1000),
-          Math.round(piped.bytes / 1_000_000),
-          timer.has('first byte') ? '' : ' (no byte was ever sent)',
+      try {
+        const channel = await tuneIn.wait(
+          req.serverCtx.channelDB.getChannel(req.params.id),
         );
-
-        session.removeConnection(token);
-      });
-
-      session.on('end', () => {
-        logger.debug(
-          { token, ip: req.ip, channel: req.params.id },
-          'Session end - closing response stream',
+        if (isNil(channel)) return res.status(404).send('Channel not found.');
+        who.channel = channel.number;
+        const lineup = await tuneIn.wait(
+          req.serverCtx.channelDB.loadLineup(channel.uuid),
         );
-        piped.end();
-      });
-
-      session.on('cleanup', () => {
-        logger.debug(
-          { token, ip: req.ip, channel: req.params.id },
-          'Session cleanup - closing response stream',
+        const mode = req.query.streamMode ?? channel.streamMode;
+        const acquisition = req.serverCtx.sessionManager
+          .getOrCreateConcatSession(
+            channel.uuid,
+            token,
+            { ip: req.ip, userAgent: req.headers['user-agent'] },
+            { audioOnly: req.query.audioOnly, sessionType: `${mode}_concat` },
+          )
+          .then((result) => {
+            if (result.isSuccess()) {
+              session = result.get();
+              tuneIn.adopt(session, token);
+              if (
+                tuneIn.signal.aborted &&
+                tuneIn.timedOut &&
+                session.numConnections() === 0
+              ) {
+                void req.serverCtx.sessionManager
+                  .endSessionInBackground(session, { ifUnused: true })
+                  .catch((error: unknown) =>
+                    logger.error(error, 'Could not retire timed-out session'),
+                  );
+              }
+            }
+            return result;
+          });
+        const sessionResult = await tuneIn.wait(acquisition);
+        if (sessionResult.isFailure()) {
+          logger.warn(
+            { ...who, error: sessionResult.error },
+            'Tune-in failed after %d ms, no byte was sent',
+            timer.elapsedMs(),
+          );
+          return res
+            .status(sessionResult.error.httpCode)
+            .send('Unable to start session');
+        }
+        timer.mark('session');
+        if (lineup.onDemandConfig) {
+          await tuneIn.wait(
+            req.serverCtx.onDemandChannelService.resumeChannel(channel.uuid),
+          );
+        }
+        // The wrapper fetches HLS through this server: wait for output only after releasing the channel lock.
+        const piped = await tuneIn.attach();
+        handedOff = true;
+        return res.header('Content-Type', 'video/mp2t').send(piped);
+      } catch (error) {
+        logger.warn(
+          { ...who, error },
+          'Tune-in failed after %d ms',
+          timer.elapsedMs(),
         );
-        piped.end();
-      });
-
-      // Close the request on error.
-      session.on('error', (error) => {
-        logger.error(
-          { token, ip: req.ip, channel: req.params.id, error },
-          'Session error - closing response stream',
-        );
-        piped.end();
-      });
-
-      return res.header('Content-Type', 'video/mp2t').send(piped);
+        if (res.raw.destroyed) return res;
+        return res
+          .status(tuneIn.timedOut ? 504 : 500)
+          .send('Unable to start stream');
+      } finally {
+        if (!handedOff) tuneIn.close('startup failed');
+      }
     },
   );
 

@@ -452,7 +452,7 @@ export default function FfmpegSettingsPage({
                 }}
               />
               <AppliesWhen setting="hlsSession" />
-              <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
+              <Stack spacing={2} direction={{ xs: 'column', md: 'row' }}>
                 <NumericFormControllerText
                   control={control}
                   name="hlsSegmentSeconds"

@@ -9,6 +9,8 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import { medianSorted } from './tune-in-stats.mjs';
+import { resetSession, tuneInCase } from './tune-in-cases.mjs';
 
 const { values: opt } = parseArgs({
   options: {
@@ -26,6 +28,7 @@ const { values: opt } = parseArgs({
     channel: { type: 'string' },
     mode: { type: 'string', default: 'hls' },
     seconds: { type: 'string', default: '60' },
+    'tune-ins': { type: 'string', default: '0' },
     out: { type: 'string' },
     ffmpeg: { type: 'string', default: 'ffmpeg' },
     ffprobe: { type: 'string', default: 'ffprobe' },
@@ -71,6 +74,10 @@ const out = path.resolve(
 fs.mkdirSync(out, { recursive: true });
 const dbDir = path.join(out, 'db');
 const seconds = Number(opt.seconds);
+const tuneIns = Number(opt['tune-ins']);
+if (!Number.isInteger(tuneIns) || tuneIns < 0 || tuneIns > 1000 || (tuneIns > 0 && (opt.mode !== 'hdhr' || opt.source !== 'synthetic'))) {
+  throw new Error('--tune-ins needs 0-1000 and --source synthetic --mode hdhr');
+}
 // --clip-file uses real files as the programs instead of generated clips
 const clipFiles = opt['clip-file'].map((f) => path.resolve(f));
 for (const f of clipFiles) if (!fs.existsSync(f)) throw new Error(`--clip-file ${f} does not exist`);
@@ -728,6 +735,49 @@ async function applySchedule(base, channel, specFile) {
 
 // ---------- capture ----------
 
+async function measureTuneIns(base, channelId) {
+  const twin = await api(base, 'POST', '/api/channels', { type: 'copy', channelId });
+  const channels = [channelId, twin.id];
+  const rows = [];
+  for (let i = 0; i < tuneIns; i++) {
+    const scenario = tuneInCase(i);
+    const id = channels[scenario.channelIndex];
+    const cold = scenario.cold;
+    if (i >= 2 && cold) await resetSession(`${base}/api/channels/${id}/sessions`);
+    const start = performance.now();
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 25_000);
+    let reader;
+    let second;
+    try {
+      const response = await fetch(`${base}/stream/channels/${id}.ts`, { signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      reader = response.body.getReader();
+      const first = await reader.read();
+      if (first.done || first.value.length === 0) throw new Error('ended without bytes');
+      const firstByteMs = Math.round(performance.now() - start);
+      if (scenario.secondViewer) {
+        second = await fetch(`${base}/stream/channels/${id}.ts`, { signal: controller.signal });
+        if (!second.ok) throw new Error(`second viewer HTTP ${second.status}`);
+        const other = second.body.getReader();
+        const chunk = await other.read();
+        await other.cancel();
+        if (chunk.done) throw new Error('second viewer ended without bytes');
+      }
+      rows.push({ channelId: id, cold, secondViewer: scenario.secondViewer, firstByteMs });
+    } catch (error) {
+      rows.push({ channelId: id, cold, secondViewer: scenario.secondViewer, error: String(error) });
+    } finally {
+      clearTimeout(deadline);
+      controller.abort();
+      await reader?.cancel().catch(() => {});
+    }
+  }
+  const times = rows.filter((r) => r.firstByteMs !== undefined).map((r) => r.firstByteMs).sort((a, b) => a - b);
+  return { attempts: rows.length, failures: rows.filter((r) => r.error).length,
+    medianMs: medianSorted(times), p95Ms: times[Math.max(0, Math.ceil(times.length * 0.95) - 1)], rows };
+}
+
 async function captureTs(base, channelId) {
   const file = path.join(out, 'capture.ts');
   const ctl = new AbortController();
@@ -1236,6 +1286,7 @@ try {
     await api(server.base, 'POST', `/api/tasks/${encodeURIComponent(task)}/run?background=false`, {});
   }
   if (opt['run-task'].length) report.tasksRun = opt['run-task'];
+  if (tuneIns > 0) report.tuneIns = await measureTuneIns(server.base, channel.channelId);
   if (seconds === 0) {
     log('--seconds 0: skipping the stream capture');
     throw new SkipCapture();

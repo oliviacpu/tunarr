@@ -13,6 +13,8 @@ import events from 'node:events';
 import type { StrictExtract } from 'ts-essentials';
 import { v4 } from 'uuid';
 import { getNumericEnvVar, TUNARR_ENV_VARS } from '../util/env.ts';
+import { caughtErrorToError } from '../util/index.ts';
+import { TuneInTimer } from './TuneInTimer.ts';
 import { ConnectionTracker } from './ConnectionTracker.ts';
 
 const ConcatSessionSuffix = '_concat';
@@ -158,14 +160,17 @@ export abstract class Session<
 
       try {
         this.state = 'starting';
-        this.emit('start');
+        const timer = new TuneInTimer();
         await this.startInternal();
+        timer.mark('setup');
         await this.waitForStreamReadyInternal();
-        this.state = 'started';
+        timer.mark('readiness');
+        this.logger.debug('Session startup: %s', timer.summary());
       } catch (e) {
         this.logger.error(e);
+        this.error = caughtErrorToError(e);
         this.state = 'error';
-        this.emit('error', e);
+        this.emit('error', this.error);
       }
     });
   }
@@ -223,11 +228,14 @@ export abstract class Session<
   private async waitForStreamReadyInternal() {
     const waitResult = await this.waitForStreamReady();
 
+    if (this.stoppingOrStopped) return;
+
     if (waitResult.isFailure()) {
+      if (this.hasError && this.error !== undefined) return;
       this.state = 'error';
       this.error = waitResult.error;
       this.emit('error', this.error);
-    } else {
+    } else if (!this.hasError) {
       this.state = 'started';
       this.emit('start');
     }

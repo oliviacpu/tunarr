@@ -3548,3 +3548,26 @@ once accepted when another job is running. Acceptance and completion use an expl
 job handle; requests joining the same show share its job and retain priority. Scanner
 validation warnings run once per library. The duplicate-case artwork test skips
 when the filesystem cannot create two distinct files differing only in case. This follow-up depends on scan-worker watchdog PR #63.
+
+
+### Safer channel switching and less tune-in setup work (2026-10-20)
+
+- **Symptoms:** slow cold tunes and switches that fail without sending bytes.
+- **Found in code:** readiness failures could become `started`; stale instance-based teardown could remove a replacement;
+  detached viewers left listeners on shared sessions; timing a direct stream with a `data` listener could consume its
+  initial bytes before the HTTP response attached. These are verified code paths, not proof of every reported failure.
+- **Fix:** preserve readiness errors, replace unusable sessions, bind wrappers to backing-session identities, and scope
+  teardown to the current instance. Initial-byte timing now happens in a pass-through. Each HTTP viewer owns its
+  listeners, pipe, cancellation, and 20-second first-output deadline; late acquisitions are released after disconnect.
+  Output readiness is awaited outside the channel mutex, so the wrapper can make its internal HLS request.
+- **Speed:** successful version probes are cached by binary path for an hour and shared while running. Startup seeds
+  FFmpeg's version. Existing HLS settings, audio/caption behavior, and the late-audio probe window are preserved.
+- **Local A/B:** 100 switches each, six cold starts, ten second-viewer joins: cold median first byte 985 → 666.5 ms,
+  overall p95 1,124 → 848 ms; neither run failed. The base accumulated listener warnings; the patch did not.
+  These synthetic FFmpeg 9.0.2 measurements do not establish production Plex/Apple TV time to picture.
+- **Tests:** version-cache sharing/expiry/failure/path changes; readiness errors and stale teardown; initial bytes,
+  cancellation during startup, silent timeout, two viewers, listener cleanup; the real HTTP route. The stream-repro
+  skill gained `--tune-ins` for alternating channels, cold resets, and second-viewer checks.
+- **Report:** `plans/tune-in-startup-2026-10-20.md`; separate availability investigation under
+  `plans/investigations/plex-tuner-availability-2026-10-20.md`. No deployment was changed.
+- **Upstream:** not sent.

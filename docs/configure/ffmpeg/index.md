@@ -77,6 +77,13 @@ listed every segment since the session started, and FFmpeg rewrote all of it aft
 each segment and read it back in at each program change, which grew costlier the
 longer a channel played.
 
+HDHomeRun/MPEG-TS tune-ins have a 20-second deadline for their first output byte. A session that exits before
+producing output fails immediately; a silent startup returns HTTP 504. Disconnecting during startup releases that
+viewer's connection when session acquisition finishes. An unused timed-out wrapper is retired before another tune.
+Tune-in logs include session instance IDs, first-byte timing, and the disconnect reason. Debug logs separate channel
+lock wait, session construction, setup, and readiness. These timings do not include the player's decoding/buffering.
+FFmpeg and ffprobe version probes are shared and cached by executable path for one hour; failed probes are retried.
+
 ### FFmpeg Transcode Path
 
 Configure the path where FFmpeg writes HLS segments for a channel's stream. For instance, if running the standalone Linux binary, Tunarr can write transcoded segments to RAM by setting this option to `/dev/shm`. 
