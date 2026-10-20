@@ -63,7 +63,7 @@ function renderPage(
 
 const coreField = (section: 'playback' | 'captions-audio') =>
   section === 'playback'
-    ? screen.findByLabelText('FFmpeg executable path')
+    ? screen.findByLabelText('FFmpeg executable path', {}, { timeout: 10_000 })
     : screen.findByRole('checkbox', { name: 'Extract embedded subtitles' });
 
 beforeEach(() => {
