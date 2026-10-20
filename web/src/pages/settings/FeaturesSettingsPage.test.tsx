@@ -103,7 +103,7 @@ describe('FeaturesSettingsPage', () => {
     server.flags = savedFlags;
     mockPutFlags.mockReset();
     mockPutFlags.mockImplementation((options: { body: FlagsBody }) => {
-      server.flags = { ...savedFlags, ...options.body };
+      server.flags = { ...(server.flags ?? savedFlags), ...options.body };
       return Promise.resolve({ data: { flags: server.flags, metadata } });
     });
   });
@@ -140,11 +140,13 @@ describe('FeaturesSettingsPage', () => {
       screen.queryByRole('checkbox', { name: 'WebVTT Sidecar Subtitles' }),
     ).not.toBeInTheDocument();
     await user.click(vulkan);
+    server.flags = { ...savedFlags, xmltvCreditImagesEnabled: true };
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(mockPutFlags).toHaveBeenCalledOnce());
-    expect(mockPutFlags.mock.calls[0]?.[0]).toMatchObject({
-      body: { ...savedFlags, disableVulkan: true },
-    });
+    expect(mockPutFlags).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { disableVulkan: true } }),
+    );
+    expect(server.flags.xmltvCreditImagesEnabled).toBe(true);
   });
 
   test('captions shows only its subtitle flag', async () => {
@@ -166,7 +168,7 @@ describe('FeaturesSettingsPage', () => {
     ).not.toBeInTheDocument();
   });
 
-  test('a switched flag is saved with the others, and the saved form is clean', async () => {
+  test('a switched flag is saved with its group, and the saved form is clean', async () => {
     const { user, flag, saveButton } = await renderPage();
     expect(saveButton()).toBeDisabled();
 
@@ -175,9 +177,11 @@ describe('FeaturesSettingsPage', () => {
     await user.click(saveButton());
 
     await waitFor(() => expect(mockPutFlags).toHaveBeenCalledOnce());
-    expect(mockPutFlags.mock.calls[0]?.[0]).toMatchObject({
-      body: { ...savedFlags, xmltvCreditImagesEnabled: true },
-    });
+    expect(mockPutFlags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { proxyArtwork: true, xmltvCreditImagesEnabled: true },
+      }),
+    );
     expect(await screen.findByText('Saved')).toBeInTheDocument();
     await waitFor(() => expect(saveButton()).toBeDisabled());
     expect(flag('XMLTV Credit Images')).toBeChecked();
