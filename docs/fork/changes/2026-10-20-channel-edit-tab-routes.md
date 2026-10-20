@@ -1,4 +1,4 @@
-### Channel edit tabs have addresses (2026-10-20)
+### Channel edit tabs have addresses (2026-10-20, PR #134)
 
 - **What you saw:** channel tabs shared an edit URL with a query parameter, browser history did not step through tabs, and Streaming also held watermark controls.
 - **Cause:** one page kept its active tab in local state and replaced the query string when it changed.
