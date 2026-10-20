@@ -3541,6 +3541,7 @@ msgid "Schedule programming using slots assigned a start time and duration."
 msgstr "Schedule programming using slots assigned a start time and duration."
 
 #: src/hooks/useRouteName.ts
+#: src/pages/search/SearchPage.tsx
 msgid "Search"
 msgstr "Search"
 
@@ -4364,6 +4365,10 @@ msgstr "TV shows are grouped by show"
 #: src/pages/system/TroubleshootPage.tsx
 msgid "Type"
 msgstr "Type"
+
+#: src/pages/search/SearchPage.tsx
+msgid "Type to search your libraries"
+msgstr "Type to search your libraries"
 
 #: src/components/UnavailableLibraryIndicator.tsx
 #: src/components/UnavailableLibraryIndicator.tsx
