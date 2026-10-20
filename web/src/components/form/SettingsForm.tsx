@@ -98,13 +98,17 @@ export function SettingsForm<
   hasOtherChanges = false,
   onDiscardChanges,
   saveDisabled = false,
-  disabled = false,
+  disabled,
   children,
 }: SettingsFormProps<TFieldValues, TContext, TTransformedValues>) {
   return (
     <FormProvider {...form}>
       <Box component="form" onSubmit={form.handleSubmit(onSubmit)}>
-        <FieldLock disabled={disabled}>{children}</FieldLock>
+        {disabled === undefined ? (
+          children
+        ) : (
+          <FieldLock disabled={disabled}>{children}</FieldLock>
+        )}
         <SaveBar
           control={form.control}
           reset={form.reset}
