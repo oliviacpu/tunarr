@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import { SERVER_URL } from '../fixture/env.ts';
+import { api } from '../fixture/api.ts';
+import type { GetChannelsByNumberV2Response as Channel } from '../../web/src/generated/types.gen.ts';
 import { knownIssuesFor } from './knownIssues.ts';
 import { watchPageHealth } from './pageHealth.ts';
 import { readFixtureIds } from './routes.ts';
@@ -82,57 +84,85 @@ test('one form preserves drafts through tabs and browser history, then saves eve
   page,
 }) => {
   const id = channelId();
-  const name = 'P5 Saved routed channel';
-  await page.goto(`/web/channels/${id}/edit/properties`);
-  await page.getByLabel('Channel name', { exact: true }).fill(name);
-  await page.getByRole('tab', { name: 'Watermark', exact: true }).click();
-  await page.getByLabel('Enable watermark', { exact: true }).check();
-  await watermarkUrl(page).fill(`${SERVER_URL}/images/tunarr.png`);
-  await page.getByRole('tab', { name: 'Guide', exact: true }).click();
-  await page
-    .getByLabel('Guide title for flex', { exact: true })
-    .fill('P5 route guide');
-  await page.goBack();
-  await expect(watermarkUrl(page)).toHaveValue(
-    `${SERVER_URL}/images/tunarr.png`,
-  );
-  await page.goBack();
-  await expect(page.getByLabel('Channel name', { exact: true })).toHaveValue(
-    name,
-  );
-  await page.goForward();
-  await expect(
-    page.getByLabel('Enable watermark', { exact: true }),
-  ).toBeChecked();
-  await page.getByRole('tab', { name: 'Guide', exact: true }).click();
-  await expect(
-    page.getByLabel('Guide title for flex', { exact: true }),
-  ).toHaveValue('P5 route guide');
-  await expect(page.getByRole('dialog')).not.toBeVisible();
-  const saved = page.waitForResponse(
-    (response) =>
-      response.url() === `${SERVER_URL}/api/channels/${id}` &&
-      response.request().method() === 'PUT',
-  );
-  await saveButton(page).click();
-  expect((await saved).ok()).toBe(true);
-  await expect(saveButton(page)).toBeDisabled();
-  const persisted: unknown = await (
-    await page.request.get(`${SERVER_URL}/api/channels/${id}`)
-  ).json();
-  expect(persisted).toMatchObject({
-    name,
-    guideFlexTitle: 'P5 route guide',
-    watermark: { enabled: true, url: `${SERVER_URL}/images/tunarr.png` },
-  });
-  await page.reload();
-  await expect(
-    page.getByRole('tab', { name: 'Guide', exact: true }),
-  ).toHaveAttribute('aria-selected', 'true');
-  await expect(
-    page.getByLabel('Guide title for flex', { exact: true }),
-  ).toHaveValue('P5 route guide');
-  await expect(saveButton(page)).toBeDisabled();
+  const path = `/channels/${id}`;
+  const before = await api<Channel>('GET', path);
+  try {
+    const name = 'P5 Saved routed channel';
+    await page.goto(`/web/channels/${id}/edit/properties`);
+    await page.getByLabel('Channel name', { exact: true }).fill(name);
+    await page.getByRole('tab', { name: 'Watermark', exact: true }).click();
+    await page.getByLabel('Enable watermark', { exact: true }).check();
+    await watermarkUrl(page).fill(`${SERVER_URL}/images/tunarr.png`);
+    await page.getByRole('tab', { name: 'Guide', exact: true }).click();
+    await page
+      .getByLabel('Guide title for flex', { exact: true })
+      .fill('P5 route guide');
+    await page.goBack();
+    await expect(watermarkUrl(page)).toHaveValue(
+      `${SERVER_URL}/images/tunarr.png`,
+    );
+    await page.goBack();
+    await expect(page.getByLabel('Channel name', { exact: true })).toHaveValue(
+      name,
+    );
+    await page.goForward();
+    await expect(
+      page.getByLabel('Enable watermark', { exact: true }),
+    ).toBeChecked();
+    await page.getByRole('tab', { name: 'Guide', exact: true }).click();
+    await expect(
+      page.getByLabel('Guide title for flex', { exact: true }),
+    ).toHaveValue('P5 route guide');
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url() === `${SERVER_URL}/api/channels/${id}` &&
+        response.request().method() === 'PUT',
+    );
+    await saveButton(page).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(saveButton(page)).toBeDisabled();
+    const persisted: unknown = await (
+      await page.request.get(`${SERVER_URL}/api/channels/${id}`)
+    ).json();
+    expect(persisted).toMatchObject({
+      name,
+      guideFlexTitle: 'P5 route guide',
+      watermark: { enabled: true, url: `${SERVER_URL}/images/tunarr.png` },
+    });
+    await page.reload();
+    await expect(
+      page.getByRole('tab', { name: 'Guide', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
+    await expect(
+      page.getByLabel('Guide title for flex', { exact: true }),
+    ).toHaveValue('P5 route guide');
+    await expect(saveButton(page)).toBeDisabled();
+  } finally {
+    const {
+      startTime: _startTime,
+      onDemand: _onDemand,
+      fallback: _fallback,
+      programCount: _programCount,
+      sessions: _sessions,
+      ...current
+    } = await api<Channel>('GET', path);
+    await api('PUT', path, {
+      ...current,
+      name: before.name,
+      guideFlexTitle: before.guideFlexTitle ?? '',
+      // Missing optional fields are not cleared by the channel update API.
+      watermark: before.watermark ?? {
+        enabled: false,
+        url: '',
+        position: 'bottom-right',
+        width: 10,
+        horizontalMargin: 1,
+        verticalMargin: 1,
+        duration: 0,
+      },
+    });
+  }
 });
 
 test('leaving the editor asks once, Cancel keeps drafts and Proceed discards them', async ({

@@ -88,7 +88,13 @@ for (const [path, count, channels] of [
           animations: 'disabled',
         });
         await page
-          .getByRole('button', { name: 'Delete', exact: true })
+          .getByRole('button', {
+            name:
+              path === 'fillers'
+                ? 'Delete Filler List "E2E Bumpers"'
+                : 'Delete',
+            exact: true,
+          })
           .first()
           .click();
         const dialog = page.getByRole('dialog');
