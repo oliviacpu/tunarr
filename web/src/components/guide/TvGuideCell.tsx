@@ -5,6 +5,12 @@ import { ProgramTypeIcon } from '../base/ProgramTypeIcon.tsx';
 import type { GuideCellStyle, GuideGlyph } from './guideColors.ts';
 import { TvGuideItem } from './TvGuideItem.tsx';
 
+// Below CompactBlockPx a cell drops its text, because it would only show as a
+// clipped fragment. The type glyph needs more room, so narrow cells keep
+// their letters for the title.
+export const CompactBlockPx = 24;
+export const GlyphBlockPx = 64;
+
 function CellGlyph({ glyph }: { glyph: GuideGlyph }) {
   return (
     <Box
@@ -31,9 +37,8 @@ type Props = {
   cellStyle: GuideCellStyle;
   title: string;
   subtitle: string;
-  // Too narrow for text: the cell drops its text and glyph and shows the
-  // title as a tooltip.
-  compact: boolean;
+  // The cell's width on screen, or undefined before the grid is measured.
+  pixelWidth: number | undefined;
   nowPlaying?: boolean;
   paused?: boolean;
   clickable?: boolean;
@@ -44,16 +49,22 @@ type Props = {
 
 /**
  * One program, flex gap or redirect on the guide: the type glyph and title,
- * the subtitle, and any further lines, unless the cell is a sliver.
+ * the subtitle, and any further lines. A sliver shows its title only as a
+ * tooltip, and a narrow cell shows text without the glyph.
  */
 export function TvGuideCell({
   cellStyle,
   title,
   subtitle,
-  compact,
+  pixelWidth,
   children,
   ...item
 }: Props) {
+  const compact = pixelWidth !== undefined && pixelWidth < CompactBlockPx;
+  const glyph =
+    pixelWidth !== undefined && pixelWidth >= GlyphBlockPx
+      ? cellStyle.glyph
+      : undefined;
   return (
     <TvGuideItem
       {...item}
@@ -73,9 +84,7 @@ export function TvGuideCell({
               minWidth: 0,
             }}
           >
-            {cellStyle.glyph !== undefined ? (
-              <CellGlyph glyph={cellStyle.glyph} />
-            ) : null}
+            {glyph !== undefined ? <CellGlyph glyph={glyph} /> : null}
             <Box
               component="span"
               sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}

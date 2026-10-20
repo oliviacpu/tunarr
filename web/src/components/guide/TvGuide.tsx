@@ -55,9 +55,8 @@ const StyledButton = styled(Button)`
   }
 `;
 
-// Below these pixel widths, blocks drop their text and header times shorten
-// or thin out, because the full text would only show as clipped fragments.
-const CompactBlockPx = 24;
+// Below these pixel widths, header times shorten or thin out, because the
+// full text would only show as clipped fragments.
 const ShortTimeSlotPx = 80;
 const SparseTimeSlotPx = 48;
 
@@ -276,8 +275,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
         return null;
       }
 
-      const isCompact =
-        gridWidth > 0 && (pct / 100) * gridWidth < CompactBlockPx;
+      const pixelWidth = gridWidth > 0 ? (pct / 100) * gridWidth : undefined;
 
       const endOfAvailableProgramming =
         index === lineup.length - 1 && programEnd.isBefore(end);
@@ -298,7 +296,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
           <TvGuideCell
             left={left}
             width={pct}
-            compact={isCompact}
+            pixelWidth={pixelWidth}
             title={title}
             subtitle={episodeTitle}
             onClick={() => handleModalOpen(program)}

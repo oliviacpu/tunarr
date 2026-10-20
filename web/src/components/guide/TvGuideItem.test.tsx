@@ -58,12 +58,12 @@ describe('TvGuideItem', () => {
 });
 
 describe('TvGuideCell', () => {
-  function renderCell(type: GuideCellType, compact = false) {
+  function renderCell(type: GuideCellType, pixelWidth: number | undefined) {
     return renderWithProviders(
       <TvGuideCell
         left={0}
         width={20}
-        compact={compact}
+        pixelWidth={pixelWidth}
         cellStyle={typeStyle(palette, type, 'show.a')}
         title="The Title"
         subtitle="S01E01 - Pilot"
@@ -71,33 +71,47 @@ describe('TvGuideCell', () => {
     );
   }
 
-  test('puts a movie icon before a movie title', () => {
-    renderCell('movie');
+  test('puts a movie icon before a movie title in a 100px cell', () => {
+    renderCell('movie', 100);
     expect(screen.getByTestId('MovieIcon')).toBeInTheDocument();
     expect(screen.queryByTestId('TvIcon')).not.toBeInTheDocument();
     expect(screen.getByText('The Title')).toBeInTheDocument();
   });
 
-  test('puts a TV icon before an episode title', () => {
-    renderCell('episode');
+  test('puts a TV icon before an episode title in a 100px cell', () => {
+    renderCell('episode', 100);
     expect(screen.getByTestId('TvIcon')).toBeInTheDocument();
     expect(screen.queryByTestId('MovieIcon')).not.toBeInTheDocument();
+    expect(screen.getByText('The Title')).toBeInTheDocument();
   });
 
-  test('puts an arrow before a redirect title', () => {
-    renderCell('redirect');
+  test('puts an arrow before a redirect title in a 100px cell', () => {
+    renderCell('redirect', 100);
     expect(screen.getByTestId('ArrowForwardIcon')).toBeInTheDocument();
   });
 
   test('draws no icon on a flex gap', () => {
-    const { container } = renderCell('flex');
+    const { container } = renderCell('flex', 100);
+    expect(container.querySelector('svg')).toBeNull();
+  });
+
+  test('keeps the text but drops the icon in a 40px cell', () => {
+    const { container } = renderCell('movie', 40);
+    expect(screen.getByText('The Title')).toBeInTheDocument();
+    expect(screen.getByText('S01E01 - Pilot')).toBeInTheDocument();
     expect(container.querySelector('svg')).toBeNull();
   });
 
   test('draws no icon or text on a sliver, and keeps the title as a tooltip', () => {
-    const { container } = renderCell('movie', true);
+    const { container } = renderCell('movie', 16);
     expect(container.querySelector('svg')).toBeNull();
     expect(screen.queryByText('The Title')).not.toBeInTheDocument();
     expect(screen.getByTitle('The Title')).toBeInTheDocument();
+  });
+
+  test('shows text without the icon before the grid is measured', () => {
+    const { container } = renderCell('movie', undefined);
+    expect(screen.getByText('The Title')).toBeInTheDocument();
+    expect(container.querySelector('svg')).toBeNull();
   });
 });

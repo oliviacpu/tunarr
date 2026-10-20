@@ -20,8 +20,8 @@
     episodes and tracks, the program for movies and other videos, and the wrapped program for custom-show entries, so
     a show keeps its colour across reloads.
   - `typeStyle(palette, type)` encodes the type without relying on colour. Movies, episodes, tracks and other videos
-    keep their ramp colour and get their `ProgramTypeIcon` (14px) before the title, in any cell wide enough to show
-    text; slivers show neither. Flex gaps and "No programming scheduled" take the page background, `text.secondary`
+    keep their ramp colour and get their `ProgramTypeIcon` (14px) before the title in cells at least 64px wide.
+    Cells from 24px show the title without it, so narrow cells keep their letters; slivers show neither. Flex gaps and "No programming scheduled" take the page background, `text.secondary`
     and a dashed divider outline. Redirects are the secondary colour at 16%
     over the paper with an arrow before the title. Only programs open the details dialog, so only they get the hand
     cursor.
@@ -40,8 +40,9 @@
   pinned; episodes of one show share a key and movies do not; flex and redirect backgrounds are not ramp steps, carry
   the dashed outline and the arrow, and keep their text at 4.5:1. `guideCellType` tells movies from episodes and
   classifies custom-show entries by the program they wrap. `TvGuideItem.test.tsx`: the ramp fill, the primary ring
-  only on the now-playing cell, the dashed flex outline, and the hand cursor only on programs; a movie cell shows the
-  movie icon and an episode cell the TV icon, a redirect the arrow, a flex gap none, and a sliver no icon or text.
+  only on the now-playing cell, the dashed flex outline, and the hand cursor only on programs; at 100px a movie cell
+  shows the movie icon and an episode cell the TV icon, a redirect the arrow and a flex gap none; a 40px cell shows
+  its text without the icon, and a sliver neither.
   `TvGuideNowMarker.test.tsx`: the marker animates by default, does not under `prefers-reduced-motion`, and is
   primary. `colorHooks.test.tsx`: `system` on a dark OS picks the dark set (fails on the old code), and on a light OS
   the light set. `theme.test.ts` adds `secondary.contrastText` on `secondary.main` at 4.5:1 and a non-text list with
