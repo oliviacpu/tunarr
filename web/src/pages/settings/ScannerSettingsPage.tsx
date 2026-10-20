@@ -28,7 +28,9 @@ function nextScanEpoch(tasks: Task[] | undefined): number | undefined {
     ?.nextExecutionEpoch;
 }
 
-export const ScannerSettingsPage = () => {
+export const ScannerSettingsPage = ({
+  onDirtyChange,
+}: { onDirtyChange?: (isDirty: boolean) => void } = {}) => {
   const { t } = useLingui();
   const dayjs = useDayjs();
   const settingsQuery = getApiSettingsMediaSourceOptions();
@@ -46,8 +48,13 @@ export const ScannerSettingsPage = () => {
   });
   const {
     reset,
-    formState: { defaultValues },
+    formState: { defaultValues, isDirty },
   } = form;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // Load the saved settings into the form. The reload after a save brings back
   // what the form already compares against, so it is skipped: resetting again
@@ -77,6 +84,7 @@ export const ScannerSettingsPage = () => {
   return (
     <SettingsForm
       form={form}
+      guardNavigation={onDirtyChange === undefined}
       onSubmit={save}
       isSubmitting={saveMutation.isPending}
     >

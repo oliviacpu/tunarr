@@ -19,7 +19,9 @@ function toFormValues(settings: SearchSettings): SearchSettings {
   return { ...settings, maxIndexingMemory: settings.maxIndexingMemory };
 }
 
-export function SearchSettingsForm() {
+export function SearchSettingsForm({
+  onDirtyChange,
+}: { onDirtyChange?: (isDirty: boolean) => void } = {}) {
   const { t } = useLingui();
   const { data: systemSettings } = useSystemSettingsSuspense();
   const settings = systemSettings.server.searchSettings;
@@ -30,8 +32,13 @@ export function SearchSettingsForm() {
   const {
     control,
     reset,
-    formState: { defaultValues },
+    formState: { defaultValues, isDirty },
   } = form;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   useEffect(() => {
     const loaded = toFormValues(settings);
@@ -49,6 +56,7 @@ export function SearchSettingsForm() {
   return (
     <SettingsForm
       form={form}
+      guardNavigation={onDirtyChange === undefined}
       onSubmit={(searchSettings) =>
         mutation.mutate({
           body: { server: { ...systemSettings.server, searchSettings } },

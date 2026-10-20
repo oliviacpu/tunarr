@@ -409,3 +409,25 @@ test('invalid backup cron reports the error and preserves the existing configura
     );
   }
 });
+
+test('Library scan and search edits share one navigation dialog', async ({
+  page,
+}) => {
+  await page.goto('/web/settings/library');
+  const scanner = page.getByLabel('Rescan interval (hours)', { exact: true });
+  const search = page.getByLabel('Search snapshot interval (hours)', {
+    exact: true,
+  });
+  await scanner.fill('3');
+  await search.fill('7');
+  await page.getByRole('tab', { name: 'General', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(scanner).toHaveValue('3');
+  await expect(search).toHaveValue('7');
+  await page.getByRole('tab', { name: 'General', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Proceed', exact: true }).click();
+  await expect(page).toHaveURL(/settings\/general$/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
