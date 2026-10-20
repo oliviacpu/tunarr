@@ -495,11 +495,8 @@ export function JellyfinServerEditDialog({ open, onClose, server }: Props) {
               />
               <FormHelperText sx={{ ml: '14px', mt: -1, flexBasis: '100%' }}>
                 <Trans>
-                  Enter your Jellyfin password to generate a new access token.
-                  <br />
-                  <strong>NOTE:</strong> These are never saved to the Tunarr DB.
-                  Instead they are sent to Jellyfin to exchange for a session
-                  token.
+                  Tunarr sends your password to Jellyfin once, for a new access
+                  token, and never saves it.
                 </Trans>
               </FormHelperText>
             </Box>

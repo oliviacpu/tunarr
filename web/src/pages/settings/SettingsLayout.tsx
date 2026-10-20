@@ -14,10 +14,10 @@ function useSettingsTabs() {
   const { t } = useLingui();
   return [
     { label: t`General`, value: '/general', to: '/settings/general' },
-    { label: t`XMLTV`, value: '/xmltv', to: '/settings/xmltv' },
-    { label: t`FFMPEG`, value: '/ffmpeg', to: '/settings/ffmpeg' },
+    { label: t`Guide`, value: '/xmltv', to: '/settings/xmltv' },
+    { label: t`Transcoding`, value: '/ffmpeg', to: '/settings/ffmpeg' },
     { label: t`Scanner`, value: '/scanner', to: '/settings/scanner' },
-    { label: t`HDHR`, value: '/hdhr', to: '/settings/hdhr' },
+    { label: t`Tuner`, value: '/hdhr', to: '/settings/hdhr' },
     { label: t`Features`, value: '/features', to: '/settings/features' },
   ] as const;
 }

@@ -1,7 +1,6 @@
 import UnsavedNavigationAlert from '@/components/settings/UnsavedNavigationAlert.tsx';
 import { toChannelUpdateRequest } from '@/helpers/channelUpdateRequest.ts';
 import { DefaultChannel } from '@/helpers/constants.ts';
-import { useLingui } from '@lingui/react/macro';
 import { Badge } from '@mui/material';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -33,9 +32,9 @@ import { ChannelFlexConfig } from './ChannelFlexConfig.tsx';
 import { ChannelPropertiesEditor } from './ChannelPropertiesEditor.tsx';
 import ChannelTranscodingConfig from './ChannelTranscodingConfig.tsx';
 import { tabsWithErrors } from './channelFieldTabs.ts';
+import { ChannelEditorTabs, useChannelTabLabels } from './channelFieldTabs.ts';
 import {
   EditChannelTabPanel,
-  type EditChannelTabProps,
   type EditChannelTabs,
 } from './EditChannelTabPanel.tsx';
 
@@ -104,20 +103,11 @@ function getDefaultFormValues(
   };
 }
 
-// Which fields each tab holds is in ChannelFieldTabs
-const EditChannelTabsProps: EditChannelTabProps[] = [
-  { value: 'properties', description: 'Properties' },
-  { value: 'flex', description: 'Flex' },
-  { value: 'epg', description: 'EPG' },
-  { value: 'ffmpeg', description: 'Streaming' },
-];
-
 export function EditChannelForm({
   channel,
   isNew,
   initialTab,
 }: EditChannelFormProps) {
-  const { t } = useLingui();
   const navigate = useNavigate({
     from: isNew ? '/channels/new' : '/channels/$channelId/edit',
   });
@@ -236,20 +226,16 @@ export function EditChannelForm({
     }
   };
 
-  const tabDescriptions: Record<string, string> = {
-    Properties: t`Properties`,
-    Flex: t`Flex`,
-    EPG: t`EPG`,
-    Streaming: t`Streaming`,
-  };
+  // Which fields each tab holds is in ChannelFieldTabs
+  const tabLabels = useChannelTabLabels();
 
-  const renderTab = (tab: EditChannelTabProps) => {
-    const hasError = tabsWithFormErrors.has(tab.value);
+  const renderTab = (tab: EditChannelTabs) => {
+    const hasError = tabsWithFormErrors.has(tab);
     return (
       <Tab
-        key={tab.value}
-        disabled={isNew && tab.value !== currentTab && !formIsValid}
-        value={tab.value}
+        key={tab}
+        disabled={isNew && tab !== currentTab && !formIsValid}
+        value={tab}
         label={
           <Badge
             color="error"
@@ -257,7 +243,7 @@ export function EditChannelForm({
             slotProps={{ badge: { style: { right: -3, top: -3 } } }}
             invisible={!hasError}
           >
-            {tabDescriptions[tab.description] ?? tab.description}
+            {tabLabels[tab]}
           </Badge>
         }
       />
@@ -273,7 +259,7 @@ export function EditChannelForm({
           variant="scrollable"
           allowScrollButtonsMobile
         >
-          {EditChannelTabsProps.map(renderTab)}
+          {ChannelEditorTabs.map(renderTab)}
         </Tabs>
       </Box>
       <FormProvider {...formMethods}>

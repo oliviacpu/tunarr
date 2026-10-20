@@ -1,5 +1,6 @@
-import { useLingui } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Grid } from '@mui/material';
+import { LearnMoreLink } from '../../base/LearnMoreLink.tsx';
 import type { DropdownOption } from '../../../helpers/DropdownOption.ts';
 import { useTypedAppFormContext } from '../../../hooks/form.ts';
 import type { BaseTranscodeConfigProps } from './BaseTranscodeConfigProps.ts';
@@ -47,8 +48,14 @@ export const TranscodeConfigErrorOptions = ({
             <field.BasicSelectInput
               formControlProps={{ sx: { mt: 2 }, fullWidth: true }}
               options={supportedErrorScreens}
-              selectProps={{ label: t`Error Screen` }}
-              helperText={t`If there are issues playing a video, Tunarr will try to use an error screen as a placeholder while retrying loading the video every 60 seconds.`}
+              selectProps={{ label: t`Error screen` }}
+              helperText={
+                <Trans>
+                  What a channel shows while a program fails to play. Tunarr
+                  tries the program again every 60 seconds.{' '}
+                  <LearnMoreLink page="transcodeConfigErrors" />
+                </Trans>
+              }
             />
           )}
         />
@@ -60,7 +67,7 @@ export const TranscodeConfigErrorOptions = ({
             <field.BasicSelectInput
               formControlProps={{ sx: { mt: 2 }, fullWidth: true }}
               options={supportedErrorAudio}
-              selectProps={{ label: t`Error Audio`, fullWidth: true }}
+              selectProps={{ label: t`Error audio`, fullWidth: true }}
             />
           )}
         />

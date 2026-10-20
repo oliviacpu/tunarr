@@ -162,7 +162,7 @@ describe('XMLTV settings API', () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.json<{ message: string }>().message).toBe(
-        'EPG (Hours) is 12, too short for a 12-hour refresh timer: the guide ' +
+        'Guide length is 12 hours, too short for a 12-hour refresh interval: the guide ' +
           'would run out before the next rebuild. It has to be at least 14 ' +
           'hours, two hours longer than the time between rebuilds, since that ' +
           'wait is up to two hours longer on the night the clocks go back.',

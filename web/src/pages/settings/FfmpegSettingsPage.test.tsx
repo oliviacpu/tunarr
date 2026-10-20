@@ -81,7 +81,7 @@ async function renderPage(queryClient?: QueryClient) {
   // its preferences list, which can take a few seconds on a busy runner
   await waitFor(
     () =>
-      expect(screen.getByLabelText('FFmpeg Executable Path')).toHaveValue(
+      expect(screen.getByLabelText('FFmpeg executable path')).toHaveValue(
         '/usr/bin/ffmpeg',
       ),
     { timeout: 10_000 },
@@ -102,8 +102,8 @@ describe('FfmpegSettingsPage', () => {
 
     await renderPage();
 
-    expect(screen.getByLabelText('FFmpeg Executable Path')).toBeEnabled();
-    expect(screen.getByLabelText('FFprobe Executable Path')).toBeEnabled();
+    expect(screen.getByLabelText('FFmpeg executable path')).toBeEnabled();
+    expect(screen.getByLabelText('FFprobe executable path')).toBeEnabled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(/FFmpeg is working/)).not.toBeInTheDocument();
   });
@@ -119,7 +119,7 @@ describe('FfmpegSettingsPage', () => {
     );
     expect(alert).toHaveTextContent('spawn /usr/bin/ffmpeg ENOENT');
 
-    const path = screen.getByLabelText('FFmpeg Executable Path');
+    const path = screen.getByLabelText('FFmpeg executable path');
     await user.clear(path);
     await user.type(path, '/opt/ffmpeg/bin/ffmpeg');
     expect(path).toHaveValue('/opt/ffmpeg/bin/ffmpeg');
@@ -158,7 +158,7 @@ describe('FfmpegSettingsPage', () => {
     );
     const { user } = await renderPage();
 
-    const path = screen.getByLabelText('FFmpeg Executable Path');
+    const path = screen.getByLabelText('FFmpeg executable path');
     await user.clear(path);
     await user.type(path, '/nowhere/ffmpeg');
     const save = screen.getByRole('button', { name: 'Save' });

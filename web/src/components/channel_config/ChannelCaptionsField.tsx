@@ -122,10 +122,9 @@ export function ChannelCaptionsField() {
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               <Trans>
-                Try closed-caption options on this channel only, without
-                changing them for every channel. Needs closed captions turned on
-                in the FFmpeg settings, the HLS stream mode and subtitles
-                enabled. Applies from the next program.
+                Try caption options on this channel alone, from its next
+                program. It needs HLS, subtitles, and closed captions on in
+                Transcoding settings.
               </Trans>
             </Typography>
             <FormControl fullWidth>
@@ -142,8 +141,8 @@ export function ChannelCaptionsField() {
               />
               <FormHelperText>
                 <Trans>
-                  Replaces this channel's captions with the numbered samples, as
-                  the FFmpeg settings' test pattern does for every channel.
+                  Replaces this channel's captions with the numbered test
+                  samples.
                 </Trans>
               </FormHelperText>
             </FormControl>
@@ -161,9 +160,8 @@ export function ChannelCaptionsField() {
               />
               <FormHelperText>
                 <Trans>
-                  The fields show the global look. A setting you change becomes
-                  this channel's own; the rest keep following the global look.
-                  Off: this channel uses the global look.
+                  Settings you change here apply to this channel; the rest
+                  follow the global look. Off uses the global look.
                 </Trans>
               </FormHelperText>
             </FormControl>
@@ -171,10 +169,10 @@ export function ChannelCaptionsField() {
               <Stack spacing={2} sx={{ mt: 2 }}>
                 <FormControl fullWidth>
                   <InputLabel id="channel-caption-alignment-label">
-                    <Trans>Caption Alignment</Trans>
+                    <Trans>Caption alignment</Trans>
                   </InputLabel>
                   <Select
-                    label={t`Caption Alignment`}
+                    label={t`Caption alignment`}
                     labelId="channel-caption-alignment-label"
                     value={look.alignment}
                     onChange={(e) =>

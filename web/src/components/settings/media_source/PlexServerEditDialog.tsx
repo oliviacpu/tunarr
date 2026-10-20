@@ -351,12 +351,11 @@ export function PlexServerEditDialog({ open, onClose, server }: Props) {
                       )}
                     />
                   }
-                  label={t`Auto-Update Guide`}
+                  label={t`Auto-update guide`}
                 />
                 <FormHelperText>
                   <Trans>
-                    Tunarr will attempt to get Plex to pull Tunarr's updated
-                    XMLTV upon regeneration
+                    Asks Plex to reload the guide each time Tunarr rebuilds it.
                   </Trans>
                 </FormHelperText>
               </FormControl>

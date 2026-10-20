@@ -57,7 +57,7 @@ vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
     mockPutSettings(options),
 }));
 
-const IntervalLabel = 'Rescan Interval (hours)';
+const IntervalLabel = 'Rescan interval (hours)';
 
 async function renderPage() {
   const rendered = renderWithProviders(
@@ -146,7 +146,7 @@ describe('ScannerSettingsPage', () => {
     const field = screen.getByLabelText(IntervalLabel);
     await waitFor(() =>
       expect(field).toHaveAccessibleDescription(
-        expect.stringContaining('Rescan Interval (hours) must be at least 1.'),
+        expect.stringContaining('Rescan interval must be at least 1 hour.'),
       ),
     );
     expect(field).toBeInvalid();

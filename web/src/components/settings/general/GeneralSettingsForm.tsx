@@ -1,4 +1,5 @@
 import { useActions, useToasts, withReason } from '@/strings/actions';
+import { LearnMoreLink } from '@/components/base/LearnMoreLink.tsx';
 import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { isValidUrl } from '@/helpers/util.ts';
@@ -78,16 +79,7 @@ const CategoryLogLevelChoices = [
   })),
 ];
 
-const LogCategorySelectInputs = [
-  {
-    category: 'streaming',
-    name: 'Streaming',
-  },
-  {
-    category: 'scheduling',
-    name: 'Scheduling',
-  },
-] as const;
+const LogCategorySelectInputs = ['streaming', 'scheduling'] as const;
 
 // Loading the page, a successful save and Reset all fill the form from this,
 // so every field has the same shape after each of them.
@@ -121,7 +113,7 @@ function getDefaultFormValues(
       categoryLogLevel: {
         ...(systemSettings.logging.categoryLogLevel ?? {}),
         ...LogCategorySelectInputs.reduce(
-          (prev, { category }) => {
+          (prev, category) => {
             prev[category] ??=
               systemSettings.logging.categoryLogLevel?.[category] ?? 'inherit';
             return prev;
@@ -142,6 +134,13 @@ export function GeneralSettingsForm({
   const { t } = useLingui();
   const actions = useActions();
   const toasts = useToasts();
+  const categoryLogLevelLabels: Record<
+    (typeof LogCategorySelectInputs)[number],
+    string
+  > = {
+    streaming: t`Streaming log level`,
+    scheduling: t`Scheduling log level`,
+  };
   const settings = useSettings();
   const snackbar = useSnackbar();
   const versionInfo = useVersion({
@@ -270,12 +269,12 @@ export function GeneralSettingsForm({
                   onChange={toggleBackupEnabled}
                 />
               }
-              label={t`Enable Backups`}
+              label={t`Enable backups`}
             />
             <FormHelperText>
               <Trans>
-                When enabling, Tunarr will generate an initial backup
-                immediately
+                Turning backups on makes a first backup straight away.{' '}
+                <LearnMoreLink page="backups" />
               </Trans>
             </FormHelperText>
           </FormControl>
@@ -299,12 +298,12 @@ export function GeneralSettingsForm({
                   control={control}
                   name="server.port"
                   TextFieldProps={{
-                    label: t`Server Listen Port`,
+                    label: t`Server port`,
                     fullWidth: true,
                     sx: {
                       width: { sm: '100%', md: '50%' },
                     },
-                    helperText: t`Select the port the Tunarr server will listen on. This requires a server restart to take effect.`,
+                    helperText: t`The port the Tunarr server listens on. Needs a restart.`,
                   }}
                 />
               )}
@@ -318,7 +317,7 @@ export function GeneralSettingsForm({
                       width: { sm: '100%', md: '50%' },
                     }}
                     fullWidth
-                    label={t`Tunarr Backend URL`}
+                    label={t`Tunarr server URL`}
                     slotProps={{
                       input: {
                         endAdornment: (
@@ -337,8 +336,8 @@ export function GeneralSettingsForm({
                     {...field}
                     helperText={
                       error?.type === 'isValidUrl'
-                        ? t`Must use a valid URL, or empty.`
-                        : t`Set the host of your Tunarr backend. When empty, the web UI will use the current host/port to communicate with the backend.`
+                        ? t`Enter a full URL, such as http://192.168.1.10:8000, or leave it empty.`
+                        : t`Where this web app reaches the Tunarr server. Leave empty to use the address in your browser.`
                     }
                   />
                 )}
@@ -379,12 +378,9 @@ export function GeneralSettingsForm({
                   />
                   <FormHelperText>
                     <Trans>
-                      Set the log level for the Tunarr server.
-                      <br />
-                      Selecting <strong>"Use environment settings"</strong> will
-                      instruct the server to use the{' '}
-                      <code>TUNARR_LOG_LEVEL</code> environment variable, if
-                      set, or system default "info".
+                      How much the Tunarr server logs. "Use environment
+                      settings" reads <code>TUNARR_LOG_LEVEL</code>, or uses
+                      info when it's unset. <LearnMoreLink page="logLevels" />
                     </Trans>
                   </FormHelperText>
                 </FormControl>
@@ -395,25 +391,24 @@ export function GeneralSettingsForm({
                 </Typography>
                 <Typography variant="subtitle2">
                   <Trans>
-                    Change the verbosity of specific categories of logs. Useful
-                    if debugging a specific feature.
+                    Log more or less for one area while you debug it.
                   </Trans>
                 </Typography>
               </Grid>
               {LogCategorySelectInputs.map((category) => (
-                <Grid size={{ xs: 6 }} key={category.category}>
-                  <FormControl key={category.category} fullWidth>
-                    <InputLabel id={`${category.category}-log-level-label`}>
-                      {category.name} Log Level
+                <Grid size={{ xs: 6 }} key={category}>
+                  <FormControl key={category} fullWidth>
+                    <InputLabel id={`${category}-log-level-label`}>
+                      {categoryLogLevelLabels[category]}
                     </InputLabel>
                     <Controller
-                      name={`logging.categoryLogLevel.${category.category}`}
+                      name={`logging.categoryLogLevel.${category}`}
                       control={control}
                       render={({ field }) => (
                         <Select
-                          labelId={`${category.category}-log-level-label`}
-                          id={`${category.category}-log-level`}
-                          label={`${category.name} Log Level`}
+                          labelId={`${category}-log-level-label`}
+                          id={`${category}-log-level`}
+                          label={categoryLogLevelLabels[category]}
                           {...field}
                         >
                           {map(

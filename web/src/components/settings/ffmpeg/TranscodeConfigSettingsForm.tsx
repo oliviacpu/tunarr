@@ -11,7 +11,6 @@ import {
   FormControlLabel,
   FormHelperText,
   Grid,
-  Link as MuiLink,
   Stack,
   TextField,
   ToggleButton,
@@ -23,6 +22,7 @@ import type z from 'zod';
 import useStore from '../../../store/index.ts';
 import { setShowAdvancedSettings } from '../../../store/settings/actions.ts';
 import Breadcrumbs from '../../Breadcrumbs.tsx';
+import { LearnMoreLink } from '../../base/LearnMoreLink.tsx';
 import { TranscodeConfigAdvancedOptions } from './TranscodeConfigAdvancedOptions.tsx';
 import { TranscodeConfigAudioSettingsForm } from './TranscodeConfigAudioSettingsForm.tsx';
 import { TranscodeConfigErrorOptions } from './TranscodeConfigErrorOptions.tsx';
@@ -54,6 +54,7 @@ export const TranscodeConfigSettingsForm = ({
     onSave: saveForm,
   });
   const transcodeConfigForm = useAppForm({ ...formOpts });
+  const configName = initialConfig.name;
 
   return (
     <Box
@@ -69,7 +70,11 @@ export const TranscodeConfigSettingsForm = ({
         <Stack spacing={2} divider={<Divider />}>
           <Stack direction={'row'}>
             <Typography variant="h4">
-              <Trans>Edit Transcode Config: "{initialConfig.name}"</Trans>
+              {isNew ? (
+                <Trans>New transcode config</Trans>
+              ) : (
+                <Trans>Edit transcode config: "{configName}"</Trans>
+              )}
             </Typography>
             <ToggleButton
               value={showAdvancedSettings}
@@ -136,18 +141,9 @@ export const TranscodeConfigSettingsForm = ({
                       fullWidth
                       helperText={
                         <Trans>
-                          Sets the number of threads used to decode the input
-                          stream. Set to 0 to let ffmpeg automatically decide
-                          how many threads to use. Read more about this option{' '}
-                          <MuiLink
-                            target="_blank"
-                            href="https://ffmpeg.org/ffmpeg-codecs.html#:~:text=threads%20integer%20(decoding/encoding%2Cvideo)"
-                          >
-                            here
-                          </MuiLink>
-                          . <strong>Note: </strong> this option is overridden to
-                          1 when using hardware accelearation for stability
-                          reasons.
+                          CPU threads FFmpeg may use; 0 lets FFmpeg decide.
+                          Hardware decoding always uses one decoding thread.{' '}
+                          <LearnMoreLink page="transcodeConfigGeneral" />
                         </Trans>
                       }
                       value={field.state.value}
@@ -203,13 +199,10 @@ export const TranscodeConfigSettingsForm = ({
                       //   name="disableChannelOverlay"
                       // />
                     }
-                    label={t`Disable Watermarks`}
+                    label={t`Disable watermarks`}
                   />
                   <FormHelperText>
-                    <Trans>
-                      If set, all watermark overlays will be disabled for
-                      channels assigned this transcode config.
-                    </Trans>
+                    <Trans>Channels using this config show no watermark.</Trans>
                   </FormHelperText>
                 </FormControl>
               </Grid>
@@ -232,11 +225,9 @@ export const TranscodeConfigSettingsForm = ({
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 2 }}>
                       <Trans>
-                        Advanced options relating to transcoding. In general, do
-                        not change these unless you know what you are doing!
-                        These settings exist in order to leave some parity with
-                        the old dizqueTV transcode pipeline as well as to
-                        provide mechanisms to aid in debugging streaming issues.
+                        Change these only to work around a hardware problem or
+                        to debug a stream.{' '}
+                        <LearnMoreLink page="transcodeConfigAdvanced" />
                       </Trans>
                     </Typography>
                     <TranscodeConfigAdvancedOptions

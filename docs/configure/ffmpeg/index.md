@@ -1,6 +1,6 @@
 # FFmpeg
 
-Tunarr requires FFmpeg for transcoding / remuxing content when outputting channel streams. Settings relating to transcoding and FFmpeg can be found on the Settings > FFmpeg page.
+Tunarr requires FFmpeg for transcoding / remuxing content when outputting channel streams. Settings relating to transcoding and FFmpeg can be found on the Settings > Transcoding page.
 
 ## Executable Paths
 

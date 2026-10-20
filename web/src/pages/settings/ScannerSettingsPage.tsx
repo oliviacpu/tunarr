@@ -107,16 +107,16 @@ export const ScannerSettingsPage = () => {
             <NumericFormControllerText
               control={settingsForm.control}
               name="rescanIntervalHours"
-              prettyFieldName={t`Rescan Interval (hours)`}
+              prettyFieldName={t`Rescan interval (hours)`}
               rules={{
                 min: {
                   value: 1,
-                  message: t`Rescan Interval (hours) must be at least 1.`,
+                  message: t`Rescan interval must be at least 1 hour.`,
                 },
               }}
               TextFieldProps={{
-                label: t`Rescan Interval (hours)`,
-                helperText: t`How frequently libraries should be scanned (starting from midnight). A new interval takes effect when it is saved.`,
+                label: t`Rescan interval (hours)`,
+                helperText: t`How often Tunarr scans your libraries, counted from midnight. A new interval applies as soon as you save.`,
               }}
             />
             {nextScanTime !== undefined && (

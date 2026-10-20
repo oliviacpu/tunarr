@@ -142,7 +142,7 @@ export function ChannelPropertiesEditor() {
                 }}
                 TextFieldProps={{
                   fullWidth: true,
-                  label: t`Channel Number`,
+                  label: t`Channel number`,
                   margin: 'normal',
                 }}
               />
@@ -153,7 +153,7 @@ export function ChannelPropertiesEditor() {
                 render={({ field, formState: { errors } }) => (
                   <TextField
                     fullWidth
-                    label={t`Channel Name`}
+                    label={t`Channel name`}
                     margin="normal"
                     helperText={
                       errors.name ? t`Channel name is required` : null
@@ -169,10 +169,13 @@ export function ChannelPropertiesEditor() {
                 render={({ field, formState: { errors } }) => (
                   <TextField
                     fullWidth
-                    label={t`Channel Group`}
+                    label={t`Channel group`}
                     margin="normal"
-                    helperText={`${t`This is used by iptv clients to categorize the channels. You can leave it as 'tunarr' if you don't need this sort of classification.`}
-                  ${errors.groupTitle ? t`Channel group is required` : ''}`}
+                    helperText={
+                      errors.groupTitle
+                        ? t`Channel group is required`
+                        : t`IPTV apps group channels by this name. Leave it as "tunarr" if you don't use groups.`
+                    }
                     {...field}
                   />
                 )}
@@ -182,7 +185,7 @@ export function ChannelPropertiesEditor() {
                 control={control}
                 render={({ field }) => (
                   <DateTimePicker
-                    label={t`Programming Start`}
+                    label={t`Programming start`}
                     slotProps={{
                       textField: {
                         margin: 'normal',
@@ -245,7 +248,7 @@ export function ChannelPropertiesEditor() {
                         }
                       }}
                       fileRenamer={renameFile}
-                      label={t`Thumbnail URL`}
+                      label={t`Icon URL`}
                       // TODO Pop a toast or something
                       onUploadError={console.error}
                     />
@@ -290,11 +293,9 @@ export function ChannelPropertiesEditor() {
               </Typography>
               <Typography variant="body2">
                 <Trans>
-                  On-Demand channels resume from where you left off. Programming
-                  is paused when the channel is not streaming.
-                  <br />
-                  <strong>NOTE:</strong> While the channel is inactive, the TV
-                  Guide for the channel will be empty.
+                  An on-demand channel pauses when nobody is watching and
+                  resumes where it left off. Its guide is empty while it's
+                  paused.
                 </Trans>
               </Typography>
               <Controller
