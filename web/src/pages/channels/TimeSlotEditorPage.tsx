@@ -1,4 +1,4 @@
-import { useActions } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
 import ChannelLineupList from '@/components/channel_config/ChannelLineupList.tsx';
 import { TimeSlotFormProvider } from '@/components/slot_scheduler/TimeSlotFormProvider.tsx';
@@ -118,6 +118,7 @@ function convertToViewModel(
 export default function TimeSlotEditorPage() {
   const { t } = useLingui();
   const actions = useActions();
+  const toasts = useToasts();
   const {
     channelEditor: { currentEntity: channel },
     materializeOriginalProgramList,
@@ -179,7 +180,7 @@ export default function TimeSlotEditorPage() {
     },
     onError(error) {
       const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(t`Error saving schedule. ${message}`, {
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave, message), {
         variant: 'error',
       });
     },
