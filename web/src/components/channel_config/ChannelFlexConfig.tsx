@@ -14,7 +14,6 @@ import {
   MenuItem,
   Paper,
   Select,
-  Skeleton,
   Slider,
   Stack,
   TextField,
@@ -49,7 +48,7 @@ export function ChannelFlexConfig() {
   const { t } = useLingui();
   const { backendUri } = useSettings();
   const channel = useStore((s) => s.channelEditor.currentEntity);
-  const { data: fillerLists, isPending: fillerListsLoading } = useFillerLists();
+  const { data: fillerLists } = useFillerLists();
   const { control, watch } = useChannelFormContext();
   const collectionControls = useFieldArray({
     control,
@@ -344,8 +343,8 @@ export function ChannelFlexConfig() {
                   often it plays. <LearnMoreLink page="fillerSelection" />
                 </Trans>
               </Typography>
-              {!fillerListsLoading && renderFillerLists()}
-              {fillerListsLoading ? <Skeleton /> : renderAddFillerListEditor()}
+              {renderFillerLists()}
+              {renderAddFillerListEditor()}
             </Box>
             <Divider sx={{ my: 2 }} />
             <Typography variant="h5" sx={{ mb: 1 }}>

@@ -10999,6 +10999,15 @@ export type PutApiSystemSettingsData = {
     url: '/api/system/settings';
 };
 
+export type PutApiSystemSettingsErrors = {
+    /**
+     * Default Response
+     */
+    400: string;
+};
+
+export type PutApiSystemSettingsError = PutApiSystemSettingsErrors[keyof PutApiSystemSettingsErrors];
+
 export type PutApiSystemSettingsResponses = {
     /**
      * Default Response
@@ -11150,6 +11159,15 @@ export type PutApiSystemSettingsBackupData = {
     query?: never;
     url: '/api/system/settings/backup';
 };
+
+export type PutApiSystemSettingsBackupErrors = {
+    /**
+     * Default Response
+     */
+    400: string;
+};
+
+export type PutApiSystemSettingsBackupError = PutApiSystemSettingsBackupErrors[keyof PutApiSystemSettingsBackupErrors];
 
 export type PutApiSystemSettingsBackupResponses = {
     /**

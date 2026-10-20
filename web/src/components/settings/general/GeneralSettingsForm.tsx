@@ -285,7 +285,24 @@ export function GeneralSettingsForm({
             </FormHelperText>
           </FormControl>
         </Grid>
-        {backupsEnabled && <BackupForm />}
+        {backupConfigurations.map((configuration, configurationIndex) => (
+          <Grid size={12} key={configuration.id}>
+            {backupConfigurations.length > 1 && (
+              <Typography
+                variant="h3"
+                sx={{ mb: 2 }}
+              >{t`Backup ${configurationIndex + 1}`}</Typography>
+            )}
+            <Grid
+              container
+              spacing={2}
+              role="group"
+              aria-label={t`Backup ${configurationIndex + 1}`}
+            >
+              <BackupForm configurationIndex={configurationIndex} />
+            </Grid>
+          </Grid>
+        ))}
       </Grid>
     );
   }

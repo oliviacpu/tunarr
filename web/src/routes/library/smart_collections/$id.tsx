@@ -1,3 +1,4 @@
+import { orNotFound } from '@/helpers/routeLoaders.ts';
 import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { Trans } from '@lingui/react/macro';
 import { Stack } from '@mui/material';
@@ -12,13 +13,16 @@ import { programSearchQueryOpts } from '../../../hooks/useProgramSearchQuery.ts'
 import useStore from '../../../store/index.ts';
 
 export const Route = createFileRoute('/library/smart_collections/$id')({
+  gcTime: 0,
   loader: async ({ context: { queryClient }, params }) => {
-    const smartCollection = await queryClient.ensureQueryData(
-      getApiSmartCollectionsByIdOptions({
-        path: {
-          id: params.id,
-        },
-      }),
+    const smartCollection = await orNotFound(
+      queryClient.fetchQuery(
+        getApiSmartCollectionsByIdOptions({
+          path: {
+            id: params.id,
+          },
+        }),
+      ),
     );
 
     const searchRequest: SearchRequest = {
@@ -44,9 +48,10 @@ export const Route = createFileRoute('/library/smart_collections/$id')({
 function RouteComponent() {
   const { id } = Route.useParams();
   const { filter, query } = Route.useLoaderData();
-  const { data: smartCollection } = useSuspenseQuery(
-    getApiSmartCollectionsByIdOptions({ path: { id } }),
-  );
+  const { data: smartCollection } = useSuspenseQuery({
+    ...getApiSmartCollectionsByIdOptions({ path: { id } }),
+    refetchOnMount: false,
+  });
   return (
     <Stack gap={2}>
       <PageHeader

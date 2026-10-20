@@ -126,6 +126,24 @@ describe('GeneralSettingsForm', () => {
     mockPutSystemSettings.mockResolvedValue({ data: systemSettings });
   });
 
+  test('a cleared retention count blocks Save until a valid number is restored', async () => {
+    const { user, saveButton } = await renderForm();
+    const retention = screen.getByLabelText('Rolled files to keep');
+    await user.clear(retention);
+    await user.tab();
+    await waitFor(() => expect(retention).toBeInvalid());
+    expect(saveButton()).toBeDisabled();
+    expect(mockPutSystemSettings).not.toHaveBeenCalled();
+    await user.type(retention, '5');
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+    await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
+    expect(
+      mockPutSystemSettings.mock.calls[0]?.[0].body.logging?.logRollConfig
+        ?.rolledFileLimit,
+    ).toBe(5);
+  });
+
   test('Reset clears an invalid value', async () => {
     const {
       user,
