@@ -84,11 +84,11 @@ test('an edited config guards leaving and saves to the same config', async ({
   await expect(saveButton(page)).toBeEnabled();
 
   // Leaving with the change unsaved asks first
-  await page
-    .getByRole('navigation', { name: 'channel-breadcrumbs' })
-    .getByRole('link')
-    .first()
-    .click();
+  const playbackLink = page
+    .getByRole('navigation', { name: 'breadcrumbs' })
+    .getByRole('link', { name: 'Playback', exact: true });
+  await expect(playbackLink).toHaveAttribute('href', '/web/settings/playback');
+  await playbackLink.click();
   await expect(unsavedDialog(page)).toBeVisible();
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page).toHaveURL(new RegExp(`/settings/playback/${before.id}$`));
