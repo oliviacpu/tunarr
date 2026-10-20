@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import { AddCircle, ContentCopy, Delete, Edit } from '@mui/icons-material';
@@ -26,6 +27,7 @@ import { DeleteConfirmationDialog } from '../../DeleteConfirmationDialog.tsx';
 
 export const TranscodeConfigsTable = () => {
   const queryClient = useQueryClient();
+  const actions = useActions();
   const transcodeConfigs = useTranscodeConfigs();
   const tableSettings = useStoreBackedTableSettings('TranscodeConfigs');
 
@@ -72,7 +74,7 @@ export const TranscodeConfigsTable = () => {
               <ContentCopy />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t`Delete`} placement="top">
+          <Tooltip title={actions.delete} placement="top">
             <IconButton onClick={() => setConfirmDeleteTranscodeConfig(config)}>
               <Delete />
             </IconButton>
@@ -80,7 +82,7 @@ export const TranscodeConfigsTable = () => {
         </Box>
       );
     },
-    [handleDuplicateConfig],
+    [actions.delete, handleDuplicateConfig],
   );
 
   const rows = useMemo(() => {

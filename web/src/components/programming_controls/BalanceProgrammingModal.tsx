@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import type { BalanceProgramsOptions } from '@/hooks/programming_controls/useBalancePrograms';
 import { useBalancePrograms } from '@/hooks/programming_controls/useBalancePrograms';
 import {
@@ -21,6 +22,7 @@ type Props = {
 };
 
 const BalanceProgrammingModalContent = ({ onClose }: Omit<Props, 'open'>) => {
+  const actions = useActions();
   const balancePrograms = useBalancePrograms();
   const [balanceType, setBalanceType] =
     useState<BalanceProgramsOptions['balanceType']>('duration');
@@ -75,9 +77,7 @@ const BalanceProgrammingModalContent = ({ onClose }: Omit<Props, 'open'>) => {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button variant="contained" onClick={() => runBalance()}>
           <Trans>Balance</Trans>
         </Button>

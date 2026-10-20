@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
@@ -49,6 +50,7 @@ import { CaptionAppearanceFields } from '../settings/ffmpeg/CaptionAppearanceFie
  */
 export function ChannelCaptionsField() {
   const { t } = useLingui();
+  const actions = useActions();
   const { control } = useChannelFormContext();
   const alignmentNames = useCaptionAlignmentNames();
   const globalSettings = useQuery(getApiSettingsFfmpegOptions());
@@ -234,7 +236,7 @@ export function ChannelCaptionsField() {
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setConfirmCopy(false)}>
-                  <Trans>Cancel</Trans>
+                  {actions.cancel}
                 </Button>
                 <Button
                   variant="contained"

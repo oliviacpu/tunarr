@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { Shuffle } from '@mui/icons-material';
 import {
   Box,
@@ -30,6 +31,7 @@ const ShuffleProgrammingModalContent = ({
   shuffleType,
 }: Omit<Props, 'open'>) => {
   const { t } = useLingui();
+  const actions = useActions();
   const shuffler = useProgramShuffle();
 
   const handleShuffle = () => {
@@ -87,9 +89,7 @@ const ShuffleProgrammingModalContent = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button
           onClick={() => handleShuffle()}
           startIcon={<Shuffle />}

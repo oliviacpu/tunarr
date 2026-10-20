@@ -5,7 +5,7 @@ import {
   SelectedNames,
 } from '@/components/base/BulkActionsToolbar.tsx';
 import { useBulkDelete } from '@/hooks/useBulkAction.ts';
-import { useToasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit, Sync } from '@mui/icons-material';
@@ -41,6 +41,7 @@ const showName = (show: CustomShow) => show.name;
 
 export default function CustomShowsPage() {
   const { t } = useLingui();
+  const actions = useActions();
   const usage = useLibraryUsage('customShows');
   const toasts = useToasts();
   const { data: customShows } = useCustomShows();
@@ -112,7 +113,7 @@ export default function CustomShowsPage() {
               <Edit />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t`Delete`} placement="top">
+          <Tooltip title={actions.delete} placement="top">
             <IconButton onClick={(e) => handleCustomShowDelete(e, show.id)}>
               <Delete />
             </IconButton>
@@ -120,7 +121,7 @@ export default function CustomShowsPage() {
         </Box>
       );
     },
-    [handleCustomShowDelete, t],
+    [actions.delete, handleCustomShowDelete, t],
   );
 
   const columns = useMemo<MRT_ColumnDef<CustomShow>[]>(
