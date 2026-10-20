@@ -33,12 +33,12 @@ export function SettingsLayout({ currentTab = '/general' }: Props) {
               to="/settings/general"
             />
             <RouterTabLink
-              label={t`XMLTV`}
+              label={t`Guide`}
               value="/xmltv"
               to="/settings/xmltv"
             />
             <RouterTabLink
-              label={t`FFMPEG`}
+              label={t`Transcoding`}
               value="/ffmpeg"
               to="/settings/ffmpeg"
             />
@@ -47,7 +47,7 @@ export function SettingsLayout({ currentTab = '/general' }: Props) {
               value="/scanner"
               to="/settings/scanner"
             />
-            <RouterTabLink label={t`HDHR`} value="/hdhr" to="/settings/hdhr" />
+            <RouterTabLink label={t`Tuner`} value="/hdhr" to="/settings/hdhr" />
             <RouterTabLink
               label={t`Features`}
               value="/features"

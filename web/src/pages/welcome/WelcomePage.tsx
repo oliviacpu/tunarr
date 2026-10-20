@@ -23,7 +23,7 @@ import { updateShowWelcomeState } from '../../store/themeEditor/actions.ts';
 
 export default function WelcomePage() {
   const { t } = useLingui();
-  const steps = [t`Connect Sources`, t`Install FFMPEG`, t`All Set!`];
+  const steps = [t`Connect Sources`, t`Install FFmpeg`, t`All Set!`];
   const [hasMediaSource, setHasMediaSource] = React.useState<boolean>(false);
   const [isFfmpegInstalled, setIsFfmpegInstalled] =
     React.useState<boolean>(false);
@@ -180,11 +180,11 @@ export default function WelcomePage() {
                 align="left"
                 sx={{ mt: 3 }}
               >
-                <Trans>Install FFMPEG</Trans>
+                <Trans>Install FFmpeg</Trans>
               </Typography>
               <Typography sx={{ mb: 3 }} align="left">
                 <Trans>
-                  FFMPEG transcoding is required for some features like channel
+                  FFmpeg transcoding is required for some features like channel
                   overlay, subtitles, and measures to prevent issues when
                   switching episodes.
                 </Trans>
@@ -193,7 +193,7 @@ export default function WelcomePage() {
               {isFfmpegInstalled ? (
                 <Alert variant="filled" severity="success">
                   <Trans>
-                    FFMPEG is installed. Detected version {version?.ffmpeg}
+                    FFmpeg is installed. Detected version {version?.ffmpeg}
                   </Trans>
                 </Alert>
               ) : (
@@ -211,11 +211,11 @@ export default function WelcomePage() {
                       </RouterButtonLink>
                     }
                   >
-                    <Trans>FFMPEG is not detected.</Trans>
+                    <Trans>FFmpeg is not detected.</Trans>
                   </Alert>
                   <Typography sx={{ my: 3 }} align="left">
                     <Trans>
-                      If you are confident FFMPEG is installed, you may just
+                      If you are confident FFmpeg is installed, you may just
                       need to update the executable path in the settings. To do
                       so, simply click Edit above to update the path.
                     </Trans>
