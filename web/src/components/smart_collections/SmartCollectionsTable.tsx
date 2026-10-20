@@ -1,3 +1,5 @@
+import { LibraryUsageDetails, UsedByChip } from '../LibraryUsage.tsx';
+import { useLibraryUsage } from '../../hooks/useLibraryUsage.ts';
 import { useBulkDelete } from '@/hooks/useBulkAction.ts';
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -42,6 +44,7 @@ const collectionName = (collection: SmartCollection) => collection.name;
 
 export const SmartCollectionsTable = () => {
   const { t } = useLingui();
+  const usage = useLibraryUsage('smartCollections');
   const navigate = Route.useNavigate();
   const smartColletionsQuery = useSmartCollections();
   const queryClient = useQueryClient();
@@ -95,6 +98,13 @@ export const SmartCollectionsTable = () => {
         header: t`Name`,
         accessorKey: 'name',
         grow: true,
+      },
+      {
+        header: t`Usage`,
+        id: 'usage',
+        Cell: ({ row }) => <UsedByChip id={row.original.uuid} usage={usage} />,
+        enableSorting: false,
+        enableColumnFilter: false,
       },
     ],
     renderEmptyRowsFallback() {
@@ -192,10 +202,27 @@ export const SmartCollectionsTable = () => {
       </Dialog>
       <DeleteConfirmationDialog
         open={!!deletingSmartCollection}
-        onClose={() => setDeletingSmartCollection(undefined)}
-        onConfirm={() =>
-          handleDeleteSmartCollection(deletingSmartCollection!.uuid)
+        details={
+          <LibraryUsageDetails
+            kind="smartCollections"
+            open={deletingSmartCollection !== undefined}
+            items={
+              deletingSmartCollection === undefined
+                ? []
+                : [
+                    {
+                      id: deletingSmartCollection.uuid,
+                      name: deletingSmartCollection.name,
+                    },
+                  ]
+            }
+          />
         }
+        onClose={() => setDeletingSmartCollection(undefined)}
+        onConfirm={() => {
+          if (deletingSmartCollection !== undefined)
+            handleDeleteSmartCollection(deletingSmartCollection.uuid);
+        }}
         title={t`Delete "${deletingSmartCollection?.name}"`}
         body={t`Are you sure you want to delete Smart Collection "${deletingSmartCollection?.name}"?`}
       />
@@ -206,7 +233,16 @@ export const SmartCollectionsTable = () => {
           other: 'Delete # smart collections?',
         })}`}
         body={t`This cannot be undone.`}
-        details={<SelectedNames items={bulkDelete.named} />}
+        details={
+          <>
+            <SelectedNames items={bulkDelete.named} />
+            <LibraryUsageDetails
+              kind="smartCollections"
+              open={bulkDelete.dialogProps.open}
+              items={bulkDelete.named}
+            />
+          </>
+        }
       />
     </>
   );

@@ -1,3 +1,5 @@
+import { LibraryUsageDetails, UsedByChip } from '@/components/LibraryUsage.tsx';
+import { useLibraryUsage } from '@/hooks/useLibraryUsage.ts';
 import { useToasts, withReason } from '@/strings/actions';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 
@@ -45,6 +47,7 @@ const fillerName = (filler: FillerList) => filler.name;
 
 export default function FillerListsPage() {
   const { t } = useLingui();
+  const usage = useLibraryUsage('fillerLists');
   const toasts = useToasts();
   const queryClient = useQueryClient();
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<
@@ -151,8 +154,15 @@ export default function FillerListsPage() {
         accessorKey: 'contentCount',
         filterVariant: 'range',
       },
+      {
+        header: t`Usage`,
+        id: 'usage',
+        Cell: ({ row }) => <UsedByChip id={row.original.id} usage={usage} />,
+        enableSorting: false,
+        enableColumnFilter: false,
+      },
     ],
-    [t],
+    [t, usage],
   );
 
   const table = useMaterialReactTable({
@@ -204,6 +214,17 @@ export default function FillerListsPage() {
     <Box>
       <DeleteConfirmationDialog
         open={deletingFiller !== undefined}
+        details={
+          <LibraryUsageDetails
+            kind="fillerLists"
+            open={deletingFiller !== undefined}
+            items={
+              deletingFiller === undefined
+                ? []
+                : [{ id: deletingFiller.id, name: deletingFiller.name }]
+            }
+          />
+        }
         onClose={() => setDeleteConfirmationId(undefined)}
         title={t`Delete Filler List "${deletingFiller?.name}"?`}
         body={t`Deleting a filler list removes it from every channel that uses it. This cannot be undone.`}
@@ -224,7 +245,16 @@ export default function FillerListsPage() {
           other:
             'Deleting these filler lists removes them from every channel that uses them. This cannot be undone.',
         })}`}
-        details={<SelectedNames items={bulkDelete.named} />}
+        details={
+          <>
+            <SelectedNames items={bulkDelete.named} />
+            <LibraryUsageDetails
+              kind="fillerLists"
+              open={bulkDelete.dialogProps.open}
+              items={bulkDelete.named}
+            />
+          </>
+        }
       />
       <PageHeader
         breadcrumbs={<Breadcrumbs />}

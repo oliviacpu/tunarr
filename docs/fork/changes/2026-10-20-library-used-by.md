@@ -1,0 +1,7 @@
+### Library channel references (2026-10-20, P3)
+
+- **What you saw:** Filler lists, custom shows and smart collections did not show which channels used them. Deleting an item gave no channel-specific warning.
+- **Cause:** The library tables had no shared view of references stored in lineup JSON and relational channel filler attachments.
+- **Fix:** Bulk usage endpoints scan saved slots and lineup items, union channel filler attachments and offline music, and return unique named channels with one-based slot positions. A shared cached scan is invalidated after lineup saves/config updates, channel creation/save/copy/delete, and filler deletion. An in-flight scan retries when invalidated. Table chips and single/bulk delete warnings use the same references; deletion remains available. Errors are shown as unavailable rather than zero usage. No schema migration or persistent scheduling index.
+- **Tests:** Real SQLite/lineup fixtures cover relational-only attachments, slot/item/music/flex references, deduplication, cache-before-save/attach/detach/copy/delete, scan races and failed scans. API contracts cover all three endpoints and static-path precedence. UI tests cover counts, named warnings and nonblocking deletion. Browser checks cover the three tables/dialogs at 390/1440px in light/dark mode. See PR for final validation results.
+- **Upstream:** Fork-only implementation of approved audit plan P3 (approval PR #85); no upstream submission.
