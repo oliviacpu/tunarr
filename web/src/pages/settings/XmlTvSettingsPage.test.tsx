@@ -30,7 +30,8 @@ vi.mock(
   async (importOriginal) => ({
     ...(await importOriginal<typeof Generated>()),
     getApiXmltvSettingsOptions: () => ({
-      queryKey: ['test-xmltv-settings'],
+      // Tagged like the generated key, so a save refetches it
+      queryKey: [{ _id: 'test-xmltv-settings', tags: ['Settings'] }],
       queryFn: () => Promise.resolve(server.settings),
     }),
   }),
@@ -295,6 +296,41 @@ describe('XmlTvSettingsPage', () => {
     await waitFor(() => expect(saveButton()).toBeDisabled());
     expect(saveButton()).toHaveAttribute('aria-busy', 'true');
     expect(mockPutXmlTvSettings).toHaveBeenCalledOnce();
+  });
+
+  test('a field changed while a save is in flight survives the save and the reload after it', async () => {
+    let answer: () => void = () => {};
+    mockPutXmlTvSettings.mockImplementation(
+      ({ body }) =>
+        new Promise((resolve) => {
+          answer = () => {
+            server.settings = { ...saved, ...body };
+            resolve({ data: server.settings });
+          };
+        }),
+    );
+    const { user, setField, saveButton, refreshTimer } = await renderPage();
+    await setField('Refresh interval (hours)', '6');
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+    await waitFor(() => expect(mockPutXmlTvSettings).toHaveBeenCalledOnce());
+
+    await setField('Public address for guide pictures', 'https://tv.example');
+    answer();
+
+    // Saved, and the page has reloaded the settings
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(saveButton()).not.toHaveAttribute('aria-busy', 'true'),
+    );
+    expect(refreshTimer()).toHaveValue('6');
+    expect(
+      screen.getByLabelText('Public address for guide pictures'),
+    ).toHaveValue('https://tv.example');
+    expect(
+      screen.getByRole('button', { name: 'Reset changes' }),
+    ).toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
   });
 
   test("a save the server refuses shows the server's reason", async () => {

@@ -4,16 +4,30 @@ import type { InvalidateQueryFilters } from '@tanstack/react-query';
 import { QueryClient } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { SnackbarProvider } from 'notistack';
+import type { ComponentProps } from 'react';
 import { useForm } from 'react-hook-form';
-import { describe, expect, test, vi } from 'vitest';
-import { useSettingsMutation } from './useSettingsMutation.ts';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type UnsavedNavigationAlert from '../components/settings/UnsavedNavigationAlert.tsx';
+import {
+  changedFieldPaths,
+  useSettingsMutation,
+} from './useSettingsMutation.ts';
 
-// It blocks navigation through the router, which these tests don't have
-vi.mock('../components/settings/UnsavedNavigationAlert.tsx', () => ({
-  default: () => null,
+type GuardProps = ComponentProps<typeof UnsavedNavigationAlert>;
+
+// The guard blocks navigation through the router, which these tests don't
+// have; record whether the form tells it there are unsaved changes instead
+const { guardProps } = vi.hoisted(() => ({
+  guardProps: vi.fn((_props: GuardProps) => null),
 }));
 
-type Values = { name: string };
+vi.mock('../components/settings/UnsavedNavigationAlert.tsx', () => ({
+  default: guardProps,
+}));
+
+const guardIsArmed = () => guardProps.mock.lastCall?.[0].isDirty;
+
+type Values = { name: string; host: string };
 
 type HarnessProps = {
   save: (values: Values) => Promise<Values>;
@@ -28,7 +42,9 @@ function Harness({
   onSuccess,
   invalidate,
 }: HarnessProps) {
-  const form = useForm<Values>({ defaultValues: { name: 'Tunarr' } });
+  const form = useForm<Values>({
+    defaultValues: { name: 'Tunarr', host: 'localhost' },
+  });
   const mutation = useSettingsMutation({
     form,
     mutation: { mutationFn: save, onSuccess },
@@ -44,6 +60,10 @@ function Harness({
       <label>
         Name
         <input {...form.register('name')} />
+      </label>
+      <label>
+        Host
+        <input {...form.register('host')} />
       </label>
     </SettingsForm>
   );
@@ -62,12 +82,13 @@ async function renderAndSave(props: HarnessProps, typed: string) {
   );
   const { user } = rendered;
   const name = () => screen.getByRole('textbox', { name: 'Name' });
+  const host = () => screen.getByRole('textbox', { name: 'Host' });
   const saveButton = () => screen.getByRole('button', { name: 'Save' });
   await user.clear(name());
   await user.type(name(), typed);
   await waitFor(() => expect(saveButton()).toBeEnabled());
   await user.click(saveButton());
-  return { ...rendered, name, saveButton, invalidateQueries };
+  return { ...rendered, name, host, saveButton, invalidateQueries };
 }
 
 function serverRefuses(message: string) {
@@ -81,10 +102,14 @@ function serverRefuses(message: string) {
 }
 
 describe('useSettingsMutation', () => {
+  beforeEach(() => {
+    guardProps.mockClear();
+  });
+
   test("a save leaves the form clean with the server's values and says Saved", async () => {
     // The server tidies what it was sent
     const save = vi.fn((values: Values) =>
-      Promise.resolve({ name: values.name.trim() }),
+      Promise.resolve({ ...values, name: values.name.trim() }),
     );
     const { name, saveButton } = await renderAndSave({ save }, 'Tunarr Live ');
 
@@ -118,7 +143,7 @@ describe('useSettingsMutation', () => {
     const { name } = await renderAndSave(
       {
         // This server answers with something that isn't the form's values
-        save: () => Promise.resolve({ name: 'ignored' }),
+        save: () => Promise.resolve({ name: 'ignored', host: 'ignored' }),
         toFormValues: (_saved, sent) => sent,
         onSuccess,
       },
@@ -126,8 +151,50 @@ describe('useSettingsMutation', () => {
     );
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
-    expect(onSuccess.mock.calls[0]?.[0]).toEqual({ name: 'ignored' });
+    expect(onSuccess.mock.calls[0]?.[0]).toEqual({
+      name: 'ignored',
+      host: 'ignored',
+    });
     expect(name()).toHaveValue('Tunarr Live');
+  });
+
+  test('a field changed while the save is in flight keeps its new value and stays unsaved', async () => {
+    let answer: (saved: Values) => void = () => {};
+    const save = vi.fn(
+      (_values: Values) =>
+        new Promise<Values>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const { user, name, host, saveButton } = await renderAndSave(
+      { save },
+      'Tunarr Live ',
+    );
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]?.[0]).toEqual({
+      name: 'Tunarr Live ',
+      host: 'localhost',
+    });
+
+    // The user goes on editing before the server answers
+    await user.clear(host());
+    await user.type(host(), 'tunarr.lan');
+    // The server tidies what it was sent
+    answer({ name: 'Tunarr Live', host: 'localhost' });
+
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    // The field saved as it was takes the server's value...
+    await waitFor(() => expect(name()).toHaveValue('Tunarr Live'));
+    // ...and the one changed since keeps the user's, still unsaved
+    expect(host()).toHaveValue('tunarr.lan');
+    await waitFor(() => expect(guardIsArmed()).toBe(true));
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+
+    // What the form now compares against is what the server saved
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(host()).toHaveValue('localhost');
+    expect(name()).toHaveValue('Tunarr Live');
+    await waitFor(() => expect(guardIsArmed()).toBe(false));
   });
 
   test("a save the server refuses says why and keeps the user's changes", async () => {
@@ -159,5 +226,34 @@ describe('useSettingsMutation', () => {
     expect(
       await screen.findByText('Could not save settings: Network Error'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('changedFieldPaths', () => {
+  test('nothing changed', () => {
+    expect(
+      changedFieldPaths({ a: 1, b: { c: 2 } }, { a: 1, b: { c: 2 } }),
+    ).toEqual([]);
+  });
+
+  test('finds changed fields inside nested objects', () => {
+    expect(
+      changedFieldPaths(
+        { name: 'x', logging: { level: 'info', roll: { size: 1 } } },
+        { name: 'x', logging: { level: 'debug', roll: { size: 2 } } },
+      ),
+    ).toEqual([
+      ['logging', 'level'],
+      ['logging', 'roll', 'size'],
+    ]);
+  });
+
+  test('treats an array as one field, and counts added and removed keys', () => {
+    expect(
+      changedFieldPaths(
+        { outputs: [1, 2], gone: true },
+        { outputs: [1, 3], added: 'y' },
+      ),
+    ).toEqual([['outputs'], ['gone'], ['added']]);
   });
 });

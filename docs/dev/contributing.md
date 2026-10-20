@@ -439,10 +439,13 @@ saves through `useSettingsMutation` (`web/src/hooks/useSettingsMutation.ts`). Th
 
 ```tsx
 const form = useForm<XmlTvSettings>({ defaultValues: defaultXmlTvSettings, mode: 'onBlur' });
-// Load the saved settings into the form; they become what it compares against
+// Load the saved settings into the form; they become what it compares against.
+// Skip a reload that matches them (the refetch after a save), or edits made
+// while the save was in flight are lost
+const { defaultValues } = form.formState;
 useEffect(() => {
-  form.reset(data);
-}, [data, form]);
+  if (!isEqual(data, defaultValues)) form.reset(data);
+}, [data]);
 
 const saveMutation = useSettingsMutation({
   form,
@@ -475,9 +478,10 @@ What every settings page gets from the shell:
   button, for example while the form already holds the defaults.
 - The unsaved-changes guard (`UnsavedNavigationAlert`) is mounted. Leaving the page, reloading or closing the tab with
   changes asks first. A form that spans routes passes `exceptTargetPaths`.
-- A save that works resets the form to `toFormValues(response, variables)`, so the form is clean and holds what the
-  server saved. It refetches the `invalidate` queries and toasts "Saved". A save that fails toasts "Could not save
-  settings: " and the server's reason, and keeps the user's changes.
+- A save that works makes `toFormValues(response, variables)` what the form compares against, and every field takes
+  those values except the ones the user changed after pressing Save. Those keep the user's value and stay unsaved, so
+  the form stays dirty and the guard stays on. It refetches the `invalidate` queries and toasts "Saved". A save that
+  fails toasts "Could not save settings: " and the server's reason, and keeps the user's changes.
 
 Build the fields from the typed controllers in `web/src/components/util/TypedController.tsx` rather than wiring
 `Controller` by hand: `NumericFormControllerText`, `CheckboxFormController`, `SwitchFormController` (a switch with its

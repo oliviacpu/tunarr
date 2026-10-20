@@ -48,10 +48,15 @@ export default function XmlTvSettingsPage() {
     trigger,
   } = form;
 
+  // Load the saved settings into the form. The reload after a save brings back
+  // what the form already compares against, so it is skipped: resetting again
+  // would drop edits made while the save was in flight. Only a new load runs
+  // this; the form's own resets change its defaults too
   useEffect(() => {
-    if (data) {
+    if (!isEqual(data, defaultValues)) {
       reset(data);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, reset]);
 
   // Settings saved before the refresh timer had to fit in the guide can't be
