@@ -22,6 +22,33 @@ test('detail and create pages expose one document heading', async ({
       await page.goto(`/web${route}`);
       await expect(page.locator('h1')).toHaveCount(1);
       await expect(page.locator('h1')).not.toHaveText('');
+      if (
+        route.startsWith('/library/fillers/') ||
+        route.startsWith('/library/custom-shows/')
+      ) {
+        await expect(
+          page.getByRole('heading', {
+            level: 2,
+            name: 'Programming',
+            exact: true,
+          }),
+        ).toBeVisible();
+      }
+      if (route === '/welcome') {
+        for (const title of [
+          'Connect Media Sources',
+          'Install FFmpeg',
+          "You're All Set!",
+        ]) {
+          await expect(
+            page.getByRole('heading', { level: 2, name: title, exact: true }),
+          ).toBeVisible();
+          if (title !== "You're All Set!")
+            await page
+              .getByRole('button', { name: 'Next', exact: true })
+              .click();
+        }
+      }
     });
   }
 });
