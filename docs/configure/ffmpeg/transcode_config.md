@@ -13,11 +13,11 @@ Transcode Configurations provide Tunarr with a set of parameters to produce a no
 
 - **Name** — A human-readable label for this configuration. Used to identify the config when assigning it to a channel.
 - **Thread Count** — CPU threads available to FFmpeg for software encoding and decoding. Set to `0` for automatic selection. Real-time transcodes use this count; HLS can temporarily increase it while preparing video ahead of playback (see [Read-ahead threads](#read-ahead-threads)). Hardware pipelines can still use CPU threads for software filters and fallback encoding.
-- **Disable Channel Overlay** — When enabled, suppresses the channel watermark/logo overlay for streams using this configuration. Useful if you want a clean output without branding.
+- **Disable watermarks** — When enabled, suppresses the channel watermark/logo overlay for streams using this configuration. Useful if you want a clean output without branding.
 
 ### Read-ahead threads
 
-FFmpeg settings include **Read-ahead Thread Limit** (default 16). HLS may raise the
+Transcoding settings include **Read-ahead Thread Limit** (default 16). HLS may raise the
 configured thread count up to this limit while preparing video ahead of playback,
 subject to available CPU cores. It never lowers the transcode configuration's own
 count. Set the limit to 0 to disable this increase; a configuration using automatic
@@ -108,7 +108,7 @@ A source whose file reports a frame rate that isn't a standard one (23.976, 24, 
 
 ### Deinterlace Video
 
-Applies a deinterlace filter to the output. Enable this if your source content is interlaced — common with recordings from broadcast or cable TV. The specific deinterlace filter used is configured globally in FFmpeg settings. This setting has no effect on progressive (non-interlaced) source content.
+Applies a deinterlace filter to the output. Enable this if your source content is interlaced — common with recordings from broadcast or cable TV. The specific deinterlace filter used is configured globally, as `ffmpeg.deinterlaceFilter` in `settings.json` (the settings page doesn't show it yet). This setting has no effect on progressive (non-interlaced) source content.
 
 ### HDR Tonemapping
 
@@ -126,7 +126,7 @@ When enabled, Tunarr automatically selects the best available tonemapping method
 | **VAAPI** | `tonemap_opencl` → `tonemap_vaapi` → software | Tunarr uses `tonemap_opencl` only when FFmpeg can create an OpenCL device from the VAAPI device. It tests this when it first detects VAAPI capabilities. If the test fails (common on Intel iGPUs whose OpenCL runtime lacks VAAPI sharing, and on all AMD GPUs), Tunarr uses `tonemap_vaapi`, then software. |
 | **CUDA** | Hardware tonemapping via Vulkan | Requires Vulkan support on the host. If Vulkan is unavailable or causing stream errors, set `TUNARR_DISABLE_VULKAN=true` to fall back to software tonemapping. |
 | **QSV** | Hardware tonemapping | Experimental. May not work reliably on all hardware. |
-| **None (Software)** | `tonemapx` → `zscale` + `tonemap` | Used as the final fallback for all modes. More CPU-intensive than hardware paths. Tunarr uses `tonemapx`, a much faster SIMD tone mapper, when the FFmpeg build has it ([jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) does); otherwise `zscale` with FFmpeg's `tonemap` filter. Either way the HDR10 metadata is removed from the SDR output. The curve is set with **HDR Tone-map Curve** in FFmpeg settings (see [FFmpeg](index.md#hdr-tone-map-curve)). |
+| **None (Software)** | `tonemapx` → `zscale` + `tonemap` | Used as the final fallback for all modes. More CPU-intensive than hardware paths. Tunarr uses `tonemapx`, a much faster SIMD tone mapper, when the FFmpeg build has it ([jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) does); otherwise `zscale` with FFmpeg's `tonemap` filter. Either way the HDR10 metadata is removed from the SDR output. The curve is set with **HDR Tone-map Curve** in Transcoding settings (see [FFmpeg](index.md#hdr-tone-map-curve)). |
 
 Tonemapping is only applied to content Tunarr identifies as HDR (HDR10 or HLG). SDR content is unaffected.
 

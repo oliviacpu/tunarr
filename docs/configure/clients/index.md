@@ -36,6 +36,8 @@ Tunarr supports two ways to connect clients:
 
 Tunarr emulates an HDHomeRun network tuner, allowing media servers like Plex, Jellyfin, and Emby to discover it automatically. This provides the most seamless integration with full guide data.
 
+Under **Settings > Tuner**, **Network discovery** turns the automatic discovery on or off (it needs a restart), and **Tuner count** sets how many tuners Tunarr reports. Plex plays at most that many channels at once.
+
 ### M3U Playlists
 
 For IPTV apps and other players, Tunarr generates M3U playlist files. Access them at:

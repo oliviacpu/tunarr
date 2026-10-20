@@ -26,7 +26,7 @@ Click the **NEW** button to create your first channel, which will take you to th
 
     Configure filler content to play during gaps in your schedule.
 
--   **[EPG](epg.md)**
+-   **[Guide](epg.md)**
 
     ---
 

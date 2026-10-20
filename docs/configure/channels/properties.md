@@ -16,4 +16,4 @@ On-Demand will allow your channels to behave similar to streaming services, wher
 
 ![Channel properties](/assets/channel-properties.png)
 
-Click the ["FLEX" tab](/configure/channels/flex) if you'd like to configure optional filler content to play in-between episodes. 
+Click the ["Flex" tab](/configure/channels/flex) if you'd like to configure optional filler content to play in-between episodes. 

@@ -8,7 +8,7 @@ When a channel reaches [Flex](/configure/channels/flex) time, Tunarr fills the g
 |---|---|---|
 | **Weight** | Channel → Flex → each filler list | Relative chance of drawing from that list. A list at 75 is picked three times as often as one at 25. |
 | **Cooldown (s)** | Channel → Flex → each filler list | How long that whole list sits out after anything from it plays. |
-| **Filler List Cooldown (seconds)** | Channel → Flex → Filler Options | How long before the *same clip* can play again. The name says list, but it applies per clip. |
+| **Clip repeat cooldown (seconds)** | Channel → Flex → Filler Options | How long before the *same clip* can play again, whatever list it's in. |
 | **Clip length** | The media itself | Adds weight to a clip on every draw, and decides which gaps the clip can fit into at all. |
 
 Nothing else feeds the decision. When filler is not behaving the way you want, one of these four is the reason.
@@ -39,7 +39,7 @@ Each surviving list gets tickets equal to its **Weight**. Tunarr pulls one. A li
 
 ### 3. Rule out the clips that cannot play
 
-Inside the winning list, a clip is out if it runs longer than the time left in the gap. A clip is also out if it played more recently than the **Filler List Cooldown** allows.
+Inside the winning list, a clip is out if it runs longer than the time left in the gap. A clip is also out if it played more recently than the **Clip repeat cooldown** allows.
 
 ### 4. Hand out tickets by how long each clip has waited
 
