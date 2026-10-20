@@ -52,7 +52,7 @@ const channelEditPage: Extract<
   BlockerLocation,
   { fullPath: '/channels/$channelId/edit' }
 > = {
-  routeId: '/channels_/$channelId/edit/',
+  routeId: '/channels_/$channelId/edit',
   fullPath: '/channels/$channelId/edit',
   pathname: '/channels/abc/edit',
   params: { channelId: 'abc' },
@@ -202,6 +202,40 @@ describe('UnsavedNavigationAlert', () => {
           channelEditPage,
         ),
       ).resolves.toBe(true);
+    });
+
+    test('literal tab exemptions allow only the same channel', async () => {
+      renderWithProviders(
+        <UnsavedNavigationAlert
+          isDirty
+          exceptTargetPaths={['/web/channels/abc/edit/guide']}
+        />,
+      );
+      const guidePage: Extract<
+        BlockerLocation,
+        { fullPath: '/channels/$channelId/edit/guide' }
+      > = {
+        routeId: '/channels_/$channelId/edit/guide',
+        fullPath: '/channels/$channelId/edit/guide',
+        pathname: '/web/channels/abc/edit/guide',
+        params: { channelId: 'abc' },
+        search: {},
+      };
+      await expect(
+        shouldBlock(lastBlockerOpts(), guidePage, channelEditPage),
+      ).resolves.toBe(false);
+      await expect(
+        shouldBlock(
+          lastBlockerOpts(),
+          {
+            ...guidePage,
+            pathname: '/web/channels/def/edit/guide',
+            params: { channelId: 'def' },
+          },
+          channelEditPage,
+        ),
+      ).resolves.toBe(true);
+      expect(beforeUnloadPromptEnabled(lastBlockerOpts())).toBe(true);
     });
 
     test('still blocks a dirty form going anywhere else', async () => {

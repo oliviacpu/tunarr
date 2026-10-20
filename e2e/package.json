@@ -9,7 +9,8 @@
     "e2e:report": "playwright show-report",
     "e2e:install-browsers": "playwright install chromium",
     "e2e:serve": "tsx fixture/startServer.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test fixture/env.test.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

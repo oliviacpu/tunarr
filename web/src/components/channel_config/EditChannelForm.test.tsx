@@ -6,14 +6,20 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  Outlet,
+  useLocation,
 } from '@tanstack/react-router';
 import type { Channel } from '@tunarr/types';
 import { SnackbarProvider } from 'notistack';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { z } from 'zod/v4';
 import type * as Sdk from '../../generated/sdk.gen.ts';
 import { EditChannelForm } from './EditChannelForm.tsx';
-import type { EditChannelTabs } from './EditChannelTabPanel.tsx';
+import { ChannelEditorTabs, channelTabFromPath } from './channelFieldTabs.ts';
+import { ChannelPropertiesEditor } from './ChannelPropertiesEditor.tsx';
+import { ChannelFlexConfig } from './ChannelFlexConfig.tsx';
+import ChannelEpgConfig from './ChannelEpgConfig.tsx';
+import ChannelTranscodingConfig from './ChannelTranscodingConfig.tsx';
+import ChannelWatermarkConfig from './ChannelWatermarkConfig.tsx';
 
 type ChannelBody = { channel: Record<string, unknown> };
 type UpdateOptions = { path: { id: string }; body: Record<string, unknown> };
@@ -55,6 +61,21 @@ vi.mock('./ChannelTranscodingConfig.tsx', () => ({
   default: () => <p>Streaming fields</p>,
 }));
 
+vi.mock('./ChannelWatermarkConfig.tsx', async () => {
+  const { useFormContext } = await import('react-hook-form');
+  return {
+    default: () => {
+      const { register } = useFormContext<{ watermark: { url: string } }>();
+      return (
+        <label>
+          Watermark URL
+          <input {...register('watermark.url')} />
+        </label>
+      );
+    },
+  };
+});
+
 const channel: Channel = {
   id: 'c0ffee00-0000-4000-8000-000000000001',
   name: 'Movie Night',
@@ -82,26 +103,39 @@ function renderEditor(mode: 'edit' | 'new') {
   const editRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/channels/$channelId/edit',
-    validateSearch: z.object({
-      tab: z.enum(['flex', 'epg', 'ffmpeg']).optional(),
-    }),
     component: function EditRoute() {
       const { data: loadedChannel } = useSuspenseQuery({
         queryKey: ['test-channel'],
         queryFn: async () => channel,
         staleTime: Infinity,
       });
-      const { tab } = editRoute.useSearch();
-      const initialTab: EditChannelTabs = tab ?? 'properties';
+      const pathname = useLocation({ select: (location) => location.pathname });
+      const activeTab = channelTabFromPath(pathname);
       return (
         <EditChannelForm
           channel={loadedChannel}
           isNew={false}
-          initialTab={initialTab}
-        />
+          activeTab={activeTab}
+        >
+          <Outlet />
+        </EditChannelForm>
       );
     },
   });
+  const tabComponents = {
+    properties: ChannelPropertiesEditor,
+    flex: ChannelFlexConfig,
+    guide: ChannelEpgConfig,
+    streaming: ChannelTranscodingConfig,
+    watermark: ChannelWatermarkConfig,
+  };
+  const editTabs = ChannelEditorTabs.map((tab) =>
+    createRoute({
+      getParentRoute: () => editRoute,
+      path: tab,
+      component: tabComponents[tab],
+    }),
+  );
   const newRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/channels/new',
@@ -122,11 +156,13 @@ function renderEditor(mode: 'edit' | 'new') {
   window.history.replaceState(
     null,
     '',
-    mode === 'new' ? '/channels/new' : `/channels/${channel.id}/edit`,
+    mode === 'new'
+      ? '/channels/new'
+      : `/channels/${channel.id}/edit/properties`,
   );
   const router = createRouter({
     routeTree: rootRoute.addChildren([
-      editRoute,
+      editRoute.addChildren(editTabs),
       newRoute,
       programmingRoute,
       channelsRoute,
@@ -246,7 +282,7 @@ describe('EditChannelForm, editing a channel', () => {
       });
     });
     expect(name).toHaveValue('Movie Night Late Draft');
-    expect(saveButton()).toBeEnabled();
+    await waitFor(() => expect(saveButton()).toBeEnabled());
     await user.click(screen.getByRole('button', { name: 'Reset changes' }));
     expect(name).toHaveValue('Movie Night Late');
   });
@@ -289,7 +325,9 @@ describe('EditChannelForm, editing a channel', () => {
 
     expect(await screen.findByText('Flex fields')).toBeInTheDocument();
     await waitFor(() =>
-      expect(router.state.location.search).toEqual({ tab: 'flex' }),
+      expect(router.state.location.pathname).toBe(
+        `/channels/${channel.id}/edit/flex`,
+      ),
     );
     expect(unsavedDialog()).not.toBeInTheDocument();
 
@@ -308,6 +346,36 @@ describe('EditChannelForm, editing a channel', () => {
     expect(
       await screen.findByRole('dialog', { name: 'You have unsaved changes!' }),
     ).toBeInTheDocument();
+  });
+
+  test('tab history preserves changes from Properties and Watermark in one save', async () => {
+    const { user, router } = renderEditor('edit');
+    await user.type(await nameField(), ' Draft');
+    await user.tab();
+    await user.click(screen.getByRole('tab', { name: 'Watermark' }));
+    const watermark = await screen.findByRole('textbox', {
+      name: 'Watermark URL',
+    });
+    await user.type(watermark, 'https://example.com/bug.png');
+    await user.click(screen.getByRole('tab', { name: 'Guide' }));
+    expect(await screen.findByText('Guide fields')).toBeInTheDocument();
+    await act(async () => router.history.back());
+    expect(
+      await screen.findByRole('textbox', { name: 'Watermark URL' }),
+    ).toHaveValue('https://example.com/bug.png');
+    await act(async () => router.history.back());
+    expect(await nameField()).toHaveValue('Movie Night Draft');
+    await act(async () => router.history.forward());
+    expect(
+      await screen.findByRole('textbox', { name: 'Watermark URL' }),
+    ).toHaveValue('https://example.com/bug.png');
+    expect(unsavedDialog()).not.toBeInTheDocument();
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+    expect(mockUpdate.mock.calls[0]?.[0].body).toMatchObject({
+      name: 'Movie Night Draft',
+      watermark: { url: 'https://example.com/bug.png' },
+    });
   });
 });
 

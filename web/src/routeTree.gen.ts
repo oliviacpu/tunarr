@@ -48,6 +48,7 @@ import { Route as LibraryFillersNewRouteRouteImport } from './routes/library/fil
 import { Route as LibraryFillersFillerIdRouteRouteImport } from './routes/library/fillers_/$fillerId/route';
 import { Route as LibraryCustomShowsNewRouteRouteImport } from './routes/library/custom-shows_/new/route';
 import { Route as LibraryCustomShowsShowIdRouteRouteImport } from './routes/library/custom-shows_/$showId/route';
+import { Route as ChannelsChannelIdEditRouteRouteImport } from './routes/channels_/$channelId/edit/route';
 import { Route as LibraryFillersNewIndexRouteImport } from './routes/library/fillers_/new/index';
 import { Route as LibraryCustomShowsNewIndexRouteImport } from './routes/library/custom-shows_/new/index';
 import { Route as ChannelsChannelIdProgrammingIndexRouteImport } from './routes/channels_/$channelId/programming/index';
@@ -62,6 +63,11 @@ import { Route as LibraryCustomShowsShowIdEditRouteImport } from './routes/libra
 import { Route as ChannelsChannelIdProgrammingTimeSlotEditorRouteImport } from './routes/channels_/$channelId/programming/time-slot-editor';
 import { Route as ChannelsChannelIdProgrammingSlotEditorRouteImport } from './routes/channels_/$channelId/programming/slot-editor';
 import { Route as ChannelsChannelIdProgrammingAddRouteImport } from './routes/channels_/$channelId/programming/add';
+import { Route as ChannelsChannelIdEditWatermarkRouteImport } from './routes/channels_/$channelId/edit/watermark';
+import { Route as ChannelsChannelIdEditStreamingRouteImport } from './routes/channels_/$channelId/edit/streaming';
+import { Route as ChannelsChannelIdEditPropertiesRouteImport } from './routes/channels_/$channelId/edit/properties';
+import { Route as ChannelsChannelIdEditGuideRouteImport } from './routes/channels_/$channelId/edit/guide';
+import { Route as ChannelsChannelIdEditFlexRouteImport } from './routes/channels_/$channelId/edit/flex';
 
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
@@ -265,6 +271,12 @@ const LibraryCustomShowsShowIdRouteRoute =
     path: '/library/custom-shows/$showId',
     getParentRoute: () => rootRouteImport,
   } as any);
+const ChannelsChannelIdEditRouteRoute =
+  ChannelsChannelIdEditRouteRouteImport.update({
+    id: '/edit',
+    path: '/edit',
+    getParentRoute: () => ChannelsChannelIdRouteRoute,
+  } as any);
 const LibraryFillersNewIndexRoute = LibraryFillersNewIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -284,9 +296,9 @@ const ChannelsChannelIdProgrammingIndexRoute =
   } as any);
 const ChannelsChannelIdEditIndexRoute =
   ChannelsChannelIdEditIndexRouteImport.update({
-    id: '/edit/',
-    path: '/edit/',
-    getParentRoute: () => ChannelsChannelIdRouteRoute,
+    id: '/',
+    path: '/',
+    getParentRoute: () => ChannelsChannelIdEditRouteRoute,
   } as any);
 const Media_sourcesMediaSourceIdLibrariesLibraryIdRoute =
   Media_sourcesMediaSourceIdLibrariesLibraryIdRouteImport.update({
@@ -348,6 +360,36 @@ const ChannelsChannelIdProgrammingAddRoute =
     path: '/programming/add',
     getParentRoute: () => ChannelsChannelIdRouteRoute,
   } as any);
+const ChannelsChannelIdEditWatermarkRoute =
+  ChannelsChannelIdEditWatermarkRouteImport.update({
+    id: '/watermark',
+    path: '/watermark',
+    getParentRoute: () => ChannelsChannelIdEditRouteRoute,
+  } as any);
+const ChannelsChannelIdEditStreamingRoute =
+  ChannelsChannelIdEditStreamingRouteImport.update({
+    id: '/streaming',
+    path: '/streaming',
+    getParentRoute: () => ChannelsChannelIdEditRouteRoute,
+  } as any);
+const ChannelsChannelIdEditPropertiesRoute =
+  ChannelsChannelIdEditPropertiesRouteImport.update({
+    id: '/properties',
+    path: '/properties',
+    getParentRoute: () => ChannelsChannelIdEditRouteRoute,
+  } as any);
+const ChannelsChannelIdEditGuideRoute =
+  ChannelsChannelIdEditGuideRouteImport.update({
+    id: '/guide',
+    path: '/guide',
+    getParentRoute: () => ChannelsChannelIdEditRouteRoute,
+  } as any);
+const ChannelsChannelIdEditFlexRoute =
+  ChannelsChannelIdEditFlexRouteImport.update({
+    id: '/flex',
+    path: '/flex',
+    getParentRoute: () => ChannelsChannelIdEditRouteRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
@@ -376,6 +418,7 @@ export interface FileRoutesByFullPath {
   '/media_sources': typeof Media_sourcesIndexRoute;
   '/settings/': typeof SettingsIndexRoute;
   '/system/': typeof SystemIndexRoute;
+  '/channels/$channelId/edit': typeof ChannelsChannelIdEditRouteRouteWithChildren;
   '/library/custom-shows/$showId': typeof LibraryCustomShowsShowIdRouteRouteWithChildren;
   '/library/custom-shows/new': typeof LibraryCustomShowsNewRouteRouteWithChildren;
   '/library/fillers/$fillerId': typeof LibraryFillersFillerIdRouteRouteWithChildren;
@@ -389,6 +432,11 @@ export interface FileRoutesByFullPath {
   '/library/smart_collections': typeof LibrarySmart_collectionsIndexRoute;
   '/library/trash': typeof LibraryTrashIndexRoute;
   '/media_sources/$mediaSourceId': typeof Media_sourcesMediaSourceIdIndexRoute;
+  '/channels/$channelId/edit/flex': typeof ChannelsChannelIdEditFlexRoute;
+  '/channels/$channelId/edit/guide': typeof ChannelsChannelIdEditGuideRoute;
+  '/channels/$channelId/edit/properties': typeof ChannelsChannelIdEditPropertiesRoute;
+  '/channels/$channelId/edit/streaming': typeof ChannelsChannelIdEditStreamingRoute;
+  '/channels/$channelId/edit/watermark': typeof ChannelsChannelIdEditWatermarkRoute;
   '/channels/$channelId/programming/add': typeof ChannelsChannelIdProgrammingAddRoute;
   '/channels/$channelId/programming/slot-editor': typeof ChannelsChannelIdProgrammingSlotEditorRoute;
   '/channels/$channelId/programming/time-slot-editor': typeof ChannelsChannelIdProgrammingTimeSlotEditorRoute;
@@ -399,7 +447,7 @@ export interface FileRoutesByFullPath {
   '/library/fillers/$fillerId/programming': typeof LibraryFillersFillerIdProgrammingRoute;
   '/library/fillers/new/programming': typeof LibraryFillersNewProgrammingRoute;
   '/media_sources/$mediaSourceId/libraries/$libraryId': typeof Media_sourcesMediaSourceIdLibrariesLibraryIdRoute;
-  '/channels/$channelId/edit': typeof ChannelsChannelIdEditIndexRoute;
+  '/channels/$channelId/edit/': typeof ChannelsChannelIdEditIndexRoute;
   '/channels/$channelId/programming': typeof ChannelsChannelIdProgrammingIndexRoute;
   '/library/custom-shows/new/': typeof LibraryCustomShowsNewIndexRoute;
   '/library/fillers/new/': typeof LibraryFillersNewIndexRoute;
@@ -439,6 +487,11 @@ export interface FileRoutesByTo {
   '/library/smart_collections': typeof LibrarySmart_collectionsIndexRoute;
   '/library/trash': typeof LibraryTrashIndexRoute;
   '/media_sources/$mediaSourceId': typeof Media_sourcesMediaSourceIdIndexRoute;
+  '/channels/$channelId/edit/flex': typeof ChannelsChannelIdEditFlexRoute;
+  '/channels/$channelId/edit/guide': typeof ChannelsChannelIdEditGuideRoute;
+  '/channels/$channelId/edit/properties': typeof ChannelsChannelIdEditPropertiesRoute;
+  '/channels/$channelId/edit/streaming': typeof ChannelsChannelIdEditStreamingRoute;
+  '/channels/$channelId/edit/watermark': typeof ChannelsChannelIdEditWatermarkRoute;
   '/channels/$channelId/programming/add': typeof ChannelsChannelIdProgrammingAddRoute;
   '/channels/$channelId/programming/slot-editor': typeof ChannelsChannelIdProgrammingSlotEditorRoute;
   '/channels/$channelId/programming/time-slot-editor': typeof ChannelsChannelIdProgrammingTimeSlotEditorRoute;
@@ -482,6 +535,7 @@ export interface FileRoutesById {
   '/media_sources_/': typeof Media_sourcesIndexRoute;
   '/settings/': typeof SettingsIndexRoute;
   '/system/': typeof SystemIndexRoute;
+  '/channels_/$channelId/edit': typeof ChannelsChannelIdEditRouteRouteWithChildren;
   '/library/custom-shows_/$showId': typeof LibraryCustomShowsShowIdRouteRouteWithChildren;
   '/library/custom-shows_/new': typeof LibraryCustomShowsNewRouteRouteWithChildren;
   '/library/fillers_/$fillerId': typeof LibraryFillersFillerIdRouteRouteWithChildren;
@@ -495,6 +549,11 @@ export interface FileRoutesById {
   '/library/smart_collections/': typeof LibrarySmart_collectionsIndexRoute;
   '/library/trash_/': typeof LibraryTrashIndexRoute;
   '/media_sources_/$mediaSourceId/': typeof Media_sourcesMediaSourceIdIndexRoute;
+  '/channels_/$channelId/edit/flex': typeof ChannelsChannelIdEditFlexRoute;
+  '/channels_/$channelId/edit/guide': typeof ChannelsChannelIdEditGuideRoute;
+  '/channels_/$channelId/edit/properties': typeof ChannelsChannelIdEditPropertiesRoute;
+  '/channels_/$channelId/edit/streaming': typeof ChannelsChannelIdEditStreamingRoute;
+  '/channels_/$channelId/edit/watermark': typeof ChannelsChannelIdEditWatermarkRoute;
   '/channels_/$channelId/programming/add': typeof ChannelsChannelIdProgrammingAddRoute;
   '/channels_/$channelId/programming/slot-editor': typeof ChannelsChannelIdProgrammingSlotEditorRoute;
   '/channels_/$channelId/programming/time-slot-editor': typeof ChannelsChannelIdProgrammingTimeSlotEditorRoute;
@@ -539,6 +598,7 @@ export interface FileRouteTypes {
     | '/media_sources'
     | '/settings/'
     | '/system/'
+    | '/channels/$channelId/edit'
     | '/library/custom-shows/$showId'
     | '/library/custom-shows/new'
     | '/library/fillers/$fillerId'
@@ -552,6 +612,11 @@ export interface FileRouteTypes {
     | '/library/smart_collections'
     | '/library/trash'
     | '/media_sources/$mediaSourceId'
+    | '/channels/$channelId/edit/flex'
+    | '/channels/$channelId/edit/guide'
+    | '/channels/$channelId/edit/properties'
+    | '/channels/$channelId/edit/streaming'
+    | '/channels/$channelId/edit/watermark'
     | '/channels/$channelId/programming/add'
     | '/channels/$channelId/programming/slot-editor'
     | '/channels/$channelId/programming/time-slot-editor'
@@ -562,7 +627,7 @@ export interface FileRouteTypes {
     | '/library/fillers/$fillerId/programming'
     | '/library/fillers/new/programming'
     | '/media_sources/$mediaSourceId/libraries/$libraryId'
-    | '/channels/$channelId/edit'
+    | '/channels/$channelId/edit/'
     | '/channels/$channelId/programming'
     | '/library/custom-shows/new/'
     | '/library/fillers/new/';
@@ -602,6 +667,11 @@ export interface FileRouteTypes {
     | '/library/smart_collections'
     | '/library/trash'
     | '/media_sources/$mediaSourceId'
+    | '/channels/$channelId/edit/flex'
+    | '/channels/$channelId/edit/guide'
+    | '/channels/$channelId/edit/properties'
+    | '/channels/$channelId/edit/streaming'
+    | '/channels/$channelId/edit/watermark'
     | '/channels/$channelId/programming/add'
     | '/channels/$channelId/programming/slot-editor'
     | '/channels/$channelId/programming/time-slot-editor'
@@ -644,6 +714,7 @@ export interface FileRouteTypes {
     | '/media_sources_/'
     | '/settings/'
     | '/system/'
+    | '/channels_/$channelId/edit'
     | '/library/custom-shows_/$showId'
     | '/library/custom-shows_/new'
     | '/library/fillers_/$fillerId'
@@ -657,6 +728,11 @@ export interface FileRouteTypes {
     | '/library/smart_collections/'
     | '/library/trash_/'
     | '/media_sources_/$mediaSourceId/'
+    | '/channels_/$channelId/edit/flex'
+    | '/channels_/$channelId/edit/guide'
+    | '/channels_/$channelId/edit/properties'
+    | '/channels_/$channelId/edit/streaming'
+    | '/channels_/$channelId/edit/watermark'
     | '/channels_/$channelId/programming/add'
     | '/channels_/$channelId/programming/slot-editor'
     | '/channels_/$channelId/programming/time-slot-editor'
@@ -975,6 +1051,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LibraryCustomShowsShowIdRouteRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    '/channels_/$channelId/edit': {
+      id: '/channels_/$channelId/edit';
+      path: '/edit';
+      fullPath: '/channels/$channelId/edit';
+      preLoaderRoute: typeof ChannelsChannelIdEditRouteRouteImport;
+      parentRoute: typeof ChannelsChannelIdRouteRoute;
+    };
     '/library/fillers_/new/': {
       id: '/library/fillers_/new/';
       path: '/';
@@ -998,10 +1081,10 @@ declare module '@tanstack/react-router' {
     };
     '/channels_/$channelId/edit/': {
       id: '/channels_/$channelId/edit/';
-      path: '/edit';
-      fullPath: '/channels/$channelId/edit';
+      path: '/';
+      fullPath: '/channels/$channelId/edit/';
       preLoaderRoute: typeof ChannelsChannelIdEditIndexRouteImport;
-      parentRoute: typeof ChannelsChannelIdRouteRoute;
+      parentRoute: typeof ChannelsChannelIdEditRouteRoute;
     };
     '/media_sources_/$mediaSourceId/libraries_/$libraryId': {
       id: '/media_sources_/$mediaSourceId/libraries_/$libraryId';
@@ -1073,6 +1156,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChannelsChannelIdProgrammingAddRouteImport;
       parentRoute: typeof ChannelsChannelIdRouteRoute;
     };
+    '/channels_/$channelId/edit/watermark': {
+      id: '/channels_/$channelId/edit/watermark';
+      path: '/watermark';
+      fullPath: '/channels/$channelId/edit/watermark';
+      preLoaderRoute: typeof ChannelsChannelIdEditWatermarkRouteImport;
+      parentRoute: typeof ChannelsChannelIdEditRouteRoute;
+    };
+    '/channels_/$channelId/edit/streaming': {
+      id: '/channels_/$channelId/edit/streaming';
+      path: '/streaming';
+      fullPath: '/channels/$channelId/edit/streaming';
+      preLoaderRoute: typeof ChannelsChannelIdEditStreamingRouteImport;
+      parentRoute: typeof ChannelsChannelIdEditRouteRoute;
+    };
+    '/channels_/$channelId/edit/properties': {
+      id: '/channels_/$channelId/edit/properties';
+      path: '/properties';
+      fullPath: '/channels/$channelId/edit/properties';
+      preLoaderRoute: typeof ChannelsChannelIdEditPropertiesRouteImport;
+      parentRoute: typeof ChannelsChannelIdEditRouteRoute;
+    };
+    '/channels_/$channelId/edit/guide': {
+      id: '/channels_/$channelId/edit/guide';
+      path: '/guide';
+      fullPath: '/channels/$channelId/edit/guide';
+      preLoaderRoute: typeof ChannelsChannelIdEditGuideRouteImport;
+      parentRoute: typeof ChannelsChannelIdEditRouteRoute;
+    };
+    '/channels_/$channelId/edit/flex': {
+      id: '/channels_/$channelId/edit/flex';
+      path: '/flex';
+      fullPath: '/channels/$channelId/edit/flex';
+      preLoaderRoute: typeof ChannelsChannelIdEditFlexRouteImport;
+      parentRoute: typeof ChannelsChannelIdEditRouteRoute;
+    };
   }
 }
 
@@ -1123,18 +1241,44 @@ const SystemRouteChildren: SystemRouteChildren = {
 const SystemRouteWithChildren =
   SystemRoute._addFileChildren(SystemRouteChildren);
 
+interface ChannelsChannelIdEditRouteRouteChildren {
+  ChannelsChannelIdEditFlexRoute: typeof ChannelsChannelIdEditFlexRoute;
+  ChannelsChannelIdEditGuideRoute: typeof ChannelsChannelIdEditGuideRoute;
+  ChannelsChannelIdEditPropertiesRoute: typeof ChannelsChannelIdEditPropertiesRoute;
+  ChannelsChannelIdEditStreamingRoute: typeof ChannelsChannelIdEditStreamingRoute;
+  ChannelsChannelIdEditWatermarkRoute: typeof ChannelsChannelIdEditWatermarkRoute;
+  ChannelsChannelIdEditIndexRoute: typeof ChannelsChannelIdEditIndexRoute;
+}
+
+const ChannelsChannelIdEditRouteRouteChildren: ChannelsChannelIdEditRouteRouteChildren =
+  {
+    ChannelsChannelIdEditFlexRoute: ChannelsChannelIdEditFlexRoute,
+    ChannelsChannelIdEditGuideRoute: ChannelsChannelIdEditGuideRoute,
+    ChannelsChannelIdEditPropertiesRoute: ChannelsChannelIdEditPropertiesRoute,
+    ChannelsChannelIdEditStreamingRoute: ChannelsChannelIdEditStreamingRoute,
+    ChannelsChannelIdEditWatermarkRoute: ChannelsChannelIdEditWatermarkRoute,
+    ChannelsChannelIdEditIndexRoute: ChannelsChannelIdEditIndexRoute,
+  };
+
+const ChannelsChannelIdEditRouteRouteWithChildren =
+  ChannelsChannelIdEditRouteRoute._addFileChildren(
+    ChannelsChannelIdEditRouteRouteChildren,
+  );
+
 interface ChannelsChannelIdRouteRouteChildren {
+  ChannelsChannelIdEditRouteRoute: typeof ChannelsChannelIdEditRouteRouteWithChildren;
   ChannelsChannelIdWatchRoute: typeof ChannelsChannelIdWatchRoute;
   ChannelsChannelIdIndexRoute: typeof ChannelsChannelIdIndexRoute;
   ChannelsChannelIdProgrammingAddRoute: typeof ChannelsChannelIdProgrammingAddRoute;
   ChannelsChannelIdProgrammingSlotEditorRoute: typeof ChannelsChannelIdProgrammingSlotEditorRoute;
   ChannelsChannelIdProgrammingTimeSlotEditorRoute: typeof ChannelsChannelIdProgrammingTimeSlotEditorRoute;
-  ChannelsChannelIdEditIndexRoute: typeof ChannelsChannelIdEditIndexRoute;
   ChannelsChannelIdProgrammingIndexRoute: typeof ChannelsChannelIdProgrammingIndexRoute;
 }
 
 const ChannelsChannelIdRouteRouteChildren: ChannelsChannelIdRouteRouteChildren =
   {
+    ChannelsChannelIdEditRouteRoute:
+      ChannelsChannelIdEditRouteRouteWithChildren,
     ChannelsChannelIdWatchRoute: ChannelsChannelIdWatchRoute,
     ChannelsChannelIdIndexRoute: ChannelsChannelIdIndexRoute,
     ChannelsChannelIdProgrammingAddRoute: ChannelsChannelIdProgrammingAddRoute,
@@ -1142,7 +1286,6 @@ const ChannelsChannelIdRouteRouteChildren: ChannelsChannelIdRouteRouteChildren =
       ChannelsChannelIdProgrammingSlotEditorRoute,
     ChannelsChannelIdProgrammingTimeSlotEditorRoute:
       ChannelsChannelIdProgrammingTimeSlotEditorRoute,
-    ChannelsChannelIdEditIndexRoute: ChannelsChannelIdEditIndexRoute,
     ChannelsChannelIdProgrammingIndexRoute:
       ChannelsChannelIdProgrammingIndexRoute,
   };

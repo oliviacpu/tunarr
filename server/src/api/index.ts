@@ -39,7 +39,6 @@ import { hdhrSettingsRouter } from './hdhrSettingsApi.js';
 import { jellyfinApiRouter } from './jellyfinApi.js';
 import { mediaSourceRouter } from './mediaSourceApi.js';
 import { plexApiRouter } from './plexApi.ts';
-import { plexSettingsRouter } from './plexSettingsApi.js';
 import { ProgramGroupingApiController } from './programGroupingApi.ts';
 import { programmingApi } from './programmingApi.js';
 import { sessionApiRouter } from './sessionApi.js';
@@ -79,7 +78,6 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
     .register(programmingApi)
     .register(mediaSourceRouter)
     .register(ffmpegSettingsRouter)
-    .register(plexSettingsRouter)
     .register(xmlTvSettingsRouter)
     .register(hdhrSettingsRouter)
     .register(systemApiRouter)

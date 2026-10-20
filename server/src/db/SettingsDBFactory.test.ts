@@ -70,6 +70,45 @@ describe('SettingsDBFactory', () => {
     expect(await fs.readdir(dir)).toEqual(['settings.json']);
   });
 
+  test('migrates version 1 without retaining dead keys or changing active settings', async () => {
+    const { defaultSettings, CURRENT_VERSION } = await import(
+      './SettingsDB.ts'
+    );
+    const original = defaultSettings(dir);
+    original.settings.xmltv.programmingHours = 48;
+    original.system.server.port = 18123;
+    original.migration.hasEnabledLogRollByDefault = true;
+    const legacy = {
+      ...original,
+      version: 1,
+      settings: {
+        ...original.settings,
+        plexStream: { streamPath: 'direct', unknownLegacyValue: true },
+        xmltv: {
+          ...original.settings.xmltv,
+          enableImageCache: 'unused-invalid-value',
+        },
+      },
+    };
+    await fs.writeFile(settingsPath, JSON.stringify(legacy));
+    const SettingsDBFactory = await loadFactory();
+    const settings = new SettingsDBFactory(options).get();
+    expect(settings.getAll().version).toBe(CURRENT_VERSION);
+    expect(settings.xmlTvSettings().programmingHours).toBe(48);
+    expect(settings.systemSettings().server.port).toBe(18123);
+    const written = JSON.parse(await fs.readFile(settingsPath, 'utf-8'));
+    expect(written.version).toBe(2);
+    expect(written.settings).not.toHaveProperty('plexStream');
+    expect(written.settings.xmltv).not.toHaveProperty('enableImageCache');
+    expect(written.settings.ffmpeg).toEqual(original.settings.ffmpeg);
+    expect(written.featureFlags).toEqual(original.featureFlags);
+    vi.resetModules();
+    const ReloadedFactory = await loadFactory();
+    const reloaded = new ReloadedFactory(options).get();
+    expect(reloaded.getAll().version).toBe(2);
+    expect(reloaded.xmlTvSettings().programmingHours).toBe(48);
+  });
+
   describe('log rolling default', () => {
     type WrittenSettings = {
       migration: Record<string, unknown>;

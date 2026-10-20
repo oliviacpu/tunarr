@@ -1,5 +1,5 @@
 import type { NewTranscodeConfig } from '@/db/schema/TranscodeConfig.js';
-import { defaultTranscodeConfigLegacy } from '@/db/schema/TranscodeConfig.js';
+import { defaultTranscodeConfigLegacy } from './legacyTranscodeConfigDefaults.ts';
 import type { DB } from '@/db/schema/db.js';
 import { booleanToNumber } from '@/util/sqliteUtil.js';
 import type { Resolution } from '@tunarr/types';
