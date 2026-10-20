@@ -9,25 +9,25 @@ import {
   Paper,
 } from '@mui/material';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
+import { last, trimEnd } from 'lodash-es';
 import { useState } from 'react';
 import type { NavItem } from '../hooks/useNavItems.tsx';
+import { navItemForPath, topLevelNavItemForPath } from '../hooks/navMatch.ts';
 import { useNavItems } from '../hooks/useNavItems.tsx';
-
-const getBaseSection = (path: string) => '/' + path.split('/')[1];
 
 export const BottomNavBar = () => {
   const navItems = useNavItems();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const fullPath = useRouterState({
+    select: ({ matches }) => trimEnd(last(matches)?.fullPath ?? '', '/'),
+  });
   const navigate = useNavigate();
   const [menuAnchor, setMenuAnchor] = useState<{
     el: HTMLElement;
     item: NavItem;
   } | null>(null);
 
-  const currentSection = getBaseSection(pathname);
-  const activeItem = navItems
-    .filter((item) => !item.hidden)
-    .find((item) => getBaseSection(item.path) === currentSection);
+  const matchedItem = navItemForPath(navItems, fullPath);
+  const activeItem = topLevelNavItemForPath(navItems, fullPath);
 
   const visibleChildren = (item: NavItem) =>
     item.children?.filter((c) => !c.hidden) ?? [];
@@ -91,7 +91,7 @@ export const BottomNavBar = () => {
         {menuAnchor && [
           <MenuItem
             key={menuAnchor.item.path}
-            selected={pathname === menuAnchor.item.path}
+            selected={matchedItem === menuAnchor.item}
             onClick={() => {
               navigate({ to: menuAnchor.item.path }).catch(console.warn);
               setMenuAnchor(null);
@@ -105,7 +105,7 @@ export const BottomNavBar = () => {
           ...visibleChildren(menuAnchor.item).map((child) => (
             <MenuItem
               key={child.path}
-              selected={pathname.startsWith(child.path)}
+              selected={matchedItem === child}
               onClick={() => {
                 navigate({ to: child.path }).catch(console.warn);
                 setMenuAnchor(null);
