@@ -1,4 +1,4 @@
-### Smart Collection create and query editing (2026-10-20)
+### Smart Collection create and query editing (2026-10-20, PR #129)
 
 - **What you saw:** Create opened Search without explaining the next step, and Edit only changed a collection's name.
 - **Cause:** the search route had no collection-creation context, and the edit dialog omitted the stored query.
