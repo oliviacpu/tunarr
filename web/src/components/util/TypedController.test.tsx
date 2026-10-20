@@ -1,8 +1,12 @@
 import { renderWithProviders, screen, waitFor } from '@/test/utils';
 import type { ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
-import { describe, expect, test } from 'vitest';
-import { NumericFormControllerText } from './TypedController.tsx';
+import { describe, expect, test, vi } from 'vitest';
+import {
+  NumericFormControllerText,
+  SelectFormController,
+  SwitchFormController,
+} from './TypedController.tsx';
 
 function Harness({
   validate,
@@ -96,6 +100,174 @@ describe('NumericFormControllerText with help text', () => {
     await waitFor(() => expect(field).toBeInvalid());
     expect(field).toHaveAccessibleDescription(
       expect.stringMatching(/^Tuners must be >= 1\s*How many at once\.$/),
+    );
+  });
+});
+
+type SwitchValues = { discovery: boolean };
+
+function SwitchHarness({
+  onSubmit,
+  disabled,
+  helperText,
+}: {
+  onSubmit: (values: SwitchValues) => void;
+  disabled?: boolean;
+  helperText?: ReactNode;
+}): ReactNode {
+  const { control, handleSubmit } = useForm<SwitchValues>({
+    defaultValues: { discovery: true },
+  });
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <SwitchFormController
+        control={control}
+        name="discovery"
+        label="Network discovery"
+        helperText={helperText}
+        disabled={disabled}
+      />
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+
+describe('SwitchFormController', () => {
+  test('shows the field as a labelled switch with its help text', () => {
+    renderWithProviders(
+      <SwitchHarness
+        onSubmit={() => {}}
+        helperText="Announces Tunarr on your network."
+      />,
+    );
+
+    const toggle = screen.getByRole('checkbox', { name: 'Network discovery' });
+    expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(
+      'Announces Tunarr on your network.',
+    );
+  });
+
+  test('has no description without help text', () => {
+    renderWithProviders(<SwitchHarness onSubmit={() => {}} />);
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Network discovery' }),
+    ).not.toHaveAccessibleDescription();
+  });
+
+  test('turning it off stores false', async () => {
+    const onSubmit = vi.fn();
+    const { user } = renderWithProviders(<SwitchHarness onSubmit={onSubmit} />);
+
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Network discovery' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual({ discovery: false });
+  });
+
+  test('a disabled switch still submits its value', async () => {
+    const onSubmit = vi.fn();
+    const { user } = renderWithProviders(
+      <SwitchHarness onSubmit={onSubmit} disabled />,
+    );
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Network discovery' }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual({ discovery: true });
+  });
+});
+
+type SelectValues = { hour: number; format: 'mkv' | 'mp4' };
+
+const hourOptions = [
+  { value: 0, label: '00:00' },
+  { value: 5, label: '05:00' },
+  { value: 23, label: '23:00' },
+];
+
+const formatOptions = [
+  { value: 'mkv', label: 'MKV' },
+  { value: 'mp4', label: 'MP4' },
+] as const;
+
+function SelectHarness({
+  onSubmit,
+}: {
+  onSubmit: (values: SelectValues) => void;
+}): ReactNode {
+  const { control, handleSubmit } = useForm<SelectValues>({
+    defaultValues: { hour: 0, format: 'mkv' },
+    mode: 'onChange',
+  });
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <SelectFormController
+        control={control}
+        name="hour"
+        label="Refreshes start at"
+        helperText="An hour in server time."
+        options={hourOptions}
+        rules={{
+          validate: (hour) => hour !== 23 || 'Too late for a rebuild',
+        }}
+      />
+      <SelectFormController
+        control={control}
+        name="format"
+        label="Output format"
+        options={formatOptions}
+      />
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+
+describe('SelectFormController', () => {
+  test('shows the field as a labelled select with its help text', () => {
+    renderWithProviders(<SelectHarness onSubmit={() => {}} />);
+
+    const select = screen.getByRole('combobox', { name: 'Refreshes start at' });
+    expect(select).toHaveTextContent('00:00');
+    expect(select).toHaveAccessibleDescription('An hour in server time.');
+  });
+
+  test("picking an option stores the option's value, keeping its type", async () => {
+    const onSubmit = vi.fn();
+    const { user } = renderWithProviders(<SelectHarness onSubmit={onSubmit} />);
+
+    await user.click(
+      screen.getByRole('combobox', { name: 'Refreshes start at' }),
+    );
+    await user.click(await screen.findByRole('option', { name: '05:00' }));
+    await user.click(screen.getByRole('combobox', { name: 'Output format' }));
+    await user.click(await screen.findByRole('option', { name: 'MP4' }));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]?.[0]).toStrictEqual({
+      hour: 5,
+      format: 'mp4',
+    });
+  });
+
+  test('a field error replaces the help text', async () => {
+    const { user } = renderWithProviders(<SelectHarness onSubmit={() => {}} />);
+    const select = () =>
+      screen.getByRole('combobox', { name: 'Refreshes start at' });
+
+    await user.click(select());
+    await user.click(await screen.findByRole('option', { name: '23:00' }));
+
+    await waitFor(() =>
+      expect(select()).toHaveAccessibleDescription('Too late for a rebuild'),
     );
   });
 });

@@ -1,61 +1,62 @@
-import { useActions, useToasts, withReason } from '@/strings/actions';
-import { useSettings } from '@/store/settings/selectors.ts';
-import { getApiErrorMessage } from '@/helpers/apiError.ts';
+import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
+import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
+import { useSettings } from '@/store/settings/selectors.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { minimumXmlTvGuideHours } from '@tunarr/shared/util';
 import {
-  Box,
-  Button,
   Divider,
   FormControl,
   FormControlLabel,
   FormHelperText,
-  MenuItem,
   Stack,
   TextField,
 } from '@mui/material';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { minimumXmlTvGuideHours } from '@tunarr/shared/util';
 import type { XmlTvSettings } from '@tunarr/types';
 import { defaultXmlTvSettings } from '@tunarr/types';
 import { isEmpty, isEqual, range } from 'lodash-es';
-import { useSnackbar } from 'notistack';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { SubmitHandler } from 'react-hook-form';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { HelpTooltip } from '../../components/base/HelpTooltip.tsx';
-import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert.tsx';
 import {
   CheckboxFormController,
   NumericFormControllerText,
+  SelectFormController,
 } from '../../components/util/TypedController.tsx';
 import { putApiXmltvSettingsMutation } from '../../generated/@tanstack/react-query.gen.ts';
 import { useXmlTvSettings } from '../../hooks/settingsHooks.ts';
 
+const refreshStartHourOptions = range(0, 24).map((hour) => ({
+  value: hour,
+  label: `${hour.toString().padStart(2, '0')}:00`,
+}));
+
 export default function XmlTvSettingsPage() {
   const { t } = useLingui();
-  const actions = useActions();
-  const toasts = useToasts();
-  const [restoreTunarrDefaults, setRestoreTunarrDefaults] = useState(false);
   const { backendUri } = useSettings();
   const { data } = useXmlTvSettings();
-  const snackbar = useSnackbar();
 
-  const {
-    reset,
-    control,
-    formState: { isDirty, isValid, isSubmitting, defaultValues },
-    handleSubmit,
-    trigger,
-  } = useForm<XmlTvSettings>({
+  const form = useForm<XmlTvSettings>({
     defaultValues: defaultXmlTvSettings,
     mode: 'onBlur',
   });
+  const {
+    reset,
+    control,
+    formState: { defaultValues },
+    trigger,
+  } = form;
 
+  // Load the saved settings into the form. The reload after a save brings back
+  // what the form already compares against, so it is skipped: resetting again
+  // would drop edits made while the save was in flight. Only a new load runs
+  // this; the form's own resets change its defaults too
   useEffect(() => {
-    if (data) {
+    if (!isEqual(data, defaultValues)) {
       reset(data);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, reset]);
 
   // Settings saved before the refresh timer had to fit in the guide can't be
@@ -66,37 +67,22 @@ export default function XmlTvSettingsPage() {
     void trigger('refreshHours');
   }, [defaultValues, trigger]);
 
-  const queryClient = useQueryClient();
+  // The defaults, except the output path, which only settings.json can move
+  const tunarrDefaults = useMemo(
+    () => ({ ...defaultXmlTvSettings, outputPath: data.outputPath }),
+    [data.outputPath],
+  );
+  const values = useWatch({ control });
 
-  const updateXmlTvSettingsMutation = useMutation({
-    ...putApiXmltvSettingsMutation(),
-    onSuccess: (data) => {
-      snackbar.enqueueSnackbar(toasts.saved, {
-        variant: 'success',
-      });
-      setRestoreTunarrDefaults(false);
-      reset(data, { keepValues: true });
-      return queryClient.invalidateQueries({
-        predicate: invalidateTaggedQueries('Settings'),
-      });
-    },
-    onError: (error) => {
-      const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(
-        withReason(toasts.couldNotSaveSettings, message),
-        {
-          variant: 'error',
-        },
-      );
-    },
+  const saveMutation = useSettingsMutation({
+    form,
+    mutation: putApiXmltvSettingsMutation(),
+    toFormValues: (saved) => saved,
+    invalidate: { predicate: invalidateTaggedQueries('Settings') },
   });
 
-  const updateXmlTvSettings: SubmitHandler<XmlTvSettings> = (data) => {
-    updateXmlTvSettingsMutation.mutate({
-      body: {
-        ...data,
-      },
-    });
+  const save: SubmitHandler<XmlTvSettings> = (settings) => {
+    saveMutation.mutate({ body: settings });
   };
 
   const guideUrl = new URL(
@@ -105,7 +91,16 @@ export default function XmlTvSettingsPage() {
   ).href;
 
   return (
-    <Box component="form" onSubmit={handleSubmit(updateXmlTvSettings)}>
+    <SettingsForm
+      form={form}
+      onSubmit={save}
+      isSubmitting={saveMutation.isPending}
+      onRestoreDefaults={
+        isEqual(values, tunarrDefaults)
+          ? undefined
+          : () => reset(tunarrDefaults, { keepDefaultValues: true })
+      }
+    >
       <FormControl fullWidth>
         <Controller
           control={control}
@@ -181,26 +176,13 @@ export default function XmlTvSettingsPage() {
             helperText: t`How often the guide is rebuilt. Guide length must be at least two hours longer.`,
           }}
         />
-        <Controller
+        <SelectFormController
           control={control}
           name="refreshStartHour"
-          render={({ field }) => (
-            <TextField
-              select
-              id="refresh-start-hour"
-              label={t`Refreshes start at`}
-              helperText={t`An hour in server time. The guide rebuilds then and every interval after it, around the clock; with 24 hours, only then.`}
-              sx={{ minWidth: 200 }}
-              {...field}
-              onChange={(e) => field.onChange(Number(e.target.value))}
-            >
-              {range(0, 24).map((hour) => (
-                <MenuItem key={hour} value={hour}>
-                  {`${hour.toString().padStart(2, '0')}:00`}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
+          label={t`Refreshes start at`}
+          helperText={t`An hour in server time. The guide rebuilds then and every interval after it, around the clock; with 24 hours, only then.`}
+          options={refreshStartHourOptions}
+          TextFieldProps={{ id: 'refresh-start-hour', sx: { minWidth: 200 } }}
         />
       </Stack>
       <FormControl fullWidth sx={{ mb: 2 }}>
@@ -269,57 +251,6 @@ export default function XmlTvSettingsPage() {
           <Trans>Episodes use their show's poster instead of their own.</Trans>
         </FormHelperText>
       </FormControl>
-      <UnsavedNavigationAlert isDirty={isDirty} />
-      <Stack spacing={2} direction="row" sx={{ mt: 2 }}>
-        <Stack
-          spacing={2}
-          direction="row"
-          justifyContent="left"
-          sx={{ mt: 2, flexGrow: 1 }}
-        >
-          {!isEqual(defaultValues, {
-            ...defaultXmlTvSettings,
-            outputPath: data.outputPath,
-          }) && (
-            <Button
-              variant="outlined"
-              onClick={() => {
-                reset({ ...defaultXmlTvSettings, outputPath: data.outputPath });
-                setRestoreTunarrDefaults(true);
-              }}
-            >
-              {actions.restoreDefaults}
-            </Button>
-          )}
-        </Stack>
-        <Stack
-          spacing={2}
-          direction="row"
-          justifyContent="right"
-          sx={{ mt: 2 }}
-        >
-          {isDirty && (
-            <Button
-              variant="outlined"
-              onClick={() => {
-                reset(data);
-                setRestoreTunarrDefaults(false);
-              }}
-            >
-              {actions.resetChanges}
-            </Button>
-          )}
-          <Button
-            variant="contained"
-            disabled={
-              !isValid || isSubmitting || (!isDirty && !restoreTunarrDefaults)
-            }
-            type="submit"
-          >
-            {actions.save}
-          </Button>
-        </Stack>
-      </Stack>
-    </Box>
+    </SettingsForm>
   );
 }

@@ -1,5 +1,18 @@
-import type { CheckboxProps, TextFieldProps } from '@mui/material';
-import { Checkbox, TextField } from '@mui/material';
+import type {
+  CheckboxProps,
+  FormControlProps,
+  SwitchProps,
+  TextFieldProps,
+} from '@mui/material';
+import {
+  Checkbox,
+  FormControl,
+  FormControlLabel,
+  FormHelperText,
+  MenuItem,
+  Switch,
+  TextField,
+} from '@mui/material';
 import {
   get,
   has,
@@ -10,12 +23,13 @@ import {
   isUndefined,
   mapValues,
 } from 'lodash-es';
-import React, { useCallback } from 'react';
+import React, { useCallback, useId } from 'react';
 import type {
   ControllerFieldState,
   ControllerRenderProps,
   FieldError,
   FieldPath,
+  FieldPathByValue,
   FieldPathValue,
   FieldValues,
   RegisterOptions,
@@ -385,5 +399,168 @@ export const CheckboxFormController = <
 
   return (
     <Controller {...props} render={({ field }) => renderCheckbox(field)} />
+  );
+};
+
+// Whether a ReactNode slot has anything in it; ReactNode admits both null and
+// undefined for "nothing"
+const hasContent = (node: React.ReactNode) =>
+  node !== undefined && node !== null && node !== false && node !== '';
+
+// RHF's own `disabled` drops the field's value from the submitted data, so the
+// controllers below take `disabled` for the input only
+type ControlledFieldProps<
+  TFieldValues extends FieldValues,
+  TName extends FieldPath<TFieldValues>,
+> = Omit<UseControllerProps<TFieldValues, TName>, 'render' | 'disabled'>;
+
+/**
+ * A switch for a boolean field, with its label beside it and optional help
+ * text under it (the switch's accessible description).
+ */
+export const SwitchFormController = <
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPathByValue<
+    TFieldValues,
+    boolean | undefined
+  > = FieldPathByValue<TFieldValues, boolean | undefined>,
+>({
+  label,
+  helperText,
+  disabled,
+  SwitchProps,
+  FormControlProps,
+  ...controllerProps
+}: ControlledFieldProps<TFieldValues, TName> & {
+  label: React.ReactNode;
+  helperText?: React.ReactNode;
+  disabled?: boolean;
+  SwitchProps?: Omit<
+    SwitchProps,
+    'checked' | 'onChange' | 'onBlur' | 'name' | 'disabled'
+  >;
+  FormControlProps?: Omit<FormControlProps, 'children' | 'disabled'>;
+}) => {
+  const helperTextId = useId();
+  const showHelperText = hasContent(helperText);
+  return (
+    <Controller
+      {...controllerProps}
+      render={({ field }) => (
+        <FormControl {...FormControlProps} disabled={disabled}>
+          <FormControlLabel
+            label={label}
+            control={
+              <Switch
+                {...SwitchProps}
+                name={field.name}
+                checked={field.value === true}
+                onChange={(_, checked) => field.onChange(checked)}
+                onBlur={field.onBlur}
+                disabled={disabled}
+                slotProps={{
+                  input: {
+                    ref: field.ref,
+                    'aria-describedby': showHelperText
+                      ? helperTextId
+                      : undefined,
+                  },
+                }}
+              />
+            }
+          />
+          {showHelperText && (
+            <FormHelperText id={helperTextId}>{helperText}</FormHelperText>
+          )}
+        </FormControl>
+      )}
+    />
+  );
+};
+
+export type SelectOption<TValue extends string | number> = {
+  value: TValue;
+  label: React.ReactNode;
+};
+
+/**
+ * A select for a string or number field: its label, options and help text.
+ * A field error replaces the help text. The chosen option's value goes into
+ * the form as it is, so a number stays a number.
+ */
+export const SelectFormController = <
+  TFieldValues extends FieldValues = FieldValues,
+  TValue extends string | number = string | number,
+  TName extends FieldPathByValue<TFieldValues, TValue> = FieldPathByValue<
+    TFieldValues,
+    TValue
+  >,
+>({
+  label,
+  options,
+  helperText,
+  disabled,
+  TextFieldProps,
+  ...controllerProps
+}: ControlledFieldProps<TFieldValues, TName> & {
+  label: React.ReactNode;
+  options: ReadonlyArray<SelectOption<TValue>>;
+  helperText?: React.ReactNode;
+  disabled?: boolean;
+  TextFieldProps?: Omit<
+    TextFieldProps,
+    | 'select'
+    | 'value'
+    | 'onChange'
+    | 'onBlur'
+    | 'name'
+    | 'label'
+    | 'helperText'
+    | 'error'
+    | 'disabled'
+    | 'children'
+  >;
+}) => {
+  // MUI ties the label and help text to the select through its id
+  const fallbackId = useId();
+  const id = TextFieldProps?.id ?? fallbackId;
+  return (
+    <Controller
+      {...controllerProps}
+      render={({ field, fieldState }) => (
+        <TextField
+          {...TextFieldProps}
+          select
+          id={id}
+          label={label}
+          name={field.name}
+          value={field.value}
+          onChange={(event) => {
+            // MUI hands over the option's own value, but the event types it
+            // as a string; match it back to the option to keep its type
+            const picked: unknown = event.target.value;
+            const chosen = options.find(
+              (option) => String(option.value) === String(picked),
+            );
+            field.onChange(chosen !== undefined ? chosen.value : picked);
+          }}
+          onBlur={field.onBlur}
+          inputRef={field.ref}
+          disabled={disabled}
+          error={fieldState.error !== undefined}
+          helperText={
+            isNonEmptyString(fieldState.error?.message)
+              ? fieldState.error.message
+              : helperText
+          }
+        >
+          {options.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
+        </TextField>
+      )}
+    />
   );
 };
