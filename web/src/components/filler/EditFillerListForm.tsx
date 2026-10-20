@@ -180,6 +180,7 @@ export function EditFillerListForm({
           >
             <Typography
               variant="h6"
+              component="h2"
               sx={{ flex: 1, flexBasis: ['100%', 'auto'] }}
             >
               <Trans>Programming</Trans>

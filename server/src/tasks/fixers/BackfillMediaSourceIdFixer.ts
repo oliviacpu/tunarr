@@ -31,52 +31,6 @@ export class BackfillMediaSourceIdFixer extends Fixer {
       .where('program.mediaSourceId', 'is', null)
       .execute();
 
-    await this.db
-      .updateTable('programExternalId')
-      .set({
-        mediaSourceId: (eb) =>
-          eb
-            .selectFrom('mediaSource')
-            .whereRef(
-              'mediaSource.name',
-              '=',
-              'programExternalId.externalSourceId',
-            )
-            .whereRef('mediaSource.type', '=', 'programExternalId.sourceType')
-            .select('mediaSource.uuid')
-            .limit(1),
-      })
-      .where('programExternalId.mediaSourceId', 'is', null)
-      .where('programExternalId.sourceType', 'in', ['plex', 'emby', 'jellyfin'])
-      .execute();
-
-    await this.db
-      .updateTable('programGroupingExternalId')
-      .set({
-        mediaSourceId: (eb) =>
-          eb
-            .selectFrom('mediaSource')
-            .whereRef(
-              'mediaSource.name',
-              '=',
-              'programGroupingExternalId.externalSourceId',
-            )
-            .whereRef(
-              'mediaSource.type',
-              '=',
-              'programGroupingExternalId.sourceType',
-            )
-            .select('mediaSource.uuid')
-            .limit(1),
-      })
-      .where('programGroupingExternalId.mediaSourceId', 'is', null)
-      .where('programGroupingExternalId.sourceType', 'in', [
-        'plex',
-        'emby',
-        'jellyfin',
-      ])
-      .execute();
-
     for (const typ of ProgramGroupingTypes) {
       const field = match(typ)
         .returnType<'albumUuid' | 'artistUuid' | 'seasonUuid' | 'tvShowUuid'>()

@@ -1,34 +1,18 @@
-import { channelQuery } from '@/hooks/useChannels';
-import EditChannelPage from '@/pages/channels/EditChannelPage';
-import { safeSetCurrentChannel } from '@/store/channelEditor/actions';
-import { createFileRoute, notFound } from '@tanstack/react-router';
-import { isUndefined } from 'lodash-es';
+import {
+  ChannelEditTabPaths,
+  legacyChannelTab,
+} from '@/components/channel_config/channelFieldTabs.ts';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { z } from 'zod/v4';
 
-// TODO: Share this schema between new and edit routes
-const editChannelParamsSchema = z.object({
-  tab: z.enum(['flex', 'epg', 'ffmpeg']).optional().catch(undefined),
-});
-
 export const Route = createFileRoute('/channels_/$channelId/edit/')({
-  validateSearch: (search) => editChannelParamsSchema.parse(search),
-  loader: async ({ params, context }) => {
-    const channel = await context.queryClient.ensureQueryData(
-      channelQuery(params.channelId),
-    );
-
-    if (isUndefined(channel)) {
-      throw notFound();
-    }
-
-    safeSetCurrentChannel(channel);
-
-    return channel;
+  validateSearch: z.object({ tab: z.string().optional().catch(undefined) }),
+  beforeLoad: ({ params, search }) => {
+    throw redirect({
+      to: ChannelEditTabPaths[legacyChannelTab(search.tab)],
+      params,
+      search: { query: search.query },
+      replace: true,
+    });
   },
-  component: EditChannelPageWrapper,
 });
-
-function EditChannelPageWrapper() {
-  const { tab } = Route.useSearch();
-  return <EditChannelPage initialTab={tab ?? 'properties'} />;
-}

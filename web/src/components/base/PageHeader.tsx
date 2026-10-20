@@ -2,8 +2,10 @@ import { Box, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 
 export type PageHeaderProps = {
-  /** The page name. Rendered as the page's only `h1`. */
+  /** The page or section name. */
   title: ReactNode;
+  /** Use h2 when a parent layout already owns the document heading. */
+  headingLevel?: 'h1' | 'h2';
   /** One sentence under the title saying what the page is for. */
   description?: ReactNode;
   /** Buttons or controls for the page, right of the title on wide screens. */
@@ -19,6 +21,7 @@ export type PageHeaderProps = {
  */
 export function PageHeader({
   title,
+  headingLevel = 'h1',
   description,
   actions,
   breadcrumbs,
@@ -43,8 +46,8 @@ export function PageHeader({
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
-            variant="h1"
-            component="h1"
+            variant={headingLevel}
+            component={headingLevel}
             sx={{ overflowWrap: 'anywhere' }}
           >
             {title}

@@ -12,7 +12,7 @@ import type { Insertable, Selectable } from 'kysely';
 import { omit } from 'lodash-es';
 import type { MarkRequired, StrictOmit } from 'ts-essentials';
 import type { MarkNotNilable } from '../../types/util.ts';
-import type { MediaSourceId, MediaSourceName } from './base.ts';
+import type { MediaSourceId } from './base.ts';
 import { ProgramExternalIdSourceTypes } from './base.ts';
 import { type KyselifyBetter } from './KyselifyBetter.ts';
 import { MediaSource } from './MediaSource.ts';
@@ -27,7 +27,6 @@ export const ProgramExternalId = sqliteTable(
     directFilePath: text(),
     externalFilePath: text(),
     externalKey: text().notNull(),
-    externalSourceId: text().$type<MediaSourceName>(),
     mediaSourceId: text()
       .references(() => MediaSource.uuid, {
         onDelete: 'cascade',
@@ -40,12 +39,6 @@ export const ProgramExternalId = sqliteTable(
   },
   (table) => [
     index('program_external_id_program_uuid_index').on(table.programUuid),
-    uniqueIndex('unique_program_multiple_external_id')
-      .on(table.programUuid, table.sourceType, table.externalSourceId)
-      .where(sql`\`external_source_id\` is not null`),
-    uniqueIndex('unique_program_single_external_id')
-      .on(table.programUuid, table.sourceType)
-      .where(sql`\`external_source_id\` is null`),
     uniqueIndex('unique_program_multiple_external_id_media_source')
       .on(table.programUuid, table.sourceType, table.mediaSourceId)
       .where(sql`\`media_source_id\` is not null`),
@@ -77,14 +70,12 @@ export type ProgramExternalIdTable = KyselifyBetter<typeof ProgramExternalId>;
 export type ProgramExternalId = Selectable<ProgramExternalIdTable>;
 export type NewProgramExternalId = Insertable<ProgramExternalIdTable>;
 export type NewSingleOrMultiExternalId =
-  | (StrictOmit<
-      Insertable<ProgramExternalIdTable>,
-      'mediaSourceId' | 'externalSourceId'
-    > & { type: 'single' })
-  | (MarkNotNilable<
-      Insertable<ProgramExternalIdTable>,
-      'mediaSourceId' | 'externalSourceId'
-    > & { type: 'multi' });
+  | (StrictOmit<Insertable<ProgramExternalIdTable>, 'mediaSourceId'> & {
+      type: 'single';
+    })
+  | (MarkNotNilable<Insertable<ProgramExternalIdTable>, 'mediaSourceId'> & {
+      type: 'multi';
+    });
 
 export function toInsertableProgramExternalId(
   extraInfo: NewSingleOrMultiExternalId,
@@ -99,7 +90,7 @@ export type ProgramExternalIdOrm = InferSelectModel<typeof ProgramExternalId>;
 
 export type MinimalProgramExternalId = MarkRequired<
   Partial<ProgramExternalId>,
-  'sourceType' | 'externalKey' | 'externalSourceId'
+  'sourceType' | 'externalKey' | 'mediaSourceId'
 >;
 
 export type ProgramExternalIdFields<
@@ -111,7 +102,6 @@ export const ProgramExternalIdKeys: (keyof ProgramExternalId)[] = [
   'directFilePath',
   'externalFilePath',
   'externalKey',
-  'externalSourceId',
   'programUuid',
   'sourceType',
   'mediaSourceId',
@@ -133,7 +123,7 @@ export const AllProgramExternalIdFields: ProgramExternalIdFields =
 export const MinimalProgramExternalIdFields: ProgramExternalIdFields = [
   'programExternalId.sourceType',
   'programExternalId.externalKey',
-  'programExternalId.externalSourceId',
+  'programExternalId.mediaSourceId',
 ];
 
 export const AllProgramExternalIdFieldsAliased = <Alias extends string>(

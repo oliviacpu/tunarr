@@ -104,7 +104,14 @@ export const SmartCollectionsTable = () => {
         >
           <Trans>
             You have no smart collections. Smart collections can be created on
-            the <RouterLink to="/search">search</RouterLink> page.
+            the{' '}
+            <RouterLink
+              to="/search"
+              search={{ createCollection: true, query: undefined }}
+            >
+              search
+            </RouterLink>{' '}
+            page.
           </Trans>
         </Typography>
       );
@@ -129,6 +136,7 @@ export const SmartCollectionsTable = () => {
             search={(prev: RootSearchQueryParams) => ({
               ...prev,
               query: undefined,
+              createCollection: true,
             })}
             startIcon={<Search />}
           >

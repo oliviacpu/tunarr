@@ -199,7 +199,6 @@ export class BackfillProgramExternalIds extends Fixer {
         externalFilePath: firstPart?.key ?? program.plexFilePath,
         directFilePath: firstPart?.file ?? program.filePath,
         externalKey: metadata.ratingKey,
-        externalSourceId: plex.serverName,
         mediaSourceId: plex.serverId,
         programUuid: program.uuid,
         sourceType: ProgramExternalIdType.PLEX,

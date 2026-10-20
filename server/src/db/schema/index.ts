@@ -1,3 +1,8 @@
+import { CachedImage } from './CachedImage.ts';
+import {
+  ChannelSubtitlePreferences,
+  CustomShowSubtitlePreferences,
+} from './SubtitlePreferences.ts';
 import type { RunResult } from 'better-sqlite3';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
@@ -96,6 +101,9 @@ import { TranscodeConfig } from './TranscodeConfig.ts';
 // export { Program } from './Program.ts';
 
 export const schema = {
+  cachedImage: CachedImage,
+  channelSubtitlePreferences: ChannelSubtitlePreferences,
+  customShowSubtitlePreferences: CustomShowSubtitlePreferences,
   channels: Channel,
   channelRelations: ChannelRelations,
   channelPrograms: ChannelPrograms,
