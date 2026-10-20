@@ -1312,12 +1312,16 @@ describe('HlsSession', () => {
       session.onSegmentRequested('10.0.0.1', 'data000050.ts');
       expect((await session.trimPlaylist()).get()?.sequence).toBe(40);
 
-      // Let the prune finish removing everything below 40.
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      const onDisk = (await fs.readdir(workingDir))
-        .filter((f) => f.startsWith('data'))
-        .sort();
-      expect(onDisk[0]).toBe('data000040.ts');
+      const onDisk = await vi.waitFor(
+        async () => {
+          const files = (await fs.readdir(workingDir))
+            .filter((f) => f.startsWith('data'))
+            .sort();
+          expect(files[0]).toBe('data000040.ts');
+          return files;
+        },
+        { timeout: 5_000, interval: 10 },
+      );
 
       // The client rewinds into the range pruning just deleted.
       session.onSegmentRequested('10.0.0.1', 'data000020.ts');

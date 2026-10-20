@@ -70,7 +70,6 @@
     "@lingui/format-po": "^5.9.0",
     "@lingui/swc-plugin": "^5.10.1",
     "@lingui/vite-plugin": "^5.9.0",
-    "@tanstack/react-devtools": "^0.9.4",
     "@tanstack/react-router-devtools": "^1.158.1",
     "@tanstack/react-table": "8.19.3",
     "@tanstack/router-cli": "1.133.13",

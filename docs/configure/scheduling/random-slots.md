@@ -6,6 +6,9 @@ To use Slots Editor for your channel programming, select "TOOLS", then "Slots Ed
 
 ![Slots Editor](../../assets/scheduling-tools-random_slots.png)
 
+Save is enabled once a slot or setting has changed, or after "Refresh Preview" made a new lineup. "Reset changes" puts
+back the saved slots and lineup, and leaving the editor with unsaved changes asks first.
+
 ## Slot Configuration
 
 Each slot is configured with a few parameters.

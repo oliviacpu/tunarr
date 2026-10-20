@@ -206,7 +206,7 @@ export const TranscodeConfigVideoSettingsForm = () => {
         )}
       />
 
-      <Stack direction={{ sm: 'column', md: 'row' }} spacing={2} useFlexGap>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap>
         <NumericFormControllerText
           control={control}
           rawValue
@@ -255,7 +255,7 @@ export const TranscodeConfigVideoSettingsForm = () => {
           }}
         />
       </Stack>
-      <Stack gap={1} direction={{ sm: 'column', md: 'row' }}>
+      <Stack gap={1} direction={{ xs: 'column', md: 'row' }}>
         <TranscodeConfigCheckbox
           name="deinterlaceVideo"
           label={t`Auto deinterlace video`}
