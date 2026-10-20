@@ -832,3 +832,125 @@ test('conditional retirement still removes an unused session', async () => {
   await manager.endSessionInBackground(session, { ifUnused: true });
   expect(manager.getHlsSession(channelUuid)).toBeUndefined();
 });
+
+test.each([
+  'lookup rejection',
+  'missing channel',
+  'factory exception',
+] as const)(
+  'failed replacement pauses an unwatched channel: %s',
+  async (failure) => {
+    let failFactory = false;
+    const manager = makeSessionManager((channel, opts) => {
+      if (failFactory) throw new Error('factory failed');
+      return new StubHlsSession(channel, opts);
+    });
+    const internals = manager as unknown as {
+      channelDB: IChannelDB;
+      onDemandChannelService: OnDemandChannelService;
+    };
+    const old = (
+      await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+    ).get();
+    old.removeConnection('old');
+    (old as unknown as StubHlsSession).markError();
+    const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+    pause.mockClear();
+    if (failure === 'lookup rejection')
+      vi.spyOn(internals.channelDB, 'getChannelOrm').mockRejectedValueOnce(
+        new Error('lookup failed'),
+      );
+    if (failure === 'missing channel')
+      vi.spyOn(internals.channelDB, 'getChannelOrm').mockResolvedValueOnce(
+        undefined,
+      );
+    failFactory = failure === 'factory exception';
+    const result = await manager.getOrCreateHlsSession(
+      channelUuid,
+      'new',
+      connection,
+    );
+    expect(result.isFailure()).toBe(true);
+    expect(pause).toHaveBeenCalledOnce();
+    old.emit('stop');
+    expect(pause).toHaveBeenCalledOnce();
+  },
+);
+
+test('a failed replacement preserves another active session on the channel', async () => {
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const old = (
+    await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+  ).get();
+  const other = (
+    await manager.getOrCreateHlsSession(channelUuid, 'other', connection, {
+      streamMode: 'hls_direct_v2',
+    })
+  ).get();
+  old.removeConnection('old');
+  (old as unknown as StubHlsSession).markError();
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  vi.spyOn(internals.channelDB, 'getChannelOrm').mockRejectedValueOnce(
+    new Error('lookup failed'),
+  );
+  expect(
+    (
+      await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+    ).isFailure(),
+  ).toBe(true);
+  old.emit('stop');
+  expect(pause).not.toHaveBeenCalled();
+  expect(other.started).toBe(true);
+  await manager.endSession(other);
+});
+
+test('a failed stale-wrapper replacement pauses its unwatched channel', async () => {
+  class Wrapper extends ConcatSession {
+    protected override async startInternal() {}
+    protected override async stopInternal() {
+      this.emit('stop');
+    }
+  }
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+    vi.fn((channel, opts) => new Wrapper(channel, opts)),
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+  const old = (
+    await manager.getOrCreateConcatSession(
+      channelUuid,
+      'old',
+      connection,
+      options,
+    )
+  ).get();
+  old.removeConnection('old');
+  old.underlyingSessionId = 'missing';
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  vi.spyOn(internals.channelDB, 'getChannelOrm').mockRejectedValueOnce(
+    new Error('lookup failed'),
+  );
+  expect(
+    (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'new',
+        connection,
+        options,
+      )
+    ).isFailure(),
+  ).toBe(true);
+  expect(pause).toHaveBeenCalledOnce();
+});

@@ -379,16 +379,10 @@ export class SessionManager {
             this.#replacedSessions.add(session);
             this.deleteSession(channelId, sessionType);
           }
-          const channel = await this.channelDB.getChannelOrm(channelId);
-
-          if (!channel?.transcodeConfig) {
-            throw new ChannelNotFoundError(channelId);
-          }
-
-          session = sessionFactory(channel);
+          session = await this.createSession(channelId, sessionFactory);
           timer.mark('factory');
 
-          this.addSession(channel.uuid, session.sessionType, session);
+          this.addSession(channelId, session.sessionType, session);
 
           session.on('error', (e) => {
             this.logger.error(
@@ -520,6 +514,38 @@ export class SessionManager {
       return Result.success(session);
     } catch (e) {
       return Result.failure(TypedError.fromAny(e));
+    }
+  }
+
+  private async createSession<TSession extends Session>(
+    channelId: string,
+    factory: (channel: ChannelOrmWithTranscodeConfig) => TSession,
+  ): Promise<TSession> {
+    try {
+      const channel = await this.channelDB.getChannelOrm(channelId);
+      if (!channel?.transcodeConfig) throw new ChannelNotFoundError(channelId);
+      return factory(channel);
+    } catch (error) {
+      // Called under the channel lock, before a subsequent tune-in can resume it.
+      const watched = this.getAllSessionsForChannel(channelId).some(
+        (session) =>
+          !session.hasError &&
+          !session.stoppingOrStopped &&
+          values(session.connections()).some(
+            (conn) => !conn.userAgent?.includes('Tunarr'),
+          ),
+      );
+      if (!watched) {
+        await this.onDemandChannelService
+          .pauseChannel(channelId, +dayjs())
+          .catch((pauseError: unknown) => {
+            this.logger.error(
+              pauseError,
+              'Could not pause channel after failed session creation',
+            );
+          });
+      }
+      throw error;
     }
   }
 
