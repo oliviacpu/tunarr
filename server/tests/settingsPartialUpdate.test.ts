@@ -47,13 +47,11 @@ describe('PUT /xmltv-settings - partial update', () => {
     await putXmlTv({
       programmingHours: 36,
       refreshHours: 7,
-      enableImageCache: true,
       useShowPoster: true,
     });
     expect(await getXmlTv()).toMatchObject({
       programmingHours: 36,
       refreshHours: 7,
-      enableImageCache: true,
       useShowPoster: true,
     });
 
@@ -64,16 +62,20 @@ describe('PUT /xmltv-settings - partial update', () => {
       programmingHours: 48,
       // These were not sent, so they must be untouched.
       refreshHours: 7,
-      enableImageCache: true,
       useShowPoster: true,
     });
+  });
+
+  test('ignores the retired image-cache key in legacy requests', async () => {
+    const saved = await putXmlTv({ enableImageCache: true });
+    expect(saved).not.toHaveProperty('enableImageCache');
+    expect(await getXmlTv()).not.toHaveProperty('enableImageCache');
   });
 
   test('an empty body changes nothing', async () => {
     await putXmlTv({
       programmingHours: 20,
       refreshHours: 5,
-      enableImageCache: true,
       useShowPoster: true,
     });
 
@@ -82,7 +84,6 @@ describe('PUT /xmltv-settings - partial update', () => {
     expect(await getXmlTv()).toMatchObject({
       programmingHours: 20,
       refreshHours: 5,
-      enableImageCache: true,
       useShowPoster: true,
     });
   });

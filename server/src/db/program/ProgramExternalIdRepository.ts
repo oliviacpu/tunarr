@@ -250,10 +250,12 @@ export class ProgramExternalIdRepository {
             and(
               eq(ProgramExternalId.programUuid, programId),
               eq(ProgramExternalId.externalKey, oldExternalId.externalKey),
-              eq(
-                ProgramExternalId.externalSourceId,
-                oldExternalId.externalSourceId!,
-              ),
+              oldExternalId.mediaSourceId === null
+                ? dbIsNull(ProgramExternalId.mediaSourceId)
+                : eq(
+                    ProgramExternalId.mediaSourceId,
+                    oldExternalId.mediaSourceId,
+                  ),
               eq(ProgramExternalId.sourceType, oldExternalId.sourceType),
             ),
           )

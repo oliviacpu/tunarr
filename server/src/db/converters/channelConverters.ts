@@ -51,7 +51,6 @@ export const dbChannelToApiChannel = ({
     startTime: channel.startTime,
     offline: channel.offline,
     name: channel.name,
-    transcoding: nilToUndefined(channel.transcoding),
     duration: channel.duration,
     stealth: channel.stealth ?? false,
     onDemand: {
@@ -106,7 +105,6 @@ export const ormChannelToApiChannel = ({
     startTime: channel.startTime,
     offline: channel.offline,
     name: channel.name,
-    transcoding: nilToUndefined(channel.transcoding),
     duration: channel.duration,
     stealth: channel.stealth ?? false,
     onDemand: {

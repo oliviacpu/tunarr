@@ -126,8 +126,8 @@ what the previous session learned that the row's agent needs.
   `cd web && pnpm test --maxWorkers=2` (full parallelism times out a few files under load);
   `cd server && pnpm test <path>`. `pnpm turbo typecheck`; `pnpm lint-changed`. E2E:
   `cd server && pnpm install-meilisearch` once, `cd e2e && pnpm e2e:install-browsers` once, then
-  `cd e2e && pnpm e2e` (the fixture finds ffmpeg on PATH or `TUNARR_TEST_FFMPEG`; ports are fixed,
-  so run one sweep at a time).
+  `cd e2e && pnpm e2e` (the fixture finds ffmpeg on PATH or `TUNARR_TEST_FFMPEG`; default ports are shared; use a distinct `TUNARR_E2E_PORT_OFFSET` in each worktree
+  for parallel sweeps).
 - **One PR per row, one worktree per PR**, branch off `main`, conventional-commit subjects
   (commitlint rejects a subject that starts with a capital), the repo's PR template. In its "Design issue" section write the plan path and the row id and
   that the maintainer approved the plan on 2026-10-19 (PR #85); this fork has no labelled GitHub

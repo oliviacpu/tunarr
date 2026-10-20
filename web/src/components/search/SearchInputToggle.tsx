@@ -1,4 +1,5 @@
 import { Keyboard, Mouse } from '@mui/icons-material';
+import { useLingui } from '@lingui/react/macro';
 import { ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { search as tunarrSearch } from '@tunarr/shared/util';
 import type { SearchFilter } from '@tunarr/types/schemas';
@@ -9,6 +10,7 @@ import type { Nullable } from '../../types/util.ts';
 import type { QueryBuilderType, SearchForm } from './SearchInput.tsx';
 
 export const SearchInputToggle = () => {
+  const { t } = useLingui();
   const { getValues, setValue, watch } = useFormContext<SearchForm>();
   const [queryBuilderType] = watch(['queryBuilderType']);
   const { getSearchExpression } = useSearchQueryParser();
@@ -77,10 +79,10 @@ export const SearchInputToggle = () => {
       }}
       exclusive
     >
-      <ToggleButton value="text">
+      <ToggleButton value="text" aria-label={t`Text filter`}>
         <Keyboard />
       </ToggleButton>
-      <ToggleButton value="click">
+      <ToggleButton value="click" aria-label={t`Visual filter builder`}>
         <Mouse />
       </ToggleButton>
     </ToggleButtonGroup>

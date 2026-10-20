@@ -231,21 +231,6 @@ export default function XmlTvSettingsPage() {
           )}
         />
       </FormControl>
-      {/* <FormControl>
-        <FormControlLabel
-          control={
-            <CheckboxFormController control={control} name="enableImageCache" />
-          }
-          label="Image Cache"
-        />
-        <FormHelperText>
-          If enabled the pictures used for Movie and TV Show posters will be
-          cached in Tunarr's .tunarr folder and will be delivered by Tunarr's
-          server instead of requiring calls to Plex. Note that using fixed xmltv
-          location in Plex (as opposed to url) will not work correctly in this
-          case.
-        </FormHelperText>
-      </FormControl> */}
       <Divider sx={{ my: 2 }} />
       <FormControl>
         <FormControlLabel

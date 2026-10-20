@@ -1,3 +1,4 @@
+import { getEnvVar, TUNARR_ENV_VARS } from '@/util/env.js';
 import type { Maybe, Nilable, Try } from '@/types/util.js';
 import type { TupleToUnion } from '@tunarr/types';
 import dayjs from 'dayjs';
@@ -328,7 +329,7 @@ export function ifDefined<T, U>(
 export const filename = (path: string) => fileURLToPath(path);
 
 const currentEnv = once(() => {
-  const env = process.env.NODE_ENV;
+  const env = getEnvVar(TUNARR_ENV_VARS.NODE_ENV);
   return env ?? 'production';
 });
 

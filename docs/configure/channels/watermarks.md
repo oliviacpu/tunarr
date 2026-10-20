@@ -2,6 +2,8 @@
 
 Channels can have watermarks to aid in recreating a classic TV experience.
 
+Open the channel editor's **Watermark** tab to configure the overlay. Existing channels also have a direct `/channels/<id>/edit/watermark` address.
+
 ![](../../assets/watermark_form.png)
 
 There are many ways to customize watermarks for a channel. Here are some details on specific options:
