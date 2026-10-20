@@ -10,11 +10,16 @@ import { isEmpty, map, reject } from 'lodash-es';
 import { useGetRouteDetails } from '../hooks/useRouteName.ts';
 import { RouterLink } from './base/RouterLink.tsx';
 
+export type BreadcrumbTrailItem = { label: string; to?: string };
+
 type Props = BreadcrumbsProps & {
   thisRouteName?: string;
+  // Explicit crumbs for layouts whose pages aren't in the route-name table.
+  // The last item is the current page and is never a link.
+  trail?: BreadcrumbTrailItem[];
 };
 
-export default function Breadcrumbs(props: Props) {
+function PathBreadcrumbs(props: Omit<Props, 'trail'>) {
   const theme = useTheme();
   const smallViewport = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -69,5 +74,42 @@ export default function Breadcrumbs(props: Props) {
         })}
       </MUIBreadcrumbs>
     </>
+  );
+}
+
+function TrailBreadcrumbs({
+  trail,
+  sx = { mb: 2 },
+  separator = '›',
+  ...restProps
+}: BreadcrumbsProps & { trail: BreadcrumbTrailItem[] }) {
+  return (
+    <MUIBreadcrumbs
+      sx={sx}
+      separator={separator}
+      aria-label="breadcrumbs"
+      {...restProps}
+    >
+      {trail.map((item, index) =>
+        index === trail.length - 1 || item.to === undefined ? (
+          <Typography color="text.primary" key={`${index}-${item.label}`}>
+            {item.label}
+          </Typography>
+        ) : (
+          <RouterLink to={item.to} key={`${index}-${item.label}`}>
+            {item.label}
+          </RouterLink>
+        ),
+      )}
+    </MUIBreadcrumbs>
+  );
+}
+
+export default function Breadcrumbs({ trail, ...props }: Props) {
+  const { thisRouteName: _name, ...muiProps } = props;
+  return trail ? (
+    <TrailBreadcrumbs trail={trail} {...muiProps} />
+  ) : (
+    <PathBreadcrumbs {...props} />
   );
 }
