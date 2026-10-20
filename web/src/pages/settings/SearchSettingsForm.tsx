@@ -2,8 +2,8 @@ import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import {
-  getApiSystemSettingsQueryKey,
-  putApiSystemSettingsMutation,
+  getApiSettingsSystemQueryKey,
+  putApiSettingsSystemMutation,
 } from '@/generated/@tanstack/react-query.gen.ts';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { useSystemSettingsSuspense } from '@/hooks/useSystemSettings.ts';
@@ -15,9 +15,12 @@ import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 type SearchSettings = SystemSettings['server']['searchSettings'];
+type SearchFormValues = Omit<SearchSettings, 'maxIndexingMemory'> & {
+  maxIndexingMemory: number | '';
+};
 
-function toFormValues(settings: SearchSettings): SearchSettings {
-  return { ...settings, maxIndexingMemory: settings.maxIndexingMemory };
+function toFormValues(settings: SearchSettings): SearchFormValues {
+  return { ...settings, maxIndexingMemory: settings.maxIndexingMemory ?? '' };
 }
 
 export function SearchSettingsForm({
@@ -26,7 +29,7 @@ export function SearchSettingsForm({
   const { t } = useLingui();
   const { data: systemSettings } = useSystemSettingsSuspense();
   const settings = systemSettings.server.searchSettings;
-  const form = useForm<SearchSettings>({
+  const form = useForm<SearchFormValues>({
     defaultValues: toFormValues(settings),
     mode: 'onTouched',
   });
@@ -49,9 +52,9 @@ export function SearchSettingsForm({
 
   const mutation = useSettingsMutation({
     form,
-    mutation: putApiSystemSettingsMutation(),
+    mutation: putApiSettingsSystemMutation(),
     toFormValues: (saved) => toFormValues(saved.server.searchSettings),
-    invalidate: { queryKey: getApiSystemSettingsQueryKey() },
+    invalidate: { queryKey: getApiSettingsSystemQueryKey() },
   });
 
   return (
@@ -60,7 +63,17 @@ export function SearchSettingsForm({
       guardNavigation={onDirtyChange === undefined}
       onSubmit={(searchSettings) =>
         mutation.mutate({
-          body: { server: { ...systemSettings.server, searchSettings } },
+          body: {
+            server: {
+              searchSettings: {
+                ...searchSettings,
+                maxIndexingMemory:
+                  searchSettings.maxIndexingMemory === ''
+                    ? null
+                    : searchSettings.maxIndexingMemory,
+              },
+            },
+          },
         })
       }
       isSubmitting={mutation.isPending}
@@ -96,9 +109,7 @@ export function SearchSettingsForm({
               type="number"
               onChange={(event) =>
                 field.onChange(
-                  event.target.value === ''
-                    ? undefined
-                    : Number(event.target.value),
+                  event.target.value === '' ? '' : Number(event.target.value),
                 )
               }
               label={t`Indexing memory limit (bytes)`}

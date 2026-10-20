@@ -37,7 +37,7 @@ vi.mock(
   '../../generated/@tanstack/react-query.gen.ts',
   async (importOriginal) => ({
     ...(await importOriginal<typeof Generated>()),
-    getApiFfmpegSettingsOptions: () => ({
+    getApiSettingsFfmpegOptions: () => ({
       queryKey: ['test-ffmpeg-settings'],
       queryFn: () => Promise.resolve(server.settings),
     }),
@@ -46,7 +46,7 @@ vi.mock(
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiFfmpegSettings: (options: { body: FfmpegSettings }) =>
+  putApiSettingsFfmpeg: (options: { body: FfmpegSettings }) =>
     mockPutFfmpegSettings(options),
 }));
 

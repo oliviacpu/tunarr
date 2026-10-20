@@ -1,7 +1,7 @@
 import GeneralSettingsPage from '@/pages/settings/GeneralSettingsPage';
 import { createFileRoute } from '@tanstack/react-router';
 import {
-  getApiSystemSettingsOptions,
+  getApiSettingsSystemOptions,
   getApiSystemStateOptions,
 } from '../../generated/@tanstack/react-query.gen.ts';
 
@@ -11,7 +11,7 @@ export const Route = createFileRoute('/settings/general')({
       context.queryClient.ensureQueryData({
         ...getApiSystemStateOptions(),
       }),
-      context.queryClient.ensureQueryData(getApiSystemSettingsOptions()),
+      context.queryClient.ensureQueryData(getApiSettingsSystemOptions()),
     ]);
   },
   component: GeneralSettingsPage,

@@ -19,17 +19,17 @@ import { useEffect } from 'react';
 import type { Control, SubmitHandler } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import {
-  getApiSystemFeatureFlagsOptions,
-  getApiSystemFeatureFlagsQueryKey,
-  putApiSystemFeatureFlagsMutation,
+  getApiSettingsFeatureFlagsOptions,
+  getApiSettingsFeatureFlagsQueryKey,
+  putApiSettingsFeatureFlagsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
-import type { GetApiSystemFeatureFlagsResponse } from '../../generated/types.gen.ts';
+import type { GetApiSettingsFeatureFlagsResponse } from '../../generated/types.gen.ts';
 import { featureFlagMessages } from './featureFlagMessages.ts';
 
-type FlagFormValues = GetApiSystemFeatureFlagsResponse['flags'];
+type FlagFormValues = GetApiSettingsFeatureFlagsResponse['flags'];
 type FlagKey = keyof FlagFormValues;
 
-type MetaEntry = GetApiSystemFeatureFlagsResponse['metadata'][number];
+type MetaEntry = GetApiSettingsFeatureFlagsResponse['metadata'][number];
 type FlagMeta = MetaEntry & { key: FlagKey };
 
 // The server describes each flag; one this page has no value for is left out
@@ -112,7 +112,7 @@ export default function FeaturesSettingsPage({
   onDirtyChange?: (isDirty: boolean) => void;
 }) {
   const { t } = useLingui();
-  const query = useQuery(getApiSystemFeatureFlagsOptions());
+  const query = useQuery(getApiSettingsFeatureFlagsOptions());
   if (query.isPending)
     return (
       <Skeleton
@@ -165,7 +165,7 @@ function FeatureFlagsForm({
   group,
   onDirtyChange,
 }: {
-  data: GetApiSystemFeatureFlagsResponse;
+  data: GetApiSettingsFeatureFlagsResponse;
   group: FlagGroup;
   onDirtyChange?: (isDirty: boolean) => void;
 }) {
@@ -194,9 +194,9 @@ function FeatureFlagsForm({
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiSystemFeatureFlagsMutation(),
+    mutation: putApiSettingsFeatureFlagsMutation(),
     toFormValues: (saved) => saved.flags,
-    invalidate: { queryKey: getApiSystemFeatureFlagsQueryKey() },
+    invalidate: { queryKey: getApiSettingsFeatureFlagsQueryKey() },
   });
 
   const save: SubmitHandler<FlagFormValues> = (flags) => {

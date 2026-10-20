@@ -195,7 +195,11 @@ describe('backup cron validation before persistence and rescheduling', () => {
   afterEach(() => {
     GlobalScheduler.clearTasks(BackupTask.name);
   });
-  for (const url of ['/api/system/settings', '/api/system/settings/backup']) {
+  for (const url of [
+    '/api/settings/system',
+    '/api/system/settings',
+    '/api/system/settings/backup',
+  ]) {
     test(`${url} rejects invalid cron without changing settings or scheduled jobs`, async () => {
       const settings = container.get<ISettingsDB>(KEYS.SettingsDB);
       const backup = {
@@ -233,6 +237,7 @@ describe('backup cron validation before persistence and rescheduling', () => {
         payload: url.endsWith('/backup') ? backup : { backup },
       });
       expect(response.statusCode, response.body).toBe(400);
+      expect(response.json()).toEqual({ message: expect.any(String) });
       expect(response.body).toContain(
         'Backup 1 has an invalid cron expression',
       );

@@ -1,16 +1,30 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import type {
-  GetApiFfmpegSettingsResponse,
-  GetApiSystemSettingsResponse,
+  GetApiSettingsFfmpegResponse,
+  GetApiSettingsSystemResponse,
 } from '../../web/src/generated/types.gen.ts';
 import { DATA_DIR, SERVER_URL } from '../fixture/env.ts';
 import { savedSettings } from './settingsForm.ts';
 
 test.describe.configure({ mode: 'serial' });
 
-const ffmpegUrl = `${SERVER_URL}/api/ffmpeg-settings`;
-const systemUrl = `${SERVER_URL}/api/system/settings`;
+const ffmpegUrl = `${SERVER_URL}/api/settings/ffmpeg`;
+const systemUrl = `${SERVER_URL}/api/settings/system`;
+
+function restoreSystemSettings(settings: GetApiSettingsSystemResponse) {
+  return {
+    ...settings,
+    server: {
+      ...settings.server,
+      searchSettings: {
+        ...settings.server.searchSettings,
+        maxIndexingMemory:
+          settings.server.searchSettings.maxIndexingMemory ?? null,
+      },
+    },
+  };
+}
 
 async function saveForm(page: Page, field: Locator, url: string) {
   const form = field.locator('xpath=ancestor::form');
@@ -31,7 +45,7 @@ for (const { key, label, option } of [
   test(`${label} saves and reloads without changing other playback settings`, async ({
     page,
   }) => {
-    const before = await savedSettings<GetApiFfmpegSettingsResponse>(
+    const before = await savedSettings<GetApiSettingsFfmpegResponse>(
       page,
       ffmpegUrl,
     );
@@ -58,7 +72,7 @@ for (const { key, label, option } of [
 test('rolled-file retention saves and reloads without changing other system settings', async ({
   page,
 }) => {
-  const before = await savedSettings<GetApiSystemSettingsResponse>(
+  const before = await savedSettings<GetApiSettingsSystemResponse>(
     page,
     systemUrl,
   );
@@ -77,9 +91,13 @@ test('rolled-file retention saves and reloads without changing other system sett
       },
     });
   } finally {
-    expect((await page.request.put(systemUrl, { data: before })).ok()).toBe(
-      true,
-    );
+    expect(
+      (
+        await page.request.put(systemUrl, {
+          data: restoreSystemSettings(before),
+        })
+      ).ok(),
+    ).toBe(true);
   }
 });
 
@@ -87,7 +105,7 @@ for (const setting of ['tempDir', 'cron', 'enabled'] as const) {
   test(`backup ${setting} saves and reloads without changing other configuration`, async ({
     page,
   }) => {
-    const original = await savedSettings<GetApiSystemSettingsResponse>(
+    const original = await savedSettings<GetApiSettingsSystemResponse>(
       page,
       systemUrl,
     );
@@ -112,7 +130,7 @@ for (const setting of ['tempDir', 'cron', 'enabled'] as const) {
     expect((await page.request.put(systemUrl, { data: { backup } })).ok()).toBe(
       true,
     );
-    const before = await savedSettings<GetApiSystemSettingsResponse>(
+    const before = await savedSettings<GetApiSettingsSystemResponse>(
       page,
       systemUrl,
     );
@@ -162,9 +180,13 @@ for (const setting of ['tempDir', 'cron', 'enabled'] as const) {
         },
       });
     } finally {
-      expect((await page.request.put(systemUrl, { data: original })).ok()).toBe(
-        true,
-      );
+      expect(
+        (
+          await page.request.put(systemUrl, {
+            data: restoreSystemSettings(original),
+          })
+        ).ok(),
+      ).toBe(true);
     }
   });
 }
@@ -184,7 +206,7 @@ for (const { key, label, value } of [
   test(`${label} saves and reloads without changing the server port or other settings`, async ({
     page,
   }) => {
-    const before = await savedSettings<GetApiSystemSettingsResponse>(
+    const before = await savedSettings<GetApiSettingsSystemResponse>(
       page,
       systemUrl,
     );
@@ -211,9 +233,13 @@ for (const { key, label, value } of [
         },
       });
     } finally {
-      expect((await page.request.put(systemUrl, { data: before })).ok()).toBe(
-        true,
-      );
+      expect(
+        (
+          await page.request.put(systemUrl, {
+            data: restoreSystemSettings(before),
+          })
+        ).ok(),
+      ).toBe(true);
     }
   });
 }
@@ -221,7 +247,7 @@ for (const { key, label, value } of [
 test('clearing the indexing memory limit restores the automatic limit', async ({
   page,
 }) => {
-  const original = await savedSettings<GetApiSystemSettingsResponse>(
+  const original = await savedSettings<GetApiSettingsSystemResponse>(
     page,
     systemUrl,
   );
@@ -249,15 +275,24 @@ test('clearing the indexing memory limit restores the automatic limit', async ({
         .locator('xpath=ancestor::form')
         .getByRole('button', { name: 'Save', exact: true }),
     ).toBeDisabled();
-    const saved = await savedSettings<GetApiSystemSettingsResponse>(
+    const saved = await savedSettings<GetApiSettingsSystemResponse>(
       page,
       systemUrl,
     );
-    expect(saved).toEqual(original);
+    const { maxIndexingMemory: _limit, ...searchSettings } =
+      original.server.searchSettings;
+    expect(saved).toEqual({
+      ...original,
+      server: { ...original.server, searchSettings },
+    });
   } finally {
-    expect((await page.request.put(systemUrl, { data: original })).ok()).toBe(
-      true,
-    );
+    expect(
+      (
+        await page.request.put(systemUrl, {
+          data: restoreSystemSettings(original),
+        })
+      ).ok(),
+    ).toBe(true);
   }
 });
 
@@ -265,7 +300,7 @@ test('missing controls fit phone and desktop layouts in both themes', async ({
   page,
 }, testInfo) => {
   test.setTimeout(120_000);
-  const original = await savedSettings<GetApiSystemSettingsResponse>(
+  const original = await savedSettings<GetApiSettingsSystemResponse>(
     page,
     systemUrl,
   );
@@ -343,16 +378,20 @@ test('missing controls fit phone and desktop layouts in both themes', async ({
       }
     }
   } finally {
-    expect((await page.request.put(systemUrl, { data: original })).ok()).toBe(
-      true,
-    );
+    expect(
+      (
+        await page.request.put(systemUrl, {
+          data: restoreSystemSettings(original),
+        })
+      ).ok(),
+    ).toBe(true);
   }
 });
 
 test('invalid backup cron reports the error and preserves the existing configuration', async ({
   page,
 }) => {
-  const original = await savedSettings<GetApiSystemSettingsResponse>(
+  const original = await savedSettings<GetApiSettingsSystemResponse>(
     page,
     systemUrl,
   );
@@ -376,7 +415,7 @@ test('invalid backup cron reports the error and preserves the existing configura
     expect((await page.request.put(systemUrl, { data: { backup } })).ok()).toBe(
       true,
     );
-    const before = await savedSettings<GetApiSystemSettingsResponse>(
+    const before = await savedSettings<GetApiSettingsSystemResponse>(
       page,
       systemUrl,
     );
@@ -404,9 +443,13 @@ test('invalid backup cron reports the error and preserves the existing configura
     await page.reload();
     await expect(cron).toHaveValue('0 5 * * *');
   } finally {
-    expect((await page.request.put(systemUrl, { data: original })).ok()).toBe(
-      true,
-    );
+    expect(
+      (
+        await page.request.put(systemUrl, {
+          data: restoreSystemSettings(original),
+        })
+      ).ok(),
+    ).toBe(true);
   }
 });
 

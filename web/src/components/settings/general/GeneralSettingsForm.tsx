@@ -4,8 +4,8 @@ import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import {
-  getApiSystemSettingsQueryKey,
-  putApiSystemSettingsMutation,
+  getApiSettingsSystemQueryKey,
+  putApiSettingsSystemMutation,
 } from '@/generated/@tanstack/react-query.gen.ts';
 import { isValidUrl } from '@/helpers/util.ts';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
@@ -135,8 +135,7 @@ function toUpdateRequest(
   data: GeneralSettingsFormData,
 ): UpdateSystemSettingsRequest {
   const { logRollConfig, categoryLogLevel } = data.logging;
-  // With rolling off the server reads neither the schedule nor the size
-  // limit, and the page hides both, so neither is sent
+  // Null clears optional values; an omitted update field now preserves it.
   const rolling = logRollConfig.enabled;
   return {
     logging: {
@@ -147,11 +146,9 @@ function toUpdateRequest(
         maxFileSizeBytes:
           rolling && logRollConfig.maxFileSizeBytes
             ? Math.max(0, logRollConfig.maxFileSizeBytes)
-            : undefined,
+            : null,
         schedule:
-          rolling && data.logRollOnSchedule
-            ? logRollConfig.schedule
-            : undefined,
+          rolling && data.logRollOnSchedule ? logRollConfig.schedule : null,
       },
       categoryLogLevel: {
         scheduling:
@@ -227,12 +224,12 @@ export function GeneralSettingsForm({
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiSystemSettingsMutation(),
+    mutation: putApiSettingsSystemMutation(),
     // The server URL lives in this browser, not in the response. The save set
     // it just before sending, so read it now rather than from this render
     toFormValues: (saved) =>
       getDefaultFormValues(useStore.getState().settings.backendUri, saved),
-    invalidate: { queryKey: getApiSystemSettingsQueryKey() },
+    invalidate: { queryKey: getApiSettingsSystemQueryKey() },
   });
 
   const save: SubmitHandler<GeneralSettingsFormData> = (data) => {

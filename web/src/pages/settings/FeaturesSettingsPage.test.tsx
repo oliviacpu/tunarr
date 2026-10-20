@@ -5,16 +5,16 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Generated from '../../generated/@tanstack/react-query.gen.ts';
 import type * as Sdk from '../../generated/sdk.gen.ts';
 import type {
-  GetApiSystemFeatureFlagsResponse,
-  PutApiSystemFeatureFlagsData,
+  GetApiSettingsFeatureFlagsResponse,
+  PutApiSettingsFeatureFlagsData,
 } from '../../generated/types.gen.ts';
 import FeaturesSettingsPage from './FeaturesSettingsPage.tsx';
 import { i18n } from '@lingui/core';
 import { FeatureFlagMetadata } from '@tunarr/types';
 import { featureFlagMessages } from './featureFlagMessages.ts';
 
-type Flags = GetApiSystemFeatureFlagsResponse['flags'];
-type FlagsBody = NonNullable<PutApiSystemFeatureFlagsData['body']>;
+type Flags = GetApiSettingsFeatureFlagsResponse['flags'];
+type FlagsBody = NonNullable<PutApiSettingsFeatureFlagsData['body']>;
 
 const savedFlags: Flags = {
   proxyArtwork: true,
@@ -26,7 +26,7 @@ const savedFlags: Flags = {
   disableVaapiPad: false,
 };
 
-const metadata: GetApiSystemFeatureFlagsResponse['metadata'] =
+const metadata: GetApiSettingsFeatureFlagsResponse['metadata'] =
   FeatureFlagMetadata.map((meta) => ({
     ...meta,
     envOverride: meta.key === 'proxyArtwork',
@@ -36,7 +36,7 @@ const metadata: GetApiSystemFeatureFlagsResponse['metadata'] =
 const { server, mockPutFlags } = vi.hoisted(() => ({
   server: {
     flags: null as Flags | null,
-    metadata: [] as GetApiSystemFeatureFlagsResponse['metadata'],
+    metadata: [] as GetApiSettingsFeatureFlagsResponse['metadata'],
   },
   mockPutFlags: vi.fn(),
 }));
@@ -45,18 +45,18 @@ vi.mock(
   '../../generated/@tanstack/react-query.gen.ts',
   async (importOriginal) => ({
     ...(await importOriginal<typeof Generated>()),
-    getApiSystemFeatureFlagsOptions: () => ({
+    getApiSettingsFeatureFlagsOptions: () => ({
       queryKey: ['test-feature-flags'],
       queryFn: () =>
         Promise.resolve({ flags: server.flags, metadata: server.metadata }),
     }),
-    getApiSystemFeatureFlagsQueryKey: () => ['test-feature-flags'],
+    getApiSettingsFeatureFlagsQueryKey: () => ['test-feature-flags'],
   }),
 );
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiSystemFeatureFlags: (options: { body: FlagsBody }) =>
+  putApiSettingsFeatureFlags: (options: { body: FlagsBody }) =>
     mockPutFlags(options),
 }));
 

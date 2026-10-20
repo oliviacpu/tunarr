@@ -5,7 +5,7 @@ import { savedSettings } from './settingsForm.ts';
 // The Transcoding page's global FFmpeg settings: a change saves, survives a
 // reload and moves nothing else.
 
-const SETTINGS_URL = `${SERVER_URL}/api/ffmpeg-settings`;
+const SETTINGS_URL = `${SERVER_URL}/api/settings/ffmpeg`;
 
 test('a changed tone-map curve saves, survives a reload and moves nothing else', async ({
   page,

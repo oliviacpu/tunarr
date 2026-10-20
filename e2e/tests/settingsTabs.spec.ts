@@ -57,7 +57,7 @@ test('legacy settings and transcode-config bookmarks redirect', async ({
 test('caption settings save and reload without changing playback', async ({
   page,
 }) => {
-  const url = `${SERVER_URL}/api/ffmpeg-settings`;
+  const url = `${SERVER_URL}/api/settings/ffmpeg`;
   const before = await savedSettings<Record<string, unknown>>(page, url);
   try {
     await page.goto('/web/settings/captions-audio');

@@ -117,6 +117,7 @@ nav:
       - Stream Troubleshooter: misc/troubleshooting.md
   - Development:
       - Contributing: dev/contributing.md
+      - Settings API: dev/settings-api.md
 
 markdown_extensions:
   - admonition

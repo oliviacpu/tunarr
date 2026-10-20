@@ -8,14 +8,14 @@ import {
 import { defaultFfmpegSettings } from '@tunarr/types';
 import { QueryClient } from '@tanstack/react-query';
 import {
-  getApiSystemFeatureFlagsQueryKey,
+  getApiSettingsFeatureFlagsQueryKey,
   getApiSystemStateQueryKey,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Sdk from '../../generated/sdk.gen.ts';
-import type { GetApiSystemFeatureFlagsResponse } from '../../generated/types.gen.ts';
+import type { GetApiSettingsFeatureFlagsResponse } from '../../generated/types.gen.ts';
 import FfmpegSettingsPage from './FfmpegSettingsPage.tsx';
 
 const { flagsRequest, stateRequest } = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ const { flagsRequest, stateRequest } = vi.hoisted(() => ({
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  getApiFfmpegSettings: () => Promise.resolve({ data: defaultFfmpegSettings }),
+  getApiSettingsFfmpeg: () => Promise.resolve({ data: defaultFfmpegSettings }),
   getApiSystemState: () => stateRequest(),
   getApiFfmpegInfo: () =>
     Promise.resolve({
@@ -35,7 +35,7 @@ vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
         hardwareAccelerationTypes: [],
       },
     }),
-  getApiSystemFeatureFlags: () => flagsRequest(),
+  getApiSettingsFeatureFlags: () => flagsRequest(),
 }));
 
 vi.mock('../../components/settings/UnsavedNavigationAlert.tsx', () => ({
@@ -108,7 +108,7 @@ describe('optional feature flag isolation', () => {
     await user.clear(path);
     await user.type(path, '/opt/ffmpeg');
 
-    const data: GetApiSystemFeatureFlagsResponse = {
+    const data: GetApiSettingsFeatureFlagsResponse = {
       flags: {
         proxyArtwork: false,
         tonemapEnabled: false,
@@ -213,7 +213,7 @@ for (const section of ['playback', 'captions-audio'] as const) {
 
 for (const section of ['playback', 'captions-audio'] as const) {
   test(`${section} preserves unsaved flags and its guard across background failure and retry`, async () => {
-    const data: GetApiSystemFeatureFlagsResponse = {
+    const data: GetApiSettingsFeatureFlagsResponse = {
       flags: {
         proxyArtwork: false,
         tonemapEnabled: false,
@@ -247,7 +247,7 @@ for (const section of ['playback', 'captions-audio'] as const) {
     flagsRequest.mockRejectedValue(new Error('Background flags unavailable'));
     await act(async () => {
       await client.refetchQueries({
-        queryKey: getApiSystemFeatureFlagsQueryKey(),
+        queryKey: getApiSettingsFeatureFlagsQueryKey(),
       });
     });
     expect(await screen.findByRole('alert')).toHaveTextContent(

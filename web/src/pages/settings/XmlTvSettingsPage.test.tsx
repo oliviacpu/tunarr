@@ -29,7 +29,7 @@ vi.mock(
   '../../generated/@tanstack/react-query.gen.ts',
   async (importOriginal) => ({
     ...(await importOriginal<typeof Generated>()),
-    getApiXmltvSettingsOptions: () => ({
+    getApiSettingsXmltvOptions: () => ({
       // Tagged like the generated key, so a save refetches it
       queryKey: [{ _id: 'test-xmltv-settings', tags: ['Settings'] }],
       queryFn: () => Promise.resolve(server.settings),
@@ -39,7 +39,7 @@ vi.mock(
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiXmltvSettings: (options: { body: Partial<XmlTvSettings> }) =>
+  putApiSettingsXmltv: (options: { body: Partial<XmlTvSettings> }) =>
     mockPutXmlTvSettings(options),
 }));
 

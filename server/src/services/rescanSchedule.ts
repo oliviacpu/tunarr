@@ -16,21 +16,6 @@ export function rescanSyncCrontab(rescanIntervalHours: number): string {
 }
 
 /**
- * Why the scheduler can't run jobs every `rescanIntervalHours`, or undefined.
- * The crontab steps through the hours of the day, so it needs a whole number
- * of hours, 1 or more. node-schedule refuses any other step, and a refused
- * reschedule cancels the job without saying so.
- */
-export function rescanIntervalProblem(
-  rescanIntervalHours: number,
-): string | undefined {
-  if (!Number.isInteger(rescanIntervalHours) || rescanIntervalHours < 1) {
-    return `The rescan interval must be a whole number of hours, 1 or more (got ${rescanIntervalHours}).`;
-  }
-  return;
-}
-
-/**
  * Moves every job that runs every `rescanIntervalHours` to the new interval.
  * The jobs are scheduled at startup; a run under way finishes, and the next
  * one follows the new interval.

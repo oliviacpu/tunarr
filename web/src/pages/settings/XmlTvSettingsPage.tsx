@@ -25,7 +25,7 @@ import {
   NumericFormControllerText,
   SelectFormController,
 } from '../../components/util/TypedController.tsx';
-import { putApiXmltvSettingsMutation } from '../../generated/@tanstack/react-query.gen.ts';
+import { putApiSettingsXmltvMutation } from '../../generated/@tanstack/react-query.gen.ts';
 import { useXmlTvSettings } from '../../hooks/settingsHooks.ts';
 
 const refreshStartHourOptions = range(0, 24).map((hour) => ({
@@ -79,7 +79,7 @@ export default function XmlTvSettingsPage() {
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiXmltvSettingsMutation(),
+    mutation: putApiSettingsXmltvMutation(),
     toFormValues: (saved) => saved,
     invalidate: { predicate: invalidateTaggedQueries('Settings') },
   });

@@ -9933,7 +9933,15 @@ export type GetApiFfmpegSettingsErrors = {
     /**
      * Default Response
      */
-    500: 'error';
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
 };
 
 export type GetApiFfmpegSettingsError = GetApiFfmpegSettingsErrors[keyof GetApiFfmpegSettingsErrors];
@@ -9988,74 +9996,6 @@ export type GetApiFfmpegSettingsResponses = {
 
 export type GetApiFfmpegSettingsResponse = GetApiFfmpegSettingsResponses[keyof GetApiFfmpegSettingsResponses];
 
-export type PostApiFfmpegSettingsData = {
-    body: {
-        ffmpegPath: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/ffmpeg-settings';
-};
-
-export type PostApiFfmpegSettingsErrors = {
-    /**
-     * Default Response
-     */
-    500: 'error';
-};
-
-export type PostApiFfmpegSettingsError = PostApiFfmpegSettingsErrors[keyof PostApiFfmpegSettingsErrors];
-
-export type PostApiFfmpegSettingsResponses = {
-    /**
-     * Default Response
-     */
-    200: {
-        configVersion: number;
-        ffmpegExecutablePath: string;
-        ffprobeExecutablePath: string;
-        enableLogging: boolean;
-        enableFileLogging: boolean;
-        logLevel: 'panic' | 'fatal' | 'error' | 'warning' | 'info' | 'verbose' | 'debug' | 'trace';
-        languagePreferences: {
-            preferences: Array<{
-                iso6391: string;
-                iso6392: string;
-                displayName: string;
-            }>;
-        };
-        transcodeDirectory?: string;
-        scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
-        deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
-        hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
-        tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
-        hlsReadAheadMaxThreads: number;
-        hlsSegmentSeconds: number;
-        hlsInitialSegmentCount: number;
-        hlsTsInitialBurstSeconds: number;
-        hdhrClosedCaptions: boolean;
-        hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
-        hdhrCaptionAppearance: {
-            textColor: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
-            backgroundColor: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
-            backgroundOpacity: 'opaque' | 'semiTransparent' | 'transparent';
-            bottomRow: number;
-            topRow: number;
-            maxLines: number;
-            lineWidth: number;
-            upperCase: boolean;
-            mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
-            keepStyles: boolean;
-            keepTopPlacement: boolean;
-            overlappingCues: 'together' | 'apart' | 'newest';
-        };
-        hdhrCaptionTestPattern: boolean;
-        enableSubtitleExtraction: boolean;
-    };
-};
-
-export type PostApiFfmpegSettingsResponse = PostApiFfmpegSettingsResponses[keyof PostApiFfmpegSettingsResponses];
-
 export type PutApiFfmpegSettingsData = {
     body?: {
         configVersion?: number;
@@ -10065,7 +10005,7 @@ export type PutApiFfmpegSettingsData = {
         enableFileLogging?: boolean;
         logLevel?: 'panic' | 'fatal' | 'error' | 'warning' | 'info' | 'verbose' | 'debug' | 'trace';
         languagePreferences?: {
-            preferences: Array<{
+            preferences?: Array<{
                 iso6391: string;
                 iso6392: string;
                 displayName: string;
@@ -10108,11 +10048,15 @@ export type PutApiFfmpegSettingsErrors = {
     /**
      * Default Response
      */
-    400: string;
+    400: {
+        message: string;
+    };
     /**
      * Default Response
      */
-    500: string;
+    500: {
+        message: string;
+    };
 };
 
 export type PutApiFfmpegSettingsError = PutApiFfmpegSettingsErrors[keyof PutApiFfmpegSettingsErrors];
@@ -10166,6 +10110,195 @@ export type PutApiFfmpegSettingsResponses = {
 };
 
 export type PutApiFfmpegSettingsResponse = PutApiFfmpegSettingsResponses[keyof PutApiFfmpegSettingsResponses];
+
+export type GetApiSettingsFfmpegData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings/ffmpeg';
+};
+
+export type GetApiSettingsFfmpegErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSettingsFfmpegError = GetApiSettingsFfmpegErrors[keyof GetApiSettingsFfmpegErrors];
+
+export type GetApiSettingsFfmpegResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        configVersion: number;
+        ffmpegExecutablePath: string;
+        ffprobeExecutablePath: string;
+        enableLogging: boolean;
+        enableFileLogging: boolean;
+        logLevel: 'panic' | 'fatal' | 'error' | 'warning' | 'info' | 'verbose' | 'debug' | 'trace';
+        languagePreferences: {
+            preferences: Array<{
+                iso6391: string;
+                iso6392: string;
+                displayName: string;
+            }>;
+        };
+        transcodeDirectory?: string;
+        scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
+        deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
+        hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
+        tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
+        hlsReadAheadMaxThreads: number;
+        hlsSegmentSeconds: number;
+        hlsInitialSegmentCount: number;
+        hlsTsInitialBurstSeconds: number;
+        hdhrClosedCaptions: boolean;
+        hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionAppearance: {
+            textColor: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundColor: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundOpacity: 'opaque' | 'semiTransparent' | 'transparent';
+            bottomRow: number;
+            topRow: number;
+            maxLines: number;
+            lineWidth: number;
+            upperCase: boolean;
+            mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+            keepStyles: boolean;
+            keepTopPlacement: boolean;
+            overlappingCues: 'together' | 'apart' | 'newest';
+        };
+        hdhrCaptionTestPattern: boolean;
+        enableSubtitleExtraction: boolean;
+    };
+};
+
+export type GetApiSettingsFfmpegResponse = GetApiSettingsFfmpegResponses[keyof GetApiSettingsFfmpegResponses];
+
+export type PutApiSettingsFfmpegData = {
+    body?: {
+        configVersion?: number;
+        ffmpegExecutablePath?: string;
+        ffprobeExecutablePath?: string;
+        enableLogging?: boolean;
+        enableFileLogging?: boolean;
+        logLevel?: 'panic' | 'fatal' | 'error' | 'warning' | 'info' | 'verbose' | 'debug' | 'trace';
+        languagePreferences?: {
+            preferences?: Array<{
+                iso6391: string;
+                iso6392: string;
+                displayName: string;
+            }>;
+        };
+        transcodeDirectory?: string;
+        scalingAlgorithm?: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
+        deinterlaceFilter?: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
+        hlsDirectOutputFormat?: 'mkv' | 'mpegts' | 'mp4';
+        tonemapAlgorithm?: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
+        hlsReadAheadMaxThreads?: number;
+        hlsSegmentSeconds?: number;
+        hlsInitialSegmentCount?: number;
+        hlsTsInitialBurstSeconds?: number;
+        hdhrClosedCaptions?: boolean;
+        hdhrCaptionAlignment?: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionAppearance?: {
+            textColor?: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundColor?: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundOpacity?: 'opaque' | 'semiTransparent' | 'transparent';
+            bottomRow?: number;
+            topRow?: number;
+            maxLines?: number;
+            lineWidth?: number;
+            upperCase?: boolean;
+            mode?: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+            keepStyles?: boolean;
+            keepTopPlacement?: boolean;
+            overlappingCues?: 'together' | 'apart' | 'newest';
+        };
+        hdhrCaptionTestPattern?: boolean;
+        enableSubtitleExtraction?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/settings/ffmpeg';
+};
+
+export type PutApiSettingsFfmpegErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PutApiSettingsFfmpegError = PutApiSettingsFfmpegErrors[keyof PutApiSettingsFfmpegErrors];
+
+export type PutApiSettingsFfmpegResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        configVersion: number;
+        ffmpegExecutablePath: string;
+        ffprobeExecutablePath: string;
+        enableLogging: boolean;
+        enableFileLogging: boolean;
+        logLevel: 'panic' | 'fatal' | 'error' | 'warning' | 'info' | 'verbose' | 'debug' | 'trace';
+        languagePreferences: {
+            preferences: Array<{
+                iso6391: string;
+                iso6392: string;
+                displayName: string;
+            }>;
+        };
+        transcodeDirectory?: string;
+        scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
+        deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
+        hlsDirectOutputFormat: 'mkv' | 'mpegts' | 'mp4';
+        tonemapAlgorithm: 'hable' | 'bt2390' | 'mobius' | 'reinhard';
+        hlsReadAheadMaxThreads: number;
+        hlsSegmentSeconds: number;
+        hlsInitialSegmentCount: number;
+        hlsTsInitialBurstSeconds: number;
+        hdhrClosedCaptions: boolean;
+        hdhrCaptionAlignment: 'centeredBlock' | 'centeredLines' | 'left';
+        hdhrCaptionAppearance: {
+            textColor: 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundColor: 'player' | 'black' | 'white' | 'green' | 'blue' | 'cyan' | 'red' | 'yellow' | 'magenta';
+            backgroundOpacity: 'opaque' | 'semiTransparent' | 'transparent';
+            bottomRow: number;
+            topRow: number;
+            maxLines: number;
+            lineWidth: number;
+            upperCase: boolean;
+            mode: 'popOn' | 'rollUp2' | 'rollUp3' | 'rollUp4' | 'paintOn';
+            keepStyles: boolean;
+            keepTopPlacement: boolean;
+            overlappingCues: 'together' | 'apart' | 'newest';
+        };
+        hdhrCaptionTestPattern: boolean;
+        enableSubtitleExtraction: boolean;
+    };
+};
+
+export type PutApiSettingsFfmpegResponse = PutApiSettingsFfmpegResponses[keyof PutApiSettingsFfmpegResponses];
 
 export type GetApiTranscodeConfigsData = {
     body?: never;
@@ -10654,7 +10787,15 @@ export type GetApiXmltvSettingsErrors = {
     /**
      * Default Response
      */
-    500: string;
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
 };
 
 export type GetApiXmltvSettingsError = GetApiXmltvSettingsErrors[keyof GetApiXmltvSettingsErrors];
@@ -10674,38 +10815,6 @@ export type GetApiXmltvSettingsResponses = {
 };
 
 export type GetApiXmltvSettingsResponse = GetApiXmltvSettingsResponses[keyof GetApiXmltvSettingsResponses];
-
-export type PostApiXmltvSettingsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/xmltv-settings';
-};
-
-export type PostApiXmltvSettingsErrors = {
-    /**
-     * Default Response
-     */
-    500: string;
-};
-
-export type PostApiXmltvSettingsError = PostApiXmltvSettingsErrors[keyof PostApiXmltvSettingsErrors];
-
-export type PostApiXmltvSettingsResponses = {
-    /**
-     * Default Response
-     */
-    200: {
-        programmingHours: number;
-        refreshHours: number;
-        refreshStartHour: number;
-        outputPath: string;
-        useShowPoster: boolean;
-        publicUrl: string | '';
-    };
-};
-
-export type PostApiXmltvSettingsResponse = PostApiXmltvSettingsResponses[keyof PostApiXmltvSettingsResponses];
 
 export type PutApiXmltvSettingsData = {
     body?: {
@@ -10754,6 +10863,93 @@ export type PutApiXmltvSettingsResponses = {
 
 export type PutApiXmltvSettingsResponse = PutApiXmltvSettingsResponses[keyof PutApiXmltvSettingsResponses];
 
+export type GetApiSettingsXmltvData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings/xmltv';
+};
+
+export type GetApiSettingsXmltvErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSettingsXmltvError = GetApiSettingsXmltvErrors[keyof GetApiSettingsXmltvErrors];
+
+export type GetApiSettingsXmltvResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        programmingHours: number;
+        refreshHours: number;
+        refreshStartHour: number;
+        outputPath: string;
+        useShowPoster: boolean;
+        publicUrl: string | '';
+    };
+};
+
+export type GetApiSettingsXmltvResponse = GetApiSettingsXmltvResponses[keyof GetApiSettingsXmltvResponses];
+
+export type PutApiSettingsXmltvData = {
+    body?: {
+        programmingHours?: number;
+        refreshHours?: number;
+        refreshStartHour?: number;
+        outputPath?: string;
+        useShowPoster?: boolean;
+        publicUrl?: string | '';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/settings/xmltv';
+};
+
+export type PutApiSettingsXmltvErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PutApiSettingsXmltvError = PutApiSettingsXmltvErrors[keyof PutApiSettingsXmltvErrors];
+
+export type PutApiSettingsXmltvResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        programmingHours: number;
+        refreshHours: number;
+        refreshStartHour: number;
+        outputPath: string;
+        useShowPoster: boolean;
+        publicUrl: string | '';
+    };
+};
+
+export type PutApiSettingsXmltvResponse = PutApiSettingsXmltvResponses[keyof PutApiSettingsXmltvResponses];
+
 export type GetApiHdhrSettingsData = {
     body?: never;
     path?: never;
@@ -10762,6 +10958,12 @@ export type GetApiHdhrSettingsData = {
 };
 
 export type GetApiHdhrSettingsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
     /**
      * Default Response
      */
@@ -10784,36 +10986,6 @@ export type GetApiHdhrSettingsResponses = {
 
 export type GetApiHdhrSettingsResponse = GetApiHdhrSettingsResponses[keyof GetApiHdhrSettingsResponses];
 
-export type PostApiHdhrSettingsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/hdhr-settings';
-};
-
-export type PostApiHdhrSettingsErrors = {
-    /**
-     * Default Response
-     */
-    500: {
-        message: string;
-    };
-};
-
-export type PostApiHdhrSettingsError = PostApiHdhrSettingsErrors[keyof PostApiHdhrSettingsErrors];
-
-export type PostApiHdhrSettingsResponses = {
-    /**
-     * Default Response
-     */
-    200: {
-        autoDiscoveryEnabled: boolean;
-        tunerCount: number;
-    };
-};
-
-export type PostApiHdhrSettingsResponse = PostApiHdhrSettingsResponses[keyof PostApiHdhrSettingsResponses];
-
 export type PutApiHdhrSettingsData = {
     body?: {
         autoDiscoveryEnabled?: boolean;
@@ -10825,6 +10997,12 @@ export type PutApiHdhrSettingsData = {
 };
 
 export type PutApiHdhrSettingsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
     /**
      * Default Response
      */
@@ -10846,6 +11024,81 @@ export type PutApiHdhrSettingsResponses = {
 };
 
 export type PutApiHdhrSettingsResponse = PutApiHdhrSettingsResponses[keyof PutApiHdhrSettingsResponses];
+
+export type GetApiSettingsHdhrData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings/hdhr';
+};
+
+export type GetApiSettingsHdhrErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSettingsHdhrError = GetApiSettingsHdhrErrors[keyof GetApiSettingsHdhrErrors];
+
+export type GetApiSettingsHdhrResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        autoDiscoveryEnabled: boolean;
+        tunerCount: number;
+    };
+};
+
+export type GetApiSettingsHdhrResponse = GetApiSettingsHdhrResponses[keyof GetApiSettingsHdhrResponses];
+
+export type PutApiSettingsHdhrData = {
+    body?: {
+        autoDiscoveryEnabled?: boolean;
+        tunerCount?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/settings/hdhr';
+};
+
+export type PutApiSettingsHdhrErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PutApiSettingsHdhrError = PutApiSettingsHdhrErrors[keyof PutApiSettingsHdhrErrors];
+
+export type PutApiSettingsHdhrResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        autoDiscoveryEnabled: boolean;
+        tunerCount: number;
+    };
+};
+
+export type PutApiSettingsHdhrResponse = PutApiSettingsHdhrResponses[keyof PutApiSettingsHdhrResponses];
 
 export type GetApiSystemHealthData = {
     body?: never;
@@ -10876,6 +11129,23 @@ export type GetApiSystemSettingsData = {
     query?: never;
     url: '/api/system/settings';
 };
+
+export type GetApiSystemSettingsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSystemSettingsError = GetApiSystemSettingsErrors[keyof GetApiSystemSettingsErrors];
 
 export type GetApiSystemSettingsResponses = {
     /**
@@ -10948,8 +11218,8 @@ export type PutApiSystemSettingsData = {
             useEnvVarLevel?: boolean;
             logRollConfig?: {
                 enabled?: boolean;
-                maxFileSizeBytes?: number;
-                rolledFileLimit: number;
+                maxFileSizeBytes?: number | null;
+                rolledFileLimit?: number;
                 schedule?: {
                     type: 'cron';
                     cron: string;
@@ -10958,14 +11228,14 @@ export type PutApiSystemSettingsData = {
                     increment: number;
                     unit: 'second' | 'minute' | 'hour' | 'day' | 'week';
                     offsetMs?: number;
-                };
+                } | null;
             };
             categoryLogLevel?: {
                 [key: string]: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace' | null;
             };
         };
         backup?: {
-            configurations: Array<{
+            configurations?: Array<{
                 enabled?: boolean;
                 schedule?: {
                     type: 'cron';
@@ -10988,8 +11258,8 @@ export type PutApiSystemSettingsData = {
         };
         server?: {
             port?: number;
-            searchSettings: {
-                maxIndexingMemory?: number;
+            searchSettings?: {
+                maxIndexingMemory?: number | null;
                 snapshotIntervalHours?: number;
             };
         };
@@ -11003,7 +11273,15 @@ export type PutApiSystemSettingsErrors = {
     /**
      * Default Response
      */
-    400: string;
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
 };
 
 export type PutApiSystemSettingsError = PutApiSystemSettingsErrors[keyof PutApiSystemSettingsErrors];
@@ -11071,6 +11349,233 @@ export type PutApiSystemSettingsResponses = {
 };
 
 export type PutApiSystemSettingsResponse = PutApiSystemSettingsResponses[keyof PutApiSystemSettingsResponses];
+
+export type GetApiSettingsSystemData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings/system';
+};
+
+export type GetApiSettingsSystemErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSettingsSystemError = GetApiSettingsSystemErrors[keyof GetApiSettingsSystemErrors];
+
+export type GetApiSettingsSystemResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        backup: {
+            configurations: Array<{
+                enabled: boolean;
+                schedule: {
+                    type: 'cron';
+                    cron: string;
+                } | {
+                    type: 'every';
+                    increment: number;
+                    unit: 'second' | 'minute' | 'hour' | 'day' | 'week';
+                    offsetMs: number;
+                };
+                outputs: Array<{
+                    type: 'file';
+                    outputPath: string;
+                    archiveFormat: 'zip' | 'tar';
+                    gzip?: boolean;
+                    tempDir?: string;
+                    maxBackups: number;
+                }>;
+            }>;
+        };
+        logging: {
+            logLevel: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace';
+            categoryLogLevel?: {
+                [key: string]: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace';
+            };
+            logsDirectory: string;
+            useEnvVarLevel: boolean;
+            logRollConfig: {
+                enabled: boolean;
+                maxFileSizeBytes?: number;
+                rolledFileLimit: number;
+                schedule?: {
+                    type: 'cron';
+                    cron: string;
+                } | {
+                    type: 'every';
+                    increment: number;
+                    unit: 'second' | 'minute' | 'hour' | 'day' | 'week';
+                    offsetMs: number;
+                };
+            };
+            environmentLogLevel?: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace';
+        };
+        server: {
+            port: number;
+            searchSettings: {
+                maxIndexingMemory?: number;
+                snapshotIntervalHours: number;
+            };
+        };
+        dataDirectory: string;
+        searchServerAddress: string;
+    };
+};
+
+export type GetApiSettingsSystemResponse = GetApiSettingsSystemResponses[keyof GetApiSettingsSystemResponses];
+
+export type PutApiSettingsSystemData = {
+    body?: {
+        logging?: {
+            logLevel?: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace';
+            useEnvVarLevel?: boolean;
+            logRollConfig?: {
+                enabled?: boolean;
+                maxFileSizeBytes?: number | null;
+                rolledFileLimit?: number;
+                schedule?: {
+                    type: 'cron';
+                    cron: string;
+                } | {
+                    type: 'every';
+                    increment: number;
+                    unit: 'second' | 'minute' | 'hour' | 'day' | 'week';
+                    offsetMs?: number;
+                } | null;
+            };
+            categoryLogLevel?: {
+                [key: string]: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace' | null;
+            };
+        };
+        backup?: {
+            configurations?: Array<{
+                enabled?: boolean;
+                schedule?: {
+                    type: 'cron';
+                    cron: string;
+                } | {
+                    type: 'every';
+                    increment: number;
+                    unit: 'second' | 'minute' | 'hour' | 'day' | 'week';
+                    offsetMs?: number;
+                };
+                outputs: Array<{
+                    type: 'file';
+                    outputPath: string;
+                    archiveFormat?: 'zip' | 'tar';
+                    gzip?: boolean;
+                    tempDir?: string;
+                    maxBackups?: number;
+                }>;
+            }>;
+        };
+        server?: {
+            port?: number;
+            searchSettings?: {
+                maxIndexingMemory?: number | null;
+                snapshotIntervalHours?: number;
+            };
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/settings/system';
+};
+
+export type PutApiSettingsSystemErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PutApiSettingsSystemError = PutApiSettingsSystemErrors[keyof PutApiSettingsSystemErrors];
+
+export type PutApiSettingsSystemResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        backup: {
+            configurations: Array<{
+                enabled: boolean;
+                schedule: {
+                    type: 'cron';
+                    cron: string;
+                } | {
+                    type: 'every';
+                    increment: number;
+                    unit: 'second' | 'minute' | 'hour' | 'day' | 'week';
+                    offsetMs: number;
+                };
+                outputs: Array<{
+                    type: 'file';
+                    outputPath: string;
+                    archiveFormat: 'zip' | 'tar';
+                    gzip?: boolean;
+                    tempDir?: string;
+                    maxBackups: number;
+                }>;
+            }>;
+        };
+        logging: {
+            logLevel: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace';
+            categoryLogLevel?: {
+                [key: string]: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace';
+            };
+            logsDirectory: string;
+            useEnvVarLevel: boolean;
+            logRollConfig: {
+                enabled: boolean;
+                maxFileSizeBytes?: number;
+                rolledFileLimit: number;
+                schedule?: {
+                    type: 'cron';
+                    cron: string;
+                } | {
+                    type: 'every';
+                    increment: number;
+                    unit: 'second' | 'minute' | 'hour' | 'day' | 'week';
+                    offsetMs: number;
+                };
+            };
+            environmentLogLevel?: 'silent' | 'fatal' | 'error' | 'warn' | 'info' | 'http' | 'debug' | 'http_out' | 'trace';
+        };
+        server: {
+            port: number;
+            searchSettings: {
+                maxIndexingMemory?: number;
+                snapshotIntervalHours: number;
+            };
+        };
+        dataDirectory: string;
+        searchServerAddress: string;
+    };
+};
+
+export type PutApiSettingsSystemResponse = PutApiSettingsSystemResponses[keyof PutApiSettingsSystemResponses];
 
 export type GetApiSystemStateData = {
     body?: never;
@@ -11164,7 +11669,15 @@ export type PutApiSystemSettingsBackupErrors = {
     /**
      * Default Response
      */
-    400: string;
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
 };
 
 export type PutApiSystemSettingsBackupError = PutApiSystemSettingsBackupErrors[keyof PutApiSystemSettingsBackupErrors];
@@ -11205,6 +11718,23 @@ export type GetApiSystemFeatureFlagsData = {
     query?: never;
     url: '/api/system/feature-flags';
 };
+
+export type GetApiSystemFeatureFlagsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSystemFeatureFlagsError = GetApiSystemFeatureFlagsErrors[keyof GetApiSystemFeatureFlagsErrors];
 
 export type GetApiSystemFeatureFlagsResponses = {
     /**
@@ -11247,6 +11777,23 @@ export type PutApiSystemFeatureFlagsData = {
     url: '/api/system/feature-flags';
 };
 
+export type PutApiSystemFeatureFlagsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PutApiSystemFeatureFlagsError = PutApiSystemFeatureFlagsErrors[keyof PutApiSystemFeatureFlagsErrors];
+
 export type PutApiSystemFeatureFlagsResponses = {
     /**
      * Default Response
@@ -11272,6 +11819,114 @@ export type PutApiSystemFeatureFlagsResponses = {
 };
 
 export type PutApiSystemFeatureFlagsResponse = PutApiSystemFeatureFlagsResponses[keyof PutApiSystemFeatureFlagsResponses];
+
+export type GetApiSettingsFeatureFlagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings/feature-flags';
+};
+
+export type GetApiSettingsFeatureFlagsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSettingsFeatureFlagsError = GetApiSettingsFeatureFlagsErrors[keyof GetApiSettingsFeatureFlagsErrors];
+
+export type GetApiSettingsFeatureFlagsResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        flags: {
+            proxyArtwork: boolean;
+            tonemapEnabled: boolean;
+            webvttSidecarEnabled: boolean;
+            xmltvCreditImagesEnabled: boolean;
+            disableSearchSnapshotInBackup: boolean;
+            disableVulkan: boolean;
+            disableVaapiPad: boolean;
+        };
+        metadata: Array<{
+            key: string;
+            displayName: string;
+            description: string;
+            category: 'experimental' | 'escape-hatch';
+            envOverride: boolean;
+        }>;
+    };
+};
+
+export type GetApiSettingsFeatureFlagsResponse = GetApiSettingsFeatureFlagsResponses[keyof GetApiSettingsFeatureFlagsResponses];
+
+export type PutApiSettingsFeatureFlagsData = {
+    body?: {
+        proxyArtwork?: boolean;
+        tonemapEnabled?: boolean;
+        webvttSidecarEnabled?: boolean;
+        disableSearchSnapshotInBackup?: boolean;
+        disableVulkan?: boolean;
+        disableVaapiPad?: boolean;
+        xmltvCreditImagesEnabled?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/settings/feature-flags';
+};
+
+export type PutApiSettingsFeatureFlagsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PutApiSettingsFeatureFlagsError = PutApiSettingsFeatureFlagsErrors[keyof PutApiSettingsFeatureFlagsErrors];
+
+export type PutApiSettingsFeatureFlagsResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        flags: {
+            proxyArtwork: boolean;
+            tonemapEnabled: boolean;
+            webvttSidecarEnabled: boolean;
+            xmltvCreditImagesEnabled: boolean;
+            disableSearchSnapshotInBackup: boolean;
+            disableVulkan: boolean;
+            disableVaapiPad: boolean;
+        };
+        metadata: Array<{
+            key: string;
+            displayName: string;
+            description: string;
+            category: 'experimental' | 'escape-hatch';
+            envOverride: boolean;
+        }>;
+    };
+};
+
+export type PutApiSettingsFeatureFlagsResponse = PutApiSettingsFeatureFlagsResponses[keyof PutApiSettingsFeatureFlagsResponses];
 
 export type GetApiSystemDebugNvidiaData = {
     body?: never;
@@ -13113,6 +13768,23 @@ export type GetApiSettingsMediaSourceData = {
     url: '/api/settings/media-source';
 };
 
+export type GetApiSettingsMediaSourceErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiSettingsMediaSourceError = GetApiSettingsMediaSourceErrors[keyof GetApiSettingsMediaSourceErrors];
+
 export type GetApiSettingsMediaSourceResponses = {
     /**
      * Default Response
@@ -13138,6 +13810,12 @@ export type PutApiSettingsMediaSourceErrors = {
      * Default Response
      */
     400: {
+        message: string;
+    };
+    /**
+     * Default Response
+     */
+    500: {
         message: string;
     };
 };

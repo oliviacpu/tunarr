@@ -48,10 +48,10 @@ import { TranscodeConfigsTable } from '../../components/settings/ffmpeg/Transcod
 import {
   getApiFfmpegInfoOptions,
   getApiFfmpegInfoQueryKey,
-  getApiFfmpegSettingsQueryKey,
+  getApiSettingsFfmpegQueryKey,
   getApiVersionQueryKey,
   getApiSystemStateOptions,
-  putApiFfmpegSettingsMutation,
+  putApiSettingsFfmpegMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { useFfmpegSettings } from '../../hooks/settingsHooks.ts';
 import FeaturesSettingsPage from './FeaturesSettingsPage.tsx';
@@ -277,11 +277,11 @@ export default function FfmpegSettingsPage({
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiFfmpegSettingsMutation(),
+    mutation: putApiSettingsFfmpegMutation(),
     toFormValues,
     // A new executable path is probed again, and the sidebar shows its version
     invalidate: [
-      { queryKey: getApiFfmpegSettingsQueryKey(), exact: true },
+      { queryKey: getApiSettingsFfmpegQueryKey(), exact: true },
       { queryKey: getApiFfmpegInfoQueryKey(), exact: true },
       { queryKey: getApiVersionQueryKey(), exact: true },
     ],

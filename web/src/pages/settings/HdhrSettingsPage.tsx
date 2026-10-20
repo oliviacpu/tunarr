@@ -19,8 +19,8 @@ import {
   NumericFormControllerText,
 } from '../../components/util/TypedController.tsx';
 import {
-  getApiHdhrSettingsQueryKey,
-  putApiHdhrSettingsMutation,
+  getApiSettingsHdhrQueryKey,
+  putApiSettingsHdhrMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { useHdhrSettings } from '../../hooks/settingsHooks.ts';
 
@@ -54,9 +54,9 @@ export default function HdhrSettingsPage() {
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiHdhrSettingsMutation(),
+    mutation: putApiSettingsHdhrMutation(),
     toFormValues: (saved) => saved,
-    invalidate: { queryKey: getApiHdhrSettingsQueryKey() },
+    invalidate: { queryKey: getApiSettingsHdhrQueryKey() },
   });
 
   const save: SubmitHandler<HdhrSettings> = (settings) => {

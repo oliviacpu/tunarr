@@ -38,7 +38,7 @@ const { mockPutSystemSettings } = vi.hoisted(() => ({
 
 vi.mock('../../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiSystemSettings: (options: { body: UpdateSystemSettingsRequest }) =>
+  putApiSettingsSystem: (options: { body: UpdateSystemSettingsRequest }) =>
     mockPutSystemSettings(options),
 }));
 
@@ -272,8 +272,8 @@ describe('GeneralSettingsForm', () => {
     expect(sent?.logging?.logRollConfig).toEqual({
       enabled: true,
       rolledFileLimit: 3,
-      maxFileSizeBytes: undefined,
-      schedule: undefined,
+      maxFileSizeBytes: null,
+      schedule: null,
     });
   });
 
@@ -357,7 +357,7 @@ describe('GeneralSettingsForm', () => {
 
     await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
     const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
-    expect(sent?.logging?.logRollConfig?.schedule).toBeUndefined();
+    expect(sent?.logging?.logRollConfig?.schedule).toBeNull();
   });
 
   test('an invalid backup interval stops blocking Save once backups are turned off', async () => {
@@ -435,8 +435,8 @@ describe('GeneralSettingsForm', () => {
     expect(sent?.logging?.logRollConfig).toEqual({
       enabled: false,
       rolledFileLimit: 3,
-      maxFileSizeBytes: undefined,
-      schedule: undefined,
+      maxFileSizeBytes: null,
+      schedule: null,
     });
   });
 });

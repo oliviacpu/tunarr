@@ -2,8 +2,11 @@ import type { RouterPluginCallback } from '@/types/serverType.js';
 import { makeWritable } from '@/util/index.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import { sanitizeForExec } from '@/util/strings.js';
-import { defaultFfmpegSettings } from '@tunarr/types';
-import { IdPathParamSchema } from '@tunarr/types/api';
+import {
+  BaseErrorSchema,
+  IdPathParamSchema,
+  UpdateFfmpegSettingsRequestSchema,
+} from '@tunarr/types/api';
 import {
   FfmpegSettingsSchema,
   TranscodeConfigSchema,
@@ -15,12 +18,14 @@ import { transcodeConfigOrmToDto } from '../db/converters/transcodeConfigConvert
 import { GlobalScheduler } from '../services/Scheduler.ts';
 import { SubtitleExtractorTask } from '../tasks/SubtitleExtractorTask.ts';
 import { TranscodeConfigNotFoundError } from '../types/errors.ts';
+import { registerSettingsAliases } from './settingsRoutes.ts';
 
 export const ffmpegSettingsRouter: RouterPluginCallback = (
   fastify,
   _opts,
   done,
 ) => {
+  registerSettingsAliases(fastify, { '/ffmpeg-settings': '/settings/ffmpeg' });
   const logger = LoggerFactory.child({
     caller: import.meta,
     className: 'FfmpegSettingsApi',
@@ -33,7 +38,7 @@ export const ffmpegSettingsRouter: RouterPluginCallback = (
         tags: ['Settings'],
         response: {
           200: FfmpegSettingsSchema,
-          500: z.literal('error'),
+          500: BaseErrorSchema,
         },
       },
     },
@@ -43,7 +48,9 @@ export const ffmpegSettingsRouter: RouterPluginCallback = (
         return res.send(makeWritable(ffmpeg));
       } catch (err) {
         logger.error(err);
-        return res.status(500).send('error');
+        return res
+          .status(500)
+          .send({ message: 'Could not process FFmpeg settings' });
       }
     },
   );
@@ -53,18 +60,29 @@ export const ffmpegSettingsRouter: RouterPluginCallback = (
     {
       schema: {
         tags: ['Settings'],
-        body: FfmpegSettingsSchema,
+        body: UpdateFfmpegSettingsRequestSchema,
         response: {
           200: FfmpegSettingsSchema,
-          400: z.string(),
-          500: z.string(),
+          400: BaseErrorSchema,
+          500: BaseErrorSchema,
         },
       },
     },
     async (req, res) => {
       try {
         const currentSettings = req.serverCtx.settings.ffmpegSettings();
-        const newSettings = req.body;
+        const newSettings = {
+          ...makeWritable(currentSettings),
+          ...req.body,
+          languagePreferences: {
+            ...makeWritable(currentSettings.languagePreferences),
+            ...req.body.languagePreferences,
+          },
+          hdhrCaptionAppearance: {
+            ...currentSettings.hdhrCaptionAppearance,
+            ...req.body.hdhrCaptionAppearance,
+          },
+        };
         newSettings.ffmpegExecutablePath = sanitizeForExec(
           newSettings.ffmpegExecutablePath,
         );
@@ -102,60 +120,15 @@ export const ffmpegSettingsRouter: RouterPluginCallback = (
         return res.send(makeWritable(ffmpeg));
       } catch (err) {
         logger.error(err);
-        await res.status(500).send('error');
+        await res
+          .status(500)
+          .send({ message: 'Could not process FFmpeg settings' });
         req.serverCtx.eventService.push({
           type: 'settings-update',
           message: 'Error updating FFMPEG configuration.',
           module: 'ffmpeg',
           detail: {
             action: 'update',
-            error: isError(err) ? err.message : 'unknown',
-          },
-          level: 'error',
-        });
-      }
-    },
-  );
-
-  fastify.post(
-    '/ffmpeg-settings',
-    {
-      schema: {
-        tags: ['Settings'],
-        body: z.object({
-          ffmpegPath: z.string(),
-        }),
-        response: {
-          200: FfmpegSettingsSchema,
-          500: z.literal('error'),
-        },
-      },
-    },
-    async (req, res) => {
-      // RESET
-      try {
-        const ffmpeg = { ...defaultFfmpegSettings };
-        ffmpeg.ffmpegExecutablePath = req.body.ffmpegPath;
-        await req.serverCtx.settings.updateFfmpegSettings(ffmpeg);
-        req.serverCtx.eventService.push({
-          type: 'settings-update',
-          message: 'FFMPEG configuration reset.',
-          module: 'ffmpeg',
-          detail: {
-            action: 'reset',
-          },
-          level: 'warning',
-        });
-        return res.send(makeWritable(req.serverCtx.settings.ffmpegSettings()));
-      } catch (err) {
-        logger.error(err);
-        await res.status(500).send('error');
-        req.serverCtx.eventService.push({
-          type: 'settings-update',
-          message: 'Error reseting FFMPEG configuration.',
-          module: 'ffmpeg',
-          detail: {
-            action: 'reset',
             error: isError(err) ? err.message : 'unknown',
           },
           level: 'error',

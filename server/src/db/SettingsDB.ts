@@ -74,7 +74,14 @@ export const SettingsSchema = z.object({
   }),
   xmltv: XmlTvSettingsSchema,
   ffmpeg: FfmpegSettingsSchema,
-  mediaSource: GlobalMediaSourceSettingsSchema,
+  mediaSource: GlobalMediaSourceSettingsSchema.extend({
+    rescanIntervalHours: z
+      .number()
+      .transform((hours) =>
+        Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, Math.floor(hours))),
+      )
+      .default(6),
+  }),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;

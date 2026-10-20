@@ -7,7 +7,7 @@ import type {
   GetApiMediaLibrariesByLibraryIdProgramsResponse,
   GetApiMediaSourcesResponse,
   CreateChannelV2Response,
-  GetApiFfmpegSettingsResponse,
+  GetApiSettingsFfmpegResponse,
   GetApiTranscodeConfigsResponse,
   PostApiChannelsByIdProgrammingData,
   PostApiFillerListsData,
@@ -16,7 +16,7 @@ import type {
   PostApiMediaSourcesResponse,
   PostApiSmartCollectionsData,
   PostApiSmartCollectionsResponse,
-  PutApiFfmpegSettingsData,
+  PutApiSettingsFfmpegData,
 } from '../../web/src/generated/types.gen.ts';
 import { api } from './api.ts';
 import { FIXTURE_IDS_FILE } from './env.ts';
@@ -147,15 +147,15 @@ function contentItem(program: LibraryProgram): LineupItem {
 // scanned, since the local scanner probes each clip with ffprobe.
 async function setFixtureFfmpeg() {
   const { ffmpeg, ffprobe } = resolveFfmpegBinaries();
-  const current = await api<GetApiFfmpegSettingsResponse>(
+  const current = await api<GetApiSettingsFfmpegResponse>(
     'GET',
-    '/ffmpeg-settings',
+    '/settings/ffmpeg',
   );
-  await api('PUT', '/ffmpeg-settings', {
+  await api('PUT', '/settings/ffmpeg', {
     ...current,
     ffmpegExecutablePath: ffmpeg,
     ffprobeExecutablePath: ffprobe,
-  } satisfies PutApiFfmpegSettingsData['body']);
+  } satisfies PutApiSettingsFfmpegData['body']);
 }
 
 export async function seed(): Promise<FixtureIds> {

@@ -370,7 +370,7 @@ export const HdhrSettingsSchema = z.object({
 });
 
 export const GlobalMediaSourceSettingsSchema = z.object({
-  rescanIntervalHours: z.number().nonnegative().default(6),
+  rescanIntervalHours: z.number().int().min(1).default(6),
 });
 
 export type GlobalMediaSourceSettings = z.infer<

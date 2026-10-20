@@ -1,16 +1,16 @@
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import {
-  getApiSystemSettingsOptions,
+  getApiSettingsSystemOptions,
   getApiSystemStateOptions,
 } from '../generated/@tanstack/react-query.gen.ts';
 
 export const useSystemSettings = () =>
   useQuery({
-    ...getApiSystemSettingsOptions(),
+    ...getApiSettingsSystemOptions(),
   });
 
 export const useSystemSettingsSuspense = () =>
-  useSuspenseQuery(getApiSystemSettingsOptions());
+  useSuspenseQuery(getApiSettingsSystemOptions());
 
 export const useSystemState = () =>
   useSuspenseQuery({
