@@ -107,21 +107,42 @@ test('clearing the last subtitle preference persists without changing filler att
   page,
 }) => {
   const before = await api<Channel>('GET', `/channels/${channelId()}`);
-  await englishRow(page).getByRole('button').last().click();
-  await expect(englishRow(page)).toHaveCount(0);
-  await expect(saveButton(page)).toBeEnabled();
-  const request = page.waitForRequest(
-    (req) =>
-      req.method() === 'PUT' &&
-      new URL(req.url()).pathname === `/api/channels/${channelId()}`,
-  );
-  await save(page);
-  const sent = (await request).postDataJSON() as PutApiChannelsByIdData['body'];
-  expect(sent.subtitlePreferences).toEqual([]);
-  await openStreamingTab(page);
-  await expect(englishRow(page)).toHaveCount(0);
-  await expect(saveButton(page)).toBeDisabled();
-  const after = await api<Channel>('GET', `/channels/${channelId()}`);
-  expect(after.subtitlePreferences ?? []).toEqual([]);
-  expect(after.fillerCollections).toEqual(before.fillerCollections);
+  try {
+    await englishRow(page).getByRole('button').last().click();
+    await expect(englishRow(page)).toHaveCount(0);
+    await expect(saveButton(page)).toBeEnabled();
+    const request = page.waitForRequest(
+      (req) =>
+        req.method() === 'PUT' &&
+        new URL(req.url()).pathname === `/api/channels/${channelId()}`,
+    );
+    await save(page);
+    const sent = (
+      await request
+    ).postDataJSON() as PutApiChannelsByIdData['body'];
+    expect(sent.subtitlePreferences).toEqual([]);
+    await openStreamingTab(page);
+    await expect(englishRow(page)).toHaveCount(0);
+    await expect(saveButton(page)).toBeDisabled();
+    const after = await api<Channel>('GET', `/channels/${channelId()}`);
+    expect(after.subtitlePreferences ?? []).toEqual([]);
+    expect(after.fillerCollections).toEqual(before.fillerCollections);
+  } finally {
+    const {
+      startTime: _startTime,
+      onDemand: _onDemand,
+      fallback: _fallback,
+      programCount: _programCount,
+      sessions: _sessions,
+      ...current
+    } = await api<Channel>('GET', `/channels/${channelId()}`);
+    await api('PUT', `/channels/${channelId()}`, {
+      ...current,
+      subtitlePreferences: before.subtitlePreferences ?? [],
+    });
+    const restored = await api<Channel>('GET', `/channels/${channelId()}`);
+    expect(restored.subtitlePreferences ?? []).toEqual(
+      before.subtitlePreferences ?? [],
+    );
+  }
 });
