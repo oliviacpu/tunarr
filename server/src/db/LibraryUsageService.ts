@@ -35,7 +35,7 @@ export class LibraryUsageService {
         if (revision === libraryReferenceRevision()) return references[kind];
       } catch (error) {
         if (this.cached === cached) this.cached = undefined;
-        throw error;
+        if (revision === libraryReferenceRevision()) throw error;
       }
     }
   }

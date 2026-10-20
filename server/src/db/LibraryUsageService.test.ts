@@ -340,38 +340,39 @@ describe('library channel references', () => {
     expect(await library.usage.getUsedBy('fillerLists')).toEqual({});
   });
 
-  test('retries a scan invalidated by a save while it was in flight', async ({
-    library,
-  }) => {
-    const channel = await library.create();
-    const custom = v4();
-    const load = library.lineups.loadLineup.bind(library.lineups);
-    let release!: () => void;
-    let started!: () => void;
-    const startedPromise = new Promise<void>((resolve) => {
-      started = resolve;
+  for (const outcome of ['resolves', 'rejects']) {
+    test(`retries a superseded scan that ${outcome}`, async ({ library }) => {
+      const channel = await library.create();
+      const custom = v4();
+      const load = library.lineups.loadLineup.bind(library.lineups);
+      let release!: () => void;
+      let started!: () => void;
+      const startedPromise = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      vi.spyOn(library.lineups, 'loadLineup').mockImplementationOnce(
+        async (id) => {
+          const old = await load(id);
+          started();
+          await gate;
+          if (outcome === 'rejects') throw new Error('Superseded read failed');
+          return old;
+        },
+      );
+      const pending = library.usage.getUsedBy('customShows');
+      await startedPromise;
+      await library.lineups.saveLineup(channel.id, {
+        items: [
+          { type: 'content', id: v4(), durationMs: 1000, customShowId: custom },
+        ],
+      });
+      release();
+      expect(await pending).toEqual({ [custom]: [channelUse(channel)] });
     });
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    vi.spyOn(library.lineups, 'loadLineup').mockImplementationOnce(
-      async (id) => {
-        const old = await load(id);
-        started();
-        await gate;
-        return old;
-      },
-    );
-    const pending = library.usage.getUsedBy('customShows');
-    await startedPromise;
-    await library.lineups.saveLineup(channel.id, {
-      items: [
-        { type: 'content', id: v4(), durationMs: 1000, customShowId: custom },
-      ],
-    });
-    release();
-    expect(await pending).toEqual({ [custom]: [channelUse(channel)] });
-  });
+  }
 
   test('does not retain a failed scan as cached missing references', async ({
     library,
