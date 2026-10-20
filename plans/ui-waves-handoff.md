@@ -6,7 +6,61 @@ session, Codex, or a person can continue without the previous session's memory. 
 "Approval gate" paragraph, the row you are about to work on, and this file's "Working rules" before
 starting anything.
 
-## State at handoff
+## Continuation after the .20.3 deployment (2026-10-20)
+
+The work through `0eba0856` is deployed as `oliviacpu-2026.10.20.3`, reporting
+`2026.10.3-oliviacpu-2026.10.20.3`. Its isolated migration/restore rehearsals and guarded
+Whatbox deployment passed. Live checks confirmed the exact 81-migration ledger, integrity/FK
+checks, preserved catalog counts/external-ID hashes, expected settings normalization and preserved
+schedules/seeds. Authenticated settings/version reads, web assets, one valid HLS MPEG-TS segment
+and Plex guide refresh passed. Apple TV acceptance remains unverified. The actual deployment
+record is in the [release notes](https://github.com/oliviacpu/tunarr/releases/tag/oliviacpu-2026.10.20.3).
+
+This closing continuation records the following source PRs in `FORK.md`; they require the next
+release and are not included in the deployed `.20.3` image:
+
+- #146: future images label their actual release commit. Existing `.20.3` labels are unchanged.
+- #147: outlined Manage Libraries Close and shared equivalent dialog action labels.
+- #148: preserve nonempty legacy `{error}` failure reasons in the client.
+- #150: minus decreases displayed guide hours; plus increases them, within the existing 1–8 hour limits.
+- #151: guide-derived lineup/calendar colours and tabular time/count numerals.
+- #152: C7a preserves omitted filler/subtitle relations, clears explicit empty arrays and replaces
+  nonempty arrays. Changed editor relations serialize deliberately; creation/update skip empty
+  subtitle inserts. Existing start-time/on-demand behavior and the bulk stealth workaround remain.
+- #154: use the existing bounded initial-field wait and current Playback breadcrumb in settings tests.
+- #155: persist table preferences outside React state updater callbacks while preserving batched updates.
+
+C7a alone was approved in #149. C7b/C7c batching is held. S5 remains approved design only, with
+implementation separate; a different dark-yellow palette step remains a separate visual decision.
+
+The first combined browser run passed 164 tests, failed two and skipped one. It exposed the
+retired transcode breadcrumb locator fixed by #154 and the table preference render warning fixed
+by #155. A separate CI run exposed the initial executable-field wait fixed by #154. These
+follow-ups preserve the original assertions; the combined suite must pass before release.
+
+Source PRs carry their focused tests and final-head CI/review evidence. The closing branch also
+combines their code for integration checks. Before the next release, require its final CI and
+review, pause automatic updates with ownership recorded, build the tagged image, run isolated
+on-host candidate/restore rehearsals, then use the existing guarded deployment and verify live
+image/version, data and playback. This batch adds no database migration or settings-version bump;
+both rehearsal images must preserve the same 81 migrations and settings version 2. Keep catalog
+snapshots on the deployment host. Record the observed deployment result in that release's notes
+and this closing PR afterward; this snapshot does not claim the next deployment has happened.
+
+### Separate local calendar observations
+
+The D4 browser fixture exposed two existing issues outside its presentation scope: a cycle shorter
+than a day repeats `actualStartTime`/React keys because the calendar loop wraps its item index
+without advancing the cycle start; and the 390px week preview overflows its headers and initially
+clips later columns under fixed day widths. These are local seeded-test findings, not reported
+production incidents. Neither is fixed here. D4's full-day GET-only fixture isolates colour checks
+without suppressing warnings or changing scheduling logic.
+
+## Earlier fold-in snapshot (before the .20.3 deployment)
+
+The state and release instructions below preserve the earlier handoff history. Their pending
+`.20.3` deployment statements describe that snapshot; use the continuation status above for the
+current release boundary.
 
 | Wave        | Rows                                                          | Status                                                                                                                            |
 | ----------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |

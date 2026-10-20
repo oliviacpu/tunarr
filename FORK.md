@@ -26,6 +26,70 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Settings tests follow the integrated loading and navigation behavior (2026-10-20, PR #154)
+
+- **What you saw:** full CI exceeded the isolation test's one-second initial executable-field wait while system state was still loading. The combined browser sweep also waited for the transcode editor's retired breadcrumb name.
+- **Cause:** the isolation helper retained Testing Library's default wait despite the neighboring FFmpeg harness already allowing ten seconds for initial fields, and the transcode test targeted an old navigation name plus its first link.
+- **Fix:** T1 follow-up under the approved UI audit (PR #85). Give only the playback helper the existing bounded ten-second initial-field wait. Keep the unresolved optional-flags assertions intact. Target the current breadcrumbs' explicit Playback link and check its destination before exercising the unchanged unsaved-dialog and save assertions. No runtime code or global CI limits change.
+- **Tests:** the failures were observed in full CI and the combined browser sweep. Focused settings suites and the real transcode browser file verify the corrected waits/locator; e2e typecheck, changed-file lint and formatting checks cover the test-only change.
+- **Upstream:** not sent.
+
+### Keep table preference updates outside React state updaters (2026-10-20, PR #155)
+
+- **What you saw:** the combined browser route sweep caught a React warning when the channel Streaming tab updated table preferences.
+- **Cause:** a functional state updater notified settings subscribers while React was rendering the subtitle table.
+- **Fix:** resolve visibility, pagination and sorting callbacks against their latest pending values before queuing concrete React state and persisting preferences. Consecutive functional updates still compose, direct values still work, and selection/reset behavior remains unchanged. No API, schema or scheduling behavior changed.
+- **Tests:** the StrictMode settings-subscriber regression reproduces the warning before the fix; all seven hook tests pass, covering composed/direct updates, persisted remount values and existing selection/reset behavior. The focused Streaming route and subtitle browser suite passed all six tests including seed. Web/E2E typechecks, changed-file lint, formatting and quick preflight pass.
+- **Upstream:** not sent.
+
+### Channel updates preserve omitted filler and subtitle relations (2026-10-20, PR #152)
+
+- **What you saw:** a channel update that omitted optional filler attachments or subtitle preferences deleted the saved rows. The bulk stealth UI worked around this by fetching and resending a full channel.
+- **Cause:** the repository deleted both relations unconditionally, while subtitle write validation rejected empty arrays and the editor serialized an intentional clear as omission.
+- **Fix:** approved C7a from design PR #149. Omitted relations keep their exact rows; explicit empty arrays clear, and nonempty arrays replace, within the existing immediate transaction. Accept empty subtitle arrays on writes and skip empty inserts during both creation and update. The editor sends changed relations only and sends an explicit empty array for a deliberate clear. Existing start-time/on-demand behavior and the bulk stealth preservation workaround stay in place. C7b/C7c batching and S5 global defaults remain held.
+- **Tests:** real SQLite repository regressions cover omissions, independent clears/replacements, retained relation IDs, rollback, start-time/on-demand preservation and creation with empty subtitles. Schema/editor/browser regressions cover empty and malformed writes, unrelated edits and clear/save/reload. Current and Latest OpenAPI document the same write change; generated client/routes are checked without rewriting historical specifications.
+- **Upstream:** not sent.
+
+### Lineup and calendar theme colours (2026-10-20, PR #151)
+
+- **What you saw:** the lineup list, mid-roll headers and day/week previews used random program colours that differed from the guide.
+- **Cause:** those surfaces kept their separate colour hook and omitted tabular numerals on time/count text.
+- **Fix:** reuse the guide's existing eight-step ramp and resolved scheme for fills, text, hover colours and dividers. Episodes and custom-show entries follow their show or artist; movies and other videos follow their program. Flex gaps and redirects keep their semantic treatment. Lineup times/counts, calendar dates/times and guide remaining-time text use tabular numerals. Scheduling, grouping, titles, controls and the existing dark-yellow palette step are unchanged.
+- **Tests:** 65 focused tests, web/E2E types, changed-file lint and quick preflight; three seeded browser tests with 16 inspected captures at 390px/1440px in both schemes. GET-only programming overrides exercise a full-day mixed/mid-roll lineup without saving fixture programming. Separate calendar timestamp and phone-overflow findings remain unimplemented.
+- **Upstream:** not sent.
+
+### Make guide minus reduce hours and plus add hours (2026-10-20, PR #150)
+
+- **What you saw:** The guide controls were ordered minus / duration / plus, but minus increased the displayed hours and plus decreased them.
+- **Cause:** Their handlers and accessible names followed zoom direction rather than the displayed duration.
+- **Fix:** Connect minus to decreasing the duration and plus to increasing it. Name the controls “Show one hour less” and “Show one hour more”, retaining the one-hour minimum, eight-hour maximum and existing order. The existing date-navigation/reset tooltips are unchanged; these duration buttons had no individual tooltips.
+- **Tests:** The two focused unit tests reject the old handler assignments and verify rendered/persisted hours, icon order, both limits and re-enabling plus after decreasing from eight hours. The existing guide browser case checks 3 → 2 → 3 and minus/duration/plus order at 390px and 1440px in both themes, with four captures. Web/e2e typechecks and quick preflight validate the scoped change.
+- **Upstream:** Fork-only guide-controls follow-up under the audit plan (PR #85), explicitly requested by the user; no upstream submission.
+
+### Preserve legacy API failure reasons (2026-10-20, PR #148)
+
+- **What you saw:** channel updates and bulk actions could show a generic HTTP failure instead of the server's reason.
+- **Cause:** the shared error helper read plain strings and `{ message }`, while older channel routes still return `{ error }`.
+- **Fix:** accept a nonempty string in the legacy error field, prefer a nonempty canonical message when both exist, and ignore empty or malformed fields. Server response shapes and channel update behavior are unchanged.
+- **Tests:** focused error-helper tests cover legacy failures, canonical precedence, and empty or malformed response bodies.
+- **Upstream:** small client compatibility correction from the C7 follow-up inventory; no API change.
+
+### Use shared dialog action labels (2026-10-20, PR #147)
+
+- **What you saw:** Manage Libraries used a primary Close button even though each toggle saves immediately. Some dismissal buttons and delete tooltips defined the same localized action labels separately.
+- **Cause:** Those sites predated the shared action vocabulary.
+- **Fix:** Make Manage Libraries' Close outlined and add Close to `useActions`. Reuse shared Cancel/Close labels in existing dialogs and the selected-program drawer, and shared Delete labels in existing table tooltips. Keep descriptive accessible names, destructive styling, primary commit actions and operation-specific toasts. Disabled Delete section headings and the running trash job's Cancel remain separate.
+- **Tests:** All 40 focused tests pass, covering immediate library toggles, non-committing Close, locale changes and affected consumers. The outlined-Close regression fails with the old contained variant. Web typecheck, changed-file lint and quick preflight pass. No locale catalogs or behavior/API/schema changes.
+- **Upstream:** Fork-only D3 follow-up under the approved audit plan (PR #85); no upstream submission.
+
+### Fork images identify their release commit (2026-10-20, PR #146)
+
+- **What you saw:** the released image's OCI revision label identified the base image's commit instead of the Tunarr release commit.
+- **Cause:** the fork image workflow set source and version labels but inherited the base image's revision label.
+- **Fix:** explicitly set `org.opencontainers.image.revision` to the workflow's full release commit SHA. Image tags, newest-release promotion to `latest`, version strings and GitHub release behavior stay unchanged. Existing images are unchanged; the correction applies to future builds.
+- **Tests:** a focused parsed-workflow assertion fails on the original workflow and passes with the revision label. Removing that single label produces the original parsed workflow exactly; formatting and changed-file lint checks pass. No release, image build or deployment was run.
+- **Upstream:** not sent; fork-only workflow correction.
+
 ### Failed FFmpeg probes report a failure (2026-10-20, PR #136)
 
 - **What you saw:** unavailable FFmpeg returned a successful capability response with empty encoder lists. Default tuner settings also shared one mutable object between settings instances.
