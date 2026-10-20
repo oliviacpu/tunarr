@@ -474,3 +474,81 @@ test('Library scan and search edits share one navigation dialog', async ({
   await expect(page).toHaveURL(/settings\/general$/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+test('HLS session fields separate helper text from the next label on phones', async ({
+  page,
+}, testInfo) => {
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const dark of [false, true]) {
+      await page.goto('/web/settings/playback');
+      await expect(
+        page.getByRole('button', { name: /Enable (light|dark) Mode/ }),
+      ).toBeVisible();
+      const toggle = page.getByRole('button', {
+        name: dark ? 'Enable dark Mode' : 'Enable light Mode',
+        exact: true,
+      });
+      if (await toggle.isVisible()) await toggle.click();
+      await expect(
+        page.getByRole('button', {
+          name: dark ? 'Enable light Mode' : 'Enable dark Mode',
+          exact: true,
+        }),
+      ).toBeVisible();
+      const labels = [
+        'HLS segment length (seconds)',
+        'Segments before playback',
+        'MPEG-TS start-up burst (seconds)',
+      ] as const;
+      await page.getByLabel(labels[0], { exact: true }).scrollIntoViewIfNeeded();
+      const geometry = await Promise.all(
+        labels.map((name) =>
+          page.getByRole('textbox', { name, exact: true }).evaluate((input) => {
+            if (!(input instanceof HTMLInputElement))
+              throw new Error('Expected an HLS input');
+            const helperId = input.getAttribute('aria-describedby');
+            const helper =
+              helperId === null ? null : document.getElementById(helperId);
+            const label = input.labels?.[0];
+            if (helper === null || label === undefined)
+              throw new Error('Expected HLS helper text and label');
+            const box = input.getBoundingClientRect();
+            return {
+              labelTop: label.getBoundingClientRect().top,
+              helperBottom: helper.getBoundingClientRect().bottom,
+              inputTop: box.top,
+              left: box.left,
+              right: box.right,
+            };
+          }),
+        ),
+      );
+      for (let index = 1; index < geometry.length; index++) {
+        const previous = geometry[index - 1];
+        const current = geometry[index];
+        if (previous === undefined || current === undefined)
+          throw new Error('Expected neighboring HLS fields');
+        if (width === 390) {
+          expect(current.labelTop).toBeGreaterThanOrEqual(
+            previous.helperBottom,
+          );
+          expect(current.inputTop).toBeGreaterThanOrEqual(
+            previous.helperBottom,
+          );
+        } else {
+          expect(
+            Math.abs(current.inputTop - previous.inputTop),
+          ).toBeLessThanOrEqual(1);
+          expect(current.left).toBeGreaterThanOrEqual(previous.right);
+        }
+      }
+      await page.screenshot({
+        path: testInfo.outputPath(
+          `hls-${width}-${dark ? 'dark' : 'light'}.png`,
+        ),
+        animations: 'disabled',
+      });
+    }
+  }
+});
