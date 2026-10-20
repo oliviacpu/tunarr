@@ -64,7 +64,9 @@ nav:
               - Music: configure/media_sources/local/music.md
               - Music Videos: configure/media_sources/local/music_videos.md
       - Settings:
-          - General: configure/settings/general.md
+          - General:
+              - configure/settings/general.md
+              - When settings take effect: configure/settings/applies-when.md
           - Playback:
               - configure/ffmpeg/index.md
               - Transcode Configs: configure/ffmpeg/transcode_config.md

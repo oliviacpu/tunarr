@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { HelpTooltip } from '@/components/base/HelpTooltip.tsx';
 import { LearnMoreLink } from '@/components/base/LearnMoreLink.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
@@ -154,6 +155,7 @@ function FfmpegBinariesFields({
   }
   return (
     <>
+      <AppliesWhen setting="ffmpegBinaries" />
       <FfmpegProbeStatus isInContainer={systemState.data.isInContainer} />
       {!systemState.data.isInContainer && (
         <>
@@ -302,6 +304,7 @@ export default function FfmpegSettingsPage({
             </Typography>
             <Stack spacing={3} useFlexGap sx={{ mb: 2 }}>
               <FfmpegBinariesFields control={control} />
+              <AppliesWhen setting="ffmpegLogging" />
               <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
                 {/* Not a field of its own: it sets the two logging switches */}
                 <TextField
@@ -358,6 +361,7 @@ export default function FfmpegSettingsPage({
                   />
                 )}
               </Stack>
+              <AppliesWhen setting="hlsDirectOutput" />
               <SelectFormController
                 control={control}
                 name="hlsDirectOutputFormat"
@@ -371,6 +375,7 @@ export default function FfmpegSettingsPage({
                 }
                 TextFieldProps={{ id: 'hls-direct-output-format' }}
               />
+              <AppliesWhen setting="videoFilters" />
               <SelectFormController
                 control={control}
                 name="scalingAlgorithm"
@@ -421,6 +426,7 @@ export default function FfmpegSettingsPage({
                 }
                 TextFieldProps={{ id: 'tonemap-algorithm' }}
               />
+              <AppliesWhen setting="readAhead" />
               <NumericFormControllerText
                 control={control}
                 name="hlsReadAheadMaxThreads"
@@ -437,6 +443,7 @@ export default function FfmpegSettingsPage({
                   ),
                 }}
               />
+              <AppliesWhen setting="hlsSession" />
               <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
                 <NumericFormControllerText
                   control={control}
@@ -469,6 +476,7 @@ export default function FfmpegSettingsPage({
                   }}
                 />
               </Stack>
+              <AppliesWhen setting="transcodeDirectory" />
               <FormControl fullWidth>
                 <Controller
                   control={control}
@@ -509,6 +517,7 @@ export default function FfmpegSettingsPage({
                 <Typography variant="h3">
                   <Trans>Subtitles</Trans>
                 </Typography>
+                <AppliesWhen setting="subtitleExtraction" />
                 <SwitchFormController
                   control={control}
                   name="enableSubtitleExtraction"
@@ -522,6 +531,7 @@ export default function FfmpegSettingsPage({
                   }
                   FormControlProps={{ fullWidth: true }}
                 />
+                <AppliesWhen setting="captionsEnabled" />
                 <SwitchFormController
                   control={control}
                   name="hdhrClosedCaptions"
@@ -531,7 +541,7 @@ export default function FfmpegSettingsPage({
                       <Trans>
                         Sends text subtitles as closed captions viewers can turn
                         on and off. For HLS channels with subtitles on, from the
-                        next program.
+                        next session.
                       </Trans>
                       <HelpTooltip
                         about={t`Closed captions for HDHomeRun clients`}
@@ -546,6 +556,7 @@ export default function FfmpegSettingsPage({
                   }
                   FormControlProps={{ fullWidth: true }}
                 />
+                <AppliesWhen setting="captionStyle" />
                 <SelectFormController
                   control={control}
                   name="hdhrCaptionAlignment"
@@ -640,6 +651,7 @@ export default function FfmpegSettingsPage({
               <Typography variant="h3" sx={{ mt: 2, mb: 1 }}>
                 <Trans>Audio Language Preferences</Trans>
               </Typography>
+              <AppliesWhen setting="audioLanguages" />
               <Typography variant="subtitle1" sx={{ mb: 2 }}>
                 <Trans>Audio languages to prefer, first to last.</Trans>
               </Typography>
@@ -686,6 +698,7 @@ export default function FfmpegSettingsPage({
           <Typography variant="h3" sx={{ mt: 2, mb: 1 }}>
             <Trans>Transcoding Configs</Trans>
           </Typography>
+          <AppliesWhen setting="transcodeConfigs" />
           <Typography variant="subtitle1">
             <Trans>
               Each channel uses one transcode config: its video, audio and

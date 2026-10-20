@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
@@ -103,6 +104,9 @@ export default function XmlTvSettingsPage() {
           : () => reset(tunarrDefaults, { keepDefaultValues: true })
       }
     >
+      <Stack sx={{ mb: 2 }}>
+        <AppliesWhen setting="guide" />
+      </Stack>
       <FormControl fullWidth>
         <Controller
           control={control}

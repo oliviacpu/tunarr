@@ -1,0 +1,188 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`settings application timing > the reviewed runtime mapping stays explicit 1`] = `
+{
+  "audioLanguages": {
+    "description": "The next program pipeline selects audio using the saved language preferences.",
+    "title": "Audio language preferences",
+    "when": "next-program",
+  },
+  "backendAddress": {
+    "description": "Saving changes the server this browser connects to immediately.",
+    "title": "Server address",
+    "when": "live",
+  },
+  "backups": {
+    "description": "Saving replaces the backup schedules immediately. A backup already running keeps its original output options.",
+    "title": "Backup configuration and schedules",
+    "when": "live",
+  },
+  "browserPreferences": {
+    "description": "Changes apply in this browser as you make them.",
+    "title": "Browser preferences",
+    "when": "live",
+  },
+  "captionStyle": {
+    "description": "The next program pipeline reads the saved caption style and test pattern. A program already transcoding keeps its captions.",
+    "title": "Caption alignment, appearance and test pattern",
+    "when": "next-program",
+  },
+  "captionsEnabled": {
+    "description": "Caption delivery is fixed when an HLS session starts. Stop all viewers of the channel and tune in again to change it.",
+    "title": "HDHomeRun closed captions",
+    "when": "next-session",
+  },
+  "feature.disableSearchSnapshotInBackup": {
+    "description": "New backup archives read this flag. A backup already running can keep its original snapshot behavior.",
+    "title": "Search snapshot in backups",
+    "when": "live",
+  },
+  "feature.disableVaapiPad": {
+    "description": "The next VAAPI program pipeline reads this flag. A pipeline already running is unchanged.",
+    "title": "Disable VAAPI padding",
+    "when": "next-program",
+  },
+  "feature.disableVulkan": {
+    "description": "The next NVIDIA program pipeline reads this flag. A pipeline already running is unchanged.",
+    "title": "Disable Vulkan",
+    "when": "next-program",
+  },
+  "feature.proxyArtwork": {
+    "description": "New artwork requests use the saved flag. Images already loaded by a client may remain cached.",
+    "title": "Proxy artwork",
+    "when": "live",
+  },
+  "feature.tonemapEnabled": {
+    "description": "The next program pipeline reads this flag. A pipeline already running keeps its tone-mapping behavior.",
+    "title": "HDR tonemapping feature",
+    "when": "next-program",
+  },
+  "feature.webvttSidecarEnabled": {
+    "description": "The next program pipeline reads this flag when preparing subtitle outputs.",
+    "title": "WebVTT sidecar subtitles",
+    "when": "next-program",
+  },
+  "feature.xmltvCreditImagesEnabled": {
+    "description": "Guide writers read this flag on each write. Regenerate the guide to update existing XMLTV output.",
+    "title": "XMLTV credit images",
+    "when": "live",
+  },
+  "ffmpegBinaries": {
+    "description": "New probes and processes use the saved executable paths. Processes already running continue with their original binaries.",
+    "title": "FFmpeg and FFprobe executable paths",
+    "when": "next-program",
+  },
+  "ffmpegLogging": {
+    "description": "New program FFmpeg processes use the saved logging destination and level. Processes already running keep their logging options.",
+    "title": "FFmpeg logging",
+    "when": "next-program",
+  },
+  "guide": {
+    "description": "Saving reschedules guide refreshes and rebuilds the guide immediately using the saved settings.",
+    "title": "Guide settings",
+    "when": "live",
+  },
+  "hlsDirectOutput": {
+    "description": "Tune in again to obtain a playlist and stream using the saved container format.",
+    "title": "HLS Direct output format",
+    "when": "next-session",
+  },
+  "hlsSession": {
+    "description": "New HLS sessions read the saved segment length and initial segment count. New MPEG-TS wrapper sessions read the startup burst.",
+    "title": "HLS segments and startup buffering",
+    "when": "next-session",
+  },
+  "logging": {
+    "description": "Saving updates logger levels and rotation rules immediately.",
+    "title": "Tunarr logging and log rotation",
+    "when": "live",
+  },
+  "readAhead": {
+    "description": "The next HLS program transcode reads the saved read-ahead thread limit. A transcode already running keeps its thread count.",
+    "title": "HLS read-ahead thread limit",
+    "when": "next-program",
+  },
+  "scanner": {
+    "description": "Saving reschedules library scans and collection and custom-show syncs immediately. A scan already running continues.",
+    "title": "Library scan interval",
+    "when": "live",
+  },
+  "search": {
+    "description": "Restart Tunarr to relaunch Meilisearch with the saved snapshot interval and memory limit. Environment overrides still take precedence.",
+    "title": "Search indexing",
+    "when": "restart",
+  },
+  "serverPort": {
+    "description": "Restart Tunarr to listen on the saved port.",
+    "title": "Server port",
+    "when": "restart",
+  },
+  "subtitleExtraction": {
+    "description": "Enabling starts an extraction run immediately. Disabling is checked before each queued program; an extraction already running can finish.",
+    "title": "Embedded subtitle extraction",
+    "when": "live",
+  },
+  "transcodeConfigs": {
+    "description": "Active HLS sessions retain their channel transcode configuration. Stop all viewers of the channel and tune in again to use an edited configuration.",
+    "title": "Transcode configurations",
+    "when": "next-session",
+  },
+  "transcodeDirectory": {
+    "description": "New sessions write to the saved directory. Existing sessions keep writing to their original directory until they end.",
+    "title": "FFmpeg transcode path",
+    "when": "next-session",
+  },
+  "tunerCount": {
+    "description": "New HDHomeRun discovery and device-information responses report the saved tuner count. Clients may need to refresh the device.",
+    "title": "HDHomeRun tuner count",
+    "when": "live",
+  },
+  "tunerDiscovery": {
+    "description": "Restart Tunarr to start or stop HDHomeRun discovery advertising.",
+    "title": "HDHomeRun network discovery",
+    "when": "restart",
+  },
+  "videoFilters": {
+    "description": "The next program pipeline reads the saved scaling, deinterlace and tone-map settings. A program already transcoding keeps its pipeline.",
+    "title": "Video scaling, deinterlacing and tone mapping",
+    "when": "next-program",
+  },
+}
+`;
+
+exports[`settings application timing > the reviewed runtime mapping stays explicit 2`] = `
+{
+  "deinterlaceFilter": "videoFilters",
+  "enableFileLogging": "ffmpegLogging",
+  "enableLogging": "ffmpegLogging",
+  "enableSubtitleExtraction": "subtitleExtraction",
+  "ffmpegExecutablePath": "ffmpegBinaries",
+  "ffprobeExecutablePath": "ffmpegBinaries",
+  "hdhrCaptionAlignment": "captionStyle",
+  "hdhrCaptionAppearance": "captionStyle",
+  "hdhrCaptionTestPattern": "captionStyle",
+  "hdhrClosedCaptions": "captionsEnabled",
+  "hlsDirectOutputFormat": "hlsDirectOutput",
+  "hlsInitialSegmentCount": "hlsSession",
+  "hlsReadAheadMaxThreads": "readAhead",
+  "hlsSegmentSeconds": "hlsSession",
+  "hlsTsInitialBurstSeconds": "hlsSession",
+  "languagePreferences": "audioLanguages",
+  "logLevel": "ffmpegLogging",
+  "scalingAlgorithm": "videoFilters",
+  "tonemapAlgorithm": "videoFilters",
+  "transcodeDirectory": "transcodeDirectory",
+}
+`;
+
+exports[`settings application timing > the reviewed runtime mapping stays explicit 3`] = `
+{
+  "disableSearchSnapshotInBackup": "feature.disableSearchSnapshotInBackup",
+  "disableVaapiPad": "feature.disableVaapiPad",
+  "disableVulkan": "feature.disableVulkan",
+  "proxyArtwork": "feature.proxyArtwork",
+  "tonemapEnabled": "feature.tonemapEnabled",
+  "webvttSidecarEnabled": "feature.webvttSidecarEnabled",
+  "xmltvCreditImagesEnabled": "feature.xmltvCreditImagesEnabled",
+}
+`;

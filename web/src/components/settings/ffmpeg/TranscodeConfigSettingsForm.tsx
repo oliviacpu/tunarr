@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Check, VisibilityOff } from '@mui/icons-material';
@@ -62,6 +63,7 @@ export const TranscodeConfigSettingsForm = ({
   return (
     <SettingsForm form={form} onSubmit={save} isSubmitting={isSaving}>
       <Breadcrumbs />
+      <AppliesWhen setting="transcodeConfigs" />
       <Box
         component="fieldset"
         ref={fieldsRef}

@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { SwitchFormController } from '@/components/util/TypedController.tsx';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
@@ -12,6 +13,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import { FeatureFlagsApplicationGroups } from '@tunarr/types';
 import { isEqual } from 'lodash-es';
 import { useEffect } from 'react';
 import type { Control, SubmitHandler } from 'react-hook-form';
@@ -57,6 +59,8 @@ function FlagSection({
             direction="row"
             alignItems="flex-start"
             spacing={1}
+            useFlexGap
+            sx={{ flexWrap: 'wrap' }}
           >
             <SwitchFormController
               control={control}
@@ -66,6 +70,7 @@ function FlagSection({
               // The environment variable wins over the saved value
               disabled={meta.envOverride}
             />
+            <AppliesWhen setting={FeatureFlagsApplicationGroups[meta.key]} />
             {meta.envOverride && (
               <Chip
                 label={<Trans>Set by environment variable</Trans>}

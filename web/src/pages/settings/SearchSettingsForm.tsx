@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import {
@@ -7,7 +8,7 @@ import {
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { useSystemSettingsSuspense } from '@/hooks/useSystemSettings.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Chip, Stack, TextField, Typography } from '@mui/material';
+import { Stack, TextField, Typography } from '@mui/material';
 import type { SystemSettings } from '@tunarr/types';
 import { isEqual } from 'lodash-es';
 import { useEffect } from 'react';
@@ -69,7 +70,7 @@ export function SearchSettingsForm({
           <Typography variant="h3">
             <Trans>Search indexing</Trans>
           </Typography>
-          <Chip size="small" label={t`Restart required`} />
+          <AppliesWhen setting="search" />
         </Stack>
         <NumericFormControllerText
           control={control}
