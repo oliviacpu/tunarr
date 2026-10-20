@@ -1,4 +1,4 @@
-### Missing detail entities and suspense loading (2026-10-20, D7)
+### Missing detail entities and suspense loading (2026-10-20, PR #135)
 
 - **What you saw:** Missing smart collections, media sources/libraries and transcode configurations reached the error page; missing media details rendered blank. Suspense-backed filler/custom-show lists retained unreachable loading branches.
 - **Cause:** Several existing ID loaders did not map lookup failures to the shared not-found UI, and media details fetched only inside the component. The outer lists suspend until their data is ready, while per-show previews genuinely load on expansion.
