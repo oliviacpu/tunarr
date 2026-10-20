@@ -983,8 +983,10 @@ test('HLS readiness failure preserves another active viewer', async () => {
 });
 
 test('a rejected start promise pauses the unwatched channel', async () => {
+  const created: StubHlsSession[] = [];
   const manager = makeSessionManager((channel, opts) => {
     const session = new StubHlsSession(channel, opts);
+    created.push(session);
     vi.spyOn(session, 'start').mockRejectedValue(new Error('start failed'));
     return session;
   });
@@ -997,4 +999,8 @@ test('a rejected start promise pauses the unwatched channel', async () => {
     ).isFailure(),
   ).toBe(true);
   expect(service.pauseChannel).toHaveBeenCalledOnce();
+  expect(manager.getHlsSession(channelUuid)).toBeUndefined();
+  vi.mocked(service.pauseChannel).mockClear();
+  created[0]?.emit('stop');
+  expect(service.pauseChannel).not.toHaveBeenCalled();
 });

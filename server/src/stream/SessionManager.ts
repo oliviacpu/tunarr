@@ -457,6 +457,7 @@ export class SessionManager {
 
         if (!session.started || session.hasError) {
           await session.start().catch(async (error: unknown) => {
+            if (session) this.#replacedSessions.add(session);
             this.deleteSession(channelId, sessionType);
             await this.pauseUnwatchedChannel(channelId);
             throw error;
