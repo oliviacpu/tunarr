@@ -552,7 +552,7 @@ export const MediaSourceLibraryTable = () => {
         <Trans>
           Tunarr only syncs content from enabled libraries. Turn on a library's
           switch to sync it, or manage sources in{' '}
-          <MuiLink component={Link} to="/settings/sources">
+          <MuiLink component={Link} to="/media_sources">
             Media Source Settings.
           </MuiLink>
         </Trans>

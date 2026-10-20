@@ -77,7 +77,7 @@ export default function ConnectMediaSources(props: CardProps) {
                         </TableCell>
                         <TableCell>
                           <RouterIconButtonLink
-                            to={`/settings/sources`}
+                            to={`/media_sources`}
                             color="primary"
                           >
                             <Edit />

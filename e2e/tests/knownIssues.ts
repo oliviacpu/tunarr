@@ -31,7 +31,6 @@ export const KNOWN_ISSUES: KnownIssue[] = [
       '/library/smart_collections',
       '/media_sources',
       '/settings/ffmpeg',
-      '/settings/sources',
     ],
     note: 'setState during render. The shared cause is likely in a table or layout component these pages use.',
   },
@@ -45,11 +44,6 @@ export const KNOWN_ISSUES: KnownIssue[] = [
       '/library/fillers/$fillerId/edit',
     ],
     note: 'Missing list keys in the lineup and programming editors.',
-  },
-  {
-    match: /MUI: The `value` provided to the Tabs component is invalid/,
-    routes: ['/settings/sources'],
-    note: 'Settings tabs receive a value with no matching tab.',
   },
   {
     match: /Invalid prop `children` supplied to `ForwardRef\(Tooltip2?\)`/,

@@ -74,6 +74,16 @@ describe('router', () => {
     },
   );
 
+  test('/settings/sources, which no longer exists, renders the not-found page', async () => {
+    const router = createTestRouter('/settings/sources');
+
+    renderWithProviders(<RouterProvider router={router} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Not found' }),
+    ).toBeInTheDocument();
+  });
+
   test('an address no route matches renders the not-found page', async () => {
     const router = createTestRouter('/does-not-exist');
 
