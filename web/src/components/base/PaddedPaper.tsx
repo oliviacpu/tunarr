@@ -4,8 +4,8 @@ import { styled } from '@mui/material/styles';
 
 const PaddedPaper = styled(Paper, {
   shouldForwardProp: () => true,
-})<PaperProps & { to?: string }>(() => ({
-  padding: 16,
+})<PaperProps & { to?: string }>(({ theme }) => ({
+  padding: theme.spacing(2),
 }));
 
 export default PaddedPaper;

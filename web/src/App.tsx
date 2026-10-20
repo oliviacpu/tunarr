@@ -13,7 +13,6 @@ import { Drawer } from './components/Drawer.tsx';
 import { NewMediaSourceLibrariesPrompt } from './components/settings/media_source/NewMediaSourceLibrariesPrompt.tsx';
 import { TopBar } from './components/TopBar.tsx';
 import { useServerEventsSnackbar } from './hooks/useServerEvents.ts';
-import { useIsDarkMode } from './hooks/useTunarrTheme.ts';
 import { useVersion } from './hooks/useVersion.tsx';
 export function Root({ children }: { children?: React.ReactNode }) {
   useServerEventsSnackbar();
@@ -21,7 +20,6 @@ export function Root({ children }: { children?: React.ReactNode }) {
   const { data: version } = useVersion();
 
   const theme = useTheme();
-  const darkMode = useIsDarkMode();
 
   const smallViewport = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -29,7 +27,7 @@ export function Root({ children }: { children?: React.ReactNode }) {
     <Box
       sx={{
         display: 'flex',
-        backgroundColor: darkMode ? 'transparent' : '#f5fafc',
+        backgroundColor: 'background.default',
         minHeight: '100vh',
       }}
     >

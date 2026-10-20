@@ -8,6 +8,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Tunarr } from './Tunarr.tsx';
 import './helpers/dayjs.ts';
+// The UI font (IBM Plex Sans, SIL Open Font License), bundled so the app works
+// offline. theme.ts names it in typography.fontFamily.
+import '@fontsource-variable/ibm-plex-sans';
 import './index.css';
 
 ColorSpace.register(OKLCH);
