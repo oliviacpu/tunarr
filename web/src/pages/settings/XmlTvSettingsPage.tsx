@@ -39,7 +39,9 @@ export default function XmlTvSettingsPage() {
 
   const form = useForm<XmlTvSettings>({
     defaultValues: defaultXmlTvSettings,
-    mode: 'onBlur',
+    // Save turns off as soon as a value stops being valid; a field says why
+    // once it has been left
+    mode: 'onTouched',
   });
   const {
     reset,

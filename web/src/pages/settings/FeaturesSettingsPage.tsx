@@ -1,47 +1,30 @@
-import { useActions, useToasts } from '@/strings/actions';
+import { SettingsForm } from '@/components/form/SettingsForm.tsx';
+import { SwitchFormController } from '@/components/util/TypedController.tsx';
+import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
-import {
-  Box,
-  Button,
-  Chip,
-  FormControl,
-  FormControlLabel,
-  FormHelperText,
-  Stack,
-  Switch,
-  Typography,
-} from '@mui/material';
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from '@tanstack/react-query';
-import { useSnackbar } from 'notistack';
-import type { SubmitHandler } from 'react-hook-form';
-import { Controller, useForm } from 'react-hook-form';
+import { Box, Chip, Stack, Typography } from '@mui/material';
+import { useSuspenseQuery } from '@tanstack/react-query';
+import { isEqual } from 'lodash-es';
+import { useEffect } from 'react';
+import type { Control, SubmitHandler } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import {
   getApiSystemFeatureFlagsOptions,
   getApiSystemFeatureFlagsQueryKey,
   putApiSystemFeatureFlagsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
+import type { GetApiSystemFeatureFlagsResponse } from '../../generated/types.gen.ts';
 
-type FlagKey =
-  | 'proxyArtwork'
-  | 'tonemapEnabled'
-  | 'webvttSidecarEnabled'
-  | 'disableSearchSnapshotInBackup'
-  | 'disableVulkan'
-  | 'disableVaapiPad';
+type FlagFormValues = GetApiSystemFeatureFlagsResponse['flags'];
+type FlagKey = keyof FlagFormValues;
 
-type FlagFormValues = Record<FlagKey, boolean>;
+type MetaEntry = GetApiSystemFeatureFlagsResponse['metadata'][number];
+type FlagMeta = MetaEntry & { key: FlagKey };
 
-type MetaEntry = {
-  key: string;
-  displayName: string;
-  description: string;
-  category: 'experimental' | 'escape-hatch';
-  envOverride: boolean;
-};
+// The server describes each flag; one this page has no value for is left out
+function isFlagMeta(meta: MetaEntry, flags: FlagFormValues): meta is FlagMeta {
+  return Object.prototype.hasOwnProperty.call(flags, meta.key);
+}
 
 function FlagSection({
   title,
@@ -49,8 +32,8 @@ function FlagSection({
   control,
 }: {
   title: string;
-  flags: MetaEntry[];
-  control: ReturnType<typeof useForm<FlagFormValues>>['control'];
+  flags: FlagMeta[];
+  control: Control<FlagFormValues>;
 }) {
   if (flags.length === 0) return null;
 
@@ -61,33 +44,28 @@ function FlagSection({
       </Typography>
       <Stack spacing={2}>
         {flags.map((meta) => (
-          <FormControl key={meta.key} component="fieldset" fullWidth>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Controller
-                name={meta.key as FlagKey}
-                control={control}
-                render={({ field }) => (
-                  <FormControlLabel
-                    label={meta.displayName}
-                    control={
-                      <Switch
-                        {...field}
-                        checked={field.value}
-                        disabled={meta.envOverride}
-                      />
-                    }
-                  />
-                )}
+          <Stack
+            key={meta.key}
+            direction="row"
+            alignItems="flex-start"
+            spacing={1}
+          >
+            <SwitchFormController
+              control={control}
+              name={meta.key}
+              label={meta.displayName}
+              helperText={meta.description}
+              // The environment variable wins over the saved value
+              disabled={meta.envOverride}
+            />
+            {meta.envOverride && (
+              <Chip
+                label={<Trans>Set by environment variable</Trans>}
+                size="small"
+                sx={{ mt: 1 }}
               />
-              {meta.envOverride && (
-                <Chip
-                  label={<Trans>Set by environment variable</Trans>}
-                  size="small"
-                />
-              )}
-            </Stack>
-            <FormHelperText sx={{ ml: 0 }}>{meta.description}</FormHelperText>
-          </FormControl>
+            )}
+          </Stack>
         ))}
       </Stack>
     </Box>
@@ -96,50 +74,48 @@ function FlagSection({
 
 export default function FeaturesSettingsPage() {
   const { t } = useLingui();
-  const actions = useActions();
-  const toasts = useToasts();
   // The route's loader fetches the flags, and the router's pending and error
   // components cover loading and failure
   const { data } = useSuspenseQuery(getApiSystemFeatureFlagsOptions());
-  const snackbar = useSnackbar();
-  const queryClient = useQueryClient();
 
+  const form = useForm<FlagFormValues>({ defaultValues: data.flags });
   const {
     control,
-    handleSubmit,
     reset,
-    formState: { isDirty, isSubmitting },
-  } = useForm<FlagFormValues>({
-    defaultValues: data.flags as FlagFormValues,
-    values: data.flags,
+    formState: { defaultValues },
+  } = form;
+
+  // Load the saved flags into the form. The reload after a save brings back
+  // what the form already compares against, so it is skipped: resetting again
+  // would drop edits made while the save was in flight
+  useEffect(() => {
+    if (!isEqual(data.flags, defaultValues)) {
+      reset(data.flags);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const saveMutation = useSettingsMutation({
+    form,
+    mutation: putApiSystemFeatureFlagsMutation(),
+    toFormValues: (saved) => saved.flags,
+    invalidate: { queryKey: getApiSystemFeatureFlagsQueryKey() },
   });
 
-  const updateMutation = useMutation({
-    ...putApiSystemFeatureFlagsMutation(),
-    onSuccess: (result) => {
-      snackbar.enqueueSnackbar(toasts.saved, { variant: 'success' });
-      reset(result.flags, { keepValues: true });
-      return queryClient.invalidateQueries({
-        queryKey: getApiSystemFeatureFlagsQueryKey(),
-      });
-    },
-    onError: () => {
-      snackbar.enqueueSnackbar(toasts.couldNotSaveSettings, {
-        variant: 'error',
-      });
-    },
-  });
-
-  const onSubmit: SubmitHandler<FlagFormValues> = (values) => {
-    updateMutation.mutate({ body: values });
+  const save: SubmitHandler<FlagFormValues> = (flags) => {
+    saveMutation.mutate({ body: flags });
   };
 
-  const metadata = data.metadata;
+  const metadata = data.metadata.filter((meta) => isFlagMeta(meta, data.flags));
   const experimental = metadata.filter((m) => m.category === 'experimental');
   const escapeHatches = metadata.filter((m) => m.category === 'escape-hatch');
 
   return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+    <SettingsForm
+      form={form}
+      onSubmit={save}
+      isSubmitting={saveMutation.isPending}
+    >
       <Stack spacing={4}>
         <FlagSection
           title={t`Experimental Features`}
@@ -152,24 +128,6 @@ export default function FeaturesSettingsPage() {
           control={control}
         />
       </Stack>
-      <Stack direction="row" justifyContent="right" spacing={2} sx={{ mt: 3 }}>
-        {isDirty && (
-          <Button
-            variant="outlined"
-            onClick={() => reset(data.flags)}
-            disabled={isSubmitting}
-          >
-            {actions.resetChanges}
-          </Button>
-        )}
-        <Button
-          variant="contained"
-          type="submit"
-          disabled={!isDirty || isSubmitting}
-        >
-          {actions.save}
-        </Button>
-      </Stack>
-    </Box>
+    </SettingsForm>
   );
 }
