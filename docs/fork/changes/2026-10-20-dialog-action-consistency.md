@@ -1,4 +1,4 @@
-### Use shared dialog action labels (2026-10-20, PR pending)
+### Use shared dialog action labels (2026-10-20, PR #147)
 
 - **What you saw:** Manage Libraries used a primary Close button even though each toggle saves immediately. Some dismissal buttons and delete tooltips defined the same localized action labels separately.
 - **Cause:** Those sites predated the shared action vocabulary.
