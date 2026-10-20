@@ -156,4 +156,24 @@ describe('calendar cycle timestamps', () => {
       expect(preview(durations, day, 7)).toEqual([]);
     },
   );
+
+  test.each([
+    { elapsedHours: 7, remainingHours: 1 },
+    { elapsedHours: 7.5, remainingHours: 0.5 },
+  ])(
+    'selects the final program at cycle phase $elapsedHours hours',
+    ({ elapsedHours, remainingHours }) => {
+      const programs = preview([7, 1], day.subtract(elapsedHours, 'hour'), 7);
+      expect(programs[0]?.program).toBe(fixture.programs[1]);
+      expect(programs[0]?.actualStartTime.valueOf()).toBe(
+        +day - (elapsedHours - 7) * hour,
+      );
+      expect(programs[0]?.howFarIntoDay).toBe(0);
+      expect(programs[0]?.duration).toBe(remainingHours * hour);
+      expect(programs.every(({ duration }) => duration > 0)).toBe(true);
+      expect(
+        programs.reduce((total, { duration }) => total + duration, 0),
+      ).toBe(24 * hour);
+    },
+  );
 });

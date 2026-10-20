@@ -315,7 +315,7 @@ must still be checked at 390px in the e2e fixture. PRs in a parallel wave write 
 
 The prior bounded continuation deployed as `oliviacpu-2026.10.20.4`; the verified outcome is in
 that release and closing PR #153. The separate local calendar findings are implemented
-as independent web-only bug fixes: cycle timestamps using the current edited list (#156) and
+as independent web-only bug fixes: cycle timestamps using the current edited list and complete final-item boundaries (#156) and
 week-preview containment/alignment with a fixed time axis (#157). Their notes are folded into
 `FORK.md`; combined validation and the next guarded release/deploy remain pending at this snapshot. Server scheduling, API contracts and database/settings migrations are outside this
 scope. C7b/C7c batching and S5 implementation remain held; Apple TV acceptance remains manual.
