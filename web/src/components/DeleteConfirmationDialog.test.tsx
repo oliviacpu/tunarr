@@ -149,4 +149,83 @@ describe('DeleteConfirmationDialog', () => {
 
     expect(screen.getByText('With Props')).toBeInTheDocument();
   });
+
+  test('states the consequence and any details under the title', () => {
+    renderWithProviders(
+      <DeleteConfirmationDialog
+        open={true}
+        title="Delete Evening Movies?"
+        body="This removes it from every channel."
+        details={<p>Used by 2 channels</p>}
+        onConfirm={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Delete Evening Movies?' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('This removes it from every channel.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Used by 2 channels')).toBeInTheDocument();
+  });
+
+  test('cancel is outlined and confirm is contained and error-coloured', () => {
+    renderWithProviders(
+      <DeleteConfirmationDialog
+        open={true}
+        title="Delete it?"
+        onConfirm={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass(
+      'MuiButton-outlined',
+    );
+    const confirm = screen.getByRole('button', { name: 'Delete' });
+    expect(confirm).toHaveClass('MuiButton-contained');
+    expect(confirm).toHaveClass('MuiButton-colorError');
+  });
+
+  test('busy disables both buttons, shows a spinner and blocks dismissal', async () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+
+    const { user } = renderWithProviders(
+      <DeleteConfirmationDialog
+        open={true}
+        title="Delete it?"
+        busy
+        onConfirm={onConfirm}
+        onClose={onClose}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  test('not busy shows no spinner and escape closes', async () => {
+    const onClose = vi.fn();
+
+    const { user } = renderWithProviders(
+      <DeleteConfirmationDialog
+        open={true}
+        title="Delete it?"
+        onConfirm={() => {}}
+        onClose={onClose}
+      />,
+    );
+
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

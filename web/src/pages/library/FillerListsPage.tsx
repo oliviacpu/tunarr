@@ -1,19 +1,10 @@
 import { useToasts, withReason } from '@/strings/actions';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 
-import { isNonEmptyString } from '@/helpers/util.ts';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit } from '@mui/icons-material';
-import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  IconButton,
-  Link,
-  Tooltip,
-} from '@mui/material';
+import { IconButton, Link, Tooltip } from '@mui/material';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
@@ -55,8 +46,9 @@ export default function FillerListsPage() {
 
   const deleteFillerList = useMutation({
     ...deleteApiFillerListsByIdMutation(),
-    onSuccess: () => {
-      return queryClient.invalidateQueries({
+    onSuccess: async () => {
+      snackbar.enqueueSnackbar({ message: toasts.deleted, variant: 'success' });
+      await queryClient.invalidateQueries({
         queryKey: getApiFillerListsQueryKey(),
         exact: false,
       });
@@ -74,12 +66,10 @@ export default function FillerListsPage() {
       });
       console.error(e);
     },
-    onSettled: () => {
-      setDeleteConfirmationId(undefined);
-    },
   });
 
   const { data: fillerLists } = useFillerLists();
+  const deletingFiller = find(fillerLists, { id: deleteConfirmationId });
   const navigate = useNavigate();
 
   const handleFillterNavigation = (
@@ -90,45 +80,6 @@ export default function FillerListsPage() {
       to: `/library/fillers/$fillerId/edit`,
       params: { fillerId: id },
     }).catch(console.error);
-  };
-
-  const renderConfirmationDialog = () => {
-    return (
-      <Dialog
-        open={isNonEmptyString(deleteConfirmationId)}
-        onClose={() => setDeleteConfirmationId(undefined)}
-        aria-labelledby="delete-filler-list-title"
-        aria-describedby="delete-filler-list-description"
-      >
-        <DialogTitle id="delete-filler-list-title">
-          <Trans>
-            Delete Filler List "
-            {find(fillerLists, { id: deleteConfirmationId })?.name}"?
-          </Trans>
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-filler-list-description">
-            <Trans>
-              Deleting a Filler will remove all programming from the channel.
-              This action cannot be undone.
-            </Trans>
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmationId(undefined)} autoFocus>
-            <Trans>Cancel</Trans>
-          </Button>
-          <Button
-            onClick={() =>
-              deleteFillerList.mutate({ path: { id: deleteConfirmationId! } })
-            }
-            variant="contained"
-          >
-            <Trans>Delete</Trans>
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
   };
 
   const renderActionCell = useCallback(
@@ -215,7 +166,17 @@ export default function FillerListsPage() {
 
   return (
     <Box>
-      {renderConfirmationDialog()}
+      <DeleteConfirmationDialog
+        open={deletingFiller !== undefined}
+        onClose={() => setDeleteConfirmationId(undefined)}
+        title={t`Delete Filler List "${deletingFiller?.name}"?`}
+        body={t`Deleting a filler list removes it from every channel that uses it. This cannot be undone.`}
+        onConfirm={() => {
+          if (deletingFiller !== undefined) {
+            deleteFillerList.mutate({ path: { id: deletingFiller.id } });
+          }
+        }}
+      />
       <PageHeader
         breadcrumbs={<Breadcrumbs />}
         title={<Trans>Filler Lists</Trans>}
