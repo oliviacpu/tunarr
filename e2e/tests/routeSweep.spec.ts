@@ -38,7 +38,9 @@ for (const [routePath, target] of Object.entries(ROUTES)) {
         await expect(
           page.getByText('Looks like something went wrong.'),
         ).toHaveCount(0);
-        await expect(page.getByText('Not found!')).toHaveCount(0);
+        await expect(
+          page.getByRole('heading', { name: 'Not found', exact: true }),
+        ).toHaveCount(0);
         expect(health.problems).toEqual([]);
 
         if (health.warnings.length > 0) {

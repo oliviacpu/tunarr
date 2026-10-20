@@ -1,14 +1,12 @@
 import { Root } from '@/App';
 import { TanStackRouterDevtools } from '@/dev/TanStackRouterDevtools';
-import { ErrorPage } from '@/pages/ErrorPage';
+import { RouteErrorPage } from '@/pages/ErrorPage';
 import type { RouterContext } from '@/types/RouterContext';
-import { Trans } from '@lingui/react/macro';
 import { createRootRouteWithContext } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { isNonEmptyString, search as tunarrSearch } from '@tunarr/shared/util';
 import type { SearchRequest } from '@tunarr/types/schemas';
 import { z } from 'zod/v4';
-import { RouterLink } from '../components/base/RouterLink.tsx';
 import { programSearchQueryOpts } from '../hooks/useProgramSearchQuery.ts';
 import { parseSearchQuery } from '../hooks/useSearchQueryParser.ts';
 import useStore from '../store/index.ts';
@@ -63,20 +61,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     };
   },
   component: RootPage,
-  notFoundComponent: () => (
-    <div>
-      <p>
-        <Trans>Not found!</Trans>
-      </p>
-      <RouterLink to="/">
-        <Trans>Go Home</Trans>
-      </RouterLink>
-    </div>
-  ),
-  errorComponent: ({ error, reset }) => {
+  // Unmatched addresses use the router's defaultNotFoundComponent, inside the
+  // shell. Errors below the root use defaultErrorComponent in place of the
+  // failed page; this one covers the root itself, so it draws the shell too.
+  errorComponent: (props) => {
     return (
       <Root>
-        <ErrorPage error={error} resetRoute={reset} />
+        <RouteErrorPage {...props} />
         <TanStackRouterDevtools />
       </Root>
     );

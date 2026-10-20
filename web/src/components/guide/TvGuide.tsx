@@ -3,7 +3,6 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import {
   Box,
   Button,
-  CircularProgress,
   styled,
   Tooltip,
   Typography,
@@ -28,6 +27,7 @@ import { useChannelsSuspense } from '../../hooks/useChannels.ts';
 import { useServerEvents } from '../../hooks/useServerEvents.ts';
 import { useTvGuides, useTvGuidesPrefetch } from '../../hooks/useTvGuide';
 import type { Maybe, Nullable } from '../../types/util.ts';
+import { LoadingIcon } from '../base/LoadingIcon.tsx';
 import PaddedPaper from '../base/PaddedPaper';
 import { ChannelIconDisplay } from '../channels/ChannelIconDisplay.tsx';
 import { ChannelOptionsMenu } from '../channels/ChannelOptionsMenu.tsx';
@@ -583,7 +583,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
                   my: 2,
                 }}
               >
-                <CircularProgress color="secondary" sx={{ m: 4 }} />
+                <LoadingIcon size={40} color="primary" sx={{ m: 4 }} />
               </Box>
             ) : (
               channels

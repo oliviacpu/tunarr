@@ -9,6 +9,8 @@ Tunarr features a built-in search index powered by [Meilisearch](https://www.mei
 
 Tunarr's search supports a basic query language to create structured searches, as well as a "free text" search which looks within all fields. A syntax diagram of the Tunarr query language can be viewed [here](/search_syntax.html).
 
+The Search page lists results once you enter keywords or a query, and until then asks you to type one. To browse everything in a library, open it from the Library page instead.
+
 ## Syntax
 
 Tunarr's search feature different typed fields, such as `string`, `number`, and `date`. Each type has a set of supported operators.

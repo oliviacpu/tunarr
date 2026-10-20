@@ -2,8 +2,8 @@ import type { EditChannelTabs } from '@/components/channel_config/EditChannelTab
 import { ChannelOptionsButton } from '@/components/channels/ChannelOptionsButton.tsx';
 import { useChannelSuspense } from '@/hooks/useChannels.ts';
 import { Route } from '@/routes/channels_/$channelId/edit/index.tsx';
-import { Box, LinearProgress, Stack } from '@mui/material';
-import Typography from '@mui/material/Typography';
+import { Box } from '@mui/material';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import { EditChannelForm } from '../../components/channel_config/EditChannelForm.tsx';
 
@@ -13,33 +13,27 @@ type Props = {
 
 export default function EditChannelPage({ initialTab }: Props) {
   const { channelId } = Route.useParams();
-  const { data: channel, isLoading } = useChannelSuspense(channelId);
+  const { data: channel } = useChannelSuspense(channelId);
 
   return (
     <>
       <Breadcrumbs />
-      {isLoading || !channel ? (
-        <LinearProgress />
-      ) : (
-        <Box>
-          <Stack direction="row">
-            <Typography variant="h4" sx={{ mb: 2, flex: 1 }}>
-              {channel.name}
-            </Typography>
-            <Box>
-              <ChannelOptionsButton
-                channel={channel}
-                hideItems={['edit', 'duplicate', 'delete']}
-              />
-            </Box>
-          </Stack>
-          <EditChannelForm
-            channel={channel}
-            isNew={false}
-            initialTab={initialTab}
-          />
-        </Box>
-      )}
+      <Box>
+        <PageHeader
+          title={channel.name}
+          actions={
+            <ChannelOptionsButton
+              channel={channel}
+              hideItems={['edit', 'duplicate', 'delete']}
+            />
+          }
+        />
+        <EditChannelForm
+          channel={channel}
+          isNew={false}
+          initialTab={initialTab}
+        />
+      </Box>
     </>
   );
 }

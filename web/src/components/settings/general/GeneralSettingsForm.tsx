@@ -1,5 +1,5 @@
 import { LearnMoreLink } from '@/components/base/LearnMoreLink.tsx';
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
+import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { isValidUrl } from '@/helpers/util.ts';
 import {
@@ -283,7 +283,7 @@ export function GeneralSettingsForm({
       <FormProvider {...settingsForm}>
         <Stack gap={2} divider={<Divider />}>
           <Stack gap={2}>
-            <Typography variant="h5" sx={{ mb: 1 }}>
+            <Typography variant="h2" sx={{ mb: 1 }}>
               <Trans>Server Settings</Trans>
             </Typography>
             <Stack direction={{ sm: 'column', md: 'row' }} gap={2}>
@@ -317,7 +317,7 @@ export function GeneralSettingsForm({
                         endAdornment: (
                           <InputAdornment position="end">
                             {isLoading ? (
-                              <RotatingLoopIcon />
+                              <LoadingIcon />
                             ) : !isError ? (
                               <CloudDoneOutlined color="success" />
                             ) : (
@@ -339,7 +339,7 @@ export function GeneralSettingsForm({
             </Stack>
           </Stack>
           <Stack gap={1}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
+            <Typography variant="h3" sx={{ mb: 1 }}>
               <Trans>Logging</Trans>
             </Typography>
             <Grid container spacing={2}>
@@ -427,7 +427,7 @@ export function GeneralSettingsForm({
             </Box>
           </Stack>
           <Box>
-            <Typography variant="h6" sx={{ mb: 1 }}>
+            <Typography variant="h3" sx={{ mb: 1 }}>
               <Trans>Backups</Trans>
             </Typography>
             {renderBackupsForm()}

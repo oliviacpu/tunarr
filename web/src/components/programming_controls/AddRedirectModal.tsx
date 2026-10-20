@@ -1,7 +1,6 @@
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
-  CircularProgress,
   FormControl,
   FormGroup,
   InputLabel,
@@ -31,6 +30,7 @@ import {
 } from '../../store/channelEditor/actions.ts';
 import useStore from '../../store/index.ts';
 import type { UIRedirectProgram } from '../../types/index.ts';
+import { LoadingIcon } from '../base/LoadingIcon.tsx';
 import { NumericFormControllerText } from '../util/TypedController.tsx';
 
 dayjs.extend(duration);
@@ -119,7 +119,7 @@ const AddRedirectModal = (props: AddRedirectModalProps) => {
 
   const dialogContent = () => {
     if (!currentChannel || isPending) {
-      return <CircularProgress />;
+      return <LoadingIcon size={40} color="primary" />;
     } else if (channels) {
       return (
         <FormGroup>

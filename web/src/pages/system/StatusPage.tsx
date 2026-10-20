@@ -1,4 +1,4 @@
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon';
+import { LoadingIcon } from '@/components/base/LoadingIcon';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useM3ULink } from '@/hooks/useM3ULink';
@@ -143,7 +143,7 @@ export const StatusPage = () => {
 
         const icon =
           fixer && runningFixers.has(fixer) ? (
-            <RotatingLoopIcon />
+            <LoadingIcon />
           ) : (
             match(data?.type)
               .with('error', () => <Error color="error" />)
@@ -152,7 +152,7 @@ export const StatusPage = () => {
               .with('info', () => <Info color="info" />)
               .otherwise(() =>
                 systemHealthQuery.isLoading ? (
-                  <RotatingLoopIcon />
+                  <LoadingIcon />
                 ) : (
                   <QuestionMark />
                 ),
@@ -206,7 +206,7 @@ export const StatusPage = () => {
       <Stack gap={2} useFlexGap>
         <Stack gap={2} useFlexGap direction={['column', 'row']}>
           <Box sx={{ pb: 2, flex: 1 }}>
-            <Typography sx={{ mb: 1 }} variant="h5">
+            <Typography sx={{ mb: 1 }} variant="h2">
               <Trans>System Health</Trans>
             </Typography>
             {systemHealthQuery.isLoading && <LinearProgress />}
@@ -216,7 +216,7 @@ export const StatusPage = () => {
           {/* <PaddedPaper> */}
 
           <Box sx={{ pb: 2, flex: 1 }}>
-            <Typography sx={{ mb: 1 }} variant="h5">
+            <Typography sx={{ mb: 1 }} variant="h2">
               <Trans>System Info</Trans>
             </Typography>
             {systemSettings.isLoading && <LinearProgress />}

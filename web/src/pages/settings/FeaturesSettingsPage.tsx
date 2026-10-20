@@ -10,7 +10,11 @@ import {
   Switch,
   Typography,
 } from '@mui/material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import type { SubmitHandler } from 'react-hook-form';
 import { Controller, useForm } from 'react-hook-form';
@@ -51,7 +55,7 @@ function FlagSection({
 
   return (
     <Box>
-      <Typography variant="h6" gutterBottom>
+      <Typography variant="h2" gutterBottom>
         {title}
       </Typography>
       <Stack spacing={2}>
@@ -91,9 +95,9 @@ function FlagSection({
 
 export default function FeaturesSettingsPage() {
   const { t } = useLingui();
-  const { data, isPending, error } = useQuery(
-    getApiSystemFeatureFlagsOptions(),
-  );
+  // The route's loader fetches the flags, and the router's pending and error
+  // components cover loading and failure
+  const { data } = useSuspenseQuery(getApiSystemFeatureFlagsOptions());
   const snackbar = useSnackbar();
   const queryClient = useQueryClient();
 
@@ -103,8 +107,8 @@ export default function FeaturesSettingsPage() {
     reset,
     formState: { isDirty, isSubmitting },
   } = useForm<FlagFormValues>({
-    defaultValues: data?.flags as FlagFormValues,
-    values: data?.flags as FlagFormValues,
+    defaultValues: data.flags as FlagFormValues,
+    values: data.flags,
   });
 
   const updateMutation = useMutation({
@@ -127,19 +131,7 @@ export default function FeaturesSettingsPage() {
     updateMutation.mutate({ body: values });
   };
 
-  if (isPending) {
-    return null;
-  }
-
-  if (error) {
-    return (
-      <Typography color="error">
-        <Trans>Failed to load feature flags.</Trans>
-      </Typography>
-    );
-  }
-
-  const metadata = data?.metadata ?? [];
+  const metadata = data.metadata;
   const experimental = metadata.filter((m) => m.category === 'experimental');
   const escapeHatches = metadata.filter((m) => m.category === 'escape-hatch');
 
@@ -161,7 +153,7 @@ export default function FeaturesSettingsPage() {
         {isDirty && (
           <Button
             variant="outlined"
-            onClick={() => reset(data?.flags)}
+            onClick={() => reset(data.flags)}
             disabled={isSubmitting}
           >
             <Trans>Reset Changes</Trans>

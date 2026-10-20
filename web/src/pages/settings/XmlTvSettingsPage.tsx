@@ -35,7 +35,7 @@ export default function XmlTvSettingsPage() {
   const { t } = useLingui();
   const [restoreTunarrDefaults, setRestoreTunarrDefaults] = useState(false);
   const { backendUri } = useSettings();
-  const { data, error } = useXmlTvSettings();
+  const { data } = useXmlTvSettings();
   const snackbar = useSnackbar();
 
   const {
@@ -92,11 +92,6 @@ export default function XmlTvSettingsPage() {
       },
     });
   };
-
-  // TODO: Handle this better - show the bug page.
-  if (error) {
-    return <h1>XML: {error.message}</h1>;
-  }
 
   const guideUrl = new URL(
     '/api/xmltv.xml',

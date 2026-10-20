@@ -24,7 +24,7 @@ import type {
 import { useToggle } from '@uidotdev/usehooks';
 import { Controller, useFormContext } from 'react-hook-form';
 import { useScheduleSlots } from '../../hooks/slot_scheduler/useScheduleSlots.ts';
-import { RotatingLoopIcon } from '../base/LoadingIcon';
+import { LoadingIcon } from '../base/LoadingIcon';
 import {
   CheckboxFormController,
   NumericFormControllerText,
@@ -256,7 +256,7 @@ export const RandomSlotSettingsForm = ({
           variant="contained"
           onClick={() => calculateSlots()}
           disabled={isCalculatingSlots}
-          startIcon={isCalculatingSlots ? <RotatingLoopIcon /> : <Autorenew />}
+          startIcon={isCalculatingSlots ? <LoadingIcon /> : <Autorenew />}
         >
           <Trans>Refresh Preview</Trans>
         </Button>

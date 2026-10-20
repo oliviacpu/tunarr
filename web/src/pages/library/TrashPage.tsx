@@ -1,4 +1,5 @@
 import PaddedPaper from '@/components/base/PaddedPaper.tsx';
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import Breadcrumbs from '@/components/Breadcrumbs.tsx';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -73,13 +74,11 @@ export const TrashPage = () => {
   }, [itemTypes]);
 
   return (
-    <Stack spacing={2}>
-      <Box>
-        <Breadcrumbs />
-        <Typography variant="h4">
-          <Trans>Trash</Trans>
-        </Typography>
-        <Box display={'flex'} alignContent={'center'} sx={{ mt: 1 }}>
+    <Box>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={<Trans>Trash</Trans>}
+        description={
           <Trans>
             Trashed items are items that were previously scanned, but not found
             in a recent scan. This could be due to missing files or a media
@@ -87,8 +86,8 @@ export const TrashPage = () => {
             be unplayable in channels in their current state. When the trash is
             emptied, their spots in channels will be replaced with flex.
           </Trans>
-        </Box>
-      </Box>
+        }
+      />
       <PaddedPaper>
         <Stack direction={'row'}>
           <ToggleButtonGroup
@@ -162,6 +161,6 @@ export const TrashPage = () => {
         body={t`This permanently deletes all trashed items. Channel lineup slots that reference them will be replaced with flex. This cannot be undone.`}
         confirmLabel={t`Empty trash`}
       />
-    </Stack>
+    </Box>
   );
 };
