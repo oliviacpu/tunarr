@@ -1,4 +1,4 @@
-### Select several channels, filler lists, custom shows or smart collections and act on them at once (2026-10-20)
+### Select several channels, filler lists, custom shows or smart collections and act on them at once (2026-10-20, PR #109)
 
 - **Design:** `plans/ui-primitives-and-settings-audit-2026-10-19.md`, issue C7.
 - **What you saw:** every list deleted one row at a time, each with its own confirmation, and hiding several channels
