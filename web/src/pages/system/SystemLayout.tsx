@@ -36,10 +36,13 @@ export const SystemLayout = ({ currentTab }: Props) => {
         title={<Trans>System</Trans>}
         breadcrumbs={
           tab && (
-          <Breadcrumbs
-            trail={[{ label: t`System`, to: '/system' }, { label: tab.label }]}
-          />
-        )
+            <Breadcrumbs
+              trail={[
+                { label: t`System`, to: '/system' },
+                { label: tab.label },
+              ]}
+            />
+          )
         }
       />
       <Paper sx={{ p: [1, 2] }}>

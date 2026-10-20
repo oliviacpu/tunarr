@@ -37,13 +37,13 @@ export function SettingsLayout({ currentTab = '/general' }: Props) {
         title={<Trans>Settings</Trans>}
         breadcrumbs={
           tab && (
-          <Breadcrumbs
-            trail={[
-              { label: t`Settings`, to: '/settings' },
-              { label: tab.label },
-            ]}
-          />
-        )
+            <Breadcrumbs
+              trail={[
+                { label: t`Settings`, to: '/settings' },
+                { label: tab.label },
+              ]}
+            />
+          )
         }
       />
       <Paper sx={{ p: [1, 2] }}>
