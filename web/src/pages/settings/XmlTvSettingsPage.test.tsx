@@ -47,10 +47,10 @@ vi.mock('../../components/settings/UnsavedNavigationAlert.tsx', () => ({
   default: () => null,
 }));
 
-// The start of the message on the refresh timer when the guide can't last it
-const TooShort = 'EPG (Hours) is too short for this timer';
+// The start of the message on the refresh interval when the guide can't last it
+const TooShort = 'The guide would run out before the next rebuild';
 const tooShortFor = (minimum: number) =>
-  `${TooShort}: the guide would run out before the next rebuild. Set it to ${minimum} or more, two hours longer than the time between rebuilds.`;
+  `${TooShort}. Set Guide length to ${minimum} hours or more, two hours longer than the interval.`;
 
 async function renderPage(refreshHours = '4') {
   const rendered = renderWithProviders(
@@ -62,7 +62,7 @@ async function renderPage(refreshHours = '4') {
   );
   // The saved settings are in the form
   await waitFor(() =>
-    expect(screen.getByLabelText('Refresh Timer (Hours)')).toHaveValue(
+    expect(screen.getByLabelText('Refresh interval (hours)')).toHaveValue(
       refreshHours,
     ),
   );
@@ -78,7 +78,7 @@ async function renderPage(refreshHours = '4') {
   const saveButton = () => screen.getByRole('button', { name: 'Save' });
   // Its helper text, which starts with its error, is its accessible
   // description
-  const refreshTimer = () => screen.getByLabelText('Refresh Timer (Hours)');
+  const refreshTimer = () => screen.getByLabelText('Refresh interval (hours)');
   return { ...rendered, setField, saveButton, refreshTimer };
 }
 
@@ -93,7 +93,7 @@ describe('XmlTvSettingsPage', () => {
     const { setField, saveButton, refreshTimer } = await renderPage();
 
     // A 12-hour guide lasts an 11-hour timer, not a 12-hour one
-    await setField('Refresh Timer (Hours)', '12');
+    await setField('Refresh interval (hours)', '12');
 
     await waitFor(() =>
       expect(refreshTimer()).toHaveAccessibleDescription(
@@ -118,10 +118,10 @@ describe('XmlTvSettingsPage', () => {
 
   test('a longer guide clears it, and both are saved', async () => {
     const { user, setField, saveButton, refreshTimer } = await renderPage();
-    await setField('Refresh Timer (Hours)', '12');
+    await setField('Refresh interval (hours)', '12');
     await waitFor(() => expect(refreshTimer()).toBeInvalid());
 
-    await setField('EPG (Hours)', '14');
+    await setField('Guide length (hours)', '14');
 
     await waitFor(() => expect(refreshTimer()).toBeValid());
     expect(refreshTimer()).not.toHaveAccessibleDescription(
@@ -139,7 +139,7 @@ describe('XmlTvSettingsPage', () => {
   test('a guide two hours longer than the timer is fine', async () => {
     const { setField, saveButton, refreshTimer } = await renderPage();
 
-    await setField('Refresh Timer (Hours)', '10');
+    await setField('Refresh interval (hours)', '10');
 
     await waitFor(() => expect(saveButton()).toBeEnabled());
     expect(refreshTimer()).toBeValid();
@@ -147,10 +147,10 @@ describe('XmlTvSettingsPage', () => {
 
   test('an empty guide is not compared with the timer', async () => {
     const { setField, refreshTimer } = await renderPage();
-    await setField('Refresh Timer (Hours)', '12');
+    await setField('Refresh interval (hours)', '12');
     await waitFor(() => expect(refreshTimer()).toBeInvalid());
 
-    await setField('EPG (Hours)', '');
+    await setField('Guide length (hours)', '');
 
     await waitFor(() => expect(refreshTimer()).toBeValid());
     expect(refreshTimer()).not.toHaveAccessibleDescription(
@@ -161,14 +161,24 @@ describe('XmlTvSettingsPage', () => {
   test('a refresh timer that is not a number is still flagged as one', async () => {
     const { setField, saveButton, refreshTimer } = await renderPage();
 
-    await setField('Refresh Timer (Hours)', 'abc');
+    await setField('Refresh interval (hours)', 'abc');
 
     await waitFor(() =>
       expect(refreshTimer()).toHaveAccessibleDescription(
-        expect.stringContaining('Refresh Timer (Hours) should be numeric.'),
+        expect.stringContaining('Refresh interval (hours) should be numeric.'),
       ),
     );
     expect(saveButton()).toBeDisabled();
+  });
+
+  test('the output path help points clients at the guide URL', async () => {
+    await renderPage();
+
+    expect(
+      screen.getByLabelText('XMLTV output path'),
+    ).toHaveAccessibleDescription(
+      expect.stringContaining('/api/xmltv.xml, not from this file.'),
+    );
   });
 
   test("a save the server refuses shows the server's reason", async () => {
@@ -183,7 +193,7 @@ describe('XmlTvSettingsPage', () => {
     );
     const { user, setField, saveButton } = await renderPage();
 
-    await setField('Refresh Timer (Hours)', '6');
+    await setField('Refresh interval (hours)', '6');
     await waitFor(() => expect(saveButton()).toBeEnabled());
     await user.click(saveButton());
 

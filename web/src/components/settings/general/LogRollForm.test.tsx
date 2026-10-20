@@ -45,7 +45,7 @@ describe('LogRollForm', () => {
 
     await waitFor(() =>
       expect(increment).toHaveAccessibleDescription(
-        'Roll Schedule Increment should be numeric.',
+        'Roll interval should be numeric.',
       ),
     );
     expect(screen.queryByText(/Max Backups/)).not.toBeInTheDocument();

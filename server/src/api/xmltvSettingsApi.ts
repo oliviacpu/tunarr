@@ -44,8 +44,8 @@ function xmlTvRefreshProblem(settings: {
   const minimum = minimumXmlTvGuideHours(settings.refreshHours);
   if (settings.programmingHours < minimum) {
     return (
-      `EPG (Hours) is ${settings.programmingHours}, too short for a ` +
-      `${settings.refreshHours}-hour refresh timer: the guide would run out ` +
+      `Guide length is ${settings.programmingHours} hours, too short for a ` +
+      `${settings.refreshHours}-hour refresh interval: the guide would run out ` +
       `before the next rebuild. It has to be at least ${minimum} hours, ` +
       `two hours longer than the time between rebuilds, since that wait is up to two hours ` +
       `longer on the night the clocks go back.`

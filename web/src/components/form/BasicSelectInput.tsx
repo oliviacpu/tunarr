@@ -11,7 +11,8 @@ import {
   Select,
 } from '@mui/material';
 import { isNonEmptyString } from '@tunarr/shared/util';
-import { identity } from 'lodash-es';
+import { identity, isNil } from 'lodash-es';
+import type { ReactNode } from 'react';
 import { useId, useMemo } from 'react';
 import type { StrictOmit } from 'ts-essentials';
 import type { DropdownOption } from '../../helpers/DropdownOption.ts';
@@ -25,7 +26,7 @@ export interface Converter<In, Out> {
 type Props<FieldTypeT, InputTypeT extends string | number> = {
   options: DropdownOption<InputTypeT>[] | readonly DropdownOption<InputTypeT>[];
   converter: Converter<FieldTypeT, InputTypeT>;
-  helperText?: string;
+  helperText?: ReactNode;
   selectProps?: SelectProps;
   formControlProps?: FormControlProps;
   formHelperTextProps?: FormHelperTextProps;
@@ -81,7 +82,7 @@ export function SelectInput<ValueTypeT, InputTypeT extends string | number>({
           </MenuItem>
         ))}
       </Select>
-      {isNonEmptyString(helperText) ? (
+      {!isNil(helperText) && helperText !== '' ? (
         <FormHelperText {...formHelperTextProps}>{helperText}</FormHelperText>
       ) : null}
     </FormControl>

@@ -17,7 +17,7 @@ const channelId = () => {
 
 const openStreamingTab = async (page: Page) => {
   await page.goto(`/web/channels/${channelId()}/edit?tab=ffmpeg`);
-  await expect(page.getByLabel('Enable Subtitles')).toBeVisible();
+  await expect(page.getByLabel('Enable subtitles')).toBeVisible();
 };
 
 const saveButton = (page: Page) =>
@@ -49,7 +49,7 @@ const setFilter = async (page: Page, from: string, to: string) => {
 test.beforeAll(async ({ browser }) => {
   const page = await browser.newPage();
   await openStreamingTab(page);
-  await page.getByLabel('Enable Subtitles').check();
+  await page.getByLabel('Enable subtitles').check();
   await page.getByLabel('Add Language Preference').fill('English');
   await page.getByRole('option', { name: 'English', exact: true }).click();
   await expect(englishRow(page)).toBeVisible();

@@ -17,9 +17,9 @@ export const TranscodeConfigAdvancedOptions = ({
         name="disableHardwareDecoder"
         children={(field) => (
           <field.BasicCheckboxInput
-            label={t`Disable Hardware Decoding`}
+            label={t`Disable hardware decoding`}
             formControlProps={{ fullWidth: true }}
-            helperText={t`Will force use of a software decoder despite hardware acceleration settings.`}
+            helperText={t`Decodes video on the CPU even with hardware acceleration on.`}
           />
         )}
       />
@@ -28,9 +28,9 @@ export const TranscodeConfigAdvancedOptions = ({
         name="disableHardwareEncoding"
         children={(field) => (
           <field.BasicCheckboxInput
-            label={t`Disable Hardware Encoding`}
+            label={t`Disable hardware encoding`}
             formControlProps={{ fullWidth: true }}
-            helperText={t`Will force use of a software encoder despite hardware acceleration settings.`}
+            helperText={t`Encodes video on the CPU even with hardware acceleration on.`}
           />
         )}
       />
@@ -39,9 +39,9 @@ export const TranscodeConfigAdvancedOptions = ({
         name="disableHardwareFilters"
         children={(field) => (
           <field.BasicCheckboxInput
-            label={t`Disable Hardware Filters`}
+            label={t`Disable hardware filters`}
             formControlProps={{ fullWidth: true }}
-            helperText={t`Will force use of a software filters (e.g. scale, pad, etc.) despite hardware acceleration settings.`}
+            helperText={t`Runs filters such as scaling and padding on the CPU even with hardware acceleration on.`}
           />
         )}
       />

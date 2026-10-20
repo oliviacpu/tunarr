@@ -39,10 +39,7 @@ export const WebSettings = () => {
           <Trans>Web Settings</Trans>
         </Typography>
         <Typography variant="subtitle2">
-          <Trans>
-            These settings are stored in your browser and are saved
-            automatically when changed.
-          </Trans>
+          <Trans>Saved in this browser as you change them.</Trans>
         </Typography>
       </Box>
 

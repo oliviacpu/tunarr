@@ -111,22 +111,26 @@ export default function HdhrSettingsPage() {
                 name="autoDiscoveryEnabled"
               />
             }
-            label={t`Enable SSDP server`}
+            label={t`Network discovery`}
           />
           <FormHelperText>
-            <Trans>* Restart required</Trans>
+            <Trans>
+              Announces Tunarr as an HDHomeRun tuner on your network (SSDP), so
+              Plex and other apps find it. Needs a restart.
+            </Trans>
           </FormHelperText>
         </FormControl>
       </Grid>
       <NumericFormControllerText
         control={control}
         name="tunerCount"
-        prettyFieldName={t`Tuner Count`}
+        prettyFieldName={t`Tuner count`}
         // The server refuses fewer than 1 tuner
         rules={{ min: 1 }}
         TextFieldProps={{
           id: 'tuner-count',
-          label: t`Tuner Count`,
+          label: t`Tuner count`,
+          helperText: t`How many tuners Tunarr reports to HDHomeRun clients. Plex plays at most this many channels at once.`,
           fullWidth: true,
           variant: 'filled',
         }}

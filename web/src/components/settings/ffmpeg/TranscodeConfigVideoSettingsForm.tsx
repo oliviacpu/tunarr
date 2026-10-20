@@ -17,6 +17,7 @@ import {
   resolutionToString,
 } from '../../../helpers/util.ts';
 
+import { HelpTooltip } from '../../base/HelpTooltip.tsx';
 import type { Converter } from '../../form/BasicSelectInput.tsx';
 import type { BaseTranscodeConfigProps } from './BaseTranscodeConfigProps.ts';
 import { useBaseTranscodeConfigFormOptions } from './useTranscodeConfigFormOptions.ts';
@@ -117,7 +118,7 @@ export const TranscodeConfigVideoSettingsForm = ({
         name="videoFormat"
         children={(field) => (
           <field.BasicSelectInput
-            selectProps={{ label: t`Video Format` }}
+            selectProps={{ label: t`Video format` }}
             options={VideoFormats}
           />
         )}
@@ -127,7 +128,7 @@ export const TranscodeConfigVideoSettingsForm = ({
         children={(field) => (
           <field.BasicSelectInput
             options={hardwareAccelerationOptions}
-            selectProps={{ label: t`Hardware Acceleration` }}
+            selectProps={{ label: t`Hardware acceleration` }}
           />
         )}
       />
@@ -191,8 +192,15 @@ export const TranscodeConfigVideoSettingsForm = ({
                 <field.SelectInput
                   options={VideoPresetOptions}
                   converter={videoPresetConverter}
-                  selectProps={{ label: t`Video Preset` }}
-                  helperText={t`How hard the software encoder works per frame. Faster presets use less CPU but need a higher bitrate for the same quality. HLS and HLS Alt channels keep the settings their stream started with, so a change applies once everyone stops watching and the stream starts again; HLS Direct and MPEG-TS channels pick it up from the next program.`}
+                  selectProps={{ label: t`Video preset` }}
+                  helperText={
+                    <>
+                      {t`How hard the software encoder works per frame. Faster presets use less CPU but need a higher bitrate for the same quality.`}
+                      <HelpTooltip about={t`Video preset`}>
+                        {t`HLS and HLS Alt channels keep the settings their stream started with, so a change applies once everyone stops watching and the stream starts again. HLS Direct and MPEG-TS channels pick it up from the next program.`}
+                      </HelpTooltip>
+                    </>
+                  }
                 />
               )}
             />
@@ -243,7 +251,7 @@ export const TranscodeConfigVideoSettingsForm = ({
           children={(field) => (
             <field.BasicTextInput
               fullWidth
-              label={t`Video Bitrate`}
+              label={t`Video bitrate`}
               slotProps={{
                 input: {
                   endAdornment: (
@@ -259,7 +267,7 @@ export const TranscodeConfigVideoSettingsForm = ({
           children={(field) => (
             <field.BasicTextInput
               fullWidth
-              label={t`Video Buffer Size`}
+              label={t`Video buffer size`}
               slotProps={{
                 input: {
                   endAdornment: (
@@ -269,13 +277,14 @@ export const TranscodeConfigVideoSettingsForm = ({
               }}
               helperText={
                 <Trans>
-                  Buffer size effects how frequently ffmpeg reconsiders the
-                  output bitrate.{' '}
+                  A smaller buffer holds the bitrate more strictly; a larger one
+                  lets it vary more.{' '}
                   <MuiLink
                     target="_blank"
+                    rel="noopener noreferrer"
                     href="https://trac.ffmpeg.org/wiki/Limiting%20the%20output%20bitrate#Whatdoes-bufsizedo"
                   >
-                    Read more
+                    How the buffer works
                   </MuiLink>
                 </Trans>
               }
@@ -288,9 +297,9 @@ export const TranscodeConfigVideoSettingsForm = ({
           name="deinterlaceVideo"
           children={(field) => (
             <field.BasicCheckboxInput
-              label={t`Auto Deinterlace Video`}
+              label={t`Auto deinterlace video`}
               formControlProps={{ fullWidth: true }}
-              helperText={t`If set, all watermark overlays will be disabled for channels assigned this transcode config.`}
+              helperText={t`Deinterlaces programs whose video is interlaced, such as TV recordings.`}
             />
           )}
         />
@@ -298,7 +307,7 @@ export const TranscodeConfigVideoSettingsForm = ({
           name="normalizeFrameRate"
           children={(field) => (
             <field.BasicCheckboxInput
-              label={t`Normalize Frame Rate`}
+              label={t`Normalize frame rate`}
               formControlProps={{ fullWidth: true }}
               helperText={t`Output video at a constant frame rate.`}
             />

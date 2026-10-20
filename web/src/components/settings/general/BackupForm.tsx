@@ -73,9 +73,9 @@ export const BackupForm = () => {
           render={({ field }) => (
             <TextField
               fullWidth
-              label={t`Output Path`}
+              label={t`Backup folder`}
               {...field}
-              helperText={t`By default, saves backups in the server's run directory, or, if running in Docker, to /config/tunarr/backups`}
+              helperText={t`Leave empty to save backups in the backups folder of Tunarr's data directory (/config/tunarr/backups in Docker).`}
             />
           )}
         />
@@ -84,18 +84,18 @@ export const BackupForm = () => {
         <NumericFormControllerText
           control={control}
           name="backup.configurations.0.outputs.0.maxBackups"
-          prettyFieldName={t`Max Backups`}
+          prettyFieldName={t`Backups to keep`}
           rules={{ min: 0 }}
           TextFieldProps={{
-            label: t`Max Backups`,
-            helperText: t`Set to 0 to never delete backups`,
+            label: t`Backups to keep`,
+            helperText: t`Older backups past this count are deleted. 0 keeps them all.`,
           }}
         />
       </Grid>
       <Grid size={{ xs: 3 }}>
         <FormControl fullWidth>
           <InputLabel>
-            <Trans>Archive Format</Trans>
+            <Trans>Archive format</Trans>
           </InputLabel>
           <Controller
             control={control}
@@ -109,7 +109,7 @@ export const BackupForm = () => {
                     ? 'targz'
                     : field.value
                 }
-                label={t`Archive Format`}
+                label={t`Archive format`}
                 onChange={(ev) => handleArchiveFormatUpdate(ev)}
               >
                 <MenuItem value="zip">.zip</MenuItem>
@@ -128,7 +128,7 @@ export const BackupForm = () => {
           <NumericFormControllerText
             control={control}
             name="backup.configurations.0.schedule.increment"
-            prettyFieldName={t`Increment`}
+            prettyFieldName={t`Backup interval`}
             rules={{ min: 1 }}
             TextFieldProps={{
               sx: { width: '30%' },

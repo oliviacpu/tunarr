@@ -9,13 +9,13 @@ test.describe.configure({ mode: 'serial' });
 
 const FIFTY_MB = 50 * 1024 * 1024;
 
-const schedule = (page: Page) => page.getByLabel('Roll on Schedule');
+const schedule = (page: Page) => page.getByLabel('Roll on schedule');
 const size = (page: Page) => page.getByLabel('Roll based on size');
 const sizeField = (page: Page) => page.getByLabel('Max file size (bytes)');
 
 const open = async (page: Page) => {
   await page.goto('/web/settings/general');
-  await expect(page.getByLabel('Enable Log File Rolling')).toBeChecked();
+  await expect(page.getByLabel('Enable log file rolling')).toBeChecked();
 };
 
 const save = async (page: Page) => {

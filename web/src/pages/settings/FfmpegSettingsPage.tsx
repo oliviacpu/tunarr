@@ -39,6 +39,8 @@ import type { SubmitHandler } from 'react-hook-form';
 import { Controller, useForm } from 'react-hook-form';
 import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert.tsx';
 
+import { HelpTooltip } from '@/components/base/HelpTooltip.tsx';
+import { LearnMoreLink } from '@/components/base/LearnMoreLink.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { LanguagePreferencesList } from '@/components/LanguagePreferencesList';
 import type { DeepRequired } from 'ts-essentials';
@@ -249,8 +251,8 @@ export default function FfmpegSettingsPage() {
                 render={({ field }) => (
                   <TextField
                     id="ffmpeg-executable-path"
-                    label={t`FFmpeg Executable Path`}
-                    helperText={t`FFmpeg version 7.1+ recommended. Check your current version in the sidebar`}
+                    label={t`FFmpeg executable path`}
+                    helperText={t`Use FFmpeg 7.1 or later. The sidebar shows your current version.`}
                     {...field}
                   />
                 )}
@@ -263,8 +265,8 @@ export default function FfmpegSettingsPage() {
                 render={({ field }) => (
                   <TextField
                     id="ffprobe-executable-path"
-                    label={t`FFprobe Executable Path`}
-                    helperText={t`FFprobe version 6.0+ recommended. Check your current version in the sidebar`}
+                    label={t`FFprobe executable path`}
+                    helperText={t`Use FFprobe 6.0 or later. It usually sits in the same folder as FFmpeg.`}
                     {...field}
                   />
                 )}
@@ -276,12 +278,12 @@ export default function FfmpegSettingsPage() {
           <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
             <FormControl sx={{ flexBasis: '50%' }}>
               <InputLabel id="ffmpeg-logging-label">
-                <Trans>FFMPEG Log Method</Trans>
+                <Trans>FFmpeg logging</Trans>
               </InputLabel>
               <Select<(typeof FfmpegLogOptions)[number]>
                 labelId="ffmpeg-logging-label"
                 id="ffmpeg-logging"
-                label={t`FFMPEG Log Method`}
+                label={t`FFmpeg logging`}
                 value={logSelectValue}
                 onChange={(e: SelectChangeEvent<FfmpegLogOptions>) =>
                   handleFfmpegLogChange(e.target.value)
@@ -300,17 +302,16 @@ export default function FfmpegSettingsPage() {
 
               <FormHelperText>
                 <Trans>
-                  Enable ffmpeg logging to different sinks. Outputting to a file
-                  will create a new log file for every spawned ffmpeg process in
-                  the Tunarr log directory. These files are automatically
-                  cleaned up by a background process.
+                  Where FFmpeg writes its log. File gives each FFmpeg process
+                  its own log in the Tunarr log folder, deleted automatically.{' '}
+                  <LearnMoreLink page="ffmpegLogging" />
                 </Trans>
               </FormHelperText>
             </FormControl>
             {logSelectValue !== 'disable' && (
               <FormControl sx={{ flex: 1 }}>
                 <InputLabel id="ffmpeg-logging-level">
-                  <Trans>FFMPEG Log Level</Trans>
+                  <Trans>FFmpeg log level</Trans>
                 </InputLabel>
                 <Controller
                   control={control}
@@ -319,7 +320,7 @@ export default function FfmpegSettingsPage() {
                     <Select
                       labelId="ffmpeg-logging-level"
                       id="ffmpeg-logging-level"
-                      label={t`FFMPEG Log Level`}
+                      label={t`FFmpeg log level`}
                       {...field}
                     >
                       {map(FfmpegLogLevels, (level) => (
@@ -333,14 +334,15 @@ export default function FfmpegSettingsPage() {
 
                 <FormHelperText>
                   <Trans>
-                    Log level to pass to ffmpeg. Read more about ffmpeg's log
-                    levels{' '}
+                    How much detail FFmpeg logs. See{' '}
                     <MuiLink
                       target="_blank"
+                      rel="noopener noreferrer"
                       href="https://ffmpeg.org/ffmpeg.html#:~:text=%2Dloglevel%20%5Bflags%2B%5Dloglevel%20%7C%20%2Dv%20%5Bflags%2B%5Dloglevel"
                     >
-                      here
+                      FFmpeg's log levels
                     </MuiLink>
+                    .
                   </Trans>
                 </FormHelperText>
               </FormControl>
@@ -349,7 +351,7 @@ export default function FfmpegSettingsPage() {
         </Stack>
         <FormControl sx={{ flexBasis: { xs: '100%', md: '50%' } }}>
           <InputLabel id="hls-direct-output-format-label">
-            <Trans>HLS Direct Output Format</Trans>
+            <Trans>HLS Direct output format</Trans>
           </InputLabel>
           <Controller
             control={control}
@@ -357,7 +359,7 @@ export default function FfmpegSettingsPage() {
             render={({ field }) => (
               <Select
                 id="hls-direct-output-format"
-                label={t`HLS Direct Output Format`}
+                label={t`HLS Direct output format`}
                 labelId="hls-direct-output-format-label"
                 {...field}
               >
@@ -369,14 +371,13 @@ export default function FfmpegSettingsPage() {
           />
           <FormHelperText>
             <Trans>
-              Channels configured to use the HLS Direct stream mode will output
-              in the selected container format.
+              The container format for channels in the HLS Direct stream mode.
             </Trans>
           </FormHelperText>
         </FormControl>
         <FormControl sx={{ flexBasis: { xs: '100%', md: '50%' } }}>
           <InputLabel id="tonemap-algorithm-label">
-            <Trans>HDR Tone-map Curve</Trans>
+            <Trans>HDR tone-map curve</Trans>
           </InputLabel>
           <Controller
             control={control}
@@ -384,7 +385,7 @@ export default function FfmpegSettingsPage() {
             render={({ field }) => (
               <Select
                 id="tonemap-algorithm"
-                label={t`HDR Tone-map Curve`}
+                label={t`HDR tone-map curve`}
                 labelId="tonemap-algorithm-label"
                 {...field}
               >
@@ -398,12 +399,16 @@ export default function FfmpegSettingsPage() {
           />
           <FormHelperText>
             <Trans>
-              How HDR programs are converted to SDR when HDR Tonemapping is
-              enabled. Hable is filmic and a little darker. BT.2390, the
-              broadcast standard, is brighter and closer to the source. Takes
-              effect from the next program. BT.2390 needs jellyfin-ffmpeg; other
-              ffmpeg builds use Hable instead.
+              How HDR programs become SDR when HDR Tonemapping is on under
+              Features. Applies from the next program.
             </Trans>
+            <HelpTooltip about={t`HDR tone-map curve`}>
+              <Trans>
+                Hable is filmic and a little darker. BT.2390, the broadcast
+                standard, is brighter and closer to the source. BT.2390 needs
+                jellyfin-ffmpeg; other FFmpeg builds use Hable instead.
+              </Trans>
+            </HelpTooltip>
           </FormHelperText>
         </FormControl>
         <NumericFormControllerText
@@ -411,8 +416,15 @@ export default function FfmpegSettingsPage() {
           name="hlsReadAheadMaxThreads"
           rules={{ min: 0, max: 256 }}
           TextFieldProps={{
-            label: t`Read-ahead Thread Limit`,
-            helperText: t`Raises encoder threads up to this limit while HLS prepares video ahead of playback, without lowering your transcode configuration's thread count. 0 disables the increase. Applies from the next program.`,
+            label: t`Read-ahead thread limit`,
+            helperText: (
+              <>
+                {t`Lets HLS use up to this many encoder threads while it prepares video ahead of playback. 0 turns this off. Applies from the next program.`}
+                <HelpTooltip about={t`Read-ahead thread limit`}>
+                  {t`It only raises a transcode config's thread count, never lowers it, and stays within the CPU cores Tunarr may use.`}
+                </HelpTooltip>
+              </>
+            ),
           }}
         />
         <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
@@ -421,9 +433,9 @@ export default function FfmpegSettingsPage() {
             name="hlsSegmentSeconds"
             rules={{ min: 1, max: 10 }}
             TextFieldProps={{
-              label: t`HLS Segment Length (seconds)`,
+              label: t`HLS segment length (seconds)`,
               fullWidth: true,
-              helperText: t`Length of each segment for channels in the HLS stream mode. Shorter segments let a channel start sooner. Applies when a channel's stream next starts.`,
+              helperText: t`Shorter segments start an HLS channel sooner, at a small cost in picture quality. Applies when the channel's stream next starts.`,
             }}
           />
           <NumericFormControllerText
@@ -431,9 +443,9 @@ export default function FfmpegSettingsPage() {
             name="hlsInitialSegmentCount"
             rules={{ min: 1, max: 10 }}
             TextFieldProps={{
-              label: t`Segments Before Playback`,
+              label: t`Segments before playback`,
               fullWidth: true,
-              helperText: t`How many segments must be ready before a client gets an HLS channel's playlist.`,
+              helperText: t`How many segments must be ready before a player gets an HLS channel's playlist.`,
             }}
           />
           <NumericFormControllerText
@@ -441,9 +453,9 @@ export default function FfmpegSettingsPage() {
             name="hlsTsInitialBurstSeconds"
             rules={{ min: 0, max: 60 }}
             TextFieldProps={{
-              label: t`MPEG-TS Start-up Burst (seconds)`,
+              label: t`MPEG-TS start-up burst (seconds)`,
               fullWidth: true,
-              helperText: t`How far ahead an HLS channel's .ts stream (what HDHomeRun clients such as Plex read) may send at start, instead of real-time pace from the first byte. 0 turns it off.`,
+              helperText: t`Sends up to this many seconds of video at once when Plex or another HDHomeRun client tunes in to an HLS channel. 0 turns it off.`,
             }}
           />
         </Stack>
@@ -454,24 +466,23 @@ export default function FfmpegSettingsPage() {
             render={({ field }) => (
               <TextField
                 id="ffmpeg-transcode-path"
-                label={t`FFmpeg Transcode Path`}
+                label={t`FFmpeg transcode path`}
                 helperText={
-                  <Trans>
-                    <span>
-                      Configure the directory where Tunarr writes HLS segment
-                      files when transcoding. Tunarr will create the target
-                      directory (but not intermediate directories) if it doesn't
-                      exist.
-                      <br />
-                      Changing this field will only affect new sessions.
-                      Existing sessions will continue writing to the previous
-                      setting, but will clean out segments when the segment
-                      ends.
-                      <br />
-                      When unset, Tunarr will write segments to its current
-                      working directory.
-                    </span>
-                  </Trans>
+                  <>
+                    <Trans>
+                      Where Tunarr writes HLS segments. Empty uses Tunarr's
+                      working directory. Applies to new sessions.
+                    </Trans>
+                    <HelpTooltip about={t`FFmpeg transcode path`}>
+                      <Trans>
+                        Tunarr creates the folder if it is missing, but not the
+                        folders above it. Sessions already running keep writing
+                        to the old folder and clean up their segments when they
+                        end.
+                      </Trans>
+                    </HelpTooltip>{' '}
+                    <LearnMoreLink page="ffmpegTranscodePath" />
+                  </>
                 }
                 {...field}
               />
@@ -495,18 +506,16 @@ export default function FfmpegSettingsPage() {
               render={({ field }) => (
                 <FormControlLabel
                   control={<Switch {...field} checked={field.value} />}
-                  label={t`Enable embedded subtitle extraction`}
+                  label={t`Extract embedded subtitles`}
                 />
               )}
             />
 
             <FormHelperText>
               <Trans>
-                Enabling embedded subtitle extaction will periodically scan your
-                upcoming programming for embedded text-based subtitle streams
-                and extract them to a local cache. This is necessary in order to
-                enable subtitle burning for text-based subtitles which are not
-                external streams.
+                Copies text subtitles embedded in upcoming programs to a cache,
+                so they can be burned in.{' '}
+                <LearnMoreLink page="ffmpegSubtitleExtraction" />
               </Trans>
             </FormHelperText>
           </FormControl>
@@ -524,19 +533,21 @@ export default function FfmpegSettingsPage() {
 
             <FormHelperText>
               <Trans>
-                Sends a program's full text subtitles as closed captions in the
-                stream HDHomeRun clients such as Plex Live TV read, so viewers
-                can switch them on and off. Instead of being burned in, those
-                subtitles also reach Tunarr's own players as selectable
-                subtitles. Forced and image-based subtitles stay burned in.
-                Applies to channels in the HLS stream mode with subtitles
-                enabled, from the next program.
+                Sends text subtitles as closed captions viewers can turn on and
+                off. For HLS channels with subtitles on, from the next program.
               </Trans>
+              <HelpTooltip about={t`Closed captions for HDHomeRun clients`}>
+                <Trans>
+                  Tunarr's own players get these subtitles as a selectable track
+                  instead of burned in. Forced and image-based subtitles stay
+                  burned in.
+                </Trans>
+              </HelpTooltip>
             </FormHelperText>
           </FormControl>
           <FormControl fullWidth sx={{ mt: 2 }}>
             <InputLabel id="hdhr-caption-alignment-label">
-              <Trans>Caption Alignment</Trans>
+              <Trans>Caption alignment</Trans>
             </InputLabel>
             <Controller
               control={control}
@@ -544,7 +555,7 @@ export default function FfmpegSettingsPage() {
               render={({ field }) => (
                 <Select
                   id="hdhr-caption-alignment"
-                  label={t`Caption Alignment`}
+                  label={t`Caption alignment`}
                   labelId="hdhr-caption-alignment-label"
                   {...field}
                   disabled={!hdhrClosedCaptions}
@@ -559,12 +570,17 @@ export default function FfmpegSettingsPage() {
             />
             <FormHelperText>
               <Trans>
-                Where closed caption lines sit across the screen. Italics,
-                underline and top-of-screen placement follow the subtitle file.
-                Text size, font and background are up to the player: Plex Live
-                TV draws captions in its own style, sized by the Plex app's
-                subtitle size setting. Takes effect from the next program.
+                Where caption lines sit across the screen. Applies from the next
+                program.
               </Trans>
+              <HelpTooltip about={t`Caption alignment`}>
+                <Trans>
+                  Italics, underline and top-of-screen placement follow the
+                  subtitle file. Text size, font and background are up to the
+                  player: Plex Live TV draws captions in its own style, sized by
+                  the Plex app's subtitle size setting.
+                </Trans>
+              </HelpTooltip>
             </FormHelperText>
           </FormControl>
           <Accordion
@@ -579,15 +595,19 @@ export default function FfmpegSettingsPage() {
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
-                <Typography variant="body2" color="text.secondary">
+                <FormHelperText>
                   <Trans>
-                    Everything closed captions can ask for. A player may ignore
-                    some of it: Plex draws captions itself, and an earlier test
-                    showed it ignoring see-through boxes. Turn on the test
-                    pattern below to see what your player shows. Changes take
-                    effect from the next program.
+                    A player may ignore some of these. Turn on the test pattern
+                    below to see what yours shows. Applies from the next
+                    program.
                   </Trans>
-                </Typography>
+                  <HelpTooltip about={t`Caption appearance`}>
+                    <Trans>
+                      Plex draws captions itself, and an earlier test showed it
+                      ignoring see-through boxes.
+                    </Trans>
+                  </HelpTooltip>
+                </FormHelperText>
                 <Controller
                   control={control}
                   name="hdhrCaptionAppearance"
@@ -612,11 +632,16 @@ export default function FfmpegSettingsPage() {
                   <FormHelperText>
                     <Trans>
                       Replaces every program's captions with 39 numbered
-                      samples, one per feature above, each saying what it should
-                      look like. Turn captions on in your player, note the
-                      numbers that look wrong, then turn this off. Your settings
-                      above don't change the samples.
+                      samples, each saying how it should look. Turn it off when
+                      you're done.
                     </Trans>
+                    <HelpTooltip about={t`Test pattern`}>
+                      <Trans>
+                        There is one sample per feature above. Turn captions on
+                        in your player and note the numbers that look wrong.
+                        Your settings above don't change the samples.
+                      </Trans>
+                    </HelpTooltip>
                   </FormHelperText>
                 </FormControl>
               </Stack>
@@ -629,7 +654,7 @@ export default function FfmpegSettingsPage() {
           <Trans>Audio Language Preferences</Trans>
         </Typography>
         <Typography variant="subtitle1" sx={{ mb: 2 }}>
-          <Trans>Configure preferred audio languages globally.</Trans>
+          <Trans>Audio languages to prefer, first to last.</Trans>
         </Typography>
         <FormControl fullWidth>
           <Controller
@@ -678,8 +703,8 @@ export default function FfmpegSettingsPage() {
       </Typography>
       <Typography variant="subtitle1">
         <Trans>
-          Configure transcoding settings for Tunarr's streams. Each channel is
-          assigned one transcode configuration.
+          Each channel uses one transcode config: its video, audio and hardware
+          settings. <LearnMoreLink page="transcodeConfigs" />
         </Trans>
       </Typography>
       <TranscodeConfigsTable />
