@@ -1,11 +1,13 @@
-import { useAppForm } from '@/hooks/form.ts';
 import { renderWithProviders, screen, waitFor } from '@/test/utils';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { QueryClient } from '@tanstack/react-query';
 import type { TranscodeConfig } from '@tunarr/types';
+import { TranscodeConfigSchema } from '@tunarr/types/schemas';
+import { FormProvider, useForm } from 'react-hook-form';
 import { describe, expect, test, vi } from 'vitest';
 import { getApiFfmpegInfoQueryKey } from '../../../generated/@tanstack/react-query.gen.ts';
 import { TranscodeConfigVideoSettingsForm } from './TranscodeConfigVideoSettingsForm.tsx';
-import { useBaseTranscodeConfigFormOptions } from './useTranscodeConfigFormOptions.ts';
+import type { TranscodeConfigFormValues } from './useTranscodeConfigForm.ts';
 
 function Harness({
   preset,
@@ -45,15 +47,17 @@ function Harness({
     disableHardwareFilters: false,
     audioLoudnormConfig: null,
   };
-  const form = useAppForm({
-    ...useBaseTranscodeConfigFormOptions(initialConfig),
-    onSubmit: ({ value }) => onSave(value.videoPreset),
+  const form = useForm<TranscodeConfigFormValues, unknown, TranscodeConfig>({
+    resolver: zodResolver(TranscodeConfigSchema),
+    defaultValues: initialConfig,
   });
   return (
-    <form.AppForm>
-      <TranscodeConfigVideoSettingsForm initialConfig={initialConfig} />
-      <button onClick={() => void form.handleSubmit()}>Save</button>
-    </form.AppForm>
+    <FormProvider {...form}>
+      <form onSubmit={form.handleSubmit((value) => onSave(value.videoPreset))}>
+        <TranscodeConfigVideoSettingsForm />
+        <button type="submit">Save</button>
+      </form>
+    </FormProvider>
   );
 }
 
@@ -75,6 +79,28 @@ describe('software video presets', () => {
       expect(
         screen.getByRole('combobox', { name: 'Video preset' }),
       ).toHaveTextContent(preset);
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(onSave).toHaveBeenCalledWith(preset));
+    },
+  );
+
+  test.each([null, '', 'placebo'])(
+    'shows veryfast for a saved %j preset and keeps it',
+    async (preset) => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { staleTime: Infinity } },
+      });
+      queryClient.setQueryData(getApiFfmpegInfoQueryKey(), {
+        hardwareAccelerationTypes: [],
+      });
+      const onSave = vi.fn();
+      const { user } = renderWithProviders(
+        <Harness preset={preset} onSave={onSave} />,
+        { queryClient },
+      );
+      expect(
+        screen.getByRole('combobox', { name: 'Video preset' }),
+      ).toHaveTextContent('veryfast (default)');
       await user.click(screen.getByRole('button', { name: 'Save' }));
       await waitFor(() => expect(onSave).toHaveBeenCalledWith(preset));
     },

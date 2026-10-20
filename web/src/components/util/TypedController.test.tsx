@@ -87,6 +87,68 @@ function HarnessWithHelp(): ReactNode {
   );
 }
 
+function RawValueHarness({
+  onSubmit,
+}: {
+  onSubmit: (values: { rate: number | string }) => void;
+}): ReactNode {
+  const { control, handleSubmit } = useForm<{ rate: number | string }>({
+    defaultValues: { rate: 48 },
+  });
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <NumericFormControllerText
+        control={control}
+        name="rate"
+        rawValue
+        TextFieldProps={{ id: 'rate', label: 'Sample rate' }}
+      />
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+
+describe('NumericFormControllerText with rawValue', () => {
+  test.each([
+    ['44.1', '44.1'],
+    ['', ''],
+    ['-23.5', '-23.5'],
+  ])('keeps %j as typed for the resolver to read', async (typed, kept) => {
+    const onSubmit = vi.fn();
+    const { user } = renderWithProviders(
+      <RawValueHarness onSubmit={onSubmit} />,
+    );
+    const field = screen.getByLabelText('Sample rate');
+
+    await user.clear(field);
+    if (typed !== '') {
+      await user.type(field, typed);
+    }
+    expect(field).toHaveValue(kept);
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]?.[0]).toStrictEqual({ rate: kept });
+  });
+
+  test('still says a value that is not a number is wrong without a resolver', async () => {
+    const onSubmit = vi.fn();
+    const { user } = renderWithProviders(
+      <RawValueHarness onSubmit={onSubmit} />,
+    );
+    const field = screen.getByLabelText('Sample rate');
+
+    await user.clear(field);
+    await user.type(field, '44k');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() =>
+      expect(field).toHaveAccessibleDescription('rate should be numeric.'),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
 describe('NumericFormControllerText with help text', () => {
   test('a rule without its own message still says what is wrong', async () => {
     const { user } = renderWithProviders(<HarnessWithHelp />);
@@ -196,6 +258,7 @@ const hourOptions = [
 const formatOptions = [
   { value: 'mkv', label: 'MKV' },
   { value: 'mp4', label: 'MP4' },
+  { value: 'avi', label: 'AVI', disabled: true },
 ] as const;
 
 function SelectHarness({
@@ -268,6 +331,17 @@ describe('SelectFormController', () => {
 
     await waitFor(() =>
       expect(select()).toHaveAccessibleDescription('Too late for a rebuild'),
+    );
+  });
+
+  test('a disabled option is listed but cannot be picked', async () => {
+    const { user } = renderWithProviders(<SelectHarness onSubmit={() => {}} />);
+
+    await user.click(screen.getByRole('combobox', { name: 'Output format' }));
+    const avi = await screen.findByRole('option', { name: 'AVI' });
+    expect(avi).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('option', { name: 'MP4' })).not.toHaveAttribute(
+      'aria-disabled',
     );
   });
 });

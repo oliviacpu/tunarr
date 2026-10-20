@@ -1,4 +1,3 @@
-import { useTypedAppFormContext } from '@/hooks/form.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   FormControl,
@@ -12,58 +11,67 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
 import {
   LoudnormConfigSchema,
   type SupportedTranscodeAudioOutputFormats,
 } from '@tunarr/types/schemas';
-import { useQuery } from '@tanstack/react-query';
-import { isNil } from 'lodash-es';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo } from 'react';
+import { useWatch } from 'react-hook-form';
 import { getApiFfmpegInfoOptions } from '../../../generated/@tanstack/react-query.gen.ts';
-import type { DropdownOption } from '../../../helpers/DropdownOption.ts';
-import type { BaseTranscodeConfigProps } from './BaseTranscodeConfigProps.ts';
-import { useBaseTranscodeConfigFormOptions } from './useTranscodeConfigFormOptions.ts';
+import type { SelectOption } from '../../util/TypedController.tsx';
+import {
+  NumericFormControllerText,
+  SelectFormController,
+} from '../../util/TypedController.tsx';
+import { useTranscodeConfigFormContext } from './useTranscodeConfigForm.ts';
 
-const AudioFormats: DropdownOption<SupportedTranscodeAudioOutputFormats>[] = [
+const AudioFormats: SelectOption<SupportedTranscodeAudioOutputFormats>[] = [
   {
-    description: 'AAC',
+    label: 'AAC',
     value: 'aac',
   },
   {
-    description: 'AC3',
+    label: 'AC3',
     value: 'ac3',
   },
   {
-    description: 'MP3',
+    label: 'MP3',
     value: 'mp3',
   },
   {
-    description: 'E-AC3',
+    label: 'E-AC3',
     value: 'eac3',
   },
   {
-    description: 'Opus (experimental)',
+    label: 'Opus (experimental)',
     value: 'libopus',
   },
   {
-    description: 'Copy / Passthrough',
+    label: 'Copy / Passthrough',
     value: 'copy',
   },
-] as const;
+];
+
+type Props = {
+  showAdvancedSettings: boolean;
+};
 
 export const TranscodeConfigAudioSettingsForm = ({
-  initialConfig,
   showAdvancedSettings,
-}: BaseTranscodeConfigProps) => {
+}: Props) => {
   const { t } = useLingui();
   const ffmpegInfo = useQuery({
     ...getApiFfmpegInfoOptions(),
   });
-  const formOpts = useBaseTranscodeConfigFormOptions(initialConfig);
-  const form = useTypedAppFormContext({ ...formOpts });
-  const [loudnormEnabled, setLoudnormEnabled] = useState(
-    !isNil(form.getFieldValue('audioLoudnormConfig')),
-  );
+  const { control, setValue } = useTranscodeConfigFormContext();
+  const [audioFormat, audioLoudnormConfig] = useWatch({
+    control,
+    name: ['audioFormat', 'audioLoudnormConfig'],
+  });
+  const loudnormEnabled = audioLoudnormConfig !== null;
+  const isCopy = audioFormat === 'copy';
+  const loudnormLabelId = useId();
 
   const audioFormatOptions = useMemo(() => {
     const availableEncoders = ffmpegInfo.data?.audioEncoders;
@@ -91,163 +99,155 @@ export const TranscodeConfigAudioSettingsForm = ({
 
   const onLoudnormChange = useCallback(
     (enabled: boolean) => {
-      setLoudnormEnabled(enabled);
-      if (enabled) {
-        form.setFieldValue(
-          'audioLoudnormConfig',
-          LoudnormConfigSchema.decode({}),
-        );
-      } else {
-        form.setFieldValue('audioLoudnormConfig', null);
-      }
+      setValue(
+        'audioLoudnormConfig',
+        enabled ? LoudnormConfigSchema.decode({}) : null,
+        { shouldDirty: true, shouldValidate: true },
+      );
     },
-    [form],
+    [setValue],
   );
+
+  const notUsedWhenCopied = isCopy ? t`Not used when audio is copied.` : null;
+  const loudnormFields = [
+    {
+      name: 'audioLoudnormConfig.i',
+      label: t`Loudness target`,
+      helperText: t`From -70 to -5 LUFS.`,
+    },
+    {
+      name: 'audioLoudnormConfig.lra',
+      label: t`Loudness range target`,
+      helperText: t`From 1 to 50 LU.`,
+    },
+    {
+      name: 'audioLoudnormConfig.tp',
+      label: t`Max true peak`,
+      helperText: t`From -9 to 0 dBTP.`,
+    },
+  ] as const;
 
   return (
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12 }}>
-          <form.AppField
+          <SelectFormController
+            control={control}
             name="audioFormat"
-            children={(field) => (
-              <field.BasicSelectInput
-                formControlProps={{ fullWidth: true }}
-                selectProps={{
-                  label: t`Audio format`,
-                }}
-                options={audioFormatOptions}
-                helperText={
-                  field.form.state.values.audioFormat === 'copy'
-                    ? t`Passes the audio through unchanged. The settings below don't apply.`
-                    : ''
-                }
-              />
-            )}
+            label={t`Audio format`}
+            options={audioFormatOptions}
+            helperText={
+              isCopy
+                ? t`Passes the audio through unchanged. The settings below don't apply.`
+                : undefined
+            }
+            TextFieldProps={{ fullWidth: true }}
           />
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
-          <form.Subscribe
-            selector={(s) => s.values.audioFormat}
-            children={(encoder) => (
-              <form.AppField
-                name="audioBitRate"
-                children={(field) => (
-                  <field.BasicTextInput
-                    fullWidth
-                    label={t`Audio bitrate`}
-                    disabled={encoder === 'copy'}
-                    slotProps={{
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">kbps</InputAdornment>
-                        ),
-                      },
-                    }}
-                    helperText={
-                      encoder === 'copy'
-                        ? t`Not used when audio is copied.`
-                        : null
-                    }
-                  />
-                )}
-              />
-            )}
+          <NumericFormControllerText
+            control={control}
+            rawValue
+            name="audioBitRate"
+            prettyFieldName={t`Audio bitrate`}
+            TextFieldProps={{
+              fullWidth: true,
+              label: t`Audio bitrate`,
+              disabled: isCopy,
+              slotProps: {
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">kbps</InputAdornment>
+                  ),
+                },
+              },
+              helperText: notUsedWhenCopied,
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <form.Subscribe
-            selector={(s) => s.values.audioFormat}
-            children={(encoder) => (
-              <form.AppField
-                name="audioBufferSize"
-                children={(field) => (
-                  <field.BasicTextInput
-                    fullWidth
-                    label={t`Audio buffer size`}
-                    disabled={encoder === 'copy'}
-                    slotProps={{
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">kb</InputAdornment>
-                        ),
-                      },
-                    }}
-                    helperText={
-                      encoder === 'copy'
-                        ? t`Not used when audio is copied.`
-                        : null
-                    }
-                  />
-                )}
-              />
-            )}
+          <NumericFormControllerText
+            control={control}
+            rawValue
+            name="audioBufferSize"
+            prettyFieldName={t`Audio buffer size`}
+            TextFieldProps={{
+              fullWidth: true,
+              label: t`Audio buffer size`,
+              disabled: isCopy,
+              slotProps: {
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">kb</InputAdornment>
+                  ),
+                },
+              },
+              helperText: notUsedWhenCopied,
+            }}
           />
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
-          <form.Subscribe
-            selector={(s) => s.values.audioFormat}
-            children={(encoder) => (
-              <form.AppField
-                name="audioSampleRate"
-                children={(field) => (
-                  <field.BasicTextInput
-                    fullWidth
-                    label={t`Audio sample rate`}
-                    disabled={encoder === 'copy'}
-                    slotProps={{
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">kHz</InputAdornment>
-                        ),
-                      },
-                    }}
-                    helperText={
-                      encoder === 'copy'
-                        ? t`Not used when audio is copied.`
-                        : null
-                    }
-                  />
-                )}
-              />
-            )}
+          <NumericFormControllerText
+            control={control}
+            rawValue
+            name="audioSampleRate"
+            prettyFieldName={t`Audio sample rate`}
+            TextFieldProps={{
+              fullWidth: true,
+              label: t`Audio sample rate`,
+              disabled: isCopy,
+              slotProps: {
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">kHz</InputAdornment>
+                  ),
+                },
+              },
+              helperText: notUsedWhenCopied,
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <form.AppField
+          <NumericFormControllerText
+            control={control}
+            rawValue
             name="audioChannels"
-            children={(field) => (
-              <field.BasicTextInput fullWidth label={t`Audio channels`} />
-            )}
+            prettyFieldName={t`Audio channels`}
+            TextFieldProps={{
+              fullWidth: true,
+              label: t`Audio channels`,
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <form.AppField
+          <NumericFormControllerText
+            control={control}
+            rawValue
             name="audioVolumePercent"
-            children={(field) => (
-              <field.BasicTextInput
-                fullWidth
-                label={t`Audio volume`}
-                helperText={t`Changes the output volume (not recommended). Above 100 boosts it.`}
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">%</InputAdornment>
-                    ),
-                  },
-                }}
-              />
-            )}
+            prettyFieldName={t`Audio volume`}
+            TextFieldProps={{
+              fullWidth: true,
+              label: t`Audio volume`,
+              helperText: t`Changes the output volume (not recommended). Above 100 boosts it.`,
+              slotProps: {
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">%</InputAdornment>
+                  ),
+                },
+              },
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
           <FormControl fullWidth>
-            <InputLabel>
+            <InputLabel id={loudnormLabelId}>
               <Trans>Loudness normalization</Trans>
             </InputLabel>
             <Select
+              labelId={loudnormLabelId}
               label={t`Loudness normalization`}
               value={loudnormEnabled ? 'enabled' : 'disabled'}
               onChange={() => onLoudnormChange(!loudnormEnabled)}
@@ -275,68 +275,32 @@ export const TranscodeConfigAudioSettingsForm = ({
           </FormControl>
         </Grid>
       </Grid>
-      {showAdvancedSettings && (
-        <form.Subscribe
-          children={(state) => {
-            const hasOneAdvancedSetting = !!state.values.audioLoudnormConfig;
-            if (!hasOneAdvancedSetting) {
-              return null;
-            }
-
-            return (
-              <Stack>
-                <Typography component="h6" variant="h6" mb={1}>
-                  <Trans>Advanced Audio Options</Trans>
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 2 }}>
-                  <Trans>
-                    Fine-tune loudness normalization. The defaults suit most
-                    programs.
-                  </Trans>
-                </Typography>
-                {!!state.values.audioLoudnormConfig && (
-                  <>
-                    <Typography sx={{ mb: 1 }}>
-                      <Trans>Loudnorm Options</Trans>
-                    </Typography>
-                    <Stack direction={{ sm: 'column', md: 'row' }} spacing={2}>
-                      <form.AppField
-                        name="audioLoudnormConfig.i"
-                        children={(field) => (
-                          <field.BasicTextInput
-                            fullWidth
-                            label={t`Loudness target`}
-                            helperText={t`From -70 to -5 LUFS.`}
-                          />
-                        )}
-                      />
-                      <form.AppField
-                        name="audioLoudnormConfig.lra"
-                        children={(field) => (
-                          <field.BasicTextInput
-                            fullWidth
-                            label={t`Loudness range target`}
-                            helperText={t`From 1 to 50 LU.`}
-                          />
-                        )}
-                      />
-                      <form.AppField
-                        name="audioLoudnormConfig.tp"
-                        children={(field) => (
-                          <field.BasicTextInput
-                            fullWidth
-                            label={t`Max true peak`}
-                            helperText={t`From -9 to 0 dBTP.`}
-                          />
-                        )}
-                      />
-                    </Stack>
-                  </>
-                )}
-              </Stack>
-            );
-          }}
-        />
+      {showAdvancedSettings && loudnormEnabled && (
+        <Stack>
+          <Typography component="h6" variant="h6" mb={1}>
+            <Trans>Advanced Audio Options</Trans>
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            <Trans>
+              Fine-tune loudness normalization. The defaults suit most programs.
+            </Trans>
+          </Typography>
+          <Typography sx={{ mb: 1 }}>
+            <Trans>Loudnorm Options</Trans>
+          </Typography>
+          <Stack direction={{ sm: 'column', md: 'row' }} spacing={2}>
+            {loudnormFields.map(({ name, label, helperText }) => (
+              <NumericFormControllerText
+                key={name}
+                control={control}
+                name={name}
+                rawValue
+                prettyFieldName={label}
+                TextFieldProps={{ fullWidth: true, label, helperText }}
+              />
+            ))}
+          </Stack>
+        </Stack>
       )}
     </Stack>
   );
