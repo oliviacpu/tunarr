@@ -1,7 +1,7 @@
-import { renderWithProviders, screen, waitFor } from '@/test/utils';
+import { act, renderWithProviders, screen, waitFor } from '@/test/utils';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Generated from '../../generated/@tanstack/react-query.gen.ts';
 import type * as Sdk from '../../generated/sdk.gen.ts';
 import type {
@@ -9,6 +9,9 @@ import type {
   PutApiSystemFeatureFlagsData,
 } from '../../generated/types.gen.ts';
 import FeaturesSettingsPage from './FeaturesSettingsPage.tsx';
+import { i18n } from '@lingui/core';
+import { FeatureFlagMetadata } from '@tunarr/types';
+import { featureFlagMessages } from './featureFlagMessages.ts';
 
 type Flags = GetApiSystemFeatureFlagsResponse['flags'];
 type FlagsBody = NonNullable<PutApiSystemFeatureFlagsData['body']>;
@@ -23,37 +26,11 @@ const savedFlags: Flags = {
   disableVaapiPad: false,
 };
 
-const metadata: GetApiSystemFeatureFlagsResponse['metadata'] = [
-  {
-    key: 'proxyArtwork',
-    displayName: 'Proxy Artwork',
-    description: 'Route artwork requests through the Tunarr server.',
-    category: 'experimental',
-    // TUNARR_PROXY_ARTWORK is set
-    envOverride: true,
-  },
-  {
-    key: 'xmltvCreditImagesEnabled',
-    displayName: 'XMLTV Credit Images',
-    description: 'Enable embedding images of people in the xmltv credits.',
-    category: 'experimental',
-    envOverride: false,
-  },
-  {
-    key: 'webvttSidecarEnabled',
-    displayName: 'WebVTT Sidecar Subtitles',
-    description: 'Enable subtitle sidecars.',
-    category: 'experimental',
-    envOverride: false,
-  },
-  {
-    key: 'disableVulkan',
-    displayName: 'Disable Vulkan (NVIDIA)',
-    description: 'Disable Vulkan-based processing.',
-    category: 'escape-hatch',
-    envOverride: false,
-  },
-];
+const metadata: GetApiSystemFeatureFlagsResponse['metadata'] =
+  FeatureFlagMetadata.map((meta) => ({
+    ...meta,
+    envOverride: meta.key === 'proxyArtwork',
+  }));
 
 // What the server has; a save changes it as the server would
 const { server, mockPutFlags } = vi.hoisted(() => ({
@@ -99,6 +76,56 @@ async function renderPage() {
 }
 
 describe('FeaturesSettingsPage', () => {
+  afterEach(() => {
+    act(() => i18n.loadAndActivate({ locale: 'en', messages: {} }));
+  });
+
+  test('web descriptors preserve every shared English flag name and description', () => {
+    expect(Object.keys(featureFlagMessages).sort()).toEqual(
+      FeatureFlagMetadata.map((meta) => meta.key).sort(),
+    );
+    for (const meta of FeatureFlagMetadata) {
+      expect(i18n._(featureFlagMessages[meta.key].displayName)).toBe(
+        meta.displayName,
+      );
+      expect(i18n._(featureFlagMessages[meta.key].description)).toBe(
+        meta.description,
+      );
+    }
+  });
+
+  test.each([
+    ['proxyArtwork', 'experimental'],
+    ['tonemapEnabled', 'playback'],
+    ['webvttSidecarEnabled', 'captions-audio'],
+    ['xmltvCreditImagesEnabled', 'experimental'],
+    ['disableSearchSnapshotInBackup', 'experimental'],
+    ['disableVulkan', 'playback'],
+    ['disableVaapiPad', 'playback'],
+  ] as const)(
+    'renders translated %s copy in its settings group',
+    async (key, group) => {
+      const messages = featureFlagMessages[key];
+      i18n.loadAndActivate({
+        locale: 'es',
+        messages: {
+          [messages.displayName.id]: `Nombre traducido ${key}`,
+          [messages.description.id]: `Descripción traducida ${key}`,
+        },
+      });
+      renderWithProviders(
+        <SnackbarProvider>
+          <FeaturesSettingsPage group={group} />
+        </SnackbarProvider>,
+      );
+      expect(
+        await screen.findByRole('checkbox', {
+          name: `Nombre traducido ${key}`,
+        }),
+      ).toHaveAccessibleDescription(`Descripción traducida ${key}`);
+    },
+  );
+
   beforeEach(() => {
     server.flags = savedFlags;
     mockPutFlags.mockReset();
@@ -118,7 +145,7 @@ describe('FeaturesSettingsPage', () => {
       screen.queryByRole('checkbox', { name: 'Disable Vulkan (NVIDIA)' }),
     ).not.toBeInTheDocument();
     expect(flag('XMLTV Credit Images')).toHaveAccessibleDescription(
-      'Enable embedding images of people in the xmltv credits.',
+      'Enable embedding images of people in the xmltv credit elements. (must regenerate xmltv to take effect)',
     );
   });
 

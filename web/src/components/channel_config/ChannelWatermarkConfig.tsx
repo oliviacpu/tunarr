@@ -32,18 +32,18 @@ import {
   NumericFormControllerText,
 } from '../util/TypedController.tsx';
 
-const watermarkPositionOptions: {
-  value: Watermark['position'];
-  label: string;
-}[] = [
-  { value: 'bottom-right', label: 'Bottom Right' },
-  { value: 'bottom-left', label: 'Bottom Left' },
-  { value: 'top-right', label: 'Top Right' },
-  { value: 'top-left', label: 'Top Left' },
-];
-
 export default function ChannelWatermarkConfig() {
   const { t } = useLingui();
+  const watermarkPositionOptions: {
+    value: Watermark['position'];
+    label: string;
+  }[] = [
+    { value: 'bottom-right', label: t`Bottom Right` },
+    { value: 'bottom-left', label: t`Bottom Left` },
+    { value: 'top-right', label: t`Top Right` },
+    { value: 'top-left', label: t`Top Left` },
+  ];
+
   const { backendUri } = useSettings();
   const channel = useStore((s) => s.channelEditor.currentEntity);
   const transcodeConfigs = useTranscodeConfigs();

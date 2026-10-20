@@ -125,6 +125,7 @@ export default function FillerListsPage() {
           </Tooltip>
           <Tooltip title={t`Delete`} placement="top">
             <IconButton
+              aria-label={t`Delete Filler List "${filler.name}"`}
               onClick={(ev) => {
                 ev.preventDefault();
                 ev.stopPropagation();

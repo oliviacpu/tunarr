@@ -22,6 +22,7 @@ import {
   putApiSystemFeatureFlagsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import type { GetApiSystemFeatureFlagsResponse } from '../../generated/types.gen.ts';
+import { featureFlagMessages } from './featureFlagMessages.ts';
 
 type FlagFormValues = GetApiSystemFeatureFlagsResponse['flags'];
 type FlagKey = keyof FlagFormValues;
@@ -43,6 +44,7 @@ function FlagSection({
   flags: FlagMeta[];
   control: Control<FlagFormValues>;
 }) {
+  const { i18n } = useLingui();
   if (flags.length === 0) return null;
 
   return (
@@ -61,8 +63,8 @@ function FlagSection({
             <SwitchFormController
               control={control}
               name={meta.key}
-              label={meta.displayName}
-              helperText={meta.description}
+              label={i18n._(featureFlagMessages[meta.key].displayName)}
+              helperText={i18n._(featureFlagMessages[meta.key].description)}
               // The environment variable wins over the saved value
               disabled={meta.envOverride}
             />
