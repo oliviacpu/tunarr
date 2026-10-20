@@ -87,6 +87,68 @@ function HarnessWithHelp(): ReactNode {
   );
 }
 
+function RawValueHarness({
+  onSubmit,
+}: {
+  onSubmit: (values: { rate: number | string }) => void;
+}): ReactNode {
+  const { control, handleSubmit } = useForm<{ rate: number | string }>({
+    defaultValues: { rate: 48 },
+  });
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <NumericFormControllerText
+        control={control}
+        name="rate"
+        rawValue
+        TextFieldProps={{ id: 'rate', label: 'Sample rate' }}
+      />
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+
+describe('NumericFormControllerText with rawValue', () => {
+  test.each([
+    ['44.1', '44.1'],
+    ['', ''],
+    ['-23.5', '-23.5'],
+  ])('keeps %j as typed for the resolver to read', async (typed, kept) => {
+    const onSubmit = vi.fn();
+    const { user } = renderWithProviders(
+      <RawValueHarness onSubmit={onSubmit} />,
+    );
+    const field = screen.getByLabelText('Sample rate');
+
+    await user.clear(field);
+    if (typed !== '') {
+      await user.type(field, typed);
+    }
+    expect(field).toHaveValue(kept);
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]?.[0]).toStrictEqual({ rate: kept });
+  });
+
+  test('still says a value that is not a number is wrong without a resolver', async () => {
+    const onSubmit = vi.fn();
+    const { user } = renderWithProviders(
+      <RawValueHarness onSubmit={onSubmit} />,
+    );
+    const field = screen.getByLabelText('Sample rate');
+
+    await user.clear(field);
+    await user.type(field, '44k');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() =>
+      expect(field).toHaveAccessibleDescription('rate should be numeric.'),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
 describe('NumericFormControllerText with help text', () => {
   test('a rule without its own message still says what is wrong', async () => {
     const { user } = renderWithProviders(<HarnessWithHelp />);

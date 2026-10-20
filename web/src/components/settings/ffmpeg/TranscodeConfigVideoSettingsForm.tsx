@@ -209,6 +209,7 @@ export const TranscodeConfigVideoSettingsForm = () => {
       <Stack direction={{ sm: 'column', md: 'row' }} spacing={2} useFlexGap>
         <NumericFormControllerText
           control={control}
+          rawValue
           name="videoBitRate"
           prettyFieldName={t`Video bitrate`}
           TextFieldProps={{
@@ -225,6 +226,7 @@ export const TranscodeConfigVideoSettingsForm = () => {
         />
         <NumericFormControllerText
           control={control}
+          rawValue
           name="videoBufferSize"
           prettyFieldName={t`Video buffer size`}
           TextFieldProps={{

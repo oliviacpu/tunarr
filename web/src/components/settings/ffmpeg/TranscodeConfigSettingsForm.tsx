@@ -101,6 +101,7 @@ export const TranscodeConfigSettingsForm = ({
             <Grid size={{ sm: 12, md: 6 }}>
               <NumericFormControllerText
                 control={control}
+                rawValue
                 name="threadCount"
                 prettyFieldName={t`Threads`}
                 TextFieldProps={{

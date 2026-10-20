@@ -9,7 +9,6 @@ import {
   MenuItem,
   Select,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -18,15 +17,13 @@ import {
   type SupportedTranscodeAudioOutputFormats,
 } from '@tunarr/types/schemas';
 import { useCallback, useId, useMemo } from 'react';
-import type { FieldPath } from 'react-hook-form';
-import { Controller, useWatch } from 'react-hook-form';
+import { useWatch } from 'react-hook-form';
 import { getApiFfmpegInfoOptions } from '../../../generated/@tanstack/react-query.gen.ts';
 import type { SelectOption } from '../../util/TypedController.tsx';
 import {
   NumericFormControllerText,
   SelectFormController,
 } from '../../util/TypedController.tsx';
-import type { TranscodeConfigFormValues } from './useTranscodeConfigForm.ts';
 import { useTranscodeConfigFormContext } from './useTranscodeConfigForm.ts';
 
 const AudioFormats: SelectOption<SupportedTranscodeAudioOutputFormats>[] = [
@@ -112,6 +109,23 @@ export const TranscodeConfigAudioSettingsForm = ({
   );
 
   const notUsedWhenCopied = isCopy ? t`Not used when audio is copied.` : null;
+  const loudnormFields = [
+    {
+      name: 'audioLoudnormConfig.i',
+      label: t`Loudness target`,
+      helperText: t`From -70 to -5 LUFS.`,
+    },
+    {
+      name: 'audioLoudnormConfig.lra',
+      label: t`Loudness range target`,
+      helperText: t`From 1 to 50 LU.`,
+    },
+    {
+      name: 'audioLoudnormConfig.tp',
+      label: t`Max true peak`,
+      helperText: t`From -9 to 0 dBTP.`,
+    },
+  ] as const;
 
   return (
     <Stack spacing={2}>
@@ -134,6 +148,7 @@ export const TranscodeConfigAudioSettingsForm = ({
         <Grid size={{ xs: 12, md: 6 }}>
           <NumericFormControllerText
             control={control}
+            rawValue
             name="audioBitRate"
             prettyFieldName={t`Audio bitrate`}
             TextFieldProps={{
@@ -154,6 +169,7 @@ export const TranscodeConfigAudioSettingsForm = ({
         <Grid size={{ xs: 12, md: 6 }}>
           <NumericFormControllerText
             control={control}
+            rawValue
             name="audioBufferSize"
             prettyFieldName={t`Audio buffer size`}
             TextFieldProps={{
@@ -175,6 +191,7 @@ export const TranscodeConfigAudioSettingsForm = ({
         <Grid size={{ xs: 12, md: 6 }}>
           <NumericFormControllerText
             control={control}
+            rawValue
             name="audioSampleRate"
             prettyFieldName={t`Audio sample rate`}
             TextFieldProps={{
@@ -195,6 +212,7 @@ export const TranscodeConfigAudioSettingsForm = ({
         <Grid size={{ xs: 12, md: 6 }}>
           <NumericFormControllerText
             control={control}
+            rawValue
             name="audioChannels"
             prettyFieldName={t`Audio channels`}
             TextFieldProps={{
@@ -206,6 +224,7 @@ export const TranscodeConfigAudioSettingsForm = ({
         <Grid size={{ xs: 12, md: 6 }}>
           <NumericFormControllerText
             control={control}
+            rawValue
             name="audioVolumePercent"
             prettyFieldName={t`Audio volume`}
             TextFieldProps={{
@@ -270,58 +289,19 @@ export const TranscodeConfigAudioSettingsForm = ({
             <Trans>Loudnorm Options</Trans>
           </Typography>
           <Stack direction={{ sm: 'column', md: 'row' }} spacing={2}>
-            <LoudnormField
-              name="audioLoudnormConfig.i"
-              label={t`Loudness target`}
-              helperText={t`From -70 to -5 LUFS.`}
-            />
-            <LoudnormField
-              name="audioLoudnormConfig.lra"
-              label={t`Loudness range target`}
-              helperText={t`From 1 to 50 LU.`}
-            />
-            <LoudnormField
-              name="audioLoudnormConfig.tp"
-              label={t`Max true peak`}
-              helperText={t`From -9 to 0 dBTP.`}
-            />
+            {loudnormFields.map(({ name, label, helperText }) => (
+              <NumericFormControllerText
+                key={name}
+                control={control}
+                name={name}
+                rawValue
+                prettyFieldName={label}
+                TextFieldProps={{ fullWidth: true, label, helperText }}
+              />
+            ))}
           </Stack>
         </Stack>
       )}
     </Stack>
   );
 };
-
-type LoudnormFieldProps = {
-  name: Extract<
-    FieldPath<TranscodeConfigFormValues>,
-    `audioLoudnormConfig.${string}`
-  >;
-  label: string;
-  helperText: string;
-};
-
-// The loudnorm targets take decimals and negative numbers, so the field keeps
-// what was typed and the schema reads the number from it
-function LoudnormField({ name, label, helperText }: LoudnormFieldProps) {
-  const { control } = useTranscodeConfigFormContext();
-  return (
-    <Controller
-      control={control}
-      name={name}
-      render={({ field, fieldState: { error } }) => (
-        <TextField
-          fullWidth
-          label={label}
-          name={field.name}
-          value={field.value ?? ''}
-          onChange={(e) => field.onChange(e.target.value)}
-          onBlur={field.onBlur}
-          inputRef={field.ref}
-          error={error !== undefined}
-          helperText={error?.message ?? helperText}
-        />
-      )}
-    />
-  );
-}

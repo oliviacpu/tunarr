@@ -103,6 +103,7 @@ const ffmpegInfo = (
 function renderForm(
   mode: 'new' | 'edit',
   info: GetApiFfmpegInfoResponse = ffmpegInfo(),
+  initialConfig: TranscodeConfig = config,
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -113,13 +114,15 @@ function renderForm(
     getParentRoute: () => rootRoute,
     path: '/settings/ffmpeg/new',
     component: () => (
-      <TranscodeConfigSettingsForm initialConfig={config} isNew />
+      <TranscodeConfigSettingsForm initialConfig={initialConfig} isNew />
     ),
   });
   const editRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/settings/ffmpeg/$configId',
-    component: () => <TranscodeConfigSettingsForm initialConfig={config} />,
+    component: () => (
+      <TranscodeConfigSettingsForm initialConfig={initialConfig} />
+    ),
   });
   const router = createRouter({
     routeTree: rootRoute.addChildren([newRoute, editRoute]),
@@ -222,6 +225,52 @@ describe('TranscodeConfigSettingsForm validation', () => {
 
     await waitFor(() => expect(threads).toBeInvalid());
     expect(threads).toHaveAccessibleDescription(/expected number/);
+    expect(saveButton()).toBeDisabled();
+  });
+
+  test('a cleared thread count saves as 0, which lets FFmpeg decide', async () => {
+    const { user } = renderForm('edit', ffmpegInfo(), {
+      ...config,
+      threadCount: 4,
+    });
+    const threads = await screen.findByLabelText('Threads');
+    expect(threads).toHaveValue('4');
+
+    await user.clear(threads);
+
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(threads).toBeValid();
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalledOnce());
+    expect(mockPut.mock.calls[0]?.[0].body).toMatchObject({ threadCount: 0 });
+  });
+
+  test('a decimal number is saved as typed', async () => {
+    const { user } = renderForm('edit');
+    const sampleRate = await screen.findByLabelText('Audio sample rate');
+
+    await user.clear(sampleRate);
+    await user.type(sampleRate, '44.1');
+    expect(sampleRate).toHaveValue('44.1');
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalledOnce());
+    expect(mockPut.mock.calls[0]?.[0].body).toMatchObject({
+      audioSampleRate: 44.1,
+    });
+  });
+
+  test('a number followed by text cannot be saved', async () => {
+    const { user } = renderForm('edit');
+    const bitrate = await screen.findByLabelText('Video bitrate');
+
+    await user.clear(bitrate);
+    await user.type(bitrate, '4000k');
+
+    await waitFor(() => expect(bitrate).toBeInvalid());
+    expect(bitrate).toHaveValue('4000k');
+    expect(bitrate).toHaveAccessibleDescription(/expected number/);
     expect(saveButton()).toBeDisabled();
   });
 

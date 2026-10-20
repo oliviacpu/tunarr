@@ -15,9 +15,11 @@ import {
 } from '../../../generated/@tanstack/react-query.gen.ts';
 
 /**
- * What the transcode config form holds. A number field holds what was typed
- * until it parses, so its value is not always a number; the schema turns the
- * values into a `TranscodeConfig` when the form is validated and saved.
+ * What the transcode config form holds. A number field holds the text that was
+ * typed (`NumericFormControllerText` with `rawValue`), so its value is not
+ * always a number; the schema turns the values into a `TranscodeConfig` when
+ * the form is validated and saved, the way the old form did: an empty field
+ * is 0, decimals are kept, and anything else that isn't a number is refused.
  */
 export type TranscodeConfigFormValues = z.input<typeof TranscodeConfigSchema>;
 

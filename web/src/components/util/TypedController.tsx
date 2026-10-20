@@ -149,17 +149,28 @@ export const NumericFormController = <
 >(
   props: Omit<Props<TFieldValues, TName, string | number>, 'transformer'> & {
     float?: boolean;
+    /**
+     * Keep what was typed in the form, as a string, and leave turning it into
+     * a number to the form's resolver (such as a zod schema with
+     * `z.coerce.number()`). Without it the field holds `parseInt` (or
+     * `parseFloat` with `float`) of the text, which drops decimals and
+     * anything after the digits.
+     */
+    rawValue?: boolean;
   },
 ) => {
   const handleStr = useCallback(
     (value: string) => {
+      if (props.rawValue) {
+        return value;
+      }
       const v = handleNumericFormValue(value, !!props.float);
       if (isNaN(v)) {
         return value;
       }
       return v;
     },
-    [props.float],
+    [props.float, props.rawValue],
   );
 
   const validateNumeric = useCallback(
@@ -284,6 +295,8 @@ export const NumericFormControllerText = <
     'transformer' | 'render'
   > & {
     float?: boolean;
+    /** See `NumericFormController`'s `rawValue`. */
+    rawValue?: boolean;
     TextFieldProps?: TextFieldPropsWithFuncs<TFieldValues, TName>;
   },
 ) => {
@@ -352,7 +365,8 @@ export const NumericFormControllerText = <
         );
 
         let formValue = displayValue ?? field.value;
-        if (props.float) {
+        // A raw value is shown as it was typed
+        if (props.float && !props.rawValue) {
           formValue = parseFloat(field.value)?.toFixed(1);
         }
 
