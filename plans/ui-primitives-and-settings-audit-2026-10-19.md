@@ -232,7 +232,7 @@ maintainer's approval first; an agent that finds a row's premise wrong stops and
 | D4 | **Guide program colours.** Replace the random saturated hue per program with a palette-derived categorical ramp (muted, 8 steps, both schemes) and encode type: movie, episode, flex, redirect. Current-time marker and now-playing cell get the one accent. Load `dataviz` skill for the ramp. Also fix `hooks/colorHooks.ts`, which picks the palette from `mode === 'dark'` and so uses the light palette under `system` on a dark OS; use the resolved scheme (found during B7, PR #87). | M | `components/guide/TvGuide.tsx` and its colour helper | Colours come from the theme; a `prefers-reduced-motion` check on the time marker; screenshot in both schemes. |
 | D5 | **Help text and copy pass.** Help text to 12.5px, `text.secondary`, max 72ch, one sentence where possible; long explanations move behind a `?` tooltip or a "Learn more" link to docs. Tab and field labels in the user's words (Guide, Transcoding, Tuner, Playback). Fix "extaction", "FFMPEG" vs "FFmpeg", "Edit Transcode Config" on create. | M | settings pages, channel edit tabs, `locales/` | No field has more than two lines of help by default; `docs/configure/` links resolve; Lingui catalogs regenerated. |
 | D6 | **Nav highlight and breadcrumbs.** Prefix match on desktop (as `BottomNavBar` already does), settings children complete, breadcrumbs on settings and system sub-pages. | S | `hooks/useNavItems.tsx`, `components/Breadcrumbs.tsx`, `components/BottomNavBar.tsx` | Visiting any route highlights exactly one drawer item; test over `routeTree.gen.ts` asserts every route maps to a nav item. |
-| D7 | **Loading and error states.** Router `defaultPendingComponent` and `defaultErrorComponent`; skeletons for tables and the channel summary; one spinner component (drop `RotatingLoopIcon` vs `LoadingIcon` vs raw `CircularProgress`). Remove the unreachable `if (error)` branches under `useSuspenseQuery`. | M | `web/src/router.ts`, `pages/ErrorPage.tsx`, list pages | Every route has pending and error UI without per-page code; e2e route sweep still green. |
+| D7 | **Loading and error states.** Router `defaultPendingComponent` and `defaultErrorComponent`; skeletons for tables and the channel summary; one spinner component (drop `RotatingLoopIcon` vs `LoadingIcon` vs raw `CircularProgress`). Remove the unreachable `if (error)` branches under `useSuspenseQuery`. | M | `web/src/router.ts`, `pages/ErrorPage.tsx`, list pages | Every route has pending and error UI without per-page code; e2e route sweep still green. Evaluate 16px inputs on a phone (iOS Safari zooms on inputs under 16px; floating labels shrink to 10.5px at 14px). |
 
 ### Wave 3: shared form shell and consistency (after D1; C1 before C2–C5)
 
@@ -283,18 +283,38 @@ Reported by the wave-1 agents; each is assigned to the issue that should absorb 
 - **Test health (new item T1, S):** under load the web suite times out in `ChannelCaptionsField`, `LanguagePreferencesList`, `CustomShowSortToolsMenu` and `XmlTvSettingsPage` (the last relies on `waitFor`'s 1 s default for first render); `router.test.ts` imports the whole route tree (45–80 s under load); `ReviewLibraryTable.test.tsx` uses inline `typeof import(...)`, which CLAUDE.md forbids. Raise the per-test timeout for first-render waits, or render less, and fix the import. (B1, B5, B8, B9)
 - **FORK.md:** already fails `prettier --check` on main and is missing a blank line between two entries; every PR adds an entry at the top so parallel PRs always conflict there. Decision pending with the user: per-PR note files folded into FORK.md after each wave, and stacked branches for the dependent waves.
 
+### Follow-ups found while landing wave 2 (2026-10-20)
+
+Reported by the wave-2 agents; each is assigned to the issue that should absorb it.
+
+- **D4 / C-wave:** D1 left out small inputs in tables and dialogs (no theme-level hook), which needs a shared input wrapper; it also left out tabular-nums on guide and lineup rows (no styled root). (D1, PR #98)
+- **D5:** the in-app docs links go to tunarr.com (upstream), not the fork's docs. (PR #104)
+- **D2 (reopened):** set the top-bar wordmark size explicitly and give page titles the h1 size (D1); the mobile top-bar overflow (⋮) renders as an outlined box and should be an `IconButton`; detail pages (filler and custom show new/edit, slot editors, smart collection, welcome) are still on h4 titles; `/search` no longer lists the whole library without a query (documented). (D1, D2)
+- **D3 leftovers (C-wave, C1):** remaining `contained` buttons outside save bars (Refresh Preview, Add Media, Proceed, New, Close); inline Cancel, Delete and Close literals in files D3 did not touch; delete success toasts are missing on custom show and filler delete; non-save failure toasts keep their own wording.
+- **D4 (second pass):** dark `secondary` (#004b79) is 1.74:1 on dark paper and drives the guide spinner, so pick a dark secondary; the redirect guide title shows the channel UUID; the sliver divider is a hard-coded rgba; the lineup editor, mid-roll and slot calendars still use the random palette (they could use `guideRamp`); `TvGuideTimeControls.tsx` is empty; the dark ramp's yellow step reads muddy; TvGuide's small-viewport times and "N left" never render (a pre-existing condition bug).
+- **D6:** `/` and `/search` highlight no nav item; `/settings/ffmpeg/new` lacks the Settings breadcrumb.
+- **D7:** Troubleshoot's stacked Accordions show 2px double borders with flat Paper; the error page's "File a Bug Report" targets upstream's issue form; the smart collection, media source, transcode config and `/media` pages show the error page for missing ids (no loader); `ChannelFlexConfig` and `CustomShowProgrammingSelector` have dead loading branches.
+- **D5 leftovers (C6, or a translation pass):** feature-flag descriptions are untranslated; the stream mode, watermark position, error screen and Hour/Day option lists are untranslated; the filler list delete icon has no aria-label.
+- **T1 (test health):** the e2e ports are fixed in `e2e/fixture/env.ts`, so parallel runs collide. (D4)
+- **T1 (test health):** `server/src/stream/hls/HlsSession.test.ts > trimPlaylist > never lists a segment below the pruning floor` failed on CI for a web-only PR (#100, run 39368733676) while main passed; it is timing-dependent (expected `data000040.ts`, got `data000036.ts`) and comes from the playlist-window commits 58380adc and 5baea7ce.
+- **T1 (test health):** the web suite times out under load in `ChannelCaptionsField`, `LanguagePreferencesList`, `XmlTvSettingsPage` (`waitFor`'s 1 s default) and `CustomShowSortToolsMenu`; `router.test.ts` importing the whole route tree takes 45–80 s under load; `ReviewLibraryTable.test.tsx` uses inline `typeof import(...)`.
+- **Lingui:** a full extract adds about 1,800 lines of strings that were never extracted. The `lingui-extract` workflow commits the catalogs after merge, so no PR needs to do it.
+- **Process:** wave PRs write their notes to `docs/fork/changes/<date>-<slug>.md` and the fold-in PR moves them into `FORK.md` (see `docs/fork/changes/README.md`).
+
 ### Not in scope here
 
 Data-layer items from `plans/frontend-audit-plan.md` (FE1–FE5, C1–C6) stay there; C3 above
 depends on its FE5 (query-key invalidation) being fixed first for channel delete to refresh the
 list. Infinite schedules UI waits for the dev branch. Mobile layout was not screenshotted; D1–D2
-must still be checked at 390px in the e2e fixture.
+must still be checked at 390px in the e2e fixture. PRs in a parallel wave write their fork notes to
+`docs/fork/changes/` (see its README) instead of FORK.md.
 
 ---
 
 ## 5. Execution notes
 
 - **Wave 1 status (2026-10-19):** all ten PRs merged (#86–#95), each reviewed by Claude and Codex with CI green.
+- **Wave 2 status (2026-10-20):** D1–D7 merged (#98–#104).
 - **Order:** Wave 1 all at once (ten S-sized PRs, one Opus agent each, worktrees). D1 alone, then
   D2–D7 in parallel. C1 alone, then C2–C7. S1 after C2. Wave 5 after decisions P1 and P2 are taken
   by the user.
