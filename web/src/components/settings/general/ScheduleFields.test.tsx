@@ -18,7 +18,13 @@ const dailyAtThree: Schedule = {
 
 // The General settings form with one backup on the given schedule. The
 // schedule the form holds is printed under the fields
-function Harness({ schedule }: { schedule: Schedule }) {
+function Harness({
+  schedule,
+  editableCron = false,
+}: {
+  schedule: Schedule;
+  editableCron?: boolean;
+}) {
   const form = useForm<GeneralSettingsFormData>({
     defaultValues: {
       backendUri: '',
@@ -66,7 +72,9 @@ function Harness({ schedule }: { schedule: Schedule }) {
           name="backup.configurations.0.schedule"
           intervalLabel="Backup interval"
           id="backup-schedule"
+          editableCron={editableCron}
         />
+        <output data-testid="valid">{String(form.formState.isValid)}</output>
         <output data-testid="held">{JSON.stringify(held)}</output>
       </FormProvider>
     </LocalizationProvider>
@@ -159,6 +167,40 @@ describe('ScheduleFields', () => {
     const { unit } = renderFields({ ...dailyAtThree, unit: 'week' });
 
     expect(unit()).toHaveTextContent('Week');
+  });
+
+  test('backup cron schedules can be edited', async () => {
+    const { user } = renderWithProviders(
+      <Harness schedule={{ type: 'cron', cron: '0 3 * * *' }} editableCron />,
+    );
+    const cron = screen.getByRole('textbox', { name: 'Cron expression' });
+    await user.clear(cron);
+    await user.type(cron, '0 6 * * *');
+    expect(
+      JSON.parse(screen.getByTestId('held').textContent ?? 'null'),
+    ).toEqual({ type: 'cron', cron: '0 6 * * *' });
+  });
+
+  test('switching an invalid backup interval to cron clears the hidden validation error', async () => {
+    const { user } = renderWithProviders(
+      <Harness schedule={dailyAtThree} editableCron />,
+    );
+    await user.clear(screen.getByLabelText('Backup interval'));
+    await user.tab();
+    await waitFor(() =>
+      expect(screen.getByTestId('valid')).toHaveTextContent('false'),
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Schedule type' }));
+    await user.click(
+      await screen.findByRole('option', { name: 'Cron expression' }),
+    );
+    expect(screen.queryByLabelText('Backup interval')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Cron expression' }),
+    ).toHaveValue('0 4 * * *');
+    await waitFor(() =>
+      expect(screen.getByTestId('valid')).toHaveTextContent('true'),
+    );
   });
 
   test('a cron schedule is shown as text', () => {

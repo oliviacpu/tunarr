@@ -373,6 +373,30 @@ export default function FfmpegSettingsPage({
               />
               <SelectFormController
                 control={control}
+                name="scalingAlgorithm"
+                label={t`Scaling algorithm`}
+                options={[
+                  { value: 'bicubic', label: 'Bicubic' },
+                  { value: 'fast_bilinear', label: 'Fast bilinear' },
+                  { value: 'lanczos', label: 'Lanczos' },
+                  { value: 'spline', label: 'Spline' },
+                ]}
+                helperText={t`How FFmpeg resizes video.`}
+              />
+              <SelectFormController
+                control={control}
+                name="deinterlaceFilter"
+                label={t`Deinterlace filter`}
+                options={[
+                  { value: 'none', label: t`None` },
+                  ...['bwdif=0', 'bwdif=1', 'w3fdif', 'yadif=0', 'yadif=1'].map(
+                    (value) => ({ value, label: value }),
+                  ),
+                ]}
+                helperText={t`Filter used to deinterlace video.`}
+              />
+              <SelectFormController
+                control={control}
                 name="tonemapAlgorithm"
                 label={t`HDR tone-map curve`}
                 options={TonemapAlgorithms.map((algorithm) => ({
