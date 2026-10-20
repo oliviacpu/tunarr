@@ -68,3 +68,14 @@ correlate with Tunarr and Plex logs. Do not infer client startup time from serve
   fixture had not extracted its cues, so its padding-only output was not counted as visible-caption validation.
 - Main checkout remains untouched; implementation is in the separate worktree. No image release, deployment,
   Plex restart, or remote configuration write was performed. Apple TV acceptance remains pending deployment.
+
+
+## Review follow-ups
+
+Independent PR review identified and regression-tested two additional races: obsolete stop callbacks during the
+asynchronous replacement lookup, and timeout retirement racing a newly registered viewer. Replaced instances now
+remain excluded from pause callbacks; connection registration and conditional idle retirement share the channel lock.
+The updated streaming/API/pipeline regression run passes **798 tests**.
+
+The measurement harness now averages both middle observations for even sample counts; four Node tests cover even,
+odd, empty, and zero-valued samples. Recomputing the saved A/B medians leaves the table above unchanged.

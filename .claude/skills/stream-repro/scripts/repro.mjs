@@ -9,6 +9,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import { medianSorted } from './tune-in-stats.mjs';
 
 const { values: opt } = parseArgs({
   options: {
@@ -772,7 +773,7 @@ async function measureTuneIns(base, channelId) {
   }
   const times = rows.filter((r) => r.firstByteMs !== undefined).map((r) => r.firstByteMs).sort((a, b) => a - b);
   return { attempts: rows.length, failures: rows.filter((r) => r.error).length,
-    medianMs: times[Math.floor(times.length / 2)], p95Ms: times[Math.max(0, Math.ceil(times.length * 0.95) - 1)], rows };
+    medianMs: medianSorted(times), p95Ms: times[Math.max(0, Math.ceil(times.length * 0.95) - 1)], rows };
 }
 
 async function captureTs(base, channelId) {
