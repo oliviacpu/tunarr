@@ -1,4 +1,4 @@
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon';
+import { LoadingIcon } from '@/components/base/LoadingIcon';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useM3ULink } from '@/hooks/useM3ULink';
@@ -143,7 +143,7 @@ export const StatusPage = () => {
 
         const icon =
           fixer && runningFixers.has(fixer) ? (
-            <RotatingLoopIcon />
+            <LoadingIcon />
           ) : (
             match(data?.type)
               .with('error', () => <Error color="error" />)
@@ -152,7 +152,7 @@ export const StatusPage = () => {
               .with('info', () => <Info color="info" />)
               .otherwise(() =>
                 systemHealthQuery.isLoading ? (
-                  <RotatingLoopIcon />
+                  <LoadingIcon />
                 ) : (
                   <QuestionMark />
                 ),

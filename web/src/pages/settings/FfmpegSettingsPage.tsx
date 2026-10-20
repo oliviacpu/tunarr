@@ -117,7 +117,7 @@ function FfmpegProbeStatus({ isInContainer }: { isInContainer: boolean }) {
 
 export default function FfmpegSettingsPage() {
   const { t } = useLingui();
-  const { data: ffmpegSettings, error } = useFfmpegSettings();
+  const { data: ffmpegSettings } = useFfmpegSettings();
 
   const queryClient = useQueryClient();
   const systemState = useSystemState();
@@ -224,14 +224,6 @@ export default function FfmpegSettingsPage() {
       },
     });
   };
-
-  if (error) {
-    return (
-      <Alert severity="error">
-        {getApiErrorMessage(error) ?? error.message}
-      </Alert>
-    );
-  }
 
   return (
     <Box component="form" onSubmit={handleSubmit(updateFfmpegSettings)}>

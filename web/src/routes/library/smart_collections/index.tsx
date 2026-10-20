@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/base/PageHeader.tsx';
+import { TableSkeleton } from '@/components/base/TableSkeleton.tsx';
 import Breadcrumbs from '@/components/Breadcrumbs.tsx';
 import { Trans } from '@lingui/react/macro';
 import { Box } from '@mui/material';
@@ -11,6 +12,7 @@ export const Route = createFileRoute('/library/smart_collections/')({
     return queryClient.ensureQueryData(getApiSmartCollectionsOptions());
   },
   component: RouteComponent,
+  pendingComponent: () => <TableSkeleton columns={2} />,
 });
 
 function RouteComponent() {

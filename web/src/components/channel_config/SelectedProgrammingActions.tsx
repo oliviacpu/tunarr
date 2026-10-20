@@ -28,7 +28,7 @@ import {
   clearSelectedMedia,
 } from '../../store/programmingSelector/actions.ts';
 import type { Maybe } from '../../types/util.ts';
-import { RotatingLoopIcon } from '../base/LoadingIcon.tsx';
+import { LoadingIcon } from '../base/LoadingIcon.tsx';
 
 type Props = {
   toggleOrSetSelectedProgramsDrawer: (open: boolean) => void;
@@ -170,7 +170,7 @@ export default function SelectedProgrammingActions({
             variant="outlined"
             startIcon={
               smallViewport ? null : selectAllLoading ? (
-                <RotatingLoopIcon />
+                <LoadingIcon />
               ) : (
                 <CheckBoxOutlined />
               )
@@ -180,7 +180,7 @@ export default function SelectedProgrammingActions({
             sx={{ m: 0.5, flexGrow: 1 }}
           >
             {smallViewport && selectAllEnabled ? (
-              <RotatingLoopIcon />
+              <LoadingIcon />
             ) : (
               t`Select All`
             )}
@@ -203,7 +203,7 @@ export default function SelectedProgrammingActions({
               variant="contained"
               startIcon={
                 smallViewport ? null : addSelectedLoading ? (
-                  <RotatingLoopIcon />
+                  <LoadingIcon />
                 ) : (
                   <AddCircle />
                 )

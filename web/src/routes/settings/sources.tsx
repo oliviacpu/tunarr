@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/components/base/TableSkeleton.tsx';
 import MediaSourceSettingsPage from '@/pages/settings/MediaSourceSettingsPage';
 import { createFileRoute } from '@tanstack/react-router';
 import {
@@ -13,4 +14,5 @@ export const Route = createFileRoute('/settings/sources')({
     ]);
   },
   component: MediaSourceSettingsPage,
+  pendingComponent: () => <TableSkeleton columns={6} />,
 });

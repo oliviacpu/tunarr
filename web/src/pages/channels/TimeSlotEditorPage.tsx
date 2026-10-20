@@ -1,4 +1,4 @@
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
+import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import ChannelLineupList from '@/components/channel_config/ChannelLineupList.tsx';
 import { TimeSlotFormProvider } from '@/components/slot_scheduler/TimeSlotFormProvider.tsx';
 import { TimeSlotTable } from '@/components/slot_scheduler/TimeSlotTable.tsx';
@@ -531,9 +531,7 @@ export default function TimeSlotEditorPage() {
               variant="contained"
               onClick={() => calculateSlots()}
               disabled={isCalculatingSlots}
-              startIcon={
-                isCalculatingSlots ? <RotatingLoopIcon /> : <Autorenew />
-              }
+              startIcon={isCalculatingSlots ? <LoadingIcon /> : <Autorenew />}
             >
               <Trans>Refresh Preview</Trans>
             </Button>

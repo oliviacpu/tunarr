@@ -1,8 +1,7 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, LinearProgress, Paper, Tabs } from '@mui/material';
+import { Box, Paper, Tabs } from '@mui/material';
 import { Outlet, useRouterState } from '@tanstack/react-router';
 import { last, trimEnd } from 'lodash-es';
-import { Suspense } from 'react';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { RouterTabLink } from '../../components/base/RouterTabLink.tsx';
@@ -70,9 +69,8 @@ export function SettingsLayout({ currentTab = '/general' }: Props) {
         </Box>
 
         <Box sx={{ py: [1, 2] }}>
-          <Suspense fallback={<LinearProgress />}>
-            <Outlet />
-          </Suspense>
+          {/* The router's pending and error components show in here */}
+          <Outlet />
         </Box>
       </Paper>
     </Box>

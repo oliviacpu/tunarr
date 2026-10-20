@@ -14,6 +14,21 @@ import { setCurrentCustomShow } from '@/store/customShowEditor/actions.ts';
 import { setCurrentFillerList } from '@/store/fillerListEditor/action.ts';
 import { type RouterContext } from '@/types/RouterContext';
 import { notFound } from '@tanstack/react-router';
+import { isMissingEntityError } from './apiError.ts';
+
+// Loads one thing a page is about. When it doesn't exist the loader throws
+// notFound(), so the router shows its not-found page; any other failure goes
+// to the router's error page.
+async function orNotFound<T>(load: Promise<T>): Promise<T> {
+  try {
+    return await load;
+  } catch (error) {
+    if (isMissingEntityError(error)) {
+      throw notFound();
+    }
+    throw error;
+  }
+}
 
 export type ChannelArgs = {
   params: { channelId: string };
@@ -24,20 +39,18 @@ export async function preloadChannelAndProgramming({
   params,
   context,
 }: ChannelArgs) {
-  const [channel, programming] = await Promise.allSettled([
-    context.queryClient.ensureQueryData(channelQuery(params.channelId)),
-    context.queryClient.ensureQueryData(
-      channelProgrammingQuery(params.channelId, true),
+  const [channel, programming] = await Promise.all([
+    orNotFound(
+      context.queryClient.ensureQueryData(channelQuery(params.channelId)),
+    ),
+    orNotFound(
+      context.queryClient.ensureQueryData(
+        channelProgrammingQuery(params.channelId, true),
+      ),
     ),
   ]);
 
-  if (channel.status === 'rejected' || programming.status === 'rejected') {
-    // Check if it's a not found or what...
-    console.error(channel, programming);
-    throw notFound();
-  }
-
-  safeSetCurrentChannel(channel.value, programming.value);
+  safeSetCurrentChannel(channel, programming);
 }
 
 type FillerArgs = {
@@ -51,11 +64,9 @@ export async function preloadFillerAndProgramming({
 }: FillerArgs) {
   // TODO if this is too slow we can use the router defer method
   const [fillerList, programming] = await Promise.all([
-    queryClient.ensureQueryData(fillerListQuery(fillerId)),
-    queryClient.ensureQueryData(fillerListProgramsQuery(fillerId)),
+    orNotFound(queryClient.ensureQueryData(fillerListQuery(fillerId))),
+    orNotFound(queryClient.ensureQueryData(fillerListProgramsQuery(fillerId))),
   ]);
-
-  // TODO handle not found
 
   // Set state
   const currentList = useStore.getState().fillerListEditor.currentEntity;
@@ -80,11 +91,9 @@ export async function preloadCustomShowAndProgramming({
 }: CustomShowArgs) {
   // TODO if this is too slow we can use the router defer method
   const [customShow, programming] = await Promise.all([
-    queryClient.ensureQueryData(customShowQuery(showId)),
-    queryClient.ensureQueryData(customShowProgramsQuery(showId)),
+    orNotFound(queryClient.ensureQueryData(customShowQuery(showId))),
+    orNotFound(queryClient.ensureQueryData(customShowProgramsQuery(showId))),
   ]);
-
-  // TODO handle not found
 
   // Set state
   const currentShow = useStore.getState().customShowEditor.currentEntity;
