@@ -16,12 +16,19 @@ starting anything.
 | 3 | C5 one delete dialog | merged, #107 |
 | 3 | C6 sources route | merged, #106 |
 | 3 | C7 bulk actions | merged, #109 |
-| 3 | C2, C4 | in progress (agents launched 2026-10-20 after C1 merged); C3 starts after C2 lands |
+| 3 | C4 transcode form on RHF | merged, #111 |
+| 3 | C2 settings pages on the shell | PR #112, reviewed, Codex-clean after three fix rounds, waiting on its last build; merge main in first if GitHub says CONFLICTING |
+| 3 | C3 editors on the shell | PR in progress (agent launched 2026-10-20) |
 | 4 | S1–S7 | not started; S1 needs C2; S5 is a design decision first |
 | 5 | P1–P5 | not started; P1 shelve and P2 retire were approved 2026-10-19 |
 
 Release `oliviacpu-2026.10.20` was tagged at the wave-2 fold-in (waves 1–2 plus C5/C6) and the
-fork image built from it. Cut another tag after wave 3 lands.
+fork image built from it. After wave 3 lands: run the wave-3 fold-in (move `docs/fork/changes/*.md`
+into FORK.md, update this file and the plan's wave status), tag `oliviacpu-2026.10.21` (or `.20.2`
+if the same day), wait for the fork-image workflow, then deploy to the box (the user asked for
+this explicitly: `~/apps/tunarr` on the seedbox, source `~/apps/_lib.sh` before any podman command,
+pull `ghcr.io/oliviacpu/tunarr:<tag>` and restart the container the way `~/apps/tunarr` scripts do;
+read them first, SSH access must be set up in the session that does it).
 
 ## Remaining rows, in order
 
@@ -30,31 +37,12 @@ what the previous session learned that the row's agent needs.
 
 ### Wave 3, remaining
 
-1. **C2, port every settings page to the shell** (M, Opus). After C1. Pages: General (server
-   form; `toFormValues = (data) => getDefaultFormValues(settings, data)`), Transcoding (the old
-   FFmpeg page), Scanner, Tuner (HDHR), Features (today it uses reactive `useForm({ values })`, which resets the form whenever the
-   query refetches and would discard an edit made during a save; replace it with cached
-   `defaultValues` plus the guarded load effect below; env-override switches map onto
-   `SwitchFormController` with `disabled`; `toFormValues = (r) => r.flags`). Use
-   `SettingsForm`, `useSettingsMutation({ form, mutation, toFormValues, invalidate })`,
-   `isSubmitting={mutation.isPending}`, `onRestoreDefaults` only when values differ from defaults,
-   and the load-effect guard `if (!isEqual(data, defaultValues)) reset(data)` with `data` as the
-   only dependency (otherwise the refetch after a save drops edits made during it). Delete the
-   XMLTV/HDHR copy-pasted scaffolding and the duplicated "Every N / unit / time" schedule widget
-   (one `ScheduleFields` for backups and log rolling). Before porting, evaluate 16px inputs on a
-   phone (iOS Safari zooms into inputs under 16px; labels shrink to 10.5px at 14px) and decide.
-   Acceptance: each page is a form body only; all have the unsaved guard; one e2e spec per page of
-   the shape load → change one field → save → reload → the field held and nothing else moved
-   (`e2e/tests/xmltvSettings.spec.ts` is the pattern).
-2. **C3, port the entity editors** (M, Opus). After C2. Channel edit (keep tabs and error dots),
+1. **C3, port the entity editors** (M, Opus). In progress. Channel edit (keep tabs and error dots),
    filler list, custom show, both slot editors (Save disabled when clean). Same shell and rules as
-   C2. A parity-checklist row in `architecture/infinite-schedules/parity-checklist.md` if slot
-   editor behaviour changes.
-3. **C4, transcode config form onto RHF** (M, Opus). After C1; can run beside C2. Replace
-   TanStack Form in `components/settings/ffmpeg/TranscodeConfigSettingsForm.tsx` and
-   `useTranscodeConfigFormOptions.ts`; remove `@tanstack/react-form` from `web/package.json` and
-   delete `hooks/form.ts` and `components/form/Basic*Input` if nothing else uses them; validation
-   parity tests (resolution, bitrate, hardware options).
+   C2: `isSubmitting={mutation.isPending}`, `mode: 'onTouched'`, the guarded load effect, tests mock
+   `UnsavedNavigationAlert` and never click a disabled Save, fields locked (`fieldset` disabled +
+   `inert`) while a create is in flight because the create navigates. A parity-checklist row in
+   `architecture/infinite-schedules/parity-checklist.md` if slot editor behaviour changes.
 
 ### Wave 4, settings regrouped by task (after C2)
 
@@ -86,6 +74,20 @@ what the previous session learned that the row's agent needs.
 15. **P5** channel edit tabs as routes, including `watermark`, with `?tab=` redirects.
 
 ### Also open
+
+- **Wave-3 follow-ups** (assign to the row named, or to a small S PR):
+  - D8 (new, S, Sonnet): 16px inputs and floating labels below the `sm` breakpoint only (`MuiInputBase`,
+    `MuiInputLabel`, the MUI X picker input base), 14px from `sm` up; never `maximum-scale=1`. C2's
+    measurement: labels go from 10.5px to 12px, nothing scrolls sideways at 390px.
+  - General settings: clearing the roll interval and then unticking "Enable log file rolling" (not
+    "Roll on schedule") still sends the empty interval and the server refuses it; unticking and
+    re-ticking "Enable backups" replaces a cron backup schedule with a daily one until Reset (C2).
+  - Transcode form: phone layout needs `xs` sizes on its Grid/Stack; docs describe a `vaapiDriver`
+    option the form never showed; zod's raw "expected number, received NaN" message; leftover
+    `@tanstack/react-devtools` dev dependency; "Reset changes" still works while a create is in
+    flight (harmless) (C4).
+  - XMLTV at 390px: "Refreshes start at" label overlaps the previous field's two-line help (D2/C2).
+  - `getApiErrorMessage` does not read the `{ error }` body `PUT /api/channels/:id` sends (S6).
 
 - From C7: a server bulk endpoint for channels/lists (one guide and M3U rebuild instead of N);
   `getApiErrorMessage` does not read the `{ error }` body that `PUT /api/channels/:id` sends; the
