@@ -63,7 +63,7 @@ export const TranscodeConfigsTable = () => {
       return (
         <Box sx={{ display: 'flex', justifyContent: 'end', width: '100%' }}>
           <Tooltip title={t`Edit`} placement="top">
-            <IconButton to={`/settings/ffmpeg/${config.id}`} component={Link}>
+            <IconButton to={`/settings/playback/${config.id}`} component={Link}>
               <Edit />
             </IconButton>
           </Tooltip>
@@ -162,7 +162,7 @@ export const TranscodeConfigsTable = () => {
             variant="contained"
             startIcon={<AddCircle />}
             component={Link}
-            to="/settings/ffmpeg/new"
+            to="/settings/playback/new"
           >
             <Trans>New</Trans>
           </Button>

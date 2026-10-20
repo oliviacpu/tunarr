@@ -1,5 +1,6 @@
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
+import { useLingui } from '@lingui/react/macro';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from '@tanstack/react-router';
 import type { TranscodeConfig } from '@tunarr/types';
@@ -38,11 +39,17 @@ type Options = {
  * page moves to its edit route; an existing one is updated in place.
  */
 export function useTranscodeConfigForm({ initialConfig, isNew }: Options) {
+  const { t } = useLingui();
   const navigate = useNavigate();
   const form = useForm<TranscodeConfigFormValues, unknown, TranscodeConfig>({
     // The schema the server checks the config against, so the form refuses
     // what the server would
-    resolver: zodResolver(TranscodeConfigSchema),
+    resolver: zodResolver(TranscodeConfigSchema, {
+      error: (issue) =>
+        issue.code === 'invalid_type' && issue.expected === 'number'
+          ? t`Enter a number.`
+          : undefined,
+    }),
     defaultValues: initialConfig,
     mode: 'onChange',
   });
@@ -76,7 +83,7 @@ export function useTranscodeConfigForm({ initialConfig, isNew }: Options) {
       // the config a second time
       onSuccess: (created) =>
         navigate({
-          to: '/settings/ffmpeg/$configId',
+          to: '/settings/playback/$configId',
           params: { configId: created.id },
           replace: true,
           ignoreBlocker: true,

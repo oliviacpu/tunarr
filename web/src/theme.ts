@@ -1,4 +1,9 @@
-import { type PaletteOptions, createTheme } from '@mui/material';
+import {
+  type PaletteOptions,
+  type Theme as MuiTheme,
+  createTheme,
+} from '@mui/material';
+import type {} from '@mui/x-date-pickers/themeAugmentation';
 
 // The direction and every value below come from
 // plans/ui-primitives-and-settings-audit-2026-10-19.md (section 2, issue D1).
@@ -14,6 +19,11 @@ export const SurfaceRadius = 10;
 // Sizes are in rem against the browser's 16px root, so a larger default font
 // size in the browser still scales the whole UI.
 const rem = (px: number) => `${px / 16}rem`;
+
+const inputTextSize = ({ theme }: { theme: MuiTheme }) => ({
+  fontSize: rem(16),
+  [theme.breakpoints.up('sm')]: { fontSize: rem(14) },
+});
 
 const LightPalette: PaletteOptions = {
   mode: 'light',
@@ -143,6 +153,9 @@ export const Theme = createTheme({
     overline: { fontSize: rem(12) },
   },
   components: {
+    MuiInputBase: { styleOverrides: { root: inputTextSize } },
+    MuiInputLabel: { styleOverrides: { root: inputTextSize } },
+    MuiPickersInputBase: { styleOverrides: { root: inputTextSize } },
     MuiButton: {
       // Contained is for a page's one primary action, and is always explicit.
       defaultProps: {

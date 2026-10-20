@@ -57,7 +57,6 @@ export const UpdateXmlTvSettingsRequestSchema = z.object({
   refreshHours: z.number().optional(),
   refreshStartHour: z.number().int().min(0).max(23).optional(),
   outputPath: z.string().optional(),
-  enableImageCache: z.boolean().optional(),
   useShowPoster: z.boolean().optional(),
   publicUrl: z.url().or(z.literal('')).optional(),
 });

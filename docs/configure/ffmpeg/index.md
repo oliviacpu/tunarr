@@ -1,6 +1,6 @@
-# FFmpeg
+# Playback
 
-Tunarr requires FFmpeg for transcoding / remuxing content when outputting channel streams. Settings relating to transcoding and FFmpeg can be found on the Settings > Transcoding page.
+Tunarr requires FFmpeg for transcoding / remuxing content when outputting channel streams. Settings relating to transcoding and FFmpeg can be found on the Settings > Playback page (`/web/settings/playback`). The old `/web/settings/ffmpeg` address and its transcode-config editor links redirect to Playback.
 
 ## Executable Paths
 
@@ -23,6 +23,10 @@ Printing or persisting FFmpeg logs to disk is useful when debugging streaming is
 ### HLS Direct Output Format
 
 When using the HLS Direct stream mode in a channel (see [channel stream modes](../channels/transcoding/#hls-direct)), use this setting to change the output container format for the stream.
+
+### Scaling and deinterlacing
+
+**Scaling algorithm** selects how FFmpeg resizes video: Bicubic, Fast bilinear, Lanczos, or Spline. **Deinterlace filter** selects the FFmpeg filter for interlaced video, or None. Both are under **Settings > Playback**.
 
 ### HDR Tone-map Curve
 
@@ -92,6 +96,8 @@ Then, in Tunarr, you would set your transcode path to `/transcode`.
 
 ## Audio & Subtitles
 
+These settings are under **Settings > Captions & audio**, separate from the Playback tab.
+
 ### Subtitle Extraction
 
 If content in your channels have embedded, text-based subtitles, this option enables Tunarr to extract subtitles from media files in order to subsequently burn the subtitles. Extract embedded text-based subtitles is currently a requirement for using said subtitle streams. Each hour Tunarr will scan the guide for upcoming media, find which items have embedded text-based subtitles, and then run extraction. This can be a resource-intensive process, so in general, sidecar text-based subtitles are preferable.
@@ -135,7 +141,7 @@ Every hour, for programs airing in the next hour on channels that have subtitles
 When using the **HLS Direct v2** stream mode, text-based subtitles (embedded or sidecar files) are served as WebVTT tracks in the HLS master playlist, since this mode can't burn them into the picture. Clients that support HLS subtitle renditions (most modern players) will display them as selectable subtitle options. A channel that starts during a stretch without dialogue starts right away, and its subtitle track stays empty until the next line.
 
 !!! note
-    WebVTT subtitle tracks in the **HLS** stream mode are currently experimental. To enable them, go to **Settings > Features** and turn on the sidecar subtitles option.
+    WebVTT subtitle tracks in the **HLS** stream mode are currently experimental. To enable them, go to **Settings > Captions & audio** and turn on WebVTT Sidecar Subtitles.
 
 ### Closed Captions for HDHomeRun Clients
 

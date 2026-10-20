@@ -125,6 +125,8 @@ Each log entry contains:
 
 Log rolling prevents log files from growing indefinitely by rotating them when they reach a certain size or on a schedule.
 
+**Rolled files to keep**, under **Settings > General > Logging**, controls the retained rotated-file count; it must be at least 1.
+
 Log rolling is on by default. Tunarr rotates the log every day at midnight, or sooner if it grows past 50 MB, and keeps three rotated files. That is about three days of logs at normal log levels.
 
 ### Configuration Options

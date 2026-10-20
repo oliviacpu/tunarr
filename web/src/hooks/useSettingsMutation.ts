@@ -48,6 +48,12 @@ export type UseSettingsMutationOptions<
   toFormValues: (saved: TData, variables: TVariables) => TFieldValues;
   /** Queries to refetch once saved, such as the settings the page loaded. */
   invalidate?: InvalidateQueryFilters | readonly InvalidateQueryFilters[];
+  /**
+   * What the failure toast says before the server's reason. Settings pages
+   * leave it out ("Could not save settings"); other editors pass
+   * `useToasts().couldNotSave`.
+   */
+  failureMessage?: string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -83,7 +89,7 @@ export function changedFieldPaths(
  * so the form stays dirty and the unsaved-changes guard stays on. Then it
  * toasts "Saved" and refetches the queries in `invalidate`; the mutation stays
  * pending until they are back. On failure it toasts "Could not save settings"
- * with the server's reason and leaves the form as it is.
+ * (or `failureMessage`) with the server's reason and leaves the form as it is.
  *
  * It tracks one save at a time, which `SettingsForm` ensures by disabling
  * Save while one is in flight.
@@ -99,6 +105,7 @@ export function useSettingsMutation<
   mutation,
   toFormValues,
   invalidate,
+  failureMessage,
 }: UseSettingsMutationOptions<
   TFieldValues,
   TData,
@@ -152,7 +159,10 @@ export function useSettingsMutation<
     onError: async (error, variables, context) => {
       submittedValues.current = undefined;
       enqueueSnackbar(
-        withReason(toasts.couldNotSaveSettings, describeError(error)),
+        withReason(
+          failureMessage ?? toasts.couldNotSaveSettings,
+          describeError(error),
+        ),
         { variant: 'error' },
       );
       await mutation.onError?.(error, variables, context);

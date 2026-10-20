@@ -5,6 +5,10 @@
 
 Custom Shows are akin to classic playlists. Any ordering operations in scheduling tools will use the ordering as defined in the Custom Show. Custom Shows can be schedule as if they were "regular" shows in slot editors. Content within are grouped by the Custom Show and not their _actual_ show. This allows creating more complex groupings of content for use in channels.
 
+In the editor, Save is enabled once the name, the sync settings or the programs have changed. A show that isn't synced
+needs at least one program. "Reset changes" puts back the saved values and programs. Leaving the page with unsaved
+changes asks first; going to "Add Media" and back keeps them.
+
 A Custom Show can be created empty, but slot editors only offer it once it has programs with a duration greater than zero. Programs with no duration cannot be scheduled, so a show made only of them counts as empty. See [Time Slots](../scheduling/time-slots.md#empty-or-deleted-custom-shows) and the [Slots Editor](../scheduling/random-slots.md#empty-or-deleted-custom-shows).
 
 ## Updating Content Through the API
@@ -37,7 +41,7 @@ When creating or editing a Custom Show:
 3. Select the **Playlist** from that media source to sync with.
 4. Save the Custom Show.
 
-An initial sync runs immediately when a synced Custom Show is first created. After that, syncs run automatically on the same schedule as library scans, set by the rescan interval under **Settings > Scanner** (see [Scheduled Scans](../media_sources/index.md#scheduled-scans)).
+An initial sync runs immediately when a synced Custom Show is first created. After that, syncs run automatically on the same schedule as library scans, set by the rescan interval under **Settings > Library** (see [Scheduled Scans](../media_sources/index.md#scheduled-scans)).
 
 ### Manual Sync
 

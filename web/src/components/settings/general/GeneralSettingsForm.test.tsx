@@ -126,6 +126,51 @@ describe('GeneralSettingsForm', () => {
     mockPutSystemSettings.mockResolvedValue({ data: systemSettings });
   });
 
+  test('category timing distinguishes live explicit levels from returning to inheritance', async () => {
+    const { user } = await renderForm({
+      ...systemSettings,
+      logging: {
+        ...systemSettings.logging,
+        categoryLogLevel: { streaming: 'debug', scheduling: 'trace' },
+      },
+    });
+    expect(screen.getAllByLabelText('Category log level: Live')).toHaveLength(
+      2,
+    );
+    await user.click(
+      screen.getByRole('combobox', { name: 'Streaming log level' }),
+    );
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'Inherit default',
+      }),
+    );
+    expect(
+      screen.getByLabelText('Inherited category log level: Restart required'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Category log level: Live')).toHaveLength(
+      1,
+    );
+  });
+
+  test('a cleared retention count blocks Save until a valid number is restored', async () => {
+    const { user, saveButton } = await renderForm();
+    const retention = screen.getByLabelText('Rolled files to keep');
+    await user.clear(retention);
+    await user.tab();
+    await waitFor(() => expect(retention).toBeInvalid());
+    expect(saveButton()).toBeDisabled();
+    expect(mockPutSystemSettings).not.toHaveBeenCalled();
+    await user.type(retention, '5');
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+    await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
+    expect(
+      mockPutSystemSettings.mock.calls[0]?.[0].body.logging?.logRollConfig
+        ?.rolledFileLimit,
+    ).toBe(5);
+  });
+
   test('Reset clears an invalid value', async () => {
     const {
       user,

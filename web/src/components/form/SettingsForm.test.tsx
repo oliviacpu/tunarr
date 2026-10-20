@@ -67,6 +67,11 @@ describe('SettingsForm', () => {
     guardProps.mockClear();
   });
 
+  test('a containing page can own navigation without registering another guard', () => {
+    renderForm({ guardNavigation: false });
+    expect(guardProps).not.toHaveBeenCalled();
+  });
+
   test('Save is disabled while nothing has changed', () => {
     const { saveButton } = renderForm();
 
@@ -132,6 +137,78 @@ describe('SettingsForm', () => {
     await user.click(screen.getByRole('button', { name: 'Restore defaults' }));
 
     expect(onRestoreDefaults).toHaveBeenCalledOnce();
+  });
+
+  test('a new form can save its starting values, but only while they are valid', async () => {
+    const onSubmit = vi.fn();
+    const { user, name, saveButton, resetChanges } = renderForm({
+      isNew: true,
+      onSubmit,
+    });
+
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(resetChanges()).not.toBeInTheDocument();
+    expect(lastGuardProps().isDirty).toBe(false);
+
+    await user.clear(name());
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+
+    await user.type(name(), 'Tunarr');
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+  });
+
+  test('changes held outside the form count as changes', async () => {
+    const onDiscardChanges = vi.fn();
+    const { user, name, saveButton } = renderForm({
+      hasOtherChanges: true,
+      onDiscardChanges,
+    });
+
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(lastGuardProps()).toMatchObject({
+      isDirty: true,
+      onProceed: onDiscardChanges,
+    });
+
+    // Reset changes puts back the fields and the outside changes
+    await user.type(name(), ' Live');
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+
+    expect(name()).toHaveValue('Tunarr');
+    expect(onDiscardChanges).toHaveBeenCalledOnce();
+  });
+
+  test('saveDisabled keeps Save disabled after a valid change', async () => {
+    const { user, name, saveButton, resetChanges } = renderForm({
+      saveDisabled: true,
+    });
+
+    await user.type(name(), ' Live');
+
+    await waitFor(() => expect(resetChanges()).toBeInTheDocument());
+    expect(saveButton()).toBeDisabled();
+  });
+
+  test('disabled locks the fields', async () => {
+    const { user, name } = renderForm({ disabled: true });
+
+    expect(name()).toBeDisabled();
+    await user.type(name(), ' Live');
+    expect(name()).toHaveValue('Tunarr');
+  });
+
+  test('Reset changes cannot discard a draft while its save is pending', () => {
+    const onDiscardChanges = vi.fn();
+    renderForm({
+      isSubmitting: true,
+      hasOtherChanges: true,
+      onDiscardChanges,
+    });
+    const reset = screen.getByRole('button', { name: 'Reset changes' });
+    expect(reset).toBeDisabled();
+    expect(onDiscardChanges).not.toHaveBeenCalled();
   });
 
   test('the unsaved guard follows whether the form has changes', async () => {

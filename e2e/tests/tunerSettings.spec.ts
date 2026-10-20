@@ -13,7 +13,7 @@ test('a changed tuner count saves, survives a reload and moves nothing else', as
   page,
 }) => {
   const before = await savedSettings<HdhrSettings>(page, SETTINGS_URL);
-  await page.goto('/web/settings/hdhr');
+  await page.goto('/web/settings/tuner');
   const tunerCount = page.getByLabel('Tuner count');
   await expect(tunerCount).toHaveValue(String(before.tunerCount));
   await expect(saveButton(page)).toBeDisabled();

@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -74,6 +75,7 @@ export default function HdhrSettingsPage() {
       }
     >
       <Stack spacing={2}>
+        <AppliesWhen setting="tunerDiscovery" />
         <FormControl fullWidth>
           <FormControlLabel
             control={
@@ -91,6 +93,7 @@ export default function HdhrSettingsPage() {
             </Trans>
           </FormHelperText>
         </FormControl>
+        <AppliesWhen setting="tunerCount" />
         <NumericFormControllerText
           control={control}
           name="tunerCount"

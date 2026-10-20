@@ -30,3 +30,7 @@ The System section covers Tunarr's core infrastructure settings including backup
 
 - [Environment Variables](../../getting-started/run.md#configuration) - Server, logging, and search configuration via environment variables
 - [FAQ](../../misc/faq.md) - Frequently asked questions including the Meilisearch `data.ms` file
+
+## Settings-file compatibility
+
+Settings files upgrade to version 2 on startup. Unused Plex streaming settings (`plexStream`) and XMLTV image caching (`xmltv.enableImageCache`) are removed while active settings are preserved. The retired `/api/plex-settings` endpoints are no longer available.

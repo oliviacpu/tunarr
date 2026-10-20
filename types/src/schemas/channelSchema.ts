@@ -254,7 +254,6 @@ export const ChannelSchema = z.object({
   offline: ChannelOfflineSchema,
   startTime: z.number(),
   stealth: z.boolean(),
-  transcoding: ChannelTranscodingOptionsSchema.optional(),
   watermark: WatermarkSchema.optional(),
   onDemand: z.object({
     enabled: z.boolean(),
@@ -275,7 +274,6 @@ export const ChannelSchema = z.object({
 export const SaveableChannelSchema = ChannelSchema.omit({
   fallback: true, // Figure out how to update this
   programCount: true,
-  transcoding: true,
   sessions: true,
 })
   .partial({

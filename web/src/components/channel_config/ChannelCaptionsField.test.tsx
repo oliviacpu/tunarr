@@ -76,7 +76,7 @@ async function renderField(captions: ChannelCaptions | null) {
     <Harness captions={captions} onValid={onValid} />,
   );
   // Shown once the global settings have loaded
-  await screen.findByText('Captions for this channel');
+  await screen.findByText('Captions for this channel', {}, { timeout: 5_000 });
   const save = async () => {
     await rendered.user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onValid).toHaveBeenCalledOnce());

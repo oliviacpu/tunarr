@@ -210,6 +210,18 @@ describe('settings API contracts', () => {
     expect(effects.backups).not.toHaveBeenCalled();
   });
 
+  it('preserves backup configurations when a partial request omits the array', async () => {
+    const before = structuredClone(settings.getAll());
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/system',
+      payload: { backup: {} },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(settings.getAll()).toEqual(before);
+    expect(effects.backups).not.toHaveBeenCalled();
+  });
+
   it('preserves tuner and feature values omitted from legacy PUT requests', async () => {
     await app.inject({
       method: 'PUT',

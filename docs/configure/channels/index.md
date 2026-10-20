@@ -6,6 +6,10 @@ Channels are the core of Tunarr. Each channel acts like a virtual TV station wit
 
 Click the **NEW** button to create your first channel, which will take you to the [Channel Properties](properties.md) page.
 
+Save creates the channel and opens its programming page; the fields are locked until it exists. When you edit a
+channel, Save is enabled once something has changed, and "Reset changes" puts the saved values back. Switching
+between the editor's tabs keeps your changes, and leaving the page with unsaved changes asks first.
+
 <div class="grid cards" markdown>
 
 -   **[Properties](properties.md)**

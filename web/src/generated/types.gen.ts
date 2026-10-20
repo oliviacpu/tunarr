@@ -2970,14 +2970,6 @@ export type GetChannelsResponses = {
         };
         startTime: number;
         stealth: boolean;
-        transcoding?: {
-            targetResolution?: {
-                widthPx: number;
-                heightPx: number;
-            };
-            videoBitrate?: number;
-            videoBufferSize?: number;
-        };
         watermark?: {
             url?: string;
             enabled: boolean;
@@ -3220,14 +3212,6 @@ export type CreateChannelV2Responses = {
         };
         startTime: number;
         stealth: boolean;
-        transcoding?: {
-            targetResolution?: {
-                widthPx: number;
-                heightPx: number;
-            };
-            videoBitrate?: number;
-            videoBufferSize?: number;
-        };
         watermark?: {
             url?: string;
             enabled: boolean;
@@ -3402,14 +3386,6 @@ export type GetChannelsByNumberV2Responses = {
         };
         startTime: number;
         stealth: boolean;
-        transcoding?: {
-            targetResolution?: {
-                widthPx: number;
-                heightPx: number;
-            };
-            videoBitrate?: number;
-            videoBufferSize?: number;
-        };
         watermark?: {
             url?: string;
             enabled: boolean;
@@ -3652,14 +3628,6 @@ export type PutApiChannelsByIdResponses = {
         };
         startTime: number;
         stealth: boolean;
-        transcoding?: {
-            targetResolution?: {
-                widthPx: number;
-                heightPx: number;
-            };
-            videoBitrate?: number;
-            videoBufferSize?: number;
-        };
         watermark?: {
             url?: string;
             enabled: boolean;
@@ -4447,28 +4415,6 @@ export type GetApiChannelsByIdProgrammingResponses = {
             randomDistribution: 'uniform' | 'weighted' | 'none';
             periodMs?: number;
             lockWeights: boolean;
-        };
-        dynamicContentConfig?: {
-            contentSources: Array<{
-                type: 'plex';
-                plexServerId: string;
-                plexLibraryKey: string;
-                search?: {
-                    filter?: PlexFilter;
-                    sort?: {
-                        field: string;
-                        direction: 'asc' | 'desc';
-                    };
-                    limit?: number;
-                };
-                updater: {
-                    _id: string;
-                    type: 'cron';
-                    schedule: string;
-                };
-                enabled: boolean;
-            }>;
-            enabled: boolean;
         };
     };
 };
@@ -5718,28 +5664,6 @@ export type PostApiChannelsByIdProgrammingResponses = {
             randomDistribution: 'uniform' | 'weighted' | 'none';
             periodMs?: number;
             lockWeights: boolean;
-        };
-        dynamicContentConfig?: {
-            contentSources: Array<{
-                type: 'plex';
-                plexServerId: string;
-                plexLibraryKey: string;
-                search?: {
-                    filter?: PlexFilter;
-                    sort?: {
-                        field: string;
-                        direction: 'asc' | 'desc';
-                    };
-                    limit?: number;
-                };
-                updater: {
-                    _id: string;
-                    type: 'cron';
-                    schedule: string;
-                };
-                enabled: boolean;
-            }>;
-            enabled: boolean;
         };
     };
 };
@@ -7089,14 +7013,6 @@ export type GetApiChannelsByIdScheduleResponses = {
                     };
                     startTime: number;
                     stealth: boolean;
-                    transcoding?: {
-                        targetResolution?: {
-                            widthPx: number;
-                            heightPx: number;
-                        };
-                        videoBitrate?: number;
-                        videoBufferSize?: number;
-                    };
                     watermark?: {
                         url?: string;
                         enabled: boolean;
@@ -7522,14 +7438,6 @@ export type GetApiChannelsByIdScheduleResponses = {
                     };
                     startTime: number;
                     stealth: boolean;
-                    transcoding?: {
-                        targetResolution?: {
-                            widthPx: number;
-                            heightPx: number;
-                        };
-                        videoBitrate?: number;
-                        videoBufferSize?: number;
-                    };
                     watermark?: {
                         url?: string;
                         enabled: boolean;
@@ -10799,101 +10707,6 @@ export type PostApiTranscodeConfigsByIdCopyResponses = {
 
 export type PostApiTranscodeConfigsByIdCopyResponse = PostApiTranscodeConfigsByIdCopyResponses[keyof PostApiTranscodeConfigsByIdCopyResponses];
 
-export type GetApiPlexSettingsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/plex-settings';
-};
-
-export type GetApiPlexSettingsErrors = {
-    /**
-     * Default Response
-     */
-    500: string;
-};
-
-export type GetApiPlexSettingsError = GetApiPlexSettingsErrors[keyof GetApiPlexSettingsErrors];
-
-export type GetApiPlexSettingsResponses = {
-    /**
-     * Default Response
-     */
-    200: {
-        streamPath: 'network' | 'direct';
-        updatePlayStatus: boolean;
-        pathReplace: string;
-        pathReplaceWith: string;
-    };
-};
-
-export type GetApiPlexSettingsResponse = GetApiPlexSettingsResponses[keyof GetApiPlexSettingsResponses];
-
-export type PostApiPlexSettingsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/plex-settings';
-};
-
-export type PostApiPlexSettingsErrors = {
-    /**
-     * Default Response
-     */
-    500: string;
-};
-
-export type PostApiPlexSettingsError = PostApiPlexSettingsErrors[keyof PostApiPlexSettingsErrors];
-
-export type PostApiPlexSettingsResponses = {
-    /**
-     * Default Response
-     */
-    200: {
-        streamPath: 'network' | 'direct';
-        updatePlayStatus: boolean;
-        pathReplace: string;
-        pathReplaceWith: string;
-    };
-};
-
-export type PostApiPlexSettingsResponse = PostApiPlexSettingsResponses[keyof PostApiPlexSettingsResponses];
-
-export type PutApiPlexSettingsData = {
-    body?: {
-        streamPath?: 'network' | 'direct';
-        updatePlayStatus?: boolean;
-        pathReplace?: string;
-        pathReplaceWith?: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/plex-settings';
-};
-
-export type PutApiPlexSettingsErrors = {
-    /**
-     * Default Response
-     */
-    500: string;
-};
-
-export type PutApiPlexSettingsError = PutApiPlexSettingsErrors[keyof PutApiPlexSettingsErrors];
-
-export type PutApiPlexSettingsResponses = {
-    /**
-     * Default Response
-     */
-    200: {
-        streamPath: 'network' | 'direct';
-        updatePlayStatus: boolean;
-        pathReplace: string;
-        pathReplaceWith: string;
-    };
-};
-
-export type PutApiPlexSettingsResponse = PutApiPlexSettingsResponses[keyof PutApiPlexSettingsResponses];
-
 export type GetApiXmltvSettingsData = {
     body?: never;
     path?: never;
@@ -10927,7 +10740,6 @@ export type GetApiXmltvSettingsResponses = {
         refreshHours: number;
         refreshStartHour: number;
         outputPath: string;
-        enableImageCache: boolean;
         useShowPoster: boolean;
         publicUrl: string | '';
     };
@@ -10941,7 +10753,6 @@ export type PutApiXmltvSettingsData = {
         refreshHours?: number;
         refreshStartHour?: number;
         outputPath?: string;
-        enableImageCache?: boolean;
         useShowPoster?: boolean;
         publicUrl?: string | '';
     };
@@ -10976,7 +10787,6 @@ export type PutApiXmltvSettingsResponses = {
         refreshHours: number;
         refreshStartHour: number;
         outputPath: string;
-        enableImageCache: boolean;
         useShowPoster: boolean;
         publicUrl: string | '';
     };
@@ -11017,7 +10827,6 @@ export type GetApiSettingsXmltvResponses = {
         refreshHours: number;
         refreshStartHour: number;
         outputPath: string;
-        enableImageCache: boolean;
         useShowPoster: boolean;
         publicUrl: string | '';
     };
@@ -11031,7 +10840,6 @@ export type PutApiSettingsXmltvData = {
         refreshHours?: number;
         refreshStartHour?: number;
         outputPath?: string;
-        enableImageCache?: boolean;
         useShowPoster?: boolean;
         publicUrl?: string | '';
     };
@@ -11066,7 +10874,6 @@ export type PutApiSettingsXmltvResponses = {
         refreshHours: number;
         refreshStartHour: number;
         outputPath: string;
-        enableImageCache: boolean;
         useShowPoster: boolean;
         publicUrl: string | '';
     };
@@ -14446,14 +14253,6 @@ export type PostApiTroubleshootResponses = {
             };
             startTime: number;
             stealth: boolean;
-            transcoding?: {
-                targetResolution?: {
-                    widthPx: number;
-                    heightPx: number;
-                };
-                videoBitrate?: number;
-                videoBufferSize?: number;
-            };
             watermark?: {
                 url?: string;
                 enabled: boolean;
