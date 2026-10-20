@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { SERVER_URL } from '../fixture/env.ts';
-import { save, saveButton, savedSettings } from './settingsForm.ts';
+import { savedSettings } from './settingsForm.ts';
 
 // The Scanner page: a change saves, survives a reload and moves nothing else.
 
@@ -12,14 +12,21 @@ test('a changed rescan interval saves, survives a reload and moves nothing else'
   page,
 }) => {
   const before = await savedSettings<MediaSourceSettings>(page, SETTINGS_URL);
-  await page.goto('/web/settings/scanner');
+  await page.goto('/web/settings/library');
   const interval = page.getByLabel('Rescan interval (hours)');
   await expect(interval).toHaveValue(String(before.rescanIntervalHours));
-  await expect(saveButton(page)).toBeDisabled();
+  const form = interval.locator('xpath=ancestor::form');
+  await expect(
+    form.getByRole('button', { name: 'Save', exact: true }),
+  ).toBeDisabled();
 
   const changed = before.rescanIntervalHours + 6;
   await interval.fill(String(changed));
-  await save(page, SETTINGS_URL);
+  const saved = page.waitForResponse(
+    (res) => res.url() === SETTINGS_URL && res.request().method() === 'PUT',
+  );
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  expect((await saved).ok()).toBe(true);
 
   await page.reload();
   await expect(interval).toHaveValue(String(changed));

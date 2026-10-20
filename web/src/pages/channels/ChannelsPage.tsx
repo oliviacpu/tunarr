@@ -408,7 +408,7 @@ export default function ChannelsPage() {
 
           return (
             <RouterLink
-              to="/settings/ffmpeg/$configId"
+              to="/settings/playback/$configId"
               params={{ configId: conf.id }}
               onClick={(e) => e.stopPropagation()}
             >

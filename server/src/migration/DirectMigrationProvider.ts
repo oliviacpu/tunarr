@@ -1,3 +1,4 @@
+import Migration1792507432_RetireLegacyExternalSourceIds from './db/Migration1792507432_RetireLegacyExternalSourceIds.ts';
 import type { BaseDrizzleDBAccess } from '@/db/schema/index.js';
 import Migration1735044379_AddHlsDirect from '@/migration/db/Migration1735044379_AddHlsDirect.js';
 import type { Migration, MigrationProvider } from 'kysely';
@@ -267,6 +268,7 @@ export class DirectMigrationProvider implements MigrationProvider {
         migration1792425288: makeMigrationFromSqlFile(
           './sql/0056_program_library_pagination.sql',
         ),
+        migration1792507432: Migration1792507432_RetireLegacyExternalSourceIds,
       } satisfies Record<string, TunarrDatabaseMigration>,
       wrapWithTransaction,
     );

@@ -13,12 +13,11 @@ type XmlTvSettings = {
   refreshHours: number;
   refreshStartHour: number;
   outputPath: string;
-  enableImageCache: boolean;
   useShowPoster: boolean;
   publicUrl: string;
 };
 
-const SETTINGS_URL = `${SERVER_URL}/api/xmltv-settings`;
+const SETTINGS_URL = `${SERVER_URL}/api/settings/xmltv`;
 
 const savedSettings = async (page: Page) => {
   const res = await page.request.get(SETTINGS_URL);
@@ -31,7 +30,7 @@ const saveButton = (page: Page) =>
   page.getByRole('button', { name: 'Save', exact: true });
 
 const open = async (page: Page) => {
-  await page.goto('/web/settings/xmltv');
+  await page.goto('/web/settings/guide');
   await expect(startHour(page)).toBeVisible();
 };
 
@@ -87,7 +86,7 @@ test('Restore defaults is a change: it can be undone, guards leaving, and saves'
   await page.getByRole('tab', { name: 'General' }).click();
   await expect(page.getByText('You have unsaved changes!')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page).toHaveURL(/\/settings\/xmltv$/);
+  await expect(page).toHaveURL(/\/settings\/guide$/);
 
   await page.getByRole('button', { name: 'Reset changes' }).click();
   await expect(startHour(page)).toHaveText('07:00');

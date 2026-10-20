@@ -8,7 +8,7 @@ import {
   getApiProgramGroupingsByIdQueryKey,
   getApiProgramsByIdQueryKey,
   getApiSystemDebugEnvQueryKey,
-  getApiXmltvSettingsQueryKey,
+  getApiSettingsXmltvQueryKey,
   getChannelsQueryKey,
 } from '../generated/@tanstack/react-query.gen.ts';
 import { invalidateTaggedQueries } from './queryUtil.ts';
@@ -66,7 +66,7 @@ describe('invalidateTaggedQueries', () => {
   test('does not match a query carrying a different tag', async () => {
     const client = new QueryClient();
     const channels = seed(client, getChannelsQueryKey());
-    const settings = seed(client, getApiXmltvSettingsQueryKey());
+    const settings = seed(client, getApiSettingsXmltvQueryKey());
 
     await client.invalidateQueries({
       predicate: invalidateTaggedQueries('Settings'),
@@ -144,7 +144,7 @@ describe('invalidation sites reach their targets', () => {
     {
       site: 'XmlTvSettingsPage after save',
       tag: 'Settings',
-      targets: [getApiXmltvSettingsQueryKey()],
+      targets: [getApiSettingsXmltvQueryKey()],
     },
     {
       site: 'SystemDebugPage on server lifecycle events',

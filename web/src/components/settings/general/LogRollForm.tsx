@@ -108,6 +108,17 @@ export const LogRollForm = () => {
       </FormControl>
       {enabled && (
         <>
+          <NumericFormControllerText
+            control={control}
+            name="logging.logRollConfig.rolledFileLimit"
+            prettyFieldName={t`Rolled files to keep`}
+            rules={{ required: true, min: 1 }}
+            TextFieldProps={{
+              label: t`Rolled files to keep`,
+              helperText: t`Older rolled log files past this count are deleted.`,
+              fullWidth: true,
+            }}
+          />
           <Stack gap={2}>
             <FormControl>
               <FormControlLabel

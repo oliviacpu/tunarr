@@ -10,6 +10,8 @@ Save creates the channel and opens its programming page; the fields are locked u
 channel, Save is enabled once something has changed, and "Reset changes" puts the saved values back. Switching
 between the editor's tabs keeps your changes, and leaving the page with unsaved changes asks first.
 
+The edit tabs are **Properties**, **Flex**, **Guide**, **Streaming**, and **Watermark**. Each has its own address, so you can bookmark or share a tab and use the browser's Back and Forward buttons between tabs. These tab changes keep the same unsaved form; Save applies changes from all tabs together. Older `?tab=epg` and `?tab=ffmpeg` links open Guide and Streaming respectively.
+
 <div class="grid cards" markdown>
 
 -   **[Properties](properties.md)**

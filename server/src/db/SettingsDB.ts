@@ -10,7 +10,6 @@ import type {
   FeatureFlags,
   FfmpegSettings,
   HdhrSettings,
-  PlexStreamSettings,
   SystemSettings,
   XmlTvSettings,
 } from '@tunarr/types';
@@ -23,7 +22,6 @@ import {
   defaultGlobalMediaSourceSettings,
   defaultHdhrSettings,
   defaultLogRollConfig,
-  defaultPlexStreamSettings,
   defaultXmlTvSettings as defaultXmlTvSettingsSchema,
 } from '@tunarr/types';
 import type {
@@ -34,7 +32,6 @@ import {
   FfmpegSettingsSchema,
   GlobalMediaSourceSettingsSchema,
   HdhrSettingsSchema,
-  PlexStreamSettingsSchema,
   XmlTvSettingsSchema,
 } from '@tunarr/types/schemas';
 import { injectable } from 'inversify';
@@ -49,9 +46,8 @@ import { z } from 'zod/v4';
 import type { Maybe } from '../types/util.ts';
 import { getDefaultLogLevel } from '../util/defaults.ts';
 
-// Version 1 -> 2: slot show ids changed to be the program_grouping ID
-//   rather than the show name.
-export const CURRENT_VERSION = 1;
+// Version 2 removes unused Plex streaming and XMLTV image-cache settings.
+export const CURRENT_VERSION = 2;
 
 export const defaultXmlTvSettings = (dbBasePath: string): XmlTvSettings => ({
   ...defaultXmlTvSettingsSchema,
@@ -77,9 +73,15 @@ export const SettingsSchema = z.object({
       .default(defaultHdhrSettings.tunerCount),
   }),
   xmltv: XmlTvSettingsSchema,
-  plexStream: PlexStreamSettingsSchema,
   ffmpeg: FfmpegSettingsSchema,
-  mediaSource: GlobalMediaSourceSettingsSchema,
+  mediaSource: GlobalMediaSourceSettingsSchema.extend({
+    rescanIntervalHours: z
+      .number()
+      .transform((hours) =>
+        Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, Math.floor(hours))),
+      )
+      .default(6),
+  }),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -110,7 +112,7 @@ const PendingOperationsSchema = z.object({
 export type PendingOperations = z.infer<typeof PendingOperationsSchema>;
 
 export const SettingsFileSchema = z.object({
-  version: z.number(),
+  version: z.number().default(CURRENT_VERSION),
   migration: MigrationStateSchema,
   settings: SettingsSchema,
   system: SystemSettingsSchema.extend({
@@ -129,7 +131,7 @@ export const SettingsFileSchema = z.object({
 export type SettingsFile = z.infer<typeof SettingsFileSchema>;
 
 export const defaultSettings = (dbBasePath: string): SettingsFile => ({
-  version: 1,
+  version: CURRENT_VERSION,
   migration: {
     legacyMigration: false,
     hasMigratedTo1_0: false,
@@ -139,7 +141,6 @@ export const defaultSettings = (dbBasePath: string): SettingsFile => ({
     clientId: uuidv4(),
     hdhr: HdhrSettingsSchema.parse({}),
     xmltv: defaultXmlTvSettings(dbBasePath),
-    plexStream: defaultPlexStreamSettings,
     ffmpeg: defaultFfmpegSettings,
     mediaSource: defaultGlobalMediaSourceSettings,
   },
@@ -211,10 +212,6 @@ export class SettingsDB extends ITypedEventEmitter implements ISettingsDB {
 
   hdhrSettings(): DeepReadonly<HdhrSettings> {
     return this.db.data.settings.hdhr;
-  }
-
-  plexSettings(): DeepReadonly<PlexStreamSettings> {
-    return this.db.data.settings.plexStream;
   }
 
   ffmpegSettings(): ReadableFfmpegSettings {

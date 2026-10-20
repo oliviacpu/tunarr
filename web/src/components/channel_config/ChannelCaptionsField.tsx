@@ -32,10 +32,10 @@ import { useSnackbar } from 'notistack';
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
 import {
-  getApiFfmpegSettingsOptions,
-  getApiFfmpegSettingsQueryKey,
+  getApiSettingsFfmpegOptions,
+  getApiSettingsFfmpegQueryKey,
 } from '../../generated/@tanstack/react-query.gen.ts';
-import { putApiFfmpegSettings } from '../../generated/sdk.gen.ts';
+import { putApiSettingsFfmpeg } from '../../generated/sdk.gen.ts';
 import { changedCaptionAppearance } from '../../helpers/channelCaptions.ts';
 import { useCaptionAlignmentNames } from '../../hooks/useCaptionAlignmentNames.ts';
 import { useChannelFormContext } from '../../hooks/useChannelFormContext.ts';
@@ -51,7 +51,7 @@ export function ChannelCaptionsField() {
   const { t } = useLingui();
   const { control } = useChannelFormContext();
   const alignmentNames = useCaptionAlignmentNames();
-  const globalSettings = useQuery(getApiFfmpegSettingsOptions());
+  const globalSettings = useQuery(getApiSettingsFfmpegOptions());
   const queryClient = useQueryClient();
   const snackbar = useSnackbar();
   const [confirmCopy, setConfirmCopy] = useState(false);
@@ -65,11 +65,11 @@ export function ChannelCaptionsField() {
     // field the channel doesn't set itself
     mutationFn: async (captions: ChannelCaptions | null) => {
       const latest = await queryClient.fetchQuery({
-        ...getApiFfmpegSettingsOptions(),
+        ...getApiSettingsFfmpegOptions(),
         staleTime: 0,
       });
       const look = channelCaptionLook(latest, captions);
-      const { data } = await putApiFfmpegSettings({
+      const { data } = await putApiSettingsFfmpeg({
         body: {
           ...latest,
           hdhrCaptionAppearance: look.appearance,
@@ -90,7 +90,7 @@ export function ChannelCaptionsField() {
         { variant: 'success' },
       );
       return queryClient.invalidateQueries({
-        queryKey: getApiFfmpegSettingsQueryKey(),
+        queryKey: getApiSettingsFfmpegQueryKey(),
       });
     },
   });
@@ -124,7 +124,7 @@ export function ChannelCaptionsField() {
               <Trans>
                 Try caption options on this channel alone, from its next
                 program. It needs HLS, subtitles, and closed captions on in
-                Transcoding settings.
+                Captions &amp; audio settings.
               </Trans>
             </Typography>
             <FormControl fullWidth>

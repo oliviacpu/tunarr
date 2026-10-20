@@ -7,13 +7,13 @@ import { save, saveButton, savedSettings } from './settingsForm.ts';
 
 type HdhrSettings = { autoDiscoveryEnabled: boolean; tunerCount: number };
 
-const SETTINGS_URL = `${SERVER_URL}/api/hdhr-settings`;
+const SETTINGS_URL = `${SERVER_URL}/api/settings/hdhr`;
 
 test('a changed tuner count saves, survives a reload and moves nothing else', async ({
   page,
 }) => {
   const before = await savedSettings<HdhrSettings>(page, SETTINGS_URL);
-  await page.goto('/web/settings/hdhr');
+  await page.goto('/web/settings/tuner');
   const tunerCount = page.getByLabel('Tuner count');
   await expect(tunerCount).toHaveValue(String(before.tunerCount));
   await expect(saveButton(page)).toBeDisabled();

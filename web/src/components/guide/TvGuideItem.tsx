@@ -9,6 +9,7 @@ const ItemOnlyProps = new Set<PropertyKey>([
   'ringColor',
   'paused',
   'clickable',
+  'dividerColor',
 ]);
 
 export const TvGuideItem = styled(TvGuideGridChild, {
@@ -23,6 +24,7 @@ export const TvGuideItem = styled(TvGuideGridChild, {
   // Too narrow for text. Drops the gap and padding so neighboring slivers
   // stay visible instead of collapsing into their borders.
   compact?: boolean;
+  dividerColor?: string;
 
   // The program on air now gets a ring in the guide's one accent (primary).
   ringColor?: string;
@@ -31,7 +33,17 @@ export const TvGuideItem = styled(TvGuideGridChild, {
   paused?: boolean;
 
   clickable?: boolean;
-}>(({ left, width, cellStyle, compact, ringColor, paused, clickable }) => {
+}>(({
+  theme,
+  left,
+  width,
+  cellStyle,
+  compact,
+  dividerColor,
+  ringColor,
+  paused,
+  clickable,
+}) => {
   const stripes = (base: string, stripe: string) =>
     `repeating-linear-gradient(-45deg,
       ${base},
@@ -51,7 +63,7 @@ export const TvGuideItem = styled(TvGuideGridChild, {
     ringColor !== undefined
       ? `inset 0 0 0 ${ringWidth}px ${ringColor}`
       : compact
-        ? 'inset -1px 0 0 rgba(0, 0, 0, 0.3)'
+        ? `inset -1px 0 0 ${dividerColor ?? theme.palette.divider}`
         : undefined;
 
   return {

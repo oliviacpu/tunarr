@@ -41,7 +41,7 @@ When creating or editing a Custom Show:
 3. Select the **Playlist** from that media source to sync with.
 4. Save the Custom Show.
 
-An initial sync runs immediately when a synced Custom Show is first created. After that, syncs run automatically on the same schedule as library scans, set by the rescan interval under **Settings > Scanner** (see [Scheduled Scans](../media_sources/index.md#scheduled-scans)).
+An initial sync runs immediately when a synced Custom Show is first created. After that, syncs run automatically on the same schedule as library scans, set by the rescan interval under **Settings > Library** (see [Scheduled Scans](../media_sources/index.md#scheduled-scans)).
 
 ### Manual Sync
 
@@ -56,3 +56,11 @@ Syncs share a queue with library scans, one at a time, and run in a worker threa
 - If the upstream playlist is empty at sync time, the Custom Show is emptied to match and a warning is logged. Slots that use the show then show an empty-show warning.
 - Saving a synced Custom Show from the editor does not change its content. Only a sync does.
 - Deleting the linked media source from Tunarr sets the sync reference to `null`; the Custom Show retains its last-synced content.
+
+## Channel References
+
+The Usage column shows how many channels reference each custom show in their current programming or saved slot schedule. Hover over the chip to see channel names and slot positions.
+
+Deleting a show warns with the affected channel names and slots, including bulk deletion. The warning does not prevent deletion; review the affected channels afterward.
+
+Slot positions are numbered from 1 within the channel’s saved schedule. A channel counts once even if it references the same item several times. References refresh after channel or programming changes. If references cannot be loaded, the interface says so instead of reporting that the item is unused.

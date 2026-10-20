@@ -5,7 +5,6 @@ import {
   LoggingSettingsSchema,
   LogLevelsSchema,
   LogRollConfigSchema,
-  ServerSettingsSchema,
   SystemSettingsSchema,
 } from '../SystemSettings.js';
 import { JellyfinItemFields, JellyfinItemKind } from '../jellyfin/index.js';
@@ -43,6 +42,7 @@ import { MaterializedSlot, RandomSlotScheduleSchema } from './RandomSlots.js';
 import { MaterializedTimeSlot, TimeSlotScheduleSchema } from './TimeSlots.js';
 
 export * from './CommonSlots.js';
+export * from './settings.js';
 export * from './RandomSlots.js';
 export * from './Scheduling.js';
 export * from './TimeSlots.js';
@@ -293,14 +293,31 @@ export const UpdateSystemSettingsRequestSchema = z.object({
     .object({
       logLevel: LogLevelsSchema.optional(),
       useEnvVarLevel: z.boolean().optional(),
-      logRollConfig: LogRollConfigSchema.optional(),
+      logRollConfig: z
+        .object({
+          enabled: z.boolean().optional(),
+          maxFileSizeBytes: z.number().positive().nullable().optional(),
+          rolledFileLimit: z.number().positive().optional(),
+          schedule: LogRollConfigSchema.shape.schedule.nullable(),
+        })
+        .optional(),
       categoryLogLevel: z
         .partialRecord(LogCategoriesSchema, LogLevelsSchema.nullish())
         .optional(),
     })
     .optional(),
-  backup: BackupSettingsSchema.optional(),
-  server: ServerSettingsSchema.optional(),
+  backup: BackupSettingsSchema.partial().optional(),
+  server: z
+    .object({
+      port: z.number().min(1).max(65535).optional(),
+      searchSettings: z
+        .object({
+          maxIndexingMemory: z.number().nullable().optional(),
+          snapshotIntervalHours: z.number().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export type UpdateSystemSettingsRequest = z.infer<
@@ -588,3 +605,17 @@ export const UpdateFeatureFlagsRequestSchema = z.object({
 export type UpdateFeatureFlagsRequest = z.infer<
   typeof UpdateFeatureFlagsRequestSchema
 >;
+
+export const LibraryUsedBySchema = z.record(
+  z.string(),
+  z.array(
+    z.object({
+      id: z.uuid(),
+      name: z.string(),
+      number: z.number(),
+      slots: z.array(z.number().int().positive()),
+    }),
+  ),
+);
+
+export type LibraryUsedBy = z.infer<typeof LibraryUsedBySchema>;

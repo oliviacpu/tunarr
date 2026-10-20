@@ -62,7 +62,7 @@ The simplest way to configure logging is through environment variables:
 
 ```bash
 # Set log level (overrides UI setting)
-LOG_LEVEL=debug
+TUNARR_LOG_LEVEL=debug
 
 # Set custom log directory
 LOG_DIRECTORY=/path/to/logs
@@ -124,6 +124,8 @@ Each log entry contains:
 ## Log Rolling
 
 Log rolling prevents log files from growing indefinitely by rotating them when they reach a certain size or on a schedule.
+
+**Rolled files to keep**, under **Settings > General > Logging**, controls the retained rotated-file count; it must be at least 1.
 
 Log rolling is on by default. Tunarr rotates the log every day at midnight, or sooner if it grows past 50 MB, and keeps three rotated files. That is about three days of logs at normal log levels.
 
@@ -272,7 +274,7 @@ Index update completed
 
 To temporarily increase log verbosity for debugging:
 
-1. Set `LOG_LEVEL=debug` environment variable
+1. Set `TUNARR_LOG_LEVEL=debug` environment variable
 2. Restart Tunarr
 3. Reproduce the issue
 4. Check logs for detailed information
@@ -281,7 +283,7 @@ To temporarily increase log verbosity for debugging:
 For Docker:
 
 ```bash
-docker run -e LOG_LEVEL=debug ... chrisbenincasa/tunarr
+docker run -e TUNARR_LOG_LEVEL=debug ... chrisbenincasa/tunarr
 ```
 
 ## Performance Considerations

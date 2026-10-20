@@ -36,7 +36,10 @@ export default function UnsavedNavigationAlert({
       }
       if (exceptTargetPaths && !isEmpty(exceptTargetPaths)) {
         for (const excludedTarget of exceptTargetPaths) {
-          if (next.fullPath === excludedTarget) {
+          if (
+            next.fullPath === excludedTarget ||
+            next.pathname === excludedTarget
+          ) {
             return false;
           }
         }

@@ -26,18 +26,25 @@ The file contains a credential; do not include it in support reports.
 
 ## Configuration
 
-Backup settings can be configured in the Tunarr web UI under **Settings > General > Backup**, or via the API.
+Backup settings can be configured in the Tunarr web UI under **Settings > General > Backups**, or via the API.
 
 ### Backup Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| **Enabled** | `true` | Enable or disable scheduled backups |
+| **Enable this backup schedule** | `true` | Enable or disable one configured backup schedule |
 | **Schedule** | Daily at 4:00 AM | When to run automatic backups |
 | **Backup folder** | `{data directory}/backups/` | Where backup files are stored |
+| **Temporary backup folder** | OS temporary directory | Staging directory used while creating an archive |
 | **Archive Format** | `tar` | Archive format: `tar` or `zip` |
 | **Gzip Compression** | `false` | Enable gzip compression (tar only) |
 | **Backups to keep** | `3` | Number of backups to retain before deleting oldest |
+
+### Configuration controls
+
+Each configured backup has an **Enable this backup schedule** switch. Turning it off preserves its schedule and output settings so it can be enabled again later. If settings.json contains multiple configurations, the page shows controls for each one.
+
+**Temporary backup folder** selects the staging directory used while creating the archive. Leave it empty to use the server's operating-system temporary directory. It is separate from **Backup folder**, where completed archives are saved.
 
 ### File Naming
 
@@ -69,8 +76,8 @@ daily schedule, **Time of day**.
 
 ### Cron-Based
 
-Use a cron expression for more complex schedules. The web UI does not edit cron schedules: set one in `settings.json`,
-and the General settings page shows it as text.
+Use a cron expression for more complex schedules. Under **Settings > General > Backups**, select **Cron expression** as the schedule type and edit the expression. You can also set one in `settings.json`,
+and the General settings page lets you edit it.
 
 ```
 0 4 * * *    # Daily at 4:00 AM
@@ -82,7 +89,7 @@ and the General settings page shows it as text.
 
 ### Via Web UI
 
-Navigate to **Settings > General > Backup** and click the **Backup Now** button.
+Navigate to **Settings > General > Backups** and click the **Backup Now** button.
 
 ### Via API
 

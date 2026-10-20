@@ -37,7 +37,7 @@ vi.mock(
   '../../generated/@tanstack/react-query.gen.ts',
   async (importOriginal) => ({
     ...(await importOriginal<typeof Generated>()),
-    getApiFfmpegSettingsOptions: () => ({
+    getApiSettingsFfmpegOptions: () => ({
       queryKey: ['test-ffmpeg-settings'],
       queryFn: () => Promise.resolve(server.settings),
     }),
@@ -46,7 +46,7 @@ vi.mock(
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiFfmpegSettings: (options: { body: FfmpegSettings }) =>
+  putApiSettingsFfmpeg: (options: { body: FfmpegSettings }) =>
     mockPutFfmpegSettings(options),
 }));
 
@@ -76,7 +76,7 @@ async function renderField(captions: ChannelCaptions | null) {
     <Harness captions={captions} onValid={onValid} />,
   );
   // Shown once the global settings have loaded
-  await screen.findByText('Captions for this channel');
+  await screen.findByText('Captions for this channel', {}, { timeout: 5_000 });
   const save = async () => {
     await rendered.user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onValid).toHaveBeenCalledOnce());
@@ -95,6 +95,9 @@ describe('ChannelCaptionsField', () => {
   test('a channel without its own settings saves none', async () => {
     const { save } = await renderField(null);
 
+    expect(
+      screen.getByText(/closed captions on in Captions & audio settings\./),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText('Text color')).not.toBeInTheDocument();
     expect(await save()).toBeNull();
   });

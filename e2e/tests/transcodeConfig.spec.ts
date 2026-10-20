@@ -27,7 +27,7 @@ const unsavedDialog = (page: Page) =>
 
 test('a new config saves once and opens as its edit page', async ({ page }) => {
   const name = `E2E new ${Date.now()}`;
-  await page.goto('/web/settings/ffmpeg/new');
+  await page.goto('/web/settings/playback/new');
   await expect(
     page.getByRole('heading', { name: 'New transcode config' }),
   ).toBeVisible();
@@ -43,7 +43,7 @@ test('a new config saves once and opens as its edit page', async ({ page }) => {
   const { id } = (await response.json()) as TranscodeConfig;
 
   // The guard does not stop the move to the new config's page
-  await expect(page).toHaveURL(new RegExp(`/settings/ffmpeg/${id}$`));
+  await expect(page).toHaveURL(new RegExp(`/settings/playback/${id}$`));
   await expect(
     page.getByRole('heading', { name: `Edit transcode config: "${name}"` }),
   ).toBeVisible();
@@ -75,7 +75,7 @@ test('an edited config guards leaving and saves to the same config', async ({
   expect(post.ok()).toBe(true);
   const before = (await post.json()) as TranscodeConfig;
 
-  await page.goto(`/web/settings/ffmpeg/${before.id}`);
+  await page.goto(`/web/settings/playback/${before.id}`);
   const bitrate = page.getByLabel('Video bitrate');
   await expect(bitrate).toHaveValue(String(before.videoBitRate));
   await expect(saveButton(page)).toBeDisabled();
@@ -91,7 +91,7 @@ test('an edited config guards leaving and saves to the same config', async ({
     .click();
   await expect(unsavedDialog(page)).toBeVisible();
   await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page).toHaveURL(new RegExp(`/settings/ffmpeg/${before.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/settings/playback/${before.id}$`));
 
   const saved = page.waitForResponse(
     (res) =>

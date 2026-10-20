@@ -48,13 +48,13 @@ const { server, mockPutFfmpegSettings } = vi.hoisted(() => ({
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  getApiFfmpegSettings: () => Promise.resolve({ data: server.settings }),
+  getApiSettingsFfmpeg: () => Promise.resolve({ data: server.settings }),
   getApiSystemState: () =>
     Promise.resolve({
       data: { isDocker: false, isPodman: false, isInContainer: false },
     }),
   getApiFfmpegInfo: () => server.ffmpegInfo(),
-  putApiFfmpegSettings: (options: { body: Partial<FfmpegSettings> }) =>
+  putApiSettingsFfmpeg: (options: { body: Partial<FfmpegSettings> }) =>
     mockPutFfmpegSettings(options),
 }));
 
@@ -68,22 +68,27 @@ vi.mock('../../components/settings/ffmpeg/TranscodeConfigsTable.tsx', () => ({
   TranscodeConfigsTable: () => null,
 }));
 
-async function renderPage(queryClient?: QueryClient) {
+vi.mock('./FeaturesSettingsPage.tsx', () => ({ default: () => null }));
+
+async function renderPage(
+  queryClient?: QueryClient,
+  section: 'playback' | 'captions-audio' = 'playback',
+) {
   const rendered = renderWithProviders(
     <SnackbarProvider>
       <Suspense fallback={null}>
-        <FfmpegSettingsPage />
+        <FfmpegSettingsPage section={section} />
       </Suspense>
     </SnackbarProvider>,
     { queryClient },
   );
-  // The saved settings are in the form. The page renders every language in
-  // its preferences list, which can take a few seconds on a busy runner
   await waitFor(
     () =>
-      expect(screen.getByLabelText('FFmpeg executable path')).toHaveValue(
-        '/usr/bin/ffmpeg',
-      ),
+      expect(
+        section === 'playback'
+          ? screen.getByLabelText('FFmpeg executable path')
+          : screen.getByRole('combobox', { name: 'Caption alignment' }),
+      ).toBeInTheDocument(),
     { timeout: 10_000 },
   );
   return rendered;
@@ -95,6 +100,39 @@ describe('FfmpegSettingsPage', () => {
     server.ffmpegInfo = () => Promise.resolve({ data: probed });
     mockPutFfmpegSettings.mockReset();
     mockPutFfmpegSettings.mockResolvedValue({ data: saved });
+  });
+
+  test('playback keeps caption settings on their own tab', async () => {
+    await renderPage();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Extract embedded subtitles' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('captions and audio save without changing playback settings', async () => {
+    const { user } = renderWithProviders(
+      <SnackbarProvider>
+        <Suspense fallback={null}>
+          <FfmpegSettingsPage section="captions-audio" />
+        </Suspense>
+      </SnackbarProvider>,
+    );
+    const extraction = await screen.findByRole('checkbox', {
+      name: 'Extract embedded subtitles',
+    });
+    expect(
+      screen.queryByLabelText('FFmpeg executable path'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Transcoding Configs')).not.toBeInTheDocument();
+    await user.click(extraction);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
+    expect(mockPutFfmpegSettings.mock.calls[0]?.[0]).toMatchObject({
+      body: {
+        ...saved,
+        enableSubtitleExtraction: !saved.enableSubtitleExtraction,
+      },
+    });
   });
 
   test('the form is there while ffmpeg is still being probed', async () => {
@@ -216,7 +254,7 @@ describe('FfmpegSettingsPage', () => {
   });
 
   test('caption alignment can be chosen once closed captions are on', async () => {
-    const { user } = await renderPage();
+    const { user } = await renderPage(undefined, 'captions-audio');
     const alignment = () =>
       screen.getByRole('combobox', { name: 'Caption alignment' });
     expect(alignment()).toHaveAttribute('aria-disabled', 'true');

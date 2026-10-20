@@ -277,7 +277,7 @@ export const TranscodeConfigAudioSettingsForm = ({
       </Grid>
       {showAdvancedSettings && loudnormEnabled && (
         <Stack>
-          <Typography component="h6" variant="h6" mb={1}>
+          <Typography component="h3" variant="h3" mb={1}>
             <Trans>Advanced Audio Options</Trans>
           </Typography>
           <Typography variant="body2" sx={{ mb: 2 }}>

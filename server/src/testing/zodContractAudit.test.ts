@@ -24,12 +24,11 @@ const REQUEST_SCHEMA_NAMES = [
   'CreateFillerListRequestSchema',
   'CreateStreamSelectionProfileSchema',
   'EmbyLoginRequest',
-  'FfmpegSettingsSchema',
-  'GlobalMediaSourceSettingsSchema',
-  'HdhrSettingsSchema',
+  'UpdateFfmpegSettingsRequestSchema',
+  'UpdateMediaSourceSettingsRequestSchema',
+  'UpdateHdhrSettingsRequestSchema',
   'InsertMediaSourceRequestSchema',
   'JellyfinLoginRequest',
-  'PlexStreamSettingsSchema',
   'ProgramSearchRequest',
   'SaveableChannelSchema',
   'SmartCollection',
@@ -44,7 +43,7 @@ const REQUEST_SCHEMA_NAMES = [
   'UpdateMediaSourceRequestSchema',
   'UpdateStreamSelectionProfileSchema',
   'UpdateSystemSettingsRequestSchema',
-  'XmlTvSettingsSchema',
+  'UpdateXmlTvSettingsRequestSchema',
 ] as const;
 
 /**
@@ -55,11 +54,6 @@ const REQUEST_SCHEMA_NAMES = [
  * Format: `SchemaName.path` for each defect-class finding.
  */
 const KNOWN: Record<string, string> = {
-  // Full-replace body, not a partial update, so the default is the intended
-  // value for a field the client leaves out.
-  'FfmpegSettingsSchema.transcodeDirectory':
-    'PUT /ffmpeg-settings replaces the whole object',
-
   // Full-replace body. Reviewed as intentional.
   'UpdateChannelProgrammingRequestSchema.lineup.fillerConfig.origin':
     'full-replace lineup body',
@@ -82,9 +76,6 @@ const KNOWN: Record<string, string> = {
   // Plex and Jellyfin members of the union both report it under this path.
   'UpdateMediaSourceRequestSchema.sendPlayStatusUpdates':
     'PUT /media-sources/:id replaces the whole object',
-
-  'XmlTvSettingsSchema.useShowPoster':
-    'catch on a boolean; low impact, not yet changed',
 };
 
 const registry: Record<string, unknown> = {

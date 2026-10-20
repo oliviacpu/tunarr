@@ -5,13 +5,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Generated from '../../generated/@tanstack/react-query.gen.ts';
 import type * as Sdk from '../../generated/sdk.gen.ts';
 import type {
-  GetApiSystemFeatureFlagsResponse,
-  PutApiSystemFeatureFlagsData,
+  GetApiSettingsFeatureFlagsResponse,
+  PutApiSettingsFeatureFlagsData,
 } from '../../generated/types.gen.ts';
 import FeaturesSettingsPage from './FeaturesSettingsPage.tsx';
 
-type Flags = GetApiSystemFeatureFlagsResponse['flags'];
-type FlagsBody = NonNullable<PutApiSystemFeatureFlagsData['body']>;
+type Flags = GetApiSettingsFeatureFlagsResponse['flags'];
+type FlagsBody = NonNullable<PutApiSettingsFeatureFlagsData['body']>;
 
 const savedFlags: Flags = {
   proxyArtwork: true,
@@ -23,7 +23,7 @@ const savedFlags: Flags = {
   disableVaapiPad: false,
 };
 
-const metadata: GetApiSystemFeatureFlagsResponse['metadata'] = [
+const metadata: GetApiSettingsFeatureFlagsResponse['metadata'] = [
   {
     key: 'proxyArtwork',
     displayName: 'Proxy Artwork',
@@ -36,6 +36,13 @@ const metadata: GetApiSystemFeatureFlagsResponse['metadata'] = [
     key: 'xmltvCreditImagesEnabled',
     displayName: 'XMLTV Credit Images',
     description: 'Enable embedding images of people in the xmltv credits.',
+    category: 'experimental',
+    envOverride: false,
+  },
+  {
+    key: 'webvttSidecarEnabled',
+    displayName: 'WebVTT Sidecar Subtitles',
+    description: 'Enable subtitle sidecars.',
     category: 'experimental',
     envOverride: false,
   },
@@ -58,17 +65,17 @@ vi.mock(
   '../../generated/@tanstack/react-query.gen.ts',
   async (importOriginal) => ({
     ...(await importOriginal<typeof Generated>()),
-    getApiSystemFeatureFlagsOptions: () => ({
+    getApiSettingsFeatureFlagsOptions: () => ({
       queryKey: ['test-feature-flags'],
       queryFn: () => Promise.resolve({ flags: server.flags, metadata }),
     }),
-    getApiSystemFeatureFlagsQueryKey: () => ['test-feature-flags'],
+    getApiSettingsFeatureFlagsQueryKey: () => ['test-feature-flags'],
   }),
 );
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiSystemFeatureFlags: (options: { body: FlagsBody }) =>
+  putApiSettingsFeatureFlags: (options: { body: FlagsBody }) =>
     mockPutFlags(options),
 }));
 
@@ -107,9 +114,56 @@ describe('FeaturesSettingsPage', () => {
     expect(flag('Proxy Artwork')).toBeDisabled();
     expect(screen.getByText('Set by environment variable')).toBeInTheDocument();
     expect(flag('XMLTV Credit Images')).toBeEnabled();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Disable Vulkan (NVIDIA)' }),
+    ).not.toBeInTheDocument();
     expect(flag('XMLTV Credit Images')).toHaveAccessibleDescription(
       'Enable embedding images of people in the xmltv credits.',
     );
+  });
+
+  test('playback shows its flags and preserves flags from other tabs on save', async () => {
+    const { user } = renderWithProviders(
+      <SnackbarProvider>
+        <Suspense fallback={null}>
+          <FeaturesSettingsPage group="playback" />
+        </Suspense>
+      </SnackbarProvider>,
+    );
+    const vulkan = await screen.findByRole('checkbox', {
+      name: 'Disable Vulkan (NVIDIA)',
+    });
+    expect(
+      screen.queryByRole('checkbox', { name: 'XMLTV Credit Images' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'WebVTT Sidecar Subtitles' }),
+    ).not.toBeInTheDocument();
+    await user.click(vulkan);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockPutFlags).toHaveBeenCalledOnce());
+    expect(mockPutFlags.mock.calls[0]?.[0]).toMatchObject({
+      body: { ...savedFlags, disableVulkan: true },
+    });
+  });
+
+  test('captions shows only its subtitle flag', async () => {
+    renderWithProviders(
+      <SnackbarProvider>
+        <Suspense fallback={null}>
+          <FeaturesSettingsPage group="captions-audio" />
+        </Suspense>
+      </SnackbarProvider>,
+    );
+    expect(
+      await screen.findByRole('checkbox', { name: 'WebVTT Sidecar Subtitles' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'XMLTV Credit Images' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Disable Vulkan (NVIDIA)' }),
+    ).not.toBeInTheDocument();
   });
 
   test('a switched flag is saved with the others, and the saved form is clean', async () => {
@@ -135,11 +189,11 @@ describe('FeaturesSettingsPage', () => {
   test('Reset changes puts the saved flags back', async () => {
     const { user, flag, saveButton } = await renderPage();
 
-    await user.click(flag('Disable Vulkan (NVIDIA)'));
-    expect(flag('Disable Vulkan (NVIDIA)')).toBeChecked();
+    await user.click(flag('XMLTV Credit Images'));
+    expect(flag('XMLTV Credit Images')).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Reset changes' }));
 
-    expect(flag('Disable Vulkan (NVIDIA)')).not.toBeChecked();
+    expect(flag('XMLTV Credit Images')).not.toBeChecked();
     await waitFor(() => expect(saveButton()).toBeDisabled());
     expect(mockPutFlags).not.toHaveBeenCalled();
   });

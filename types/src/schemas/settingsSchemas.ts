@@ -13,7 +13,6 @@ export const XmlTvSettingsSchema = z.object({
   // API refuses a shorter guide
   refreshStartHour: z.number().int().min(0).max(23).default(0),
   outputPath: z.string().default(''),
-  enableImageCache: z.boolean().default(false),
   // If true, episodes will use the poster for their show in
   // the XMLTV file
   useShowPoster: z.boolean().default(false).catch(false),
@@ -363,13 +362,6 @@ export const MediaSourceSettingsSchema = z.discriminatedUnion('type', [
   LocalMediaSourceSchema,
 ]);
 
-export const PlexStreamSettingsSchema = z.object({
-  streamPath: z.enum(['network', 'direct']).default('network'),
-  updatePlayStatus: z.boolean().default(false),
-  pathReplace: z.string().default(''),
-  pathReplaceWith: z.string().default(''),
-});
-
 export const HdhrSettingsSchema = z.object({
   autoDiscoveryEnabled: z.boolean().default(true),
   // The TunerCount the HDHomeRun device reports: how many channels a
@@ -378,7 +370,7 @@ export const HdhrSettingsSchema = z.object({
 });
 
 export const GlobalMediaSourceSettingsSchema = z.object({
-  rescanIntervalHours: z.number().nonnegative().default(6),
+  rescanIntervalHours: z.number().int().min(1).default(6),
 });
 
 export type GlobalMediaSourceSettings = z.infer<

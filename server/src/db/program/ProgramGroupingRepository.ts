@@ -7,7 +7,6 @@ import type { Maybe, PagedResult } from '@/types/util.js';
 import { InjectLogger } from '@/util/inject.js';
 import { type Logger } from '@/util/logging/LoggerFactory.js';
 import { seq } from '@tunarr/shared/util';
-import { untag } from '@tunarr/types';
 import { and, asc, count, countDistinct, eq } from 'drizzle-orm';
 import type {
   SelectedFields,
@@ -114,14 +113,11 @@ export class ProgramGroupingRepository {
   ): Promise<Maybe<ProgramGroupingOrmWithRelations>> {
     return await this.drizzleDB.query.programGroupingExternalId
       .findFirst({
-        where: (row, { and, or, eq }) =>
+        where: (row, { and, eq }) =>
           and(
             eq(row.externalKey, eid.externalKey),
             eq(row.sourceType, eid.sourceType),
-            or(
-              eq(row.externalSourceId, untag(eid.externalSourceId)),
-              eq(row.mediaSourceId, eid.externalSourceId),
-            ),
+            eq(row.mediaSourceId, eid.externalSourceId),
           ),
         with: {
           grouping: {

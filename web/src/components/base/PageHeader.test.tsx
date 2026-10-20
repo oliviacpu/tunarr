@@ -74,4 +74,16 @@ describe('PageHeader', () => {
 
     expect(container.firstElementChild).toHaveStyle({ marginBottom: '16px' });
   });
+  test('uses a section heading below a layout that already owns the h1', () => {
+    renderWithProviders(
+      <>
+        <h1>Settings</h1>
+        <PageHeader title="New transcode config" headingLevel="h2" />
+      </>,
+    );
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'New transcode config' }),
+    ).toBeInTheDocument();
+  });
 });

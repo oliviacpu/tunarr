@@ -38,7 +38,7 @@ const { mockPutSystemSettings } = vi.hoisted(() => ({
 
 vi.mock('../../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  putApiSystemSettings: (options: { body: UpdateSystemSettingsRequest }) =>
+  putApiSettingsSystem: (options: { body: UpdateSystemSettingsRequest }) =>
     mockPutSystemSettings(options),
 }));
 
@@ -124,6 +124,51 @@ describe('GeneralSettingsForm', () => {
     setBackendUri(LoadedBackendUri);
     mockPutSystemSettings.mockReset();
     mockPutSystemSettings.mockResolvedValue({ data: systemSettings });
+  });
+
+  test('category timing distinguishes live explicit levels from returning to inheritance', async () => {
+    const { user } = await renderForm({
+      ...systemSettings,
+      logging: {
+        ...systemSettings.logging,
+        categoryLogLevel: { streaming: 'debug', scheduling: 'trace' },
+      },
+    });
+    expect(screen.getAllByLabelText('Category log level: Live')).toHaveLength(
+      2,
+    );
+    await user.click(
+      screen.getByRole('combobox', { name: 'Streaming log level' }),
+    );
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'Inherit default',
+      }),
+    );
+    expect(
+      screen.getByLabelText('Inherited category log level: Restart required'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Category log level: Live')).toHaveLength(
+      1,
+    );
+  });
+
+  test('a cleared retention count blocks Save until a valid number is restored', async () => {
+    const { user, saveButton } = await renderForm();
+    const retention = screen.getByLabelText('Rolled files to keep');
+    await user.clear(retention);
+    await user.tab();
+    await waitFor(() => expect(retention).toBeInvalid());
+    expect(saveButton()).toBeDisabled();
+    expect(mockPutSystemSettings).not.toHaveBeenCalled();
+    await user.type(retention, '5');
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+    await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
+    expect(
+      mockPutSystemSettings.mock.calls[0]?.[0].body.logging?.logRollConfig
+        ?.rolledFileLimit,
+    ).toBe(5);
   });
 
   test('Reset clears an invalid value', async () => {
@@ -227,8 +272,8 @@ describe('GeneralSettingsForm', () => {
     expect(sent?.logging?.logRollConfig).toEqual({
       enabled: true,
       rolledFileLimit: 3,
-      maxFileSizeBytes: undefined,
-      schedule: undefined,
+      maxFileSizeBytes: null,
+      schedule: null,
     });
   });
 
@@ -312,7 +357,7 @@ describe('GeneralSettingsForm', () => {
 
     await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
     const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
-    expect(sent?.logging?.logRollConfig?.schedule).toBeUndefined();
+    expect(sent?.logging?.logRollConfig?.schedule).toBeNull();
   });
 
   test('an invalid backup interval stops blocking Save once backups are turned off', async () => {
@@ -390,8 +435,8 @@ describe('GeneralSettingsForm', () => {
     expect(sent?.logging?.logRollConfig).toEqual({
       enabled: false,
       rolledFileLimit: 3,
-      maxFileSizeBytes: undefined,
-      schedule: undefined,
+      maxFileSizeBytes: null,
+      schedule: null,
     });
   });
 });

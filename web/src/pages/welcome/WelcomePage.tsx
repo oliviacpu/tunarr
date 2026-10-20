@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { AddMediaSourceButton } from '@/components/settings/media_source/AddMediaSourceButton.tsx';
 import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { ArrowBack, ArrowForward, Edit } from '@mui/icons-material';
@@ -58,9 +59,7 @@ export default function WelcomePage() {
         }}
       />
 
-      <Typography variant="h3">
-        <Trans>Welcome to Tunarr!</Trans>
-      </Typography>
+      <PageHeader title={<Trans>Welcome to Tunarr!</Trans>} />
     </>
   );
 
@@ -116,6 +115,7 @@ export default function WelcomePage() {
             <>
               <Typography
                 variant="h6"
+                component="h2"
                 fontWeight={600}
                 align="left"
                 sx={{ mt: 3 }}
@@ -176,6 +176,7 @@ export default function WelcomePage() {
             <>
               <Typography
                 variant="h6"
+                component="h2"
                 fontWeight={600}
                 align="left"
                 sx={{ mt: 3 }}
@@ -203,7 +204,7 @@ export default function WelcomePage() {
                     severity="warning"
                     action={
                       <RouterButtonLink
-                        to={`/settings/ffmpeg`}
+                        to={`/settings/playback`}
                         color="inherit"
                         startIcon={<Edit />}
                       >
@@ -229,6 +230,7 @@ export default function WelcomePage() {
               {' '}
               <Typography
                 variant="h6"
+                component="h2"
                 fontWeight={600}
                 align="left"
                 sx={{ mt: 3 }}

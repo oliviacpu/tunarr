@@ -16,7 +16,6 @@ export function withProgramExternalIds(
   externalIdFields: (keyof ProgramExternalId)[] = [
     'externalKey',
     'sourceType',
-    'externalSourceId',
     'mediaSourceId',
   ],
 ) {

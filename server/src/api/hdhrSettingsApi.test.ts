@@ -5,7 +5,6 @@
  * refused.
  */
 import type { HdhrSettings } from '@tunarr/types';
-import { HdhrSettingsSchema } from '@tunarr/types/schemas';
 import Fastify from 'fastify';
 import {
   serializerCompiler,
@@ -68,13 +67,10 @@ describe('HDHR settings API', () => {
     await app.close();
   });
 
-  it('a reset restores the schema defaults', async () => {
+  it('removes the unused reset endpoint', async () => {
     const res = await app.inject({ method: 'POST', url: '/hdhr-settings' });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(HdhrSettingsSchema.parse({}));
-    expect(res.json()).toEqual({ autoDiscoveryEnabled: true, tunerCount: 2 });
-    expect(stored).toEqual({ autoDiscoveryEnabled: true, tunerCount: 2 });
+    expect(res.statusCode).toBe(404);
+    expect(stored).toEqual({ autoDiscoveryEnabled: false, tunerCount: 4 });
   });
 
   it.each([0, -1, 1.5])('refuses a tuner count of %s', async (tunerCount) => {

@@ -63,7 +63,7 @@ export function Root({ children }: { children?: React.ReactNode }) {
               sx={{ my: 2, display: 'flex', flexGrow: 1, width: '100%' }}
               action={
                 <RouterButtonLink
-                  to={'/settings/ffmpeg'}
+                  to={'/settings/playback'}
                   size="small"
                   sx={{
                     color: 'inherit',

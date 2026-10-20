@@ -28,6 +28,7 @@ import {
 
 type Props = {
   onClose: () => void;
+  onSaved?: () => void;
   initialQuery: {
     filter?: SearchFilter;
     keywords?: string;
@@ -43,6 +44,7 @@ type SmartCollectionForm = {
 
 export const CreateSmartCollectionDialog = ({
   onClose,
+  onSaved,
   initialQuery,
 }: Props) => {
   const { t } = useLingui();
@@ -66,16 +68,20 @@ export const CreateSmartCollectionDialog = ({
   const insertSmartCollection = useCreateSmartCollection({
     onSuccess: () => {
       onClose();
+      onSaved?.();
     },
   });
 
   const updateSmartCollection = useUpdateSmartCollection({
     onSuccess: () => {
       onClose();
+      onSaved?.();
     },
   });
 
   const [existingId] = useWatch({ control, name: ['id'] });
+  const saving =
+    insertSmartCollection.isPending || updateSmartCollection.isPending;
 
   const saveSmartCollection = useCallback(
     (values: SmartCollectionForm) => {
@@ -94,8 +100,8 @@ export const CreateSmartCollectionDialog = ({
             id: values.id,
           },
           body: {
-            filter: values.filter,
-            keywords: values.keywords,
+            filter: values.filter ?? { type: 'op', op: 'and', children: [] },
+            keywords: values.keywords ?? '',
           },
         });
       }
@@ -137,7 +143,7 @@ export const CreateSmartCollectionDialog = ({
               return (
                 <FormControl>
                   <Select
-                    disabled={existingCollections.length === 0}
+                    disabled={saving || existingCollections.length === 0}
                     {...field}
                     value={field.value ? field.value : 'new'}
                   >
@@ -167,7 +173,9 @@ export const CreateSmartCollectionDialog = ({
                 required: true,
                 minLength: 1,
               }}
-              render={({ field }) => <TextField label={t`Name`} {...field} />}
+              render={({ field }) => (
+                <TextField disabled={saving} label={t`Name`} {...field} />
+              )}
             />
           )}
           <Controller
@@ -194,10 +202,13 @@ export const CreateSmartCollectionDialog = ({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>{actions.cancel}</Button>
+        <Button disabled={saving} onClick={() => onClose()}>
+          {actions.cancel}
+        </Button>
         <Button
           variant="contained"
-          disabled={!isValid}
+          disabled={!isValid || saving}
+          loading={saving}
           startIcon={<Save />}
           onClick={handleSubmit(saveSmartCollection, handleError)}
         >

@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -18,8 +19,8 @@ import {
   NumericFormControllerText,
 } from '../../components/util/TypedController.tsx';
 import {
-  getApiHdhrSettingsQueryKey,
-  putApiHdhrSettingsMutation,
+  getApiSettingsHdhrQueryKey,
+  putApiSettingsHdhrMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { useHdhrSettings } from '../../hooks/settingsHooks.ts';
 
@@ -53,9 +54,9 @@ export default function HdhrSettingsPage() {
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiHdhrSettingsMutation(),
+    mutation: putApiSettingsHdhrMutation(),
     toFormValues: (saved) => saved,
-    invalidate: { queryKey: getApiHdhrSettingsQueryKey() },
+    invalidate: { queryKey: getApiSettingsHdhrQueryKey() },
   });
 
   const save: SubmitHandler<HdhrSettings> = (settings) => {
@@ -74,6 +75,7 @@ export default function HdhrSettingsPage() {
       }
     >
       <Stack spacing={2}>
+        <AppliesWhen setting="tunerDiscovery" />
         <FormControl fullWidth>
           <FormControlLabel
             control={
@@ -91,6 +93,7 @@ export default function HdhrSettingsPage() {
             </Trans>
           </FormHelperText>
         </FormControl>
+        <AppliesWhen setting="tunerCount" />
         <NumericFormControllerText
           control={control}
           name="tunerCount"

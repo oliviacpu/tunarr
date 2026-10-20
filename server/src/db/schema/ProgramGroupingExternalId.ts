@@ -12,7 +12,7 @@ import type { Insertable, Selectable } from 'kysely';
 import { omit } from 'lodash-es';
 import type { StrictOmit } from 'ts-essentials';
 import type { MarkNotNilable } from '../../types/util.ts';
-import type { MediaSourceId, MediaSourceName } from './base.ts';
+import type { MediaSourceId } from './base.ts';
 import { ProgramExternalIdSourceTypes } from './base.ts';
 import { type KyselifyBetter } from './KyselifyBetter.ts';
 import { MediaSource } from './MediaSource.ts';
@@ -27,7 +27,6 @@ export const ProgramGroupingExternalId = sqliteTable(
     updatedAt: integer(),
     externalFilePath: text(),
     externalKey: text().notNull(),
-    externalSourceId: text().$type<MediaSourceName>(),
     mediaSourceId: text()
       .references(() => MediaSource.uuid, {
         onDelete: 'cascade',
@@ -83,11 +82,10 @@ export type NewProgramGroupingExternalId =
   Insertable<ProgramGroupingExternalIdTable>;
 export type NewSingleProgramGroupingExternalId = StrictOmit<
   Insertable<ProgramGroupingExternalIdTable>,
-  'externalSourceId' | 'mediaSourceId'
+  'mediaSourceId'
 > & { type: 'single' };
 export type NewMultiProgramGroupingId = MarkNotNilable<
-  // Do not allow inserting new items with externalSourceId, a deprecated field
-  StrictOmit<Insertable<ProgramGroupingExternalIdTable>, 'externalSourceId'>,
+  Insertable<ProgramGroupingExternalIdTable>,
   'mediaSourceId'
 > & { type: 'multi' };
 export type NewSingleOrMultiProgramGroupingExternalId =
@@ -113,7 +111,7 @@ export const ProgramGroupingExternalIdKeys: (keyof ProgramGroupingExternalId)[] 
     'createdAt',
     'externalFilePath',
     'externalKey',
-    'externalSourceId',
+    'mediaSourceId',
     'sourceType',
     'groupUuid',
     'updatedAt',
@@ -137,7 +135,7 @@ export const MinimalProgramGroupingExternalIdFields: ProgramGroupingExternalIdFi
   [
     'ProgramGroupingExternalId.sourceType',
     'ProgramGroupingExternalId.externalKey',
-    'ProgramGroupingExternalId.externalSourceId',
+    'ProgramGroupingExternalId.mediaSourceId',
   ];
 
 export const AllProgramGroupingExternalIdFieldsAliased = <Alias extends string>(

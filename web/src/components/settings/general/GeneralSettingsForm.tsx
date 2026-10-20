@@ -1,10 +1,11 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { LearnMoreLink } from '@/components/base/LearnMoreLink.tsx';
 import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import {
-  getApiSystemSettingsQueryKey,
-  putApiSystemSettingsMutation,
+  getApiSettingsSystemQueryKey,
+  putApiSettingsSystemMutation,
 } from '@/generated/@tanstack/react-query.gen.ts';
 import { isValidUrl } from '@/helpers/util.ts';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
@@ -134,8 +135,7 @@ function toUpdateRequest(
   data: GeneralSettingsFormData,
 ): UpdateSystemSettingsRequest {
   const { logRollConfig, categoryLogLevel } = data.logging;
-  // With rolling off the server reads neither the schedule nor the size
-  // limit, and the page hides both, so neither is sent
+  // Null clears optional values; an omitted update field now preserves it.
   const rolling = logRollConfig.enabled;
   return {
     logging: {
@@ -146,11 +146,9 @@ function toUpdateRequest(
         maxFileSizeBytes:
           rolling && logRollConfig.maxFileSizeBytes
             ? Math.max(0, logRollConfig.maxFileSizeBytes)
-            : undefined,
+            : null,
         schedule:
-          rolling && data.logRollOnSchedule
-            ? logRollConfig.schedule
-            : undefined,
+          rolling && data.logRollOnSchedule ? logRollConfig.schedule : null,
       },
       categoryLogLevel: {
         scheduling:
@@ -226,12 +224,12 @@ export function GeneralSettingsForm({
 
   const saveMutation = useSettingsMutation({
     form,
-    mutation: putApiSystemSettingsMutation(),
+    mutation: putApiSettingsSystemMutation(),
     // The server URL lives in this browser, not in the response. The save set
     // it just before sending, so read it now rather than from this render
     toFormValues: (saved) =>
       getDefaultFormValues(useStore.getState().settings.backendUri, saved),
-    invalidate: { queryKey: getApiSystemSettingsQueryKey() },
+    invalidate: { queryKey: getApiSettingsSystemQueryKey() },
   });
 
   const save: SubmitHandler<GeneralSettingsFormData> = (data) => {
@@ -285,7 +283,24 @@ export function GeneralSettingsForm({
             </FormHelperText>
           </FormControl>
         </Grid>
-        {backupsEnabled && <BackupForm />}
+        {backupConfigurations.map((configuration, configurationIndex) => (
+          <Grid size={12} key={configuration.id}>
+            {backupConfigurations.length > 1 && (
+              <Typography
+                variant="h3"
+                sx={{ mb: 2 }}
+              >{t`Backup ${configurationIndex + 1}`}</Typography>
+            )}
+            <Grid
+              container
+              spacing={2}
+              role="group"
+              aria-label={t`Backup ${configurationIndex + 1}`}
+            >
+              <BackupForm configurationIndex={configurationIndex} />
+            </Grid>
+          </Grid>
+        ))}
       </Grid>
     );
   }
@@ -312,7 +327,12 @@ export function GeneralSettingsForm({
                   sx: {
                     width: { sm: '100%', md: '50%' },
                   },
-                  helperText: t`The port the Tunarr server listens on. Needs a restart.`,
+                  helperText: (
+                    <>
+                      {t`The port the Tunarr server listens on.`}{' '}
+                      <AppliesWhen setting="serverPort" />
+                    </>
+                  ),
                 }}
               />
             )}
@@ -345,9 +365,13 @@ export function GeneralSettingsForm({
                   {...field}
                   error={error !== undefined}
                   helperText={
-                    error?.type === 'isValidUrl'
-                      ? t`Enter a full URL, such as http://192.168.1.10:8000, or leave it empty.`
-                      : t`Where this web app reaches the Tunarr server. Leave empty to use the address in your browser.`
+                    <>
+                      {' '}
+                      {error?.type === 'isValidUrl'
+                        ? t`Enter a full URL, such as http://192.168.1.10:8000, or leave it empty.`
+                        : t`Where this web app reaches the Tunarr server. Leave empty to use the address in your browser.`}{' '}
+                      <AppliesWhen setting="backendAddress" />
+                    </>
                   }
                 />
               )}
@@ -358,6 +382,7 @@ export function GeneralSettingsForm({
           <Typography variant="h3" sx={{ mb: 1 }}>
             <Trans>Logging</Trans>
           </Typography>
+          <AppliesWhen setting="logging" />
           <Grid container spacing={2}>
             <Grid size={{ xs: 12 }}>
               <FormControl
@@ -413,24 +438,34 @@ export function GeneralSettingsForm({
                     name={`logging.categoryLogLevel.${category}`}
                     control={control}
                     render={({ field }) => (
-                      <Select
-                        labelId={`${category}-log-level-label`}
-                        id={`${category}-log-level`}
-                        label={categoryLogLevelLabels[category]}
-                        {...field}
-                      >
-                        {map(
-                          CategoryLogLevelChoices,
-                          ({ value, description }) => (
-                            <MenuItem key={value} value={value}>
-                              {description}
-                            </MenuItem>
-                          ),
-                        )}
-                      </Select>
+                      <>
+                        <Select
+                          labelId={`${category}-log-level-label`}
+                          id={`${category}-log-level`}
+                          label={categoryLogLevelLabels[category]}
+                          {...field}
+                        >
+                          {map(
+                            CategoryLogLevelChoices,
+                            ({ value, description }) => (
+                              <MenuItem key={value} value={value}>
+                                {description}
+                              </MenuItem>
+                            ),
+                          )}
+                        </Select>
+                        <FormHelperText>
+                          <AppliesWhen
+                            setting={
+                              field.value === 'inherit'
+                                ? 'logCategoryInheritance'
+                                : 'logCategoryLevel'
+                            }
+                          />
+                        </FormHelperText>
+                      </>
                     )}
                   />
-                  <FormHelperText></FormHelperText>
                 </FormControl>
               </Grid>
             ))}
@@ -444,6 +479,7 @@ export function GeneralSettingsForm({
           <Typography variant="h3" sx={{ mb: 1 }}>
             <Trans>Backups</Trans>
           </Typography>
+          <AppliesWhen setting="backups" />
           {renderBackupsForm()}
         </Box>
       </Stack>

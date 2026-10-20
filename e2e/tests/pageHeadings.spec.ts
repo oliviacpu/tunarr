@@ -14,7 +14,7 @@ const TOP_LEVEL_PAGES: [url: string, title: string][] = [
   ['/media_sources', 'Media Sources'],
   ['/search', 'Search'],
   ['/settings/general', 'Settings'],
-  ['/settings/ffmpeg', 'Settings'],
+  ['/settings/playback', 'Settings'],
   ['/system', 'System'],
   ['/system/tasks', 'System'],
 ];

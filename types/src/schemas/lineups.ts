@@ -1,8 +1,5 @@
 import z from 'zod/v4';
-import {
-  DynamicContentConfigSchema,
-  LineupScheduleSchema,
-} from '../api/Scheduling.js';
+import { LineupScheduleSchema } from '../api/Scheduling.js';
 import {
   CondensedContentProgramSchema,
   CondensedCustomProgramSchema,
@@ -50,5 +47,4 @@ export const CondensedChannelProgrammingSchema = z.object({
   lineup: z.array(CondensedChannelProgramSchema),
   startTimeOffsets: z.array(z.number()),
   schedule: LineupScheduleSchema.optional(),
-  dynamicContentConfig: DynamicContentConfigSchema.optional(),
 });

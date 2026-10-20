@@ -1,26 +1,26 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import {
   getApiChannelsByIdTranscodeConfigOptions,
-  getApiFfmpegSettingsOptions,
-  getApiHdhrSettingsOptions,
+  getApiSettingsFfmpegOptions,
+  getApiSettingsHdhrOptions,
   getApiMediaSourcesOptions,
   getApiTranscodeConfigsByIdOptions,
   getApiTranscodeConfigsOptions,
-  getApiXmltvSettingsOptions,
+  getApiSettingsXmltvOptions,
 } from '../generated/@tanstack/react-query.gen.ts';
 
 export const useXmlTvSettings = () =>
-  useSuspenseQuery(getApiXmltvSettingsOptions());
+  useSuspenseQuery(getApiSettingsXmltvOptions());
 
 export const useFfmpegSettings = () =>
-  useSuspenseQuery(getApiFfmpegSettingsOptions());
+  useSuspenseQuery(getApiSettingsFfmpegOptions());
 
 export const useMediaSources = () =>
   useSuspenseQuery(getApiMediaSourcesOptions());
 
 export const useHdhrSettings = () => {
   return useSuspenseQuery({
-    ...getApiHdhrSettingsOptions(),
+    ...getApiSettingsHdhrOptions(),
   });
 };
 
