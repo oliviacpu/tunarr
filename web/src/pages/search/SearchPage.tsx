@@ -1,5 +1,5 @@
 import { Trans } from '@lingui/react/macro';
-import { Box, Stack, Typography } from '@mui/material';
+import { Alert, Box, Stack, Typography } from '@mui/material';
 import { isNonEmptyString } from '@tunarr/shared/util';
 import type { SearchFilter, SearchRequest } from '@tunarr/types/schemas';
 import { isNil } from 'lodash-es';
@@ -11,6 +11,8 @@ import type { Nullable } from '../../types/util.ts';
 
 type Props = {
   initialSearchFilter?: SearchFilter;
+  creatingCollection?: boolean;
+  onCollectionSaved?: () => void;
 };
 
 // A request with neither keywords nor a filter would list the whole library,
@@ -22,14 +24,28 @@ function hasQuery(request: Nullable<SearchRequest>) {
   return isNonEmptyString(request.query) || !isNil(request.filter);
 }
 
-export function SearchPage({ initialSearchFilter }: Props) {
+export function SearchPage({
+  initialSearchFilter,
+  creatingCollection,
+  onCollectionSaved,
+}: Props) {
   const searchRequest = useStore((s) => s.currentSearchRequest);
 
   return (
     <Box>
       <PageHeader title={<Trans>Search</Trans>} />
       <Stack gap={2}>
-        <SearchInput initialSearchFilter={initialSearchFilter} showViewToggle />
+        {creatingCollection && (
+          <Alert severity="info">
+            <Trans>Build the query, then Save as collection</Trans>
+          </Alert>
+        )}
+        <SearchInput
+          initialSearchFilter={initialSearchFilter}
+          collectionCreation={creatingCollection}
+          onCollectionSaved={creatingCollection ? onCollectionSaved : undefined}
+          showViewToggle
+        />
         {hasQuery(searchRequest) ? (
           <LibraryProgramGrid disableProgramSelection />
         ) : (
