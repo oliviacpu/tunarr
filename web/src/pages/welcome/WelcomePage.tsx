@@ -115,6 +115,7 @@ export default function WelcomePage() {
             <>
               <Typography
                 variant="h6"
+                component="h2"
                 fontWeight={600}
                 align="left"
                 sx={{ mt: 3 }}
@@ -175,6 +176,7 @@ export default function WelcomePage() {
             <>
               <Typography
                 variant="h6"
+                component="h2"
                 fontWeight={600}
                 align="left"
                 sx={{ mt: 3 }}
@@ -228,6 +230,7 @@ export default function WelcomePage() {
               {' '}
               <Typography
                 variant="h6"
+                component="h2"
                 fontWeight={600}
                 align="left"
                 sx={{ mt: 3 }}
