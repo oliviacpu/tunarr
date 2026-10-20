@@ -18,15 +18,88 @@ import { useRouterState } from '@tanstack/react-router';
 import { countBy, last, trimEnd } from 'lodash-es';
 import { useMemo, type ReactNode } from 'react';
 import useStore from '../store/index.ts';
+import { navItemForPath } from './navMatch.ts';
 import { useSystemHealthChecks } from './useSystemHealthChecks.ts';
 
-function setSelected(navItems: NavItem[], currentRoute: string | undefined) {
+function setSelected(navItems: NavItem[], selected: NavItem | undefined) {
   for (const item of navItems) {
-    item.selected = item.path === currentRoute;
+    item.selected = item === selected;
     if (item.children) {
-      setSelected(item.children, currentRoute);
+      setSelected(item.children, selected);
     }
   }
+}
+
+export function buildNavItems(
+  showWelcome: boolean,
+  highestSev: 'error' | 'warning' | null,
+  sevCount: number,
+): NavItem[] {
+  const items: NavItem[] = [
+    {
+      name: t`Welcome`,
+      path: '/welcome',
+      hidden: !showWelcome,
+      icon: <Home />,
+    },
+    { name: t`Guide`, path: '/guide', icon: <Tv /> },
+    {
+      name: t`Channels`,
+      path: '/channels',
+      icon: <SettingsRemote />,
+    },
+    // { name: 'Watch', path: '/watch', hidden: true, icon: <LiveTv /> },
+    {
+      name: t`Library`,
+      path: '/library',
+      icon: <VideoLibrary />,
+      children: [
+        {
+          name: t`Filler Lists`,
+          path: '/library/fillers',
+          icon: <Preview />,
+        },
+        {
+          name: t`Smart Collections`,
+          path: '/library/smart_collections',
+          icon: <Psychology />,
+        },
+        {
+          name: t`Custom Shows`,
+          path: '/library/custom-shows' as const,
+          icon: <Theaters />,
+        },
+        {
+          name: t`Trash`,
+          path: '/library/trash',
+          icon: <Delete />,
+        },
+      ],
+    },
+    {
+      name: t`Sources`,
+      path: '/media_sources',
+      icon: <StorageIcon />,
+    },
+    {
+      name: t`System`,
+      path: '/system',
+      icon: <Computer />,
+      badge: highestSev
+        ? {
+            count: sevCount,
+            color: highestSev === 'error' ? 'error' : 'warning',
+          }
+        : undefined,
+    },
+    {
+      name: t`Settings`,
+      path: '/settings',
+      icon: <Settings />,
+    },
+  ];
+
+  return items;
 }
 
 export const useNavItems = () => {
@@ -51,111 +124,8 @@ export const useNavItems = () => {
   }, [healthChecks]);
 
   return useMemo<NavItem[]>(() => {
-    const items: NavItem[] = [
-      {
-        name: t`Welcome`,
-        path: '/welcome',
-        hidden: !showWelcome,
-        icon: <Home />,
-      },
-      { name: t`Guide`, path: '/guide', icon: <Tv /> },
-      {
-        name: t`Channels`,
-        path: '/channels',
-        icon: <SettingsRemote />,
-      },
-      // { name: 'Watch', path: '/watch', hidden: true, icon: <LiveTv /> },
-      {
-        name: t`Library`,
-        path: '/library',
-        icon: <VideoLibrary />,
-        children: [
-          {
-            name: t`Filler Lists`,
-            path: '/library/fillers',
-            icon: <Preview />,
-          },
-          {
-            name: t`Smart Collections`,
-            path: '/library/smart_collections',
-            icon: <Psychology />,
-          },
-          {
-            name: t`Custom Shows`,
-            path: '/library/custom-shows' as const,
-            icon: <Theaters />,
-          },
-          {
-            name: t`Trash`,
-            path: '/library/trash',
-            icon: <Delete />,
-          },
-        ],
-      },
-      {
-        name: t`Sources`,
-        path: '/media_sources',
-        icon: <StorageIcon />,
-      },
-      {
-        name: t`System`,
-        path: '/system',
-        icon: <Computer />,
-        badge: highestSev
-          ? {
-              count: sevCount,
-              color: highestSev === 'error' ? 'error' : 'warning',
-            }
-          : undefined,
-        children: [
-          {
-            name: t`Status`,
-            path: '/system',
-            hidden: true,
-          },
-          {
-            name: t`Debug`,
-            path: '/system/debug',
-            hidden: true,
-          },
-          {
-            name: t`Logs`,
-            path: '/system/logs',
-            hidden: true,
-          },
-        ],
-      },
-      {
-        name: t`Settings`,
-        path: '/settings/general',
-        icon: <Settings />,
-        children: [
-          {
-            name: 'xmltv',
-            path: '/settings/xmltv',
-            hidden: true,
-          },
-          {
-            name: 'ffmpeg',
-            path: '/settings/ffmpeg',
-            hidden: true,
-          },
-          {
-            name: 'sources',
-            path: '/settings/sources',
-            hidden: true,
-          },
-          {
-            name: 'hdhr',
-            path: '/settings/hdhr',
-            hidden: true,
-          },
-        ],
-      },
-    ];
-
-    setSelected(items, routerState);
-
+    const items = buildNavItems(showWelcome, highestSev, sevCount);
+    setSelected(items, navItemForPath(items, routerState));
     return items;
   }, [highestSev, routerState, sevCount, showWelcome]);
 };
