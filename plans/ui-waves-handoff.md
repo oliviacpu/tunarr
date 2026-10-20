@@ -27,9 +27,16 @@ release and are not included in the deployed `.20.3` image:
 - #152: C7a preserves omitted filler/subtitle relations, clears explicit empty arrays and replaces
   nonempty arrays. Changed editor relations serialize deliberately; creation/update skip empty
   subtitle inserts. Existing start-time/on-demand behavior and the bulk stealth workaround remain.
+- #154: use the existing bounded initial-field wait and current Playback breadcrumb in settings tests.
+- #155: persist table preferences outside React state updater callbacks while preserving batched updates.
 
 C7a alone was approved in #149. C7b/C7c batching is held. S5 remains approved design only, with
 implementation separate; a different dark-yellow palette step remains a separate visual decision.
+
+The first combined browser run passed 164 tests, failed two and skipped one. It exposed the
+retired transcode breadcrumb locator fixed by #154 and the table preference render warning fixed
+by #155. A separate CI run exposed the initial executable-field wait fixed by #154. These
+follow-ups preserve the original assertions; the combined suite must pass before release.
 
 Source PRs carry their focused tests and final-head CI/review evidence. The closing branch also
 combines their code for integration checks. Before the next release, require its final CI and

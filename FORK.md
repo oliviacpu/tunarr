@@ -26,6 +26,22 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Settings tests follow the integrated loading and navigation behavior (2026-10-20, PR #154)
+
+- **What you saw:** full CI exceeded the isolation test's one-second initial executable-field wait while system state was still loading. The combined browser sweep also waited for the transcode editor's retired breadcrumb name.
+- **Cause:** the isolation helper retained Testing Library's default wait despite the neighboring FFmpeg harness already allowing ten seconds for initial fields, and the transcode test targeted an old navigation name plus its first link.
+- **Fix:** T1 follow-up under the approved UI audit (PR #85). Give only the playback helper the existing bounded ten-second initial-field wait. Keep the unresolved optional-flags assertions intact. Target the current breadcrumbs' explicit Playback link and check its destination before exercising the unchanged unsaved-dialog and save assertions. No runtime code or global CI limits change.
+- **Tests:** the failures were observed in full CI and the combined browser sweep. Focused settings suites and the real transcode browser file verify the corrected waits/locator; e2e typecheck, changed-file lint and formatting checks cover the test-only change.
+- **Upstream:** not sent.
+
+# Keep table preference updates outside React state updaters
+
+The combined browser route sweep caught a React warning when the channel Streaming tab updated table preferences: a functional state updater notified settings subscribers while React was rendering the subtitle table.
+
+Resolve visibility, pagination and sorting callbacks against their latest pending values before queuing concrete React state and persisting preferences. Consecutive functional updates still compose, direct values still work, and selection/reset behavior remains unchanged. No API, schema or scheduling behavior changed.
+
+Validation: the StrictMode settings-subscriber regression reproduces the warning before the fix; all seven hook tests now pass, covering composed/direct updates, persisted remount values and existing selection/reset behavior. The focused Streaming route and subtitle browser suite passed all six tests including fixture seed. Web/E2E typechecks, changed-file lint, formatting and quick preflight passed.
+
 ### Channel updates preserve omitted filler and subtitle relations (2026-10-20, PR #152)
 
 - **What you saw:** a channel update that omitted optional filler attachments or subtitle preferences deleted the saved rows. The bulk stealth UI worked around this by fetching and resending a full channel.
