@@ -348,3 +348,64 @@ test('missing controls fit phone and desktop layouts in both themes', async ({
     );
   }
 });
+
+test('invalid backup cron reports the error and preserves the existing configuration', async ({
+  page,
+}) => {
+  const original = await savedSettings<GetApiSystemSettingsResponse>(
+    page,
+    systemUrl,
+  );
+  const backup = {
+    configurations: [
+      {
+        enabled: true,
+        schedule: { type: 'cron', cron: '0 4 * * *' },
+        outputs: [
+          {
+            type: 'file',
+            outputPath: DATA_DIR,
+            archiveFormat: 'tar',
+            maxBackups: 3,
+          },
+        ],
+      },
+    ],
+  };
+  try {
+    expect((await page.request.put(systemUrl, { data: { backup } })).ok()).toBe(
+      true,
+    );
+    const before = await savedSettings<GetApiSystemSettingsResponse>(
+      page,
+      systemUrl,
+    );
+    await page.goto('/web/settings/general');
+    const cron = page.getByRole('textbox', {
+      name: 'Cron expression',
+      exact: true,
+    });
+    await cron.fill('not cron');
+    const response = page.waitForResponse(
+      (res) => res.url() === systemUrl && res.request().method() === 'PUT',
+    );
+    await cron
+      .locator('xpath=ancestor::form')
+      .getByRole('button', { name: 'Save', exact: true })
+      .click();
+    expect((await response).status()).toBe(400);
+    await expect(page.getByRole('alert')).toContainText(
+      'Backup 1 has an invalid cron expression',
+    );
+    expect(await savedSettings(page, systemUrl)).toEqual(before);
+    await expect(cron).toHaveValue('not cron');
+    await cron.fill('0 5 * * *');
+    await saveForm(page, cron, systemUrl);
+    await page.reload();
+    await expect(cron).toHaveValue('0 5 * * *');
+  } finally {
+    expect((await page.request.put(systemUrl, { data: original })).ok()).toBe(
+      true,
+    );
+  }
+});

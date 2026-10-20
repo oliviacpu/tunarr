@@ -3,6 +3,7 @@ import { serverOptions } from '@/globals.js';
 import { scheduleBackupJobs } from '@/services/Scheduler.js';
 import type { RouterPluginAsyncCallback } from '@/types/serverType.js';
 import { getDefaultLogLevel } from '@/util/defaults.js';
+import { backupScheduleProblem } from '@/util/backupScheduleValidation.js';
 import { ifDefined, mapToObj } from '@/util/index.js';
 import {
   getEnvironmentLogLevel,
@@ -181,10 +182,15 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
         body: UpdateSystemSettingsRequestSchema,
         response: {
           200: SystemSettingsResponseSchema,
+          400: z.string(),
         },
       },
     },
     async (req, res) => {
+      if (req.body.backup !== undefined) {
+        const problem = backupScheduleProblem(req.body.backup);
+        if (problem !== undefined) return res.status(400).send(problem);
+      }
       await req.serverCtx.settings.directUpdate((file) => {
         const { system } = file;
 
@@ -254,10 +260,13 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
         body: UpdateBackupSettingsRequestSchema,
         response: {
           200: BackupSettingsSchema,
+          400: z.string(),
         },
       },
     },
     async (req, res) => {
+      const problem = backupScheduleProblem(req.body);
+      if (problem !== undefined) return res.status(400).send(problem);
       await req.serverCtx.settings.directUpdate((settings) => {
         settings.system.backup = req.body;
         return settings;

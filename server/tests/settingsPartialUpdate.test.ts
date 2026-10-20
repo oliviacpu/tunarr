@@ -1,7 +1,9 @@
 import { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
 import { container } from '../src/container.ts';
 import type { ISettingsDB } from '../src/db/interfaces/ISettingsDB.ts';
+import { GlobalScheduler } from '../src/services/Scheduler.ts';
+import { BackupTask } from '../src/tasks/BackupTask.ts';
 import { ScheduleJobsStartupTask } from '../src/services/startup/ScheduleJobsStartupTask.ts';
 import { KEYS } from '../src/types/inject.ts';
 import { getAvailablePort } from '../src/util/net.ts';
@@ -186,4 +188,57 @@ describe('PUT /system/settings - partial update', () => {
     expect(logging.useEnvVarLevel).toBe(false);
     expect(logging.logLevel).toBe('info');
   });
+});
+
+describe('backup cron validation before persistence and rescheduling', () => {
+  afterEach(() => {
+    GlobalScheduler.clearTasks(BackupTask.name);
+  });
+  for (const url of ['/api/system/settings', '/api/system/settings/backup']) {
+    test(`${url} rejects invalid cron without changing settings or scheduled jobs`, async () => {
+      const settings = container.get<ISettingsDB>(KEYS.SettingsDB);
+      const backup = {
+        configurations: [
+          {
+            enabled: true,
+            schedule: { type: 'cron', cron: 'not cron' },
+            outputs: [
+              {
+                type: 'file',
+                outputPath: '/tmp/backups',
+                archiveFormat: 'tar',
+                maxBackups: 3,
+              },
+            ],
+          },
+        ],
+      };
+      await putSystem({
+        backup: {
+          configurations: backup.configurations.map((configuration) => ({
+            ...configuration,
+            schedule: { type: 'cron', cron: '0 4 * * *' },
+          })),
+        },
+      });
+      const before = structuredClone(settings.systemSettings());
+      const jobs = [
+        ...(GlobalScheduler.getScheduledJobs(BackupTask.name) ?? []),
+      ];
+      expect(jobs).toHaveLength(1);
+      const response = await app.inject({
+        method: 'PUT',
+        url,
+        payload: url.endsWith('/backup') ? backup : { backup },
+      });
+      expect(response.statusCode, response.body).toBe(400);
+      expect(response.body).toContain(
+        'Backup 1 has an invalid cron expression',
+      );
+      expect(settings.systemSettings()).toEqual(before);
+      expect(GlobalScheduler.getScheduledJobs(BackupTask.name) ?? []).toEqual(
+        jobs,
+      );
+    });
+  }
 });
