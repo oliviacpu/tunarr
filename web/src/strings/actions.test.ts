@@ -24,6 +24,7 @@ describe('action vocabulary', () => {
         'changesReset',
         'couldNotDelete',
         'couldNotSave',
+        'couldNotSaveSettings',
         'defaultsRestored',
         'deleted',
         'saved',
@@ -42,6 +43,8 @@ describe('action vocabulary', () => {
   });
 
   it('uses the agreed wording', () => {
+    expect(toasts.couldNotSave()).toBe('Could not save');
+    expect(toasts.couldNotSaveSettings()).toBe('Could not save settings');
     expect(actions.save()).toBe('Save');
     expect(actions.resetChanges()).toBe('Reset changes');
     expect(actions.restoreDefaults()).toBe('Restore defaults');
@@ -50,12 +53,8 @@ describe('action vocabulary', () => {
   });
 
   it('appends a reason only when there is one', () => {
-    expect(withReason('Could not save settings')).toBe(
-      'Could not save settings',
-    );
-    expect(withReason('Could not save settings', '')).toBe(
-      'Could not save settings',
-    );
+    expect(withReason('Could not save')).toBe('Could not save');
+    expect(withReason('Could not save', '')).toBe('Could not save');
     expect(withReason('Could not delete', 'in use')).toBe(
       'Could not delete: in use',
     );

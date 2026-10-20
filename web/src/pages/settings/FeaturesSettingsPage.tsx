@@ -118,7 +118,7 @@ export default function FeaturesSettingsPage() {
       });
     },
     onError: () => {
-      snackbar.enqueueSnackbar(toasts.couldNotSave(), {
+      snackbar.enqueueSnackbar(toasts.couldNotSaveSettings(), {
         variant: 'error',
       });
     },

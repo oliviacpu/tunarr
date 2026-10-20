@@ -219,7 +219,7 @@ export function GeneralSettingsForm({
         onError: (err) => {
           console.error(err);
           snackbar.enqueueSnackbar(
-            withReason(toasts.couldNotSave(), t`Check the console for details`),
+            withReason(toasts.couldNotSaveSettings(), t`Check the console for details`),
             {
               variant: 'error',
             },

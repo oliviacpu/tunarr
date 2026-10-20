@@ -68,7 +68,7 @@ export const ScannerSettingsPage = () => {
       snackbar.enqueueSnackbar({
         variant: 'error',
         message: withReason(
-          toasts.couldNotSave(),
+          toasts.couldNotSaveSettings(),
           t`Check the server and browser logs for details`,
         ),
       });
@@ -88,7 +88,7 @@ export const ScannerSettingsPage = () => {
     snackbar.enqueueSnackbar({
       variant: 'error',
       message: withReason(
-        toasts.couldNotSave(),
+        toasts.couldNotSaveSettings(),
         t`Check the form and try again`,
       ),
     });

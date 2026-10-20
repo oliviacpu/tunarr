@@ -206,7 +206,7 @@ export default function FfmpegSettingsPage() {
     },
     onError: (error) => {
       const message = getApiErrorMessage(error);
-      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave(), message), {
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSaveSettings(), message), {
         variant: 'error',
       });
     },

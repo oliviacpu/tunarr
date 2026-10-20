@@ -2,6 +2,8 @@
 // confirms each one. Use one verb through the whole flow (Save -> Saved,
 // Delete -> Deleted). Do not write "Update", "Submit", "Reset Options" or
 // "Settings Saved!" by hand; add a row here if an action is missing.
+// Failures: "Could not save settings" is for the settings pages only; every
+// other save uses the generic "Could not save".
 //
 // These are functions, not constants, so the message is looked up in the
 // active locale when it renders rather than when the module loads.
@@ -25,12 +27,13 @@ export const toasts = {
   deleted: () => t`Deleted`,
   changesReset: () => t`Changes reset`,
   defaultsRestored: () => t`Defaults restored`,
-  couldNotSave: () => t`Could not save settings`,
+  couldNotSave: () => t`Could not save`,
+  couldNotSaveSettings: () => t`Could not save settings`,
   couldNotDelete: () => t`Could not delete`,
 } as const;
 
 /**
- * Appends the server's reason to a failure message: "Could not save settings:
+ * Appends the server's reason to a failure message: "Could not save:
  * <reason>". Without a reason the message stands alone.
  */
 export function withReason(message: string, reason?: string): string {

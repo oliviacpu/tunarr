@@ -79,7 +79,7 @@ export default function XmlTvSettingsPage() {
     },
     onError: (error) => {
       const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave(), message), {
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSaveSettings(), message), {
         variant: 'error',
       });
     },
