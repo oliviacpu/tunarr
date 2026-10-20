@@ -456,7 +456,14 @@ export class SessionManager {
         }
 
         if (!session.started || session.hasError) {
-          await session.start();
+          await session.start().catch(async (error: unknown) => {
+            this.deleteSession(channelId, sessionType);
+            await this.pauseUnwatchedChannel(channelId);
+            throw error;
+          });
+          if (session.hasError || session.stoppingOrStopped) {
+            await this.pauseUnwatchedChannel(channelId);
+          }
           this.eventService.push({
             type: 'stream',
             action: 'start',
@@ -517,26 +524,30 @@ export class SessionManager {
       if (!channel?.transcodeConfig) throw new ChannelNotFoundError(channelId);
       return factory(channel);
     } catch (error) {
-      // Called under the channel lock, before a subsequent tune-in can resume it.
-      const watched = this.getAllSessionsForChannel(channelId).some(
-        (session) =>
-          !session.hasError &&
-          !session.stoppingOrStopped &&
-          values(session.connections()).some(
-            (conn) => !conn.userAgent?.includes('Tunarr'),
-          ),
-      );
-      if (!watched) {
-        await this.onDemandChannelService
-          .pauseChannel(channelId, +dayjs())
-          .catch((pauseError: unknown) => {
-            this.logger.error(
-              pauseError,
-              'Could not pause channel after failed session creation',
-            );
-          });
-      }
+      await this.pauseUnwatchedChannel(channelId);
       throw error;
+    }
+  }
+
+  private async pauseUnwatchedChannel(channelId: string) {
+    // Called under the channel lock, before a subsequent tune-in can resume it.
+    const watched = this.getAllSessionsForChannel(channelId).some(
+      (session) =>
+        !session.hasError &&
+        !session.stoppingOrStopped &&
+        values(session.connections()).some(
+          (conn) => !conn.userAgent?.includes('Tunarr'),
+        ),
+    );
+    if (!watched) {
+      await this.onDemandChannelService
+        .pauseChannel(channelId, +dayjs())
+        .catch((error: unknown) => {
+          this.logger.error(
+            error,
+            'Could not pause channel after failed session startup',
+          );
+        });
     }
   }
 

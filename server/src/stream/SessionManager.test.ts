@@ -915,3 +915,86 @@ test('a failed stale-wrapper replacement pauses its unwatched channel', async ()
   ).toBe(true);
   expect(pause).toHaveBeenCalledOnce();
 });
+
+class FailedReadySession extends StubHlsSession {
+  protected override async waitForStreamReady() {
+    const { Result } = await import('@/types/result.js');
+    return Result.forError(new Error('readiness failed'));
+  }
+}
+
+test.each(['fresh', 'replacement'] as const)(
+  '%s HLS readiness failure pauses the unwatched channel',
+  async (kind) => {
+    let failReady = kind === 'fresh';
+    const manager = makeSessionManager((channel, opts) =>
+      failReady
+        ? new FailedReadySession(channel, opts)
+        : new StubHlsSession(channel, opts),
+    );
+    const service = (
+      manager as unknown as { onDemandChannelService: OnDemandChannelService }
+    ).onDemandChannelService;
+    if (kind === 'replacement') {
+      const old = (
+        await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+      ).get();
+      old.removeConnection('old');
+      (old as unknown as StubHlsSession).markError();
+      failReady = true;
+    }
+    const pause = vi.spyOn(service, 'pauseChannel');
+    pause.mockClear();
+    expect(
+      (
+        await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+      ).isFailure(),
+    ).toBe(true);
+    expect(pause).toHaveBeenCalledOnce();
+  },
+);
+
+test('HLS readiness failure preserves another active viewer', async () => {
+  let failReady = false;
+  const manager = makeSessionManager((channel, opts) =>
+    failReady
+      ? new FailedReadySession(channel, opts)
+      : new StubHlsSession(channel, opts),
+  );
+  const other = (
+    await manager.getOrCreateHlsSession(channelUuid, 'other', connection, {
+      streamMode: 'hls_direct_v2',
+    })
+  ).get();
+  failReady = true;
+  const service = (
+    manager as unknown as { onDemandChannelService: OnDemandChannelService }
+  ).onDemandChannelService;
+  const pause = vi.spyOn(service, 'pauseChannel');
+  pause.mockClear();
+  expect(
+    (
+      await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+    ).isFailure(),
+  ).toBe(true);
+  expect(pause).not.toHaveBeenCalled();
+  expect(other.started).toBe(true);
+  await manager.endSession(other);
+});
+
+test('a rejected start promise pauses the unwatched channel', async () => {
+  const manager = makeSessionManager((channel, opts) => {
+    const session = new StubHlsSession(channel, opts);
+    vi.spyOn(session, 'start').mockRejectedValue(new Error('start failed'));
+    return session;
+  });
+  const service = (
+    manager as unknown as { onDemandChannelService: OnDemandChannelService }
+  ).onDemandChannelService;
+  expect(
+    (
+      await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+    ).isFailure(),
+  ).toBe(true);
+  expect(service.pauseChannel).toHaveBeenCalledOnce();
+});
