@@ -2,6 +2,8 @@
 
 Transcode Configurations provide Tunarr with a set of parameters to produce a normalized output stream for a given channel. These configurations are responsible for options like hardware acceleration, output video/audio formats, bit rates, and more. Transcode configurations are applied per-channel and can be shared across multiple channels. This page explores each option in detail.
 
+Save is available once something has changed. Saving a new configuration opens it for editing, and leaving the page with unsaved changes asks first.
+
 !!! warning "Performance: Hardware Acceleration Strongly Recommended"
     Software transcoding (Hardware Acceleration = **None**) is **extremely CPU-intensive**. Transcoding even a single 1080p stream can saturate multiple CPU cores, and on modest or low-power hardware (NAS devices, Raspberry Pi, older PCs) it will cause dropped frames, stuttering, or an inability to keep up with real-time playback.
 
