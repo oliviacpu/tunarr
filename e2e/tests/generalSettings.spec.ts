@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import { SERVER_URL } from '../fixture/env.ts';
+import { api } from '../fixture/api.ts';
 import {
   save as saveSettings,
   saveButton,
@@ -23,29 +24,42 @@ test('a changed category log level saves, survives a reload and moves nothing el
   page,
 }) => {
   const before = await savedSettings<SystemSettings>(page, SETTINGS_URL);
-  await page.goto('/web/settings/general');
-  const streaming = page.getByRole('combobox', {
-    name: 'Streaming log level',
-  });
-  await expect(streaming).toHaveText('Inherit default');
-  await expect(saveButton(page)).toBeDisabled();
+  try {
+    await api('PUT', '/settings/system', {
+      logging: { categoryLogLevel: { streaming: null } },
+    });
+    await page.goto('/web/settings/general');
+    const streaming = page.getByRole('combobox', {
+      name: 'Streaming log level',
+    });
+    await expect(streaming).toHaveText('Inherit default');
+    await expect(saveButton(page)).toBeDisabled();
 
-  await streaming.click();
-  await page.getByRole('option', { name: 'debug', exact: true }).click();
-  await saveSettings(page, SETTINGS_URL);
+    await streaming.click();
+    await page.getByRole('option', { name: 'debug', exact: true }).click();
+    await saveSettings(page, SETTINGS_URL);
 
-  await page.reload();
-  await expect(streaming).toHaveText('debug');
-  expect(await savedSettings(page, SETTINGS_URL)).toEqual({
-    ...before,
-    logging: {
-      ...before.logging,
-      categoryLogLevel: {
-        ...before.logging.categoryLogLevel,
-        streaming: 'debug',
+    await page.reload();
+    await expect(streaming).toHaveText('debug');
+    expect(await savedSettings(page, SETTINGS_URL)).toEqual({
+      ...before,
+      logging: {
+        ...before.logging,
+        categoryLogLevel: {
+          ...before.logging.categoryLogLevel,
+          streaming: 'debug',
+        },
       },
-    },
-  });
+    });
+  } finally {
+    await api('PUT', '/settings/system', {
+      logging: {
+        categoryLogLevel: {
+          streaming: before.logging.categoryLogLevel?.streaming ?? null,
+        },
+      },
+    });
+  }
 });
 
 // Each log roll option must save and survive a reload on its own.
