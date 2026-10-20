@@ -26,6 +26,278 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Select several channels, filler lists, custom shows or smart collections and act on them at once (2026-10-20, PR #109)
+
+- **Design:** `plans/ui-primitives-and-settings-audit-2026-10-19.md`, issue C7.
+- **What you saw:** every list deleted one row at a time, each with its own confirmation, and hiding several channels
+  from the guide meant opening each channel's settings.
+- **Cause:** the four list tables never turned on material-react-table's row selection, and there was no shared bulk
+  action.
+- **Fix:**
+  - Channels, Filler Lists, Custom Shows and Smart Collections have a checkbox per row and a select-all in the header
+    that selects the visible page. While rows are selected, the table's toolbar shows `BulkActionsToolbar`
+    (`web/src/components/base/BulkActionsToolbar.tsx`): "N selected", an outlined red Delete and, on Channels only,
+    "Hide from guide" and "Show in guide". Selection lives in component state only (`useSelectableTableSettings` in
+    `web/src/hooks/useTableSettings.ts`), is keyed by id, and clears when an action finishes or the page or page size
+    changes. MRT's own selection banner is off.
+  - Delete opens the shared `DeleteConfirmationDialog` once: "Delete 3 channels?", the names (the first ten, then "and
+    N more"), busy and kept open until every delete settles. There is no bulk endpoint, so the web app sends the
+    existing per-item `DELETE` for each row with `Promise.allSettled` (`useBulkAction` / `useBulkDelete` in
+    `web/src/hooks/useBulkAction.ts`). The toast is "Deleted" when all succeed, otherwise "1 of 2 deleted; could not
+    delete Late Night: <reason>" (up to three names, then "and N more").
+  - Hide from guide / Show in guide save only the selected channels whose stealth differs. Each is read with
+    `GET /api/channels/:id` first and saved with `PUT` (`toStealthUpdateRequest` in
+    `web/src/helpers/channelUpdateRequest.ts`), because the channel list leaves out filler lists and subtitle
+    preferences and the update replaces both with what it carries: saving the list's copy would have detached every
+    filler list. The update also leaves out `startTime` (keeps a server rebase) and `onDemand` (sending it resets an
+    on-demand channel's position). The toast is "Saved" or "1 of 2 saved; could not save Cartoons: <reason>".
+  - The Channels table's row actions (edit, menu) moved to the last column, as on the other three tables, so the
+    checkbox is the first column.
+  - Keyboard: in MRT 3.2.1, Space on the focused select-all checkbox did nothing, because the header cell's shortcut
+    read the checkbox's value before it toggled and then cancelled the toggle. The select-all checkbox now keeps its
+    key events, so Space selects and clears the page. Row checkboxes already worked.
+  - User docs: `docs/configure/channels/index.md` ("Working with several channels") and
+    `docs/configure/library/index.md` ("Deleting several at once").
+- **Tests:** `BulkActionsToolbar.test.tsx` (count and plural, outlined error Delete, extra actions, busy, names list
+  with "and N more"); `useTableSettings.test.ts` (selection keyed by id, cleared on page and page-size change, kept on
+  a no-op update); `useBulkAction.test.ts` (`settleEach` order, one failure doesn't stop the rest, server message as
+  reason); `channelUpdateRequest.test.ts` (stealth update keeps filler lists and subtitle preferences, leaves out
+  startTime and onDemand). Per table, selecting rows and confirming deletes exactly those ids and clears the
+  selection: `ChannelsPage.test.tsx`, `FillerListsPage.test.tsx`, `CustomShowsPage.test.tsx`,
+  `SmartCollectionsTable.test.tsx`. Channels also covers Hide from guide (full channel saved, filler lists kept), Show
+  in guide saving only hidden channels, and a partial stealth failure naming the channel. Custom Shows covers the
+  dialog staying busy until the deletes settle and a partial delete failure naming the show. Filler Lists covers the
+  labelled checkboxes working from the keyboard.
+- **Upstream:** not sent.
+
+### Entity editors share the settings form shell (2026-10-20)
+
+- **What you saw:** channel, filler-list, custom-show and slot editors each managed their own save controls and dirty-state behavior. Slot Save stayed enabled without changes; library drafts lacked consistent navigation protection.
+- **Cause:** separate form scaffolding mixed React Hook Form fields with program drafts held in the editor store.
+- **Fix:** audit row C3. Reuse `SettingsForm` and `useSettingsMutation`, count program drafts and refreshed previews as unsaved changes, reset fields and drafts together, and preserve drafts when visiting Add Media. Channel tabs retain validation indicators. Creation and draft saves lock their fields while pending; Reset changes is disabled during a save. Settings-page behavior remains covered by the shared-shell tests.
+- **Tests:** editor regression suites cover clean/dirty Save, validation, request payloads, failed saves, creation locks, tab navigation, draft reset and navigation protection. Shared-shell, mutation and guard suites cover their common behavior. Classic slot behavior is recorded in the infinite-schedules parity checklist.
+- **Upstream:** not sent.
+
+### Guide zoom controls sit around the duration (2026-10-20, PR #116)
+
+- **What you saw:** the guide duration and its zoom controls were in separate groups, with Show Stealth between
+  them on wide screens and unrelated controls between them when the header wrapped.
+- **Cause:** the duration belonged to the start-time group while the zoom buttons belonged to navigation.
+- **Fix:** the zoom-in button, duration and zoom-out button share one row that stays together when the header wraps.
+  The group and both buttons have translated accessible names.
+- **Tests:** `GuidePage.test.tsx` checks the control order, rendered guide range and persisted duration while zooming
+  in and out, including the existing one-hour and eight-hour limits.
+- **Upstream:** not sent.
+
+### Inputs use readable mobile sizing (2026-10-20)
+
+- **What you saw:** phones rendered form inputs at 14px, which can trigger Safari focus zoom, with floating labels scaled from that small base.
+- **Cause:** inputs and picker fields inherited the desktop body type size at every viewport width.
+- **Fix:** approved UI follow-up D8. The theme sets input text, input labels and MUI X picker input bases to 16px below the `sm` breakpoint and 14px from `sm` up. The viewport's zoom policy is unchanged. Guide refresh fields also stack with an explicit phone layout and flex gap so the next floating label clears the preceding help text (D2/C2 follow-up).
+- **Tests:** browser coverage checks text fields, selects, labels and date/time picker bases at 390px and 1440px in both colour schemes, including page overflow and screenshots.
+- **Upstream:** not sent.
+
+### Deleting a channel, filler list or custom show asks the same question as everything else (2026-10-20)
+
+- **What you saw:** four different delete confirmations. Media sources, smart collections, transcode configs and the
+  Trash page used one dialog; channels, Filler Lists and Custom Shows each had their own copy with a different layout.
+  The Filler Lists copy said "Deleting a Filler will remove all programming from the channel", which is wrong. Their
+  Delete button was blue, not red, and Filler Lists and Custom Shows showed no message when the delete worked.
+- **Cause:** the shared `DeleteConfirmationDialog` was added after the page-local ones and nobody went back for them.
+- **Fix:** issue C5 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+  - `DeleteConfirmationDialog` is the only delete dialog. The title names the thing ("Delete Filler List "Ad Breaks"?"),
+    the body is one sentence on the consequence, Cancel is outlined and the confirm button is red and reads the verb
+    (Delete, or "Empty trash"). It takes an optional `details` node under the body and an optional `busy` flag that
+    disables both buttons, shows a spinner on the confirm button and stops the dialog being dismissed.
+  - Filler Lists and Custom Shows use it, say "Deleted" on success and "Could not delete: <reason>" on failure, and
+    their copy now describes what happens (the list or show is removed from every channel that uses it).
+  - `ChannelDeleteDialog` is gone. It only deleted the channel and warned about its programming, so the channel menu
+    now uses the shared dialog directly and shows the same "Deleted" and "Could not delete" messages.
+- **Tests:** `DeleteConfirmationDialog.test.tsx` (title and consequence, details, outlined Cancel and red confirm,
+  busy state, confirm then close in order). `CustomShowsPage.test.tsx`, `FillerListsPage.test.tsx` and
+  `ChannelOptionsMenu.test.tsx` check that nothing is deleted until the dialog is confirmed, that Cancel deletes
+  nothing, and that "Deleted" shows afterwards.
+- **Upstream:** not sent.
+
+### Settings pages get one form shell: one save bar, the unsaved guard, one way to report a save (2026-10-20)
+
+Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue C1, approved by the maintainer 2026-10-19 (PR #85).
+
+- **What you saw:** on the XMLTV page, Save stayed clickable while a save was in flight, so a second click sent a
+  second save. "Restore defaults" filled in the defaults without counting them as a change: "Reset changes" did not
+  appear to take them back, and leaving the page did not warn that they were unsaved. Each of the other settings pages
+  laid out and enabled its save bar differently (section 3 of the plan lists them).
+- **Cause:** every settings page wrote its own `<form>`, save bar, mutation callbacks and error toast. XMLTV disabled
+  Save on React Hook Form's `isSubmitting`, which a save started with `mutate()` never holds, and its "Restore defaults"
+  made the defaults the form's new saved values, behind a separate flag that enabled Save.
+- **Fix:** issue C1 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+  - New `web/src/components/form/SettingsForm.tsx`: wraps the fields in the `<form>` and React Hook Form's
+    `FormProvider`, and renders the save bar under them. "Restore defaults" is on the left when the page passes
+    `onRestoreDefaults`. On the right, "Reset changes" shows while there are changes, and Save is enabled only when the
+    form has changes, they are valid and no save is in flight; while one is, Save shows a spinner. The bar wraps on
+    phones. It mounts `UnsavedNavigationAlert` with the form's dirty state and passes `exceptTargetPaths` through.
+  - New `web/src/hooks/useSettingsMutation.ts`: wraps the generated client's mutation options. A save that works
+    makes the saved values what the form compares against and puts them in every field the user has not changed
+    since pressing Save. Fields changed while the save was in flight keep the user's value and stay unsaved. Then it
+    toasts "Saved" and refetches the queries the page names. A save that fails toasts "Could not save settings" with
+    the server's reason.
+  - `SwitchFormController` and `SelectFormController` in `web/src/components/util/TypedController.tsx`, beside the
+    numeric and checkbox controllers: a labelled switch or select with help text in one element. The select stores the
+    chosen option's own value, so a number stays a number.
+  - The XMLTV page is ported as the reference: its fields are unchanged, and the refresh start hour uses the new
+    select. "Restore defaults" now counts as a change (Save, "Reset changes" and the unsaved guard all apply) and hides
+    once the form holds the defaults. After a save the form shows what the server saved, and the reload of the
+    settings that follows no longer resets the form when it brings back those same values.
+  - `docs/dev/contributing.md` (Web, "Settings pages") says how a settings page uses the shell and what its save bar
+    guarantees. The other settings pages move onto it in C2, the entity editors in C3.
+- **Tests:** `SettingsForm.test.tsx` (Save disabled when clean, enabled when dirty and valid, disabled when invalid
+  and while saving; "Reset changes" only with changes and puts the saved values back; "Restore defaults" only when
+  offered; the unsaved guard follows the dirty state and gets the exempt paths). `useSettingsMutation.test.tsx` (a save
+  leaves the form clean with the server's values and toasts "Saved", refetches the given queries, runs the page's own
+  `onSuccess`; a field changed while the save is in flight keeps its value and stays unsaved; a refused save toasts
+  the server's reason and keeps the changes). `TypedController.test.tsx` covers both new controllers.
+  `XmlTvSettingsPage.test.tsx` adds "Restore defaults" (fills in the defaults but keeps the output path, can be undone,
+  saves with Save), the start hour saved as a number, Save disabled while a save is in flight, a field changed during
+  a save surviving the save and the reload after it, and saved settings that fail validation staying unsaveable after
+  another change; the restore and in-flight tests fail on the old page. The e2e spec `e2e/tests/xmltvSettings.spec.ts` saves a start hour and reloads (nothing
+  else moves), and checks that restored defaults can be undone, warn before leaving and save.
+- **Upstream:** not sent.
+
+### Every settings page saves the same way: one save bar, the unsaved guard, one schedule widget (2026-10-20, PR #112)
+
+Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue C2, approved by the maintainer 2026-10-19 (PR #85).
+
+- **What you saw:** each settings page laid out and enabled its save bar its own way. Scanner had Save only, so a
+  change could not be undone and leaving the page did not warn. General and Features did not warn either. On General,
+  Save turned off for an invalid server URL without saying why; saving a new server URL put the old one back in the
+  field; clearing the log-roll interval to type a new one made the field vanish and unticked "Roll on schedule"; the
+  "Every N / unit / time" inputs had no labels, and the time picker was cut off on a phone. A failed save on General or
+  Scanner pointed at the console or the logs instead of giving the server's reason. The Features page left out one flag's type.
+- **Cause:** every page wrote its own `<form>`, save bar, mutation callbacks and error toast, and the backup and log
+  rolling schedules were two copies of one hand-built widget. General's save reset the form from the settings of the
+  render that pressed Save, before the new server URL was stored. "Roll on schedule" was read from the interval
+  itself, so any interval that was not positive also meant "off".
+- **Fix:** issue C2 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+  - General, Transcoding (global FFmpeg settings), Scanner, Tuner and Features are now only their fields inside
+    `SettingsForm`, saved through `useSettingsMutation`. Each page lost its own mutation, toasts, save bar and unsaved
+    guard. Every page now has the same save bar ("Reset changes" while there are changes; Save only when there are
+    valid changes and no save is in flight) and the unsaved guard. Tuner keeps "Restore defaults", now as a change that
+    can be undone. A failed save says "Could not save settings:" and the server's reason (or the error's own message).
+  - Each page loads its settings into the form once, and skips a reload that brings back what the form already holds,
+    so a field changed while a save is in flight keeps its value.
+  - The settings forms, the guide (XMLTV) page included, validate on `onTouched`: Save turns off as soon as a value
+    stops being valid, and the field says why once you have left it. General's server URL field now shows its error.
+  - General: the form fills in from the saved settings with the server URL as stored when the save returns, so a new
+    URL stays in the field. "Roll on schedule" is its own field; unticking it hides the schedule and leaves it out of
+    the save, ticking it again brings the schedule back (a cron schedule included), and with no schedule it starts
+    daily at midnight. With log rolling off, its hidden fields no longer hold up Save and neither the schedule nor the
+    size limit is sent; turning rolling back on with neither set starts from the defaults (daily at midnight, 50 MB).
+    Turning backups off no longer leaves Save disabled by a hidden backup interval.
+  - New `web/src/components/settings/general/ScheduleFields.tsx` replaces both schedule copies: a labelled interval
+    ("Backup interval" / "Roll interval", required and at least 1), a labelled unit (hours or days; a unit only
+    settings.json sets stays listed) and a labelled "Time of day" for daily schedules. It wraps on a phone. A cron
+    schedule shows as text. The unguarded `currentBackupSchedule!` is gone. The archive format select has a label, and
+    the backup folder row stacks on a phone.
+  - Transcoding: the global form uses `SwitchFormController` and `SelectFormController`; the transcode-config table
+    sits below the form, outside it. Features: the switches use `SwitchFormController`, a flag an environment variable
+    sets is disabled, and the flag type comes from the API, so no flag is missing.
+  - Removed: `useUpdateSystemSettings` and the Tuner page's `restoreTunarrDefaults` flag.
+  - Docs: `docs/dev/contributing.md` "Settings pages" names the pages and the validation mode;
+    `docs/configure/system/backup.md` and `logging.md` describe the schedule fields.
+- **16px inputs on phones (decision for a theme issue, not changed here):** measured in the e2e fixture at 390px in
+  Chromium: inputs, selects and pickers are 14px, so a floating label shrinks to 10.5px; forced to 16px the shrunk
+  label is 12px, no settings page scrolls sideways, and the outlined notch scales with it. iOS Safari zooms into a
+  focused field under 16px and stays zoomed (not testable here; it applies to text inputs and likely the pickers'
+  editable sections, not MUI's select, which is a `div`). Recommendation: 16px for `MuiInputBase`, `MuiInputLabel` and
+  the pickers' input below the `sm` breakpoint only, 14px from `sm` up; never `maximum-scale=1`, which blocks pinch
+  zoom on Android.
+- **Tests:** new `ScheduleFields.test.tsx` (labels, a cleared or 0 interval stays on screen and says why, unit names
+  follow the interval and hours drop the time of day, the time is kept as milliseconds after midnight, a settings.json
+  unit and a cron schedule). `LogRollForm.test.tsx` adds the cleared interval, ticking with no schedule and untick then
+  tick. `GeneralSettingsForm.test.tsx` adds a saved server URL staying in the field (fails on the old form) and an
+  unticked schedule saved as none. New `FeaturesSettingsPage.test.tsx`; Tuner adds "Restore defaults" (undo, then
+  save); Scanner adds "Reset changes"; Transcoding adds a select and a switch. Existing page tests pass with two
+  updates for the shell: Scanner asserts Save is disabled for an invalid interval instead of clicking it, and Tuner's
+  reasonless failure toast carries the error's message. E2E: one round-trip spec per page (`generalSettings`,
+  `transcodingSettings`, `scannerSettings`, `tunerSettings`, `featuresSettings`): load, change one field, save, reload,
+  the field held and the server's settings moved by that field only. `logRollSettings.spec.ts` moved unchanged into
+  `generalSettings.spec.ts`, because both save the whole system settings and Playwright runs files in parallel.
+- **Upstream:** not sent.
+
+### Media sources live at one address (2026-10-20)
+
+- **What you saw:** media sources opened at both `/media_sources` and `/settings/sources`. The second copy sat inside
+  the Settings layout with no matching tab (a MUI "invalid Tabs value" warning), a second page heading, and a loader
+  that prefetched scanner settings it never used. The in-app links to the sources page (the library table, the
+  channel programming picker and the connect-sources prompt) pointed at the Settings copy.
+- **Cause:** `routes/settings/sources.tsx` rendered the same page as `routes/media_sources_/index.tsx`.
+- **Fix:** the `/settings/sources` route is gone (no redirect; the page was never linked from the nav), and the three
+  in-app links point at `/media_sources`. The page files moved to `pages/media_sources/MediaSourcesPage.tsx` and
+  `pages/system/TasksPage.tsx` (the tasks page was routed under `/system` but lived in the settings folder); the
+  components were renamed to match. The two `knownIssues.ts` entries for the Settings copy are gone.
+- **Tests:** `router.test.tsx` checks that `/settings/sources` now renders the not-found page; the route is removed from
+  `e2e/tests/routes.ts` so the coverage test matches the regenerated route tree.
+- **Design:** `plans/ui-primitives-and-settings-audit-2026-10-19.md`, issue C6.
+- **Upstream:** not sent.
+
+### Transcode form phone layout and validation follow-ups (2026-10-20)
+
+- **What you saw:** some transcode fields had no phone grid width, the heading and advanced control crowded each other, and invalid numeric text exposed Zod's raw NaN message. Documentation also described a VAAPI driver selector absent from the form.
+- **Cause:** responsive layout declarations began at `sm`; the resolver used its default error text; documentation described a stored setting as an exposed control.
+- **Fix:** C4 follow-ups. Stack related controls and give grid fields full width on phones, present a translated numeric validation message, correct the driver documentation, and remove the unused React devtools dependency. The pending-save Reset safeguard is covered by C3.
+- **Tests:** invalid bitrate and thread inputs retain Save blocking and now show the readable error; transcode form/video regression suites and phone/desktop browser layout checks.
+- **Upstream:** not sent.
+
+### The transcode config page uses the settings form shell, and one form library is left (2026-10-20)
+
+Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue C4, approved by the maintainer 2026-10-19 (PR #85).
+
+- **What you saw:** on a transcode config page, Save was enabled with nothing changed and stayed enabled while a save
+  was in flight. Leaving the page, reloading or closing the tab with unsaved changes did not warn. After creating
+  a config the page stayed on "New transcode config", so saving again created a second config. A failed save said "See
+  console log for details" instead of the server's reason. "Reset changes" after turning loudness normalization on or
+  off left the select showing the new choice.
+- **Cause:** the transcode config form was the only form on TanStack Form. It had its own save bar and mutation
+  callbacks, no unsaved guard, kept the create mode after a create, and held the loudness normalization choice in
+  local state beside the form.
+- **Fix:** issue C4 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+  - `TranscodeConfigSettingsForm` and its sections (video, advanced video, audio, error) are on React Hook Form inside
+    `SettingsForm`, with the same fields, defaults, sections and "Show Advanced" toggle as before: the device path only
+    for VA-API and QSV, the video preset only for software H.264 and HEVC, the hardware switches only with advanced
+    settings and an accelerator, the loudness targets only with advanced settings and loudness normalization on. The
+    preset list still runs to veryslow and a saved preset outside it is kept.
+  - The form validates with `zodResolver(TranscodeConfigSchema)`, the schema the server checks the config against, so
+    the form refuses what the server would.
+  - `useTranscodeConfigForm` (replacing `useTranscodeConfigFormOptions`) saves through `useSettingsMutation`: a new
+    config is POSTed without an id, then the page replaces itself with the new config's edit route; an existing one is
+    PUT to its id. Both refetch the transcode config queries and toast "Saved" or "Could not save settings" with the
+    server's reason. While a create is in flight the fields are locked (a disabled, `inert` fieldset), so nothing
+    typed after Save is lost when the page moves to the new config.
+  - `NumericFormControllerText` takes an opt-in `rawValue`: the field keeps what was typed and the resolver turns it
+    into a number. The transcode form uses it for every number, so an empty field saves as 0, decimals (a 44.1 kHz
+    sample rate) are kept, and text after the digits ("4000k") is refused rather than dropped. Other pages are
+    unchanged.
+  - The loudness normalization select follows the form, so "Reset changes" puts it back, and it has an accessible
+    name.
+  - `SelectFormController` options take `disabled`, for the audio formats FFmpeg lacks an encoder for.
+  - Removed: `web/src/hooks/form.ts`, `web/src/components/form/BasicTextInput.tsx`, `BasicSelectInput.tsx`,
+    `BasicCheckboxInput.tsx`, `BaseTranscodeConfigProps.ts`, and the `@tanstack/react-form` and
+    `@tanstack/react-form-devtools` dependencies.
+  - `docs/configure/ffmpeg/transcode_config.md` says when Save is available, that saving a new configuration opens it,
+    and that leaving with unsaved changes asks first.
+- **Tests:** `TranscodeConfigSettingsForm.test.tsx` keeps the New and Edit titles and adds: an empty name, a bitrate
+  or thread count that is not a number, and a loudness target outside -70 to -5 LUFS cannot be saved (these fail
+  without the schema resolver); typed numbers and a decimal loudness target are saved as numbers; a resolution picked
+  as WxH is saved as its width and height; only the accelerators FFmpeg has are offered; the device path, video preset
+  and hardware switches show only for the accelerators they apply to and are saved; a create POSTs without an id and
+  opens the new config; an update PUTs to the config's id; the unsaved guard follows the dirty state through an edit,
+  "Reset changes" and a save. `TranscodeConfigVideoSettingsForm.test.tsx` runs on React Hook Form and adds that an
+  empty, missing or unknown preset shows as veryfast and is kept. `TypedController.test.tsx` covers a disabled select
+  option. The e2e spec `e2e/tests/transcodeConfig.spec.ts` creates a config (it is saved once and opens as its edit
+  page; this fails if the unsaved guard is not bypassed for that move) and edits one (leaving warns first, the save
+  goes to the same config, and only the edited field changes).
+- **Upstream:** not sent.
+
 ### Every top-level page opens with the same header, and headings follow one outline (2026-10-20, PR #101)
 
 - **What you saw:** each page set its own title. Channels, Settings, System, Guide and Media Sources used h3; Fillers,
