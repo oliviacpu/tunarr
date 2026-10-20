@@ -3,6 +3,7 @@ import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import tmp from 'tmp';
+import { ChildProcessHelper } from '@/util/ChildProcessHelper.js';
 import { FfmpegInfo } from './ffmpegInfo.ts';
 
 function fixedPaths(
@@ -162,4 +163,100 @@ describe('FfmpegInfo.probeFile', () => {
       expect(debugged).not.toContain('X-Plex-Token=abc');
     },
   );
+});
+
+describe('version probe cache', () => {
+  let dir: tmp.DirResult;
+  beforeEach(() => {
+    dir = tmp.dirSync({ unsafeCleanup: true });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    dir.removeCallback();
+  });
+  const version =
+    'ffmpeg version 8.1.3 Copyright (c) 2026 the FFmpeg developers';
+
+  test('shares one in-flight probe across instances and later calls', async () => {
+    const spawn = vi
+      .spyOn(ChildProcessHelper.prototype, 'getStdout')
+      .mockResolvedValue(version);
+    const settings = fixedPaths(
+      path.join(dir.name, 'ffmpeg'),
+      path.join(dir.name, 'ffprobe'),
+    );
+    const one = new FfmpegInfo(settings);
+    const two = new FfmpegInfo(settings);
+    const results = await Promise.all([
+      one.getVersion(),
+      two.getVersion(),
+      one.getVersion(),
+    ]);
+    await two.getVersion();
+    expect(results.every((r) => r.versionString === '8.1.3')).toBe(true);
+    expect(spawn).toHaveBeenCalledOnce();
+  });
+
+  test('keys by executable path and keeps ffprobe separate', async () => {
+    const spawn = vi
+      .spyOn(ChildProcessHelper.prototype, 'getStdout')
+      .mockResolvedValue(version);
+    const paths = {
+      ffmpegExecutablePath: path.join(dir.name, 'a'),
+      ffprobeExecutablePath: path.join(dir.name, 'probe'),
+    };
+    const info = new FfmpegInfo({ ffmpegSettings: () => paths });
+    await info.getVersion();
+    paths.ffmpegExecutablePath = path.join(dir.name, 'b');
+    await info.getVersion();
+    await info.getFfprobeVersion();
+    expect(spawn.mock.calls.map(([file]) => file)).toEqual([
+      path.join(dir.name, 'a'),
+      path.join(dir.name, 'b'),
+      path.join(dir.name, 'probe'),
+    ]);
+  });
+
+  test.each(['rejection', 'unknown'])('does not cache %s', async (failure) => {
+    const spawn = vi.spyOn(ChildProcessHelper.prototype, 'getStdout');
+    if (failure === 'rejection')
+      spawn.mockRejectedValueOnce(new Error('temporarily unavailable'));
+    else spawn.mockResolvedValueOnce('not a version');
+    spawn.mockResolvedValue(version);
+    const info = new FfmpegInfo(
+      fixedPaths(path.join(dir.name, 'ffmpeg'), '/unused'),
+    );
+    expect((await info.getVersion()).isUnknown).toBe(true);
+    expect((await info.getVersion()).isUnknown).toBe(false);
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  test('expires successful probes after an hour', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const spawn = vi
+      .spyOn(ChildProcessHelper.prototype, 'getStdout')
+      .mockResolvedValue(version);
+    const info = new FfmpegInfo(
+      fixedPaths(path.join(dir.name, 'ffmpeg'), '/unused'),
+    );
+    await info.getVersion();
+    vi.setSystemTime(Date.now() + 3_600_001);
+    await info.getVersion();
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  test('startup seed includes the version used by streaming', async () => {
+    const spawn = vi
+      .spyOn(ChildProcessHelper.prototype, 'getStdout')
+      .mockResolvedValue(version);
+    const info = new FfmpegInfo(
+      fixedPaths(path.join(dir.name, 'ffmpeg'), '/unused'),
+    );
+    await info.seed();
+    await info.getVersion();
+    expect(
+      spawn.mock.calls.filter(([, args]) => args[0] === '-version'),
+    ).toHaveLength(1);
+  });
 });

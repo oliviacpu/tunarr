@@ -36,6 +36,7 @@ const CacheKeys = {
   NVIDIA: 'nvidia',
   VAINFO: 'vainfo_%s_%s',
   FILTERS: 'filters',
+  VERSION: 'version',
 } as const;
 
 export type FfmpegVersionResult = {
@@ -81,6 +82,11 @@ export class FfmpegInfo {
     return format(`${path}_${CacheKeys[command]}`, ...args);
   }
 
+  private static versionProbes = new Map<
+    string,
+    Promise<FfmpegVersionResult>
+  >();
+
   private childProcessHelper = new ChildProcessHelper();
 
   @InjectLogger() declare private readonly logger: Logger;
@@ -99,6 +105,7 @@ export class FfmpegInfo {
     this.logger.debug('Seeding ffmpeg info');
     try {
       return await Promise.allSettled([
+        this.getVersion(),
         this.getAvailableAudioEncoders(),
         this.getAvailableVideoEncoders(),
         this.getHwAccels(),
@@ -111,24 +118,33 @@ export class FfmpegInfo {
     }
   }
 
-  async getVersion(): Promise<FfmpegVersionResult> {
-    try {
-      const s = await this.getFfmpegStdout(['-version']);
-      return this.parseFfmpegVersion(s, 'ffmpeg');
-    } catch (err) {
-      this.logger.error(err);
-      return { versionString: 'unknown', isUnknown: true };
-    }
+  getVersion(): Promise<FfmpegVersionResult> {
+    return this.getCachedVersion(this.ffmpegPath, 'ffmpeg');
   }
 
-  async getFfprobeVersion(): Promise<FfmpegVersionResult> {
-    try {
-      const s = await this.getFfprobeStdout(['-version']);
-      return this.parseFfmpegVersion(s, 'ffprobe');
-    } catch (err) {
-      this.logger.error(err);
-      return { versionString: 'unknown', isUnknown: true };
-    }
+  getFfprobeVersion(): Promise<FfmpegVersionResult> {
+    return this.getCachedVersion(this.ffprobePath, 'ffprobe');
+  }
+
+  private async getCachedVersion(path: string, name: string) {
+    const key = FfmpegInfo.makeCacheKey(path, 'VERSION');
+    const cached = FfmpegInfo.resultCache.get<FfmpegVersionResult>(key);
+    if (cached !== undefined) return cached;
+    const pending = FfmpegInfo.versionProbes.get(key);
+    if (pending !== undefined) return pending;
+    const probe = this.getStdout(path, ['-version'])
+      .then((stdout) => {
+        const version = this.parseFfmpegVersion(stdout, name);
+        if (!version.isUnknown) FfmpegInfo.resultCache.set(key, version);
+        return version;
+      })
+      .catch((error: unknown) => {
+        this.logger.error(error);
+        return { versionString: 'unknown', isUnknown: true };
+      })
+      .finally(() => FfmpegInfo.versionProbes.delete(key));
+    FfmpegInfo.versionProbes.set(key, probe);
+    return probe;
   }
 
   parseFfmpegVersion(
