@@ -1,16 +1,12 @@
 import { Trans } from '@lingui/react/macro';
-import { Box, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Stack } from '@mui/material';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { MediaSourceLibraryTable } from '../../components/MediaSourceLibraryTable.tsx';
 
 export default function LibraryIndexPage() {
-  const theme = useTheme();
-  const smallViewport = useMediaQuery(theme.breakpoints.down('sm'));
-
   return (
     <Box>
-      <Typography variant={smallViewport ? 'h5' : 'h3'} mb={2}>
-        <Trans>Library</Trans>
-      </Typography>
+      <PageHeader title={<Trans>Library</Trans>} />
       <Stack gap={2}>
         <MediaSourceLibraryTable />
       </Stack>

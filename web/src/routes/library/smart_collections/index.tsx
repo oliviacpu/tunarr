@@ -1,6 +1,7 @@
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import Breadcrumbs from '@/components/Breadcrumbs.tsx';
 import { Trans } from '@lingui/react/macro';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import { createFileRoute } from '@tanstack/react-router';
 import { SmartCollectionsTable } from '../../../components/smart_collections/SmartCollectionsTable.tsx';
 import { getApiSmartCollectionsOptions } from '../../../generated/@tanstack/react-query.gen.ts';
@@ -15,20 +16,18 @@ export const Route = createFileRoute('/library/smart_collections/')({
 function RouteComponent() {
   return (
     <Box>
-      <Breadcrumbs />
-      <Box flexDirection={'column'} flexGrow={1} mb={2}>
-        <Typography variant="h4">
-          <Trans>Smart Collections</Trans>
-        </Typography>
-        <Typography>
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={<Trans>Smart Collections</Trans>}
+        description={
           <Trans>
             Smart Collections are self-updating content lists. You set the query
             and the collection automatically adds any new content from your
             library that fits those rules. Any newly added content matching
             query will not modify existing channel programming at this time.
           </Trans>
-        </Typography>
-      </Box>
+        }
+      />
       <SmartCollectionsTable />
     </Box>
   );

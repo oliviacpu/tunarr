@@ -1,7 +1,8 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, LinearProgress, Paper, Tabs, Typography } from '@mui/material';
+import { Box, LinearProgress, Paper, Tabs } from '@mui/material';
 import { Outlet } from '@tanstack/react-router';
 import { Suspense } from 'react';
+import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { RouterTabLink } from '../../components/base/RouterTabLink.tsx';
 
 type Props = {
@@ -13,9 +14,7 @@ export const SystemLayout = ({ currentTab }: Props) => {
   currentTab ??= '/';
   return (
     <Box>
-      <Typography variant="h3" mb={2}>
-        <Trans>System</Trans>
-      </Typography>
+      <PageHeader title={<Trans>System</Trans>} />
       <Paper sx={{ p: [1, 2] }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs
