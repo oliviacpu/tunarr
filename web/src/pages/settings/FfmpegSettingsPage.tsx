@@ -9,7 +9,6 @@ import {
 } from '@/components/util/TypedController.tsx';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
-import { useSystemState } from '@/hooks/useSystemSettings.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { ExpandMore } from '@mui/icons-material';
 import {
@@ -39,7 +38,7 @@ import {
 } from '@tunarr/types/schemas';
 import { capitalize, isEmpty, isEqual } from 'lodash-es';
 import { useEffect } from 'react';
-import type { SubmitHandler } from 'react-hook-form';
+import type { Control, SubmitHandler } from 'react-hook-form';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import type { DeepRequired } from 'ts-essentials';
 import { CaptionAppearanceFields } from '../../components/settings/ffmpeg/CaptionAppearanceFields.tsx';
@@ -49,6 +48,7 @@ import {
   getApiFfmpegInfoQueryKey,
   getApiFfmpegSettingsQueryKey,
   getApiVersionQueryKey,
+  getApiSystemStateOptions,
   putApiFfmpegSettingsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import { useFfmpegSettings } from '../../hooks/settingsHooks.ts';
@@ -133,6 +133,63 @@ function FfmpegProbeStatus({ isInContainer }: { isInContainer: boolean }) {
   );
 }
 
+function FfmpegBinariesFields({
+  control,
+}: {
+  control: Control<FfmpegFormValues>;
+}) {
+  const { t } = useLingui();
+  const systemState = useQuery(getApiSystemStateOptions());
+  if (systemState.isPending) return <Skeleton variant="rounded" height={48} />;
+  if (systemState.isError) {
+    return (
+      <Alert severity="warning">
+        <Trans>
+          Server environment could not be loaded. Reload this page to edit
+          executable paths.
+        </Trans>
+      </Alert>
+    );
+  }
+  return (
+    <>
+      <FfmpegProbeStatus isInContainer={systemState.data.isInContainer} />
+      {!systemState.data.isInContainer && (
+        <>
+          <FormControl fullWidth>
+            <Controller
+              control={control}
+              name="ffmpegExecutablePath"
+              render={({ field }) => (
+                <TextField
+                  id="ffmpeg-executable-path"
+                  label={t`FFmpeg executable path`}
+                  helperText={t`Use FFmpeg 7.1 or later. The sidebar shows your current version.`}
+                  {...field}
+                />
+              )}
+            />
+          </FormControl>
+          <FormControl fullWidth>
+            <Controller
+              control={control}
+              name="ffprobeExecutablePath"
+              render={({ field }) => (
+                <TextField
+                  id="ffprobe-executable-path"
+                  label={t`FFprobe executable path`}
+                  helperText={t`Use FFprobe 6.0 or later. It usually sits in the same folder as FFmpeg.`}
+                  {...field}
+                />
+              )}
+            />
+          </FormControl>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function FfmpegSettingsPage({
   section = 'playback',
 }: {
@@ -140,7 +197,6 @@ export default function FfmpegSettingsPage({
 }) {
   const { t } = useLingui();
   const { data: ffmpegSettings } = useFfmpegSettings();
-  const systemState = useSystemState();
   const captionAlignmentNames = useCaptionAlignmentNames();
 
   const form = useForm<FfmpegFormValues>({
@@ -241,41 +297,7 @@ export default function FfmpegSettingsPage({
               <Trans>Global playback options</Trans>
             </Typography>
             <Stack spacing={3} useFlexGap sx={{ mb: 2 }}>
-              <FfmpegProbeStatus
-                isInContainer={systemState.data.isInContainer}
-              />
-              {!systemState.data.isInContainer && (
-                <>
-                  <FormControl fullWidth>
-                    <Controller
-                      control={control}
-                      name="ffmpegExecutablePath"
-                      render={({ field }) => (
-                        <TextField
-                          id="ffmpeg-executable-path"
-                          label={t`FFmpeg executable path`}
-                          helperText={t`Use FFmpeg 7.1 or later. The sidebar shows your current version.`}
-                          {...field}
-                        />
-                      )}
-                    />
-                  </FormControl>
-                  <FormControl fullWidth>
-                    <Controller
-                      control={control}
-                      name="ffprobeExecutablePath"
-                      render={({ field }) => (
-                        <TextField
-                          id="ffprobe-executable-path"
-                          label={t`FFprobe executable path`}
-                          helperText={t`Use FFprobe 6.0 or later. It usually sits in the same folder as FFmpeg.`}
-                          {...field}
-                        />
-                      )}
-                    />
-                  </FormControl>
-                </>
-              )}
+              <FfmpegBinariesFields control={control} />
               <Stack spacing={2} direction={{ sm: 'column', md: 'row' }}>
                 {/* Not a field of its own: it sets the two logging switches */}
                 <TextField

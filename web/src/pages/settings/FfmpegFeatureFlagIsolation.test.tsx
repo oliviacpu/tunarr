@@ -7,12 +7,15 @@ import type * as Sdk from '../../generated/sdk.gen.ts';
 import type { GetApiSystemFeatureFlagsResponse } from '../../generated/types.gen.ts';
 import FfmpegSettingsPage from './FfmpegSettingsPage.tsx';
 
-const { flagsRequest } = vi.hoisted(() => ({ flagsRequest: vi.fn() }));
+const { flagsRequest, stateRequest } = vi.hoisted(() => ({
+  flagsRequest: vi.fn(),
+  stateRequest: vi.fn(),
+}));
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
   getApiFfmpegSettings: () => Promise.resolve({ data: defaultFfmpegSettings }),
-  getApiSystemState: () => Promise.resolve({ data: { isInContainer: false } }),
+  getApiSystemState: () => stateRequest(),
   getApiFfmpegInfo: () =>
     Promise.resolve({
       data: {
@@ -46,11 +49,14 @@ const coreField = (section: 'playback' | 'captions-audio') =>
     ? screen.findByLabelText('FFmpeg executable path')
     : screen.findByRole('checkbox', { name: 'Extract embedded subtitles' });
 
-describe('optional feature flag isolation', () => {
-  beforeEach(() => {
-    flagsRequest.mockReset();
-  });
+beforeEach(() => {
+  flagsRequest.mockReset();
+  stateRequest
+    .mockReset()
+    .mockResolvedValue({ data: { isInContainer: false } });
+});
 
+describe('optional feature flag isolation', () => {
   for (const section of ['playback', 'captions-audio'] as const) {
     test(`${section} stays editable while optional flags load`, async () => {
       flagsRequest.mockImplementation(() => new Promise(() => {}));
@@ -112,4 +118,23 @@ describe('optional feature flag isolation', () => {
     ).toBeEnabled();
     expect(path).toHaveValue('/opt/ffmpeg');
   });
+});
+
+describe('captions system state isolation', () => {
+  for (const state of ['loading', 'failed'] as const) {
+    test(`captions stay editable when unrelated system state is ${state}`, async () => {
+      flagsRequest.mockImplementation(() => new Promise(() => {}));
+      stateRequest.mockImplementation(() =>
+        state === 'loading'
+          ? new Promise(() => {})
+          : Promise.reject(new Error('System state unavailable')),
+      );
+      renderPage('captions-audio');
+      expect(await coreField('captions-audio')).toBeEnabled();
+      expect(stateRequest).not.toHaveBeenCalled();
+      expect(
+        screen.queryByText('Core settings suspended'),
+      ).not.toBeInTheDocument();
+    });
+  }
 });
