@@ -6,7 +6,6 @@ import { check, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type { Insertable, Selectable, Updateable } from 'kysely';
 import { v4 } from 'uuid';
 import { VideoFormats } from '../../ffmpeg/builder/constants.ts';
-import { booleanToNumber } from '../../util/sqliteUtil.ts';
 import { type KyselifyBetter } from './KyselifyBetter.ts';
 
 export const AllKnownHardwareAccelerationModes = [
@@ -260,32 +259,5 @@ export const defaultTranscodeConfig = (
     normalizeFrameRate: false,
     videoBitDepth: 8,
     isDefault: !!isDefault,
-  };
-};
-
-export const defaultTranscodeConfigLegacy = (
-  isDefault?: boolean,
-): NewTranscodeConfig => {
-  return {
-    threadCount: 0,
-    audioBitRate: 192,
-    audioBufferSize: 192 * 2,
-    audioChannels: 2,
-    audioFormat: 'aac',
-    audioSampleRate: 48,
-    hardwareAccelerationMode: 'none',
-    name: isDefault ? 'Default' : `h264 @ 1920x1080`,
-    resolution: JSON.stringify({
-      widthPx: 1920,
-      heightPx: 1080,
-    } satisfies Resolution),
-    uuid: v4(),
-    videoBitRate: 2000,
-    videoBufferSize: 4000,
-    videoFormat: 'h264',
-    disableChannelOverlay: booleanToNumber(false),
-    normalizeFrameRate: booleanToNumber(false),
-    videoBitDepth: 8,
-    isDefault: booleanToNumber(!!isDefault),
   };
 };
