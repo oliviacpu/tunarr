@@ -186,7 +186,8 @@ for (const section of ['playback', 'captions-audio'] as const) {
     const { user } = renderPage(section);
     const core = await coreField(section);
     const flag = await screen.findByRole('checkbox', {
-      name: 'Optional test feature',
+      name:
+        section === 'playback' ? 'HDR Tonemapping' : 'WebVTT Sidecar Subtitles',
     });
     expect(screen.getAllByTestId('navigation-guard')).toHaveLength(1);
     if (section === 'playback') await user.type(core, '-edited');
@@ -239,7 +240,8 @@ for (const section of ['playback', 'captions-audio'] as const) {
     });
     const { user } = renderPage(section, client);
     const flag = await screen.findByRole('checkbox', {
-      name: 'Optional test feature',
+      name:
+        section === 'playback' ? 'HDR Tonemapping' : 'WebVTT Sidecar Subtitles',
     });
     await user.click(flag);
     flagsRequest.mockRejectedValue(new Error('Background flags unavailable'));

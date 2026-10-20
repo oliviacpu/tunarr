@@ -199,7 +199,13 @@ describe('FeaturesSettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(mockPutFlags).toHaveBeenCalledOnce());
     expect(mockPutFlags).toHaveBeenCalledWith(
-      expect.objectContaining({ body: { disableVulkan: true } }),
+      expect.objectContaining({
+        body: {
+          tonemapEnabled: false,
+          disableVulkan: true,
+          disableVaapiPad: false,
+        },
+      }),
     );
     expect(server.flags.xmltvCreditImagesEnabled).toBe(true);
   });
@@ -234,7 +240,11 @@ describe('FeaturesSettingsPage', () => {
     await waitFor(() => expect(mockPutFlags).toHaveBeenCalledOnce());
     expect(mockPutFlags).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: { proxyArtwork: true, xmltvCreditImagesEnabled: true },
+        body: {
+          proxyArtwork: true,
+          xmltvCreditImagesEnabled: true,
+          disableSearchSnapshotInBackup: false,
+        },
       }),
     );
     expect(await screen.findByText('Saved')).toBeInTheDocument();
