@@ -1,4 +1,4 @@
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
+import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { isValidUrl } from '@/helpers/util.ts';
 import {
@@ -318,7 +318,7 @@ export function GeneralSettingsForm({
                         endAdornment: (
                           <InputAdornment position="end">
                             {isLoading ? (
-                              <RotatingLoopIcon />
+                              <LoadingIcon />
                             ) : !isError ? (
                               <CloudDoneOutlined color="success" />
                             ) : (

@@ -6,7 +6,7 @@ import { Box, Button, Collapse, Stack, Typography } from '@mui/material';
 import { isError } from 'lodash-es';
 import { useMemo } from 'react';
 import errorImage from '../assets/error_this_is_fine.png';
-import { RotatingLoopIcon } from '../components/base/LoadingIcon';
+import { LoadingIcon } from '../components/base/LoadingIcon';
 import { useVersion } from '../hooks/useVersion.tsx';
 
 type Props = {
@@ -69,7 +69,7 @@ export function ErrorPage({ error }: Props) {
           href={bugReportLink.toString()}
           target="_blank"
           variant="contained"
-          startIcon={versionLoading ? <RotatingLoopIcon /> : <GitHub />}
+          startIcon={versionLoading ? <LoadingIcon /> : <GitHub />}
           disabled={versionLoading}
         >
           {versionLoading ? (

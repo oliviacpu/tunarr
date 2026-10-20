@@ -1,6 +1,6 @@
 import { isNonEmptyString, isValidUrlWithError, toggle } from '@/helpers/util';
 
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
+import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import { useMediaSourceBackendStatus } from '@/hooks/media-sources/useMediaSourceBackendStatus';
@@ -312,7 +312,7 @@ export function EmbyServerEditDialog({ open, onClose, server }: Props) {
                   }
                   InputProps={{
                     endAdornment: serverStatusLoading ? (
-                      <RotatingLoopIcon />
+                      <LoadingIcon />
                     ) : !isUndefined(serverStatus) && serverStatus.healthy ? (
                       <CloudDoneOutlined color="success" />
                     ) : (

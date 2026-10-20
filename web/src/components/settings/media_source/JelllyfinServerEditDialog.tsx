@@ -1,6 +1,6 @@
 import { isNonEmptyString, isValidUrlWithError, toggle } from '@/helpers/util';
 
-import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
+import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { jellyfinLogin } from '@/hooks/jellyfin/useJellyfinLogin.ts';
 import { useMediaSourceBackendStatus } from '@/hooks/media-sources/useMediaSourceBackendStatus';
 import { t } from '@lingui/core/macro';
@@ -373,7 +373,7 @@ export function JellyfinServerEditDialog({ open, onClose, server }: Props) {
                   }
                   InputProps={{
                     endAdornment: serverStatusLoading ? (
-                      <RotatingLoopIcon />
+                      <LoadingIcon />
                     ) : !isUndefined(serverStatus) && serverStatus.healthy ? (
                       <CloudDoneOutlined color="success" />
                     ) : (
