@@ -51,7 +51,7 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
   const [showStealth, _, setShowStealth] = useToggle(true);
   const duration = +end - +start;
 
-  const zoomIn = useCallback(() => {
+  const decreaseDuration = useCallback(() => {
     if (end.subtract(SubtractInterval).diff(start) >= MinDurationMillis) {
       setEnd((prevEnd) => {
         const newEnd = prevEnd.subtract(SubtractInterval);
@@ -61,7 +61,7 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
     }
   }, [start, end]);
 
-  const zoomOut = useCallback(() => {
+  const increaseDuration = useCallback(() => {
     setEnd((prevEnd) => {
       const newEnd = prevEnd.add(SubtractInterval);
       setGuideDurationState(Math.abs(start.diff(newEnd)));
@@ -76,10 +76,10 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
     setEnd(newStart.add(DefaultDuration, 'ms'));
   }, []);
 
-  const zoomInDisabled =
+  const decreaseDurationDisabled =
     end.subtract(SubtractInterval).diff(start) < MinDurationMillis;
 
-  const zoomOutDisabled = end.diff(start) >= MaxDurationMillis;
+  const increaseDurationDisabled = end.diff(start) >= MaxDurationMillis;
 
   const navigateBackward = useCallback(() => {
     setEnd((last) => last.subtract(1, 'hour'));
@@ -141,15 +141,15 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
               </FormControl>
               <Stack
                 role="group"
-                aria-label={t`Guide zoom`}
+                aria-label={t`Guide duration`}
                 direction="row"
                 alignItems="center"
                 sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
               >
                 <IconButton
-                  aria-label={t`Zoom out`}
-                  disabled={zoomOutDisabled}
-                  onClick={zoomOut}
+                  aria-label={t`Show one hour less`}
+                  disabled={decreaseDurationDisabled}
+                  onClick={decreaseDuration}
                 >
                   <ZoomOutIcon />
                 </IconButton>
@@ -157,9 +157,9 @@ export default function GuidePage({ channelId }: Props = { channelId: 'all' }) {
                   {dayjs.duration(end.diff(start)).humanize()}
                 </Typography>
                 <IconButton
-                  aria-label={t`Zoom in`}
-                  disabled={zoomInDisabled}
-                  onClick={zoomIn}
+                  aria-label={t`Show one hour more`}
+                  disabled={increaseDurationDisabled}
+                  onClick={increaseDuration}
                 >
                   <ZoomInIcon />
                 </IconButton>

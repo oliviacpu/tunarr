@@ -5,16 +5,16 @@ import { usePrevious } from '@uidotdev/usehooks';
 import type dayjs from 'dayjs';
 import { range } from 'lodash-es';
 import { useCallback, useRef, useState } from 'react';
-import { getTextContrast } from '../../helpers/colors.ts';
 import { OneDayMillis } from '../../helpers/constants.ts';
 import {
   programSeasonAndEpisode,
   programTitle,
 } from '../../helpers/formatters.ts';
 import { useGetProgramsForDayFunc } from '../../hooks/calendarHooks.ts';
-import { useRandomProgramBackgroundColor } from '../../hooks/colorHooks.ts';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
 import { useDayjs } from '../../hooks/useDayjs.ts';
 import { useSuspendedStore } from '../../hooks/useSuspendedStore.ts';
+import { channelProgramStyle } from '../guide/guideColors.ts';
 import {
   DefaultBlockHeight,
   LeftDividerWidth,
@@ -74,7 +74,7 @@ export const ProgramDayCalendarView = ({
   const calHeight = calRef?.current?.getBoundingClientRect().height;
 
   const getCalendarProgramsForDay = useGetProgramsForDayFunc(channel.id);
-  const randomBackgroundColor = useRandomProgramBackgroundColor();
+  const palette = useActivePalette();
 
   const getProgramsForDay = () => {
     return seq.collect(
@@ -89,7 +89,7 @@ export const ProgramDayCalendarView = ({
         const px = (calHeight ?? 0) * (duration / OneDayMillis);
         const dataRows = Math.floor((px - 8) / 15);
 
-        const backgroundColor = randomBackgroundColor(program);
+        const cellStyle = channelProgramStyle(palette, program);
 
         return (
           <Paper
@@ -100,14 +100,13 @@ export const ProgramDayCalendarView = ({
               left: 0,
               width: '90%',
               height: `${height}%`,
-              backgroundColor: `${backgroundColor.toString()}`,
+              backgroundColor: cellStyle.background,
               borderRadius: '5px',
               zIndex: 100,
               border: 'thin solid',
-              borderColor: 'black',
+              borderColor: palette.divider,
               cursor: 'pointer',
-              color: (theme) =>
-                getTextContrast(backgroundColor, theme.palette.mode),
+              color: cellStyle.color,
               overflow: 'hidden',
               lineHeight: 1,
               p: 0.5,
@@ -180,7 +179,7 @@ export const ProgramDayCalendarView = ({
   };
 
   return (
-    <Stack sx={{ width: '100%' }} gap={2}>
+    <Stack sx={{ width: '100%', fontVariantNumeric: 'tabular-nums' }} gap={2}>
       <Stack direction="row" alignItems={'center'}>
         <IconButton onClick={() => moveBackwardDays(1)}>
           <ArrowBack />

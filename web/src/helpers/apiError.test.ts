@@ -36,6 +36,37 @@ describe('getApiErrorMessage', () => {
     );
   });
 
+  test('returns the legacy channel error field', () => {
+    const error = 'Transcode config with ID missing not found';
+    expect(getApiErrorMessage(responseError({ error }))).toBe(error);
+    expect(describeError(responseError({ error }))).toBe(error);
+  });
+
+  test('prefers a nonempty message over a legacy error', () => {
+    expect(
+      getApiErrorMessage(
+        responseError({ message: 'Current message', error: 'Legacy error' }),
+      ),
+    ).toBe('Current message');
+    expect(
+      getApiErrorMessage(
+        responseError({ message: ' ', error: 'Legacy error' }),
+      ),
+    ).toBe('Legacy error');
+  });
+
+  test.each([
+    null,
+    {},
+    { error: '' },
+    { error: ' ' },
+    { error: { message: 'Not a string' } },
+    { message: '' },
+    { message: ' ' },
+  ])('ignores empty or malformed error bodies: %j', (data) => {
+    expect(getApiErrorMessage(responseError(data))).toBeUndefined();
+  });
+
   test('ignores an empty body', () => {
     expect(getApiErrorMessage(responseError(''))).toBeUndefined();
   });

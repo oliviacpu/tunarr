@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { LibraryUsageDetails, UsedByChip } from '../LibraryUsage.tsx';
 import { useLibraryUsage } from '../../hooks/useLibraryUsage.ts';
 import { useBulkDelete } from '@/hooks/useBulkAction.ts';
@@ -44,6 +45,7 @@ const collectionName = (collection: SmartCollection) => collection.name;
 
 export const SmartCollectionsTable = () => {
   const { t } = useLingui();
+  const actions = useActions();
   const usage = useLibraryUsage('smartCollections');
   const navigate = Route.useNavigate();
   const smartColletionsQuery = useSmartCollections();
@@ -182,7 +184,7 @@ export const SmartCollectionsTable = () => {
               <Edit />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t`Delete`} placement="top">
+          <Tooltip title={actions.delete} placement="top">
             <IconButton
               onClick={() => setDeletingSmartCollection(row.original)}
             >

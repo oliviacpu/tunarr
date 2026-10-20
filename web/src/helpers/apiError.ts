@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
 
-// The API reports validation failures as a plain string body.
+// Older routes use { error }; newer routes use { message } or a plain string.
 export function getApiErrorMessage(error: unknown): string | undefined {
   if (!isAxiosError(error)) {
     return undefined;
@@ -15,9 +15,20 @@ export function getApiErrorMessage(error: unknown): string | undefined {
     typeof data === 'object' &&
     data !== null &&
     'message' in data &&
-    typeof data.message === 'string'
+    typeof data.message === 'string' &&
+    data.message.trim().length > 0
   ) {
     return data.message;
+  }
+
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'error' in data &&
+    typeof data.error === 'string' &&
+    data.error.trim().length > 0
+  ) {
+    return data.error;
   }
 
   return undefined;

@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { useMediaSources } from '@/hooks/settingsHooks.ts';
 import { useKnownMedia } from '@/store/programmingSelector/selectors.ts';
 import type {
@@ -126,6 +127,7 @@ export default function SelectedProgrammingList({
   toggleOrSetSelectedProgramsDrawer,
 }: Props) {
   const { t } = useLingui();
+  const actions = useActions();
   const { data: mediaSources } = useMediaSources();
   const { data: customShows } = useCustomShows();
   const knownMedia = useKnownMedia();
@@ -240,7 +242,7 @@ export default function SelectedProgrammingList({
             zIndex: 10,
           }}
         >
-          <Tooltip title={t`Close`} placement="left">
+          <Tooltip title={actions.close} placement="left">
             <IconButton
               disableRipple
               onClick={() => toggleOrSetSelectedProgramsDrawer(!open)}

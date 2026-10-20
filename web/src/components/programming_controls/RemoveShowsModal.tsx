@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { betterHumanize } from '@/helpers/dayjs';
 import { isNonEmptyString } from '@/helpers/util';
 import {
@@ -56,6 +57,7 @@ const RemoveShowsModalContent = ({
   onClose,
 }: Omit<RemoveShowsModalProps, 'open'>) => {
   const { t } = useLingui();
+  const actions = useActions();
   const { count, increment, decrement } = useCounter(0);
   const removeProgramming = useRemoveProgramming();
   const [removeRequest, setRemoveRequest] = useState<RemoveProgrammingRequest>(
@@ -432,9 +434,7 @@ const RemoveShowsModalContent = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button
           variant="contained"
           onClick={() => removeShowsProgramming()}

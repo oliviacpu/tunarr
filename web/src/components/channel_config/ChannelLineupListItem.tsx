@@ -1,14 +1,15 @@
 import { ListItem, styled } from '@mui/material';
 import Color from 'colorjs.io';
 import type React from 'react';
-import { getTextContrast } from '../../helpers/colors.ts';
 import type { UIChannelProgram } from '../../types/index.ts';
+import type { GuideCellStyle } from '../guide/guideColors.ts';
 
 type Props = {
   enableDrag?: boolean;
   isDragging: boolean;
   program: UIChannelProgram;
-  backgroundColor: Color;
+  cellStyle: GuideCellStyle;
+  dividerColor: string;
   relativeDuration?: number;
   style?: React.CSSProperties;
   indented?: boolean;
@@ -20,14 +21,15 @@ export const ChannelLineupListItem = styled(ListItem, {
     prop !== 'enableDrag' &&
     prop !== 'isDragging' &&
     prop !== 'program' &&
-    prop !== 'backgroundColor' &&
+    prop !== 'cellStyle' &&
+    prop !== 'dividerColor' &&
     prop !== 'relativeDuration' &&
     prop !== 'indented' &&
     prop !== 'enableDelete',
 })<Props>(({
   style,
-  theme,
-  backgroundColor,
+  cellStyle,
+  dividerColor,
   relativeDuration,
   program,
   enableDrag,
@@ -36,19 +38,21 @@ export const ChannelLineupListItem = styled(ListItem, {
   enableDelete,
 }) => {
   const relativePct = relativeDuration ? relativeDuration * 100.0 : null;
-  const bgHex = backgroundColor.toString({ format: 'hex' });
-  const bgDarker = new Color(backgroundColor.clone().darken(0.1));
+  const bgHex = cellStyle.background;
+  const progressColor = cellStyle.hoverBackground;
 
   let bg: string;
   if (program.type === 'flex') {
-    const contrastColor = new Color(backgroundColor.clone().darken(0.05));
+    const contrastColor = new Color(new Color(bgHex).darken(0.05)).toString({
+      format: 'hex',
+    });
     bg = `repeating-linear-gradient(-45deg,
               ${bgHex},
               ${bgHex} 10px,
-              ${contrastColor.toString()} 10px,
-              ${contrastColor.toString()} 20px)`;
+              ${contrastColor} 10px,
+              ${contrastColor} 20px)`;
   } else if (relativePct) {
-    bg = `linear-gradient(to right, ${bgDarker.display()} 0%, ${bgDarker.display()} ${relativePct}%, ${bgHex} ${relativePct}%, ${bgHex} 100%)`;
+    bg = `linear-gradient(to right, ${progressColor} 0%, ${progressColor} ${relativePct}%, ${bgHex} ${relativePct}%, ${bgHex} 100%)`;
   } else {
     bg = bgHex;
   }
@@ -66,24 +70,19 @@ export const ChannelLineupListItem = styled(ListItem, {
     //   marginLeft: theme.spacing(1),
     //   width: 'auto',
     // },
-    color: getTextContrast(bgDarker, theme.palette.mode),
+    color: cellStyle.color,
+    fontVariantNumeric: 'tabular-nums',
+    outline: cellStyle.outline,
+    outlineOffset: cellStyle.outline !== undefined ? '-2px' : undefined,
     background: bg,
     '&:hover': {
-      background: isDragging
-        ? 'transparent'
-        : new Color(
-            backgroundColor
-              .clone()
-              .lighten(theme.palette.mode === 'dark' ? 0.025 : 0.05),
-          ).toString({ format: 'hex' }),
+      background: isDragging ? 'transparent' : cellStyle.hoverBackground,
     },
-    borderBottomColor: new Color(backgroundColor.clone().darken(0.2)).toString({
-      format: 'hex',
-    }),
+    borderBottomColor: dividerColor,
     paddingRight: enableDelete ? '96px' : undefined,
     ...(indented && {
       paddingLeft: '5em',
-      borderLeft: `3px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'}`,
+      borderLeft: `3px solid ${dividerColor}`,
     }),
   };
 });

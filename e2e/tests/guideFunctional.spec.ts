@@ -85,6 +85,38 @@ test('guide uses redirect names, shows mobile times and themes compact dividers'
           exact: true,
         }),
       ).toBeVisible();
+      const duration = page.getByRole('group', { name: 'Guide duration' });
+      const minus = duration.getByRole('button', {
+        name: 'Show one hour less',
+      });
+      const plus = duration.getByRole('button', { name: 'Show one hour more' });
+      if (await duration.getByText('2 hours', { exact: true }).isVisible()) {
+        await plus.click();
+      }
+      await expect(
+        duration.getByText('3 hours', { exact: true }),
+      ).toBeVisible();
+      await minus.click();
+      await expect(
+        duration.getByText('2 hours', { exact: true }),
+      ).toBeVisible();
+      await plus.click();
+      await expect(
+        duration.getByText('3 hours', { exact: true }),
+      ).toBeVisible();
+      const controls = await duration
+        .locator(':scope > *')
+        .evaluateAll((elements) =>
+          elements.map(
+            (element) =>
+              element.getAttribute('aria-label') ?? element.textContent,
+          ),
+        );
+      expect(controls).toEqual([
+        'Show one hour less',
+        '3 hours',
+        'Show one hour more',
+      ]);
       const title = page.getByText('Redirect to Channel E2E Episodes', {
         exact: true,
       });
@@ -97,6 +129,10 @@ test('guide uses redirect names, shows mobile times and themes compact dividers'
         cell.getByText(/\d{1,2}:\d{2}.* - \d{1,2}:\d{2}/),
       ).toBeVisible();
       await expect(cell.getByText(/left$/)).toBeVisible();
+      await expect(cell.getByText(/left$/)).toHaveCSS(
+        'font-variant-numeric',
+        'tabular-nums',
+      );
       const sliver = page.getByTitle('Short break', { exact: true });
       await expect(sliver).toBeVisible();
       shadows.push(

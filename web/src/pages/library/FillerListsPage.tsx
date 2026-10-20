@@ -1,6 +1,6 @@
 import { LibraryUsageDetails, UsedByChip } from '@/components/LibraryUsage.tsx';
 import { useLibraryUsage } from '@/hooks/useLibraryUsage.ts';
-import { useToasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 
 import {
@@ -47,6 +47,7 @@ const fillerName = (filler: FillerList) => filler.name;
 
 export default function FillerListsPage() {
   const { t } = useLingui();
+  const actions = useActions();
   const usage = useLibraryUsage('fillerLists');
   const toasts = useToasts();
   const queryClient = useQueryClient();
@@ -126,7 +127,7 @@ export default function FillerListsPage() {
               <Edit />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t`Delete`} placement="top">
+          <Tooltip title={actions.delete} placement="top">
             <IconButton
               aria-label={t`Delete Filler List "${filler.name}"`}
               onClick={(ev) => {
@@ -141,7 +142,7 @@ export default function FillerListsPage() {
         </Box>
       );
     },
-    [t],
+    [actions.delete, t],
   );
 
   const columns = useMemo<MRT_ColumnDef<FillerList>[]>(

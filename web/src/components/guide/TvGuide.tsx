@@ -324,7 +324,9 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
                     {`${programStart.format('LT')} - ${programEnd.format('LT')}`}
                   </Box>
                 )}
-                <Box sx={{ fontSize: '12px' }}>
+                <Box
+                  sx={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}
+                >
                   {remainingTime ? <Trans>{remainingTime} left</Trans> : null}
                 </Box>
               </>
