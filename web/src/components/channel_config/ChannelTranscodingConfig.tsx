@@ -179,7 +179,7 @@ export default function ChannelTranscodingConfig() {
                   The video and audio settings this channel uses. Edit them
                   under{' '}
                   <RouterLink to="/settings/playback">
-                    Settings › Transcoding
+                    Settings › Playback
                   </RouterLink>
                   .
                 </Trans>

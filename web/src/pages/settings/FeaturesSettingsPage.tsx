@@ -2,8 +2,16 @@ import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { SwitchFormController } from '@/components/util/TypedController.tsx';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, Chip, Stack, Typography } from '@mui/material';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Skeleton,
+  Stack,
+  Typography,
+} from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
 import { isEqual } from 'lodash-es';
 import { useEffect } from 'react';
 import type { Control, SubmitHandler } from 'react-hook-form';
@@ -87,10 +95,39 @@ export default function FeaturesSettingsPage({
   group?: FlagGroup;
 }) {
   const { t } = useLingui();
-  // The route's loader fetches the flags, and the router's pending and error
-  // components cover loading and failure
-  const { data } = useSuspenseQuery(getApiSystemFeatureFlagsOptions());
+  const query = useQuery(getApiSystemFeatureFlagsOptions());
+  if (query.isPending)
+    return (
+      <Skeleton
+        variant="rounded"
+        height={80}
+        aria-label={t`Loading optional features`}
+      />
+    );
+  if (query.isError)
+    return (
+      <Alert
+        severity="warning"
+        action={
+          <Button onClick={() => void query.refetch()}>
+            <Trans>Try again</Trans>
+          </Button>
+        }
+      >
+        <Trans>Optional feature settings could not be loaded.</Trans>
+      </Alert>
+    );
+  return <FeatureFlagsForm data={query.data} group={group} />;
+}
 
+function FeatureFlagsForm({
+  data,
+  group,
+}: {
+  data: GetApiSystemFeatureFlagsResponse;
+  group: FlagGroup;
+}) {
+  const { t } = useLingui();
   const form = useForm<FlagFormValues>({ defaultValues: data.flags });
   const {
     control,
