@@ -1,3 +1,4 @@
+import { actions, toasts, withReason } from '@/strings/actions';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
@@ -57,7 +58,7 @@ export default function HdhrSettingsPage() {
   const updateHdhrSettingsMutation = useMutation({
     ...putApiHdhrSettingsMutation(),
     onSuccess: (data) => {
-      snackbar.enqueueSnackbar(t`Settings Saved!`, {
+      snackbar.enqueueSnackbar(toasts.saved(), {
         variant: 'success',
       });
       setRestoreTunarrDefaults(false);
@@ -68,12 +69,9 @@ export default function HdhrSettingsPage() {
     },
     onError: (error) => {
       const message = getApiErrorMessage(error);
-      snackbar.enqueueSnackbar(
-        message !== undefined
-          ? t`Could not save settings. ${message}`
-          : t`Could not save settings`,
-        { variant: 'error' },
-      );
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave(), message), {
+        variant: 'error',
+      });
     },
   });
 
@@ -147,7 +145,7 @@ export default function HdhrSettingsPage() {
                 setRestoreTunarrDefaults(true);
               }}
             >
-              <Trans>Restore Default Settings</Trans>
+              {actions.restoreDefaults()}
             </Button>
           )}
         </Stack>
@@ -160,7 +158,7 @@ export default function HdhrSettingsPage() {
                 setRestoreTunarrDefaults(false);
               }}
             >
-              <Trans>Reset Changes</Trans>
+              {actions.resetChanges()}
             </Button>
           )}
           <Button
@@ -170,7 +168,7 @@ export default function HdhrSettingsPage() {
             }
             type="submit"
           >
-            <Trans>Save</Trans>
+            {actions.save()}
           </Button>
         </Stack>
       </Stack>

@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { useAppForm } from '@/hooks/form.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Check, VisibilityOff } from '@mui/icons-material';
@@ -273,7 +274,7 @@ export const TranscodeConfigSettingsForm = ({
                         transcodeConfigForm.reset();
                       }}
                     >
-                      <Trans>Reset Changes</Trans>
+                      {actions.resetChanges()}
                     </Button>
                   ) : null}
                   <Button
@@ -281,11 +282,7 @@ export const TranscodeConfigSettingsForm = ({
                     disabled={!canSubmit}
                     type="submit"
                   >
-                    {isSubmitting ? (
-                      <Trans>Submitting...</Trans>
-                    ) : (
-                      <Trans>Submit</Trans>
-                    )}
+                    {isSubmitting ? t`Saving...` : actions.save()}
                   </Button>
                 </>
               )}

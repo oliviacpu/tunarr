@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
 import ChannelLineupList from '@/components/channel_config/ChannelLineupList.tsx';
 import { TimeSlotFormProvider } from '@/components/slot_scheduler/TimeSlotFormProvider.tsx';
@@ -580,8 +581,8 @@ export default function TimeSlotEditorPage() {
           </RouterButtonLink>
         </Box>
         {isDirty && (
-          <Button variant="contained" onClick={() => resetLineupToSaved()}>
-            <Trans>Reset Options</Trans>
+          <Button onClick={() => resetLineupToSaved()}>
+            {actions.resetChanges()}
           </Button>
         )}
         <Button
@@ -590,7 +591,7 @@ export default function TimeSlotEditorPage() {
           disabled={unavailableSlotCount > 0}
           onClick={() => onSave()}
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </Box>
     </div>

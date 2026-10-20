@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
 import {
@@ -308,7 +309,7 @@ const SlotSchedulerCyclicShuffleDialogContent = ({ onClose }: Props) => {
           )}
           onClick={() => confirmSchedule()}
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </>

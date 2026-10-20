@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { RotatingLoopIcon } from '@/components/base/LoadingIcon';
 import { isNonEmptyString, isValidUrlWithError, toggle } from '@/helpers/util';
 import { useMediaSourceBackendStatus } from '@/hooks/media-sources/useMediaSourceBackendStatus';
@@ -391,7 +392,7 @@ export function PlexServerEditDialog({ open, onClose, server }: Props) {
           disabled={!isDirty || !isValid}
           type="submit"
         >
-          {server?.id ? <Trans>Update</Trans> : <Trans>Add</Trans>}
+          {server?.id ? actions.save() : actions.add()}
         </Button>
       </DialogActions>
     </Dialog>

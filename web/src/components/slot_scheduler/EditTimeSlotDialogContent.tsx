@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import type {
   CustomShowProgramOption,
   FillerProgramOption,
@@ -423,7 +424,7 @@ export const EditTimeSlotDialogContent = ({
           onClick={() => commit()}
           variant="contained"
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </>

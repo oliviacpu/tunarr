@@ -1,3 +1,4 @@
+import { actions, toasts, withReason } from '@/strings/actions';
 import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { isValidUrl } from '@/helpers/util.ts';
@@ -211,14 +212,14 @@ export function GeneralSettingsForm({
       {
         onSuccess(data) {
           reset(getDefaultFormValues(settings, data), { keepDirty: false });
-          snackbar.enqueueSnackbar(t`Settings Saved!`, {
+          snackbar.enqueueSnackbar(toasts.saved(), {
             variant: 'success',
           });
         },
         onError: (err) => {
           console.error(err);
           snackbar.enqueueSnackbar(
-            t`Error while saving settings. Please check console for details.`,
+            withReason(toasts.couldNotSave(), t`Check the console for details`),
             {
               variant: 'error',
             },
@@ -453,7 +454,7 @@ export function GeneralSettingsForm({
               // Reset is the way out of an invalid value, so it stays enabled
               disabled={isSubmitting || !isDirty}
             >
-              <Trans>Reset Options</Trans>
+              {actions.resetChanges()}
             </Button>
           )}
           <Button
@@ -461,7 +462,7 @@ export function GeneralSettingsForm({
             type="submit"
             disabled={!isValid || isSubmitting || !isDirty}
           >
-            <Trans>Save</Trans>
+            {actions.save()}
           </Button>
         </Stack>
       </FormProvider>

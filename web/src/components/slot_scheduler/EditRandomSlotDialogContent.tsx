@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { betterHumanize } from '@/helpers/dayjs.ts';
 import type {
@@ -604,7 +605,7 @@ export const EditRandomSlotDialogContent = ({
           onClick={() => commit()}
           variant="contained"
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </>

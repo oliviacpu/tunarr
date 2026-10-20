@@ -1,3 +1,5 @@
+import { t } from '@lingui/core/macro';
+import { toasts, withReason } from '@/strings/actions';
 import {
   useMutation,
   useQueryClient,
@@ -40,8 +42,10 @@ export const useUpdateMediaSource = (callbacks?: Callbacks) => {
     },
     onError: (err) => {
       snackbar.enqueueSnackbar({
-        message:
-          'Error while updating media source. Please check browser and server logs for details.',
+        message: withReason(
+          toasts.couldNotSave(),
+          t`Check browser and server logs for details`,
+        ),
         variant: 'error',
       });
       console.error(err);
@@ -63,8 +67,10 @@ export const useCreateMediaSource = (callbacks?: Callbacks) => {
     },
     onError(error) {
       snackbar.enqueueSnackbar({
-        message:
-          'Error while creating media source. Please check browser and server logs for details.',
+        message: withReason(
+          toasts.couldNotSave(),
+          t`Check browser and server logs for details`,
+        ),
         variant: 'error',
       });
       console.error(error);

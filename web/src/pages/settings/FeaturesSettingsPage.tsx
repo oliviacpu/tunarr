@@ -1,3 +1,4 @@
+import { actions, toasts } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
@@ -110,14 +111,14 @@ export default function FeaturesSettingsPage() {
   const updateMutation = useMutation({
     ...putApiSystemFeatureFlagsMutation(),
     onSuccess: (result) => {
-      snackbar.enqueueSnackbar(t`Feature flags saved!`, { variant: 'success' });
+      snackbar.enqueueSnackbar(toasts.saved(), { variant: 'success' });
       reset(result.flags, { keepValues: true });
       return queryClient.invalidateQueries({
         queryKey: getApiSystemFeatureFlagsQueryKey(),
       });
     },
     onError: () => {
-      snackbar.enqueueSnackbar(t`Failed to save feature flags.`, {
+      snackbar.enqueueSnackbar(toasts.couldNotSave(), {
         variant: 'error',
       });
     },
@@ -164,7 +165,7 @@ export default function FeaturesSettingsPage() {
             onClick={() => reset(data?.flags)}
             disabled={isSubmitting}
           >
-            <Trans>Reset Changes</Trans>
+            {actions.resetChanges()}
           </Button>
         )}
         <Button
@@ -172,7 +173,7 @@ export default function FeaturesSettingsPage() {
           type="submit"
           disabled={!isDirty || isSubmitting}
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </Stack>
     </Box>

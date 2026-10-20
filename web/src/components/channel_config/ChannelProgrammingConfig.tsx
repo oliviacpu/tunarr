@@ -1,10 +1,11 @@
+import { actions, toasts, withReason } from '@/strings/actions';
 import { useUpdateChannel } from '@/hooks/useUpdateChannel.ts';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { useUpdateLineup } from '@/hooks/useUpdateLineup.ts';
 import { resetLineup } from '@/store/channelEditor/actions.ts';
 import useStore from '@/store/index.ts';
 import { useChannelEditor } from '@/store/selectors.ts';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
 import {
   CalendarViewDay,
   CalendarViewMonth,
@@ -79,13 +80,13 @@ export function ChannelProgrammingConfig() {
       setIsSubmitting(false);
     },
     onSuccess: () => {
-      snackbar.enqueueSnackbar(t`Programs saved!`, {
+      snackbar.enqueueSnackbar(toasts.saved(), {
         variant: 'success',
       });
     },
     onError: (error, vars) => {
       const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(t`Error saving programs. ${message}`, {
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave(), message), {
         variant: 'error',
       });
 
@@ -232,7 +233,7 @@ export function ChannelProgrammingConfig() {
                     disabled={!programsDirty}
                     startIcon={<Undo />}
                   >
-                    <Trans>Reset</Trans>
+                    {actions.resetChanges()}
                   </Button>
                 )}
               </Tooltip>
@@ -267,7 +268,7 @@ export function ChannelProgrammingConfig() {
                   )
                 }
               >
-                <Trans>Save</Trans>
+                {actions.save()}
               </Button>
             )}
           </Stack>

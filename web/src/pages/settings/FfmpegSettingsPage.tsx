@@ -1,3 +1,4 @@
+import { actions, toasts, withReason } from '@/strings/actions';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { useSystemState } from '@/hooks/useSystemSettings.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -186,7 +187,7 @@ export default function FfmpegSettingsPage() {
     ...putApiFfmpegSettingsMutation(),
     // mutationFn: apiClient.updateFfmpegSettings,
     onSuccess: (data) => {
-      snackbar.enqueueSnackbar(t`Settings Saved!`, {
+      snackbar.enqueueSnackbar(toasts.saved(), {
         variant: 'success',
       });
       reset(data, { keepValues: true });
@@ -205,12 +206,9 @@ export default function FfmpegSettingsPage() {
     },
     onError: (error) => {
       const message = getApiErrorMessage(error);
-      snackbar.enqueueSnackbar(
-        message !== undefined
-          ? t`Could not save settings. ${message}`
-          : t`Could not save settings`,
-        { variant: 'error' },
-      );
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave(), message), {
+        variant: 'error',
+      });
     },
   });
 
@@ -660,7 +658,7 @@ export default function FfmpegSettingsPage() {
       <Stack spacing={2} direction="row" justifyContent="right">
         {(isDirty || (isDirty && !isSubmitting)) && (
           <Button variant="outlined" onClick={() => reset(ffmpegSettings)}>
-            <Trans>Reset Changes</Trans>
+            {actions.resetChanges()}
           </Button>
         )}
         <Button
@@ -668,7 +666,7 @@ export default function FfmpegSettingsPage() {
           disabled={!isValid || isSubmitting || !isDirty}
           type="submit"
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </Stack>
       <Divider sx={{ mt: 2 }} />

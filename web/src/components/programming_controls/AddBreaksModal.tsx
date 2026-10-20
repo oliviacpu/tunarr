@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { useAddBreaks } from '@/hooks/programming_controls/useAddBreaks';
 import {
   Box,
@@ -214,7 +215,7 @@ const AddBreaksModalContent = ({
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" type="submit">
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </Box>

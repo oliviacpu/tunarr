@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
@@ -194,7 +195,7 @@ const AddRedirectModal = (props: AddRedirectModalProps) => {
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" form="redirect-channel-form" type="submit">
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </Dialog>

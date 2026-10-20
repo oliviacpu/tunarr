@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { Box, ButtonGroup, DialogContentText } from '@mui/material';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -43,7 +44,7 @@ const AdjustWeightsModal = ({ open, onClose }: AdjustWeightsModalProps) => {
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" onClick={() => adjustWeightProgramming()}>
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </Dialog>

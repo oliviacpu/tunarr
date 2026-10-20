@@ -123,7 +123,7 @@ describe('HdhrSettingsPage', () => {
 
     expect(
       await screen.findByText(
-        'Could not save settings. Tuner count must be at least 1',
+        'Could not save settings: Tuner count must be at least 1',
       ),
     ).toBeInTheDocument();
   });

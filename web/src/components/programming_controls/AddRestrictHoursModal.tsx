@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { DialogContentText, Stack, Typography } from '@mui/material';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -145,7 +146,7 @@ const AddRestrictHoursModalContent = ({
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" onClick={() => handleClick()}>
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </>

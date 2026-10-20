@@ -167,7 +167,7 @@ describe('FfmpegSettingsPage', () => {
 
     expect(
       await screen.findByText(
-        'Could not save settings. FFmpeg executable path does not exist',
+        'Could not save settings: FFmpeg executable path does not exist',
       ),
     ).toBeInTheDocument();
   });

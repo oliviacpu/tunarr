@@ -1,3 +1,4 @@
+import { actions, toasts, withReason } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
 import {
@@ -84,7 +85,7 @@ export const EditSmartCollectionDialog = (props: Props) => {
     console.error(err);
     snackbar.enqueueSnackbar({
       variant: 'error',
-      message: t`Error updating Smart Collection. Check logs for details.`,
+      message: withReason(toasts.couldNotSave(), t`Check logs for details`),
     });
   };
 
@@ -120,7 +121,7 @@ export const EditSmartCollectionDialog = (props: Props) => {
             variant="contained"
             onClick={handleSubmit(handleSave, handleSubmitError)}
           >
-            <Trans>Save</Trans>
+            {actions.save()}
           </Button>
         </DialogActions>
       </>

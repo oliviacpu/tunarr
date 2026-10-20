@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { RandomSlotFormProvider } from '@/components/slot_scheduler/RandomSlotFormProvider.tsx';
 import { RandomSlotSettingsForm } from '@/components/slot_scheduler/RandomSlotSettingsForm';
 import { RandomSlotTable } from '@/components/slot_scheduler/RandomSlotTable.tsx';
@@ -306,8 +307,8 @@ export default function RandomSlotEditorPage() {
           </RouterButtonLink>
         </Box>
         {isDirty && (
-          <Button variant="contained" onClick={() => resetLineupToSaved()}>
-            <Trans>Reset Options</Trans>
+          <Button onClick={() => resetLineupToSaved()}>
+            {actions.resetChanges()}
           </Button>
         )}
         <Button
@@ -315,7 +316,7 @@ export default function RandomSlotEditorPage() {
           disabled={unavailableSlotCount > 0}
           onClick={() => onSave()}
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </Box>
     </>

@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import {
   DialogContentText,
   FormControl,
@@ -98,7 +99,7 @@ const AddRerunBlockModal = ({ open, onClose }: AddRerunModalProps) => {
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" onClick={() => rerunBlockProgramming()}>
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </Dialog>

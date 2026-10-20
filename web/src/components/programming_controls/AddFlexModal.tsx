@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import { TextField } from '@mui/material';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -115,7 +116,7 @@ const AddFlexModal = ({
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" onClick={() => addFlex()}>
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </Dialog>

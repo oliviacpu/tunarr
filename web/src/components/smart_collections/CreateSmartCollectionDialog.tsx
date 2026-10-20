@@ -1,3 +1,4 @@
+import { actions, toasts, withReason } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
 import {
@@ -105,7 +106,10 @@ export const CreateSmartCollectionDialog = ({
       console.error(errors);
       snackbar.enqueueSnackbar({
         variant: 'error',
-        message: t`Error saving new Smart Collection. Check server logs and browser console for details.`,
+        message: withReason(
+          toasts.couldNotSave(),
+          t`Check server logs and browser console for details`,
+        ),
       });
     },
     [snackbar, t],
@@ -197,7 +201,7 @@ export const CreateSmartCollectionDialog = ({
           startIcon={<Save />}
           onClick={handleSubmit(saveSmartCollection, handleError)}
         >
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </>

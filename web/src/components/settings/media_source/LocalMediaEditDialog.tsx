@@ -1,3 +1,4 @@
+import { actions, toasts, withReason } from '@/strings/actions';
 import { plural, t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import { Add, CloudDoneOutlined, CloudOff, Delete } from '@mui/icons-material';
@@ -164,7 +165,10 @@ const LocalMediaEditDialogContent = ({ onClose, source }: Props) => {
     (err: FieldErrors<LocalMediaSourceForm>) => {
       console.error(err);
       snackbar.enqueueSnackbar({
-        message: t`There was an error when submitting the form. Please see console logs for details.`,
+        message: withReason(
+          toasts.couldNotSave(),
+          t`See console logs for details`,
+        ),
         variant: 'error',
       });
     },
@@ -339,7 +343,7 @@ const LocalMediaEditDialogContent = ({ onClose, source }: Props) => {
           type="submit"
           onClick={handleSubmit(onSubmitSuccess, onSubmitError)}
         >
-          {source?.id ? <Trans>Update</Trans> : <Trans>Add</Trans>}
+          {source?.id ? actions.save() : actions.add()}
         </Button>
       </DialogActions>
     </>

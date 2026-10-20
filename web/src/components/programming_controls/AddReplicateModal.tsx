@@ -1,3 +1,4 @@
+import { actions } from '@/strings/actions';
 import {
   Box,
   DialogContentText,
@@ -118,7 +119,7 @@ const AddReplicateModalContent = ({
           <Trans>Cancel</Trans>
         </Button>
         <Button variant="contained" form="replication-form" type="submit">
-          <Trans>Save</Trans>
+          {actions.save()}
         </Button>
       </DialogActions>
     </>
