@@ -1,4 +1,4 @@
-### Stream Selection Profile management stays internal (2026-10-20, PR pending)
+### Stream Selection Profile management stays internal (2026-10-20, PR #123)
 
 Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue P1, approved by the maintainer 2026-10-19 (PR #85).
 
