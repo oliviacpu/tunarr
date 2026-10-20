@@ -72,7 +72,7 @@ nav:
           - configure/channels/index.md
           - Properties: configure/channels/properties.md
           - Flex: configure/channels/flex.md
-          - EPG: configure/channels/epg.md
+          - Guide: configure/channels/epg.md
           - Transcoding: configure/channels/transcoding.md
           - Watermarks: configure/channels/watermarks.md
           - Programming: configure/channels/programming.md

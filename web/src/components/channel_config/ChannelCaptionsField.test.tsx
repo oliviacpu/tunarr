@@ -134,7 +134,7 @@ describe('ChannelCaptionsField', () => {
     );
     await user.click(screen.getByRole('option', { name: '4' }));
     await user.click(
-      screen.getByRole('combobox', { name: 'Caption Alignment' }),
+      screen.getByRole('combobox', { name: 'Caption alignment' }),
     );
     await user.click(screen.getByRole('option', { name: 'Left' }));
 

@@ -1,5 +1,28 @@
+import { useLingui } from '@lingui/react/macro';
 import type { SaveableChannel } from '@tunarr/types';
 import type { EditChannelTabs } from './EditChannelTabPanel.tsx';
+
+/** The channel editor's tabs, in display order. */
+export const ChannelEditorTabs: readonly EditChannelTabs[] = [
+  'properties',
+  'flex',
+  'epg',
+  'ffmpeg',
+];
+
+/**
+ * The label each channel editor tab shows. The values are older names kept in
+ * `?tab=` links: "epg" is the Guide tab and "ffmpeg" the Streaming tab.
+ */
+export function useChannelTabLabels(): Record<EditChannelTabs, string> {
+  const { t } = useLingui();
+  return {
+    properties: t`Properties`,
+    flex: t`Flex`,
+    epg: t`Guide`,
+    ffmpeg: t`Streaming`,
+  };
+}
 
 /**
  * The channel editor tab that shows each form field, so a validation error

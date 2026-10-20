@@ -64,11 +64,11 @@ const useNamedRoutes = () => {
       },
       {
         matcher: channelsPageMatcher('edit/ffmpeg'),
-        name: 'FFMPEG',
+        name: t`Streaming`,
       },
       {
         matcher: channelsPageMatcher('edit/epg'),
-        name: 'EPG',
+        name: t`Guide`,
       },
       {
         matcher: customShowsPageMatcher('edit'),
@@ -136,11 +136,11 @@ const useNamedRoutes = () => {
       },
       {
         matcher: /^\/settings\/ffmpeg$/g,
-        name: t`FFmpeg Settings`,
+        name: t`Transcoding settings`,
       },
       {
         matcher: entityPageMatcher('settings/ffmpeg', ''),
-        name: t`Edit Transcode Config`,
+        name: t`Edit transcode config`,
       },
       {
         matcher: entityPageMatcher('library', ''),

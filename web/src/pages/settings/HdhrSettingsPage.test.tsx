@@ -50,11 +50,11 @@ async function renderPage() {
   // The saved settings are in the form. The first render in a run can take
   // longer than waitFor's default second
   await waitFor(
-    () => expect(screen.getByLabelText('Tuner Count')).toHaveValue('4'),
+    () => expect(screen.getByLabelText('Tuner count')).toHaveValue('4'),
     { timeout: 10_000 },
   );
   const { user } = rendered;
-  const tunerCount = () => screen.getByLabelText('Tuner Count');
+  const tunerCount = () => screen.getByLabelText('Tuner count');
   const setTunerCount = async (value: string) => {
     await user.clear(tunerCount());
     await user.type(tunerCount(), value);
@@ -85,8 +85,9 @@ describe('HdhrSettingsPage', () => {
     await setTunerCount('0');
 
     await waitFor(() =>
+      // The help text stays under the message
       expect(tunerCount()).toHaveAccessibleDescription(
-        'Tuner Count must be >= 1',
+        expect.stringMatching(/^Tuner count must be >= 1\s*How many tuners/),
       ),
     );
     expect(tunerCount()).toBeInvalid();

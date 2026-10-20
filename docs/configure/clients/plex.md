@@ -42,7 +42,7 @@ Gaps between programmes (flex) show the channel's offline picture, which is what
 
 A new channel logo appears in Plex after Plex next refreshes the guide: daily by default, right away with **Refresh Guide** in Plex's Live TV & DVR settings, or when Tunarr asks it to after a guide change (the media source's **Send guide updates**). A guide refresh keeps playing Live TV streams; only changing the channel map ends them.
 
-To fix this, set **Public Address for Guide Pictures** (Settings → XMLTV) to an address the apps can reach, such as `https://tunarr.example.com`. The guide's picture links then use it. Plex keeps fetching the guide from its usual address. The picture paths (`/media/artwork/…`, `/api/programs/<id>/artwork/<type>`, `/api/credits/<id>/artwork/<type>` and `/images/…`) must be reachable at that address without a login.
+To fix this, set **Public address for guide pictures** (Settings → Guide) to an address the apps can reach, such as `https://tunarr.example.com`. The guide's picture links then use it. Plex keeps fetching the guide from its usual address. The picture paths (`/media/artwork/…`, `/api/programs/<id>/artwork/<type>`, `/api/credits/<id>/artwork/<type>` and `/images/…`) must be reachable at that address without a login.
 
 Images uploaded in the web UI (channel logos, offline pictures) are saved with that address too, so they load in Plex's apps even when you upload them from a browser on the server (`localhost`) or behind a proxy that terminates HTTPS. Without it, an upload gets the address the browser used, and behind such a proxy Tunarr sees plain `http://`. Images uploaded before you set it keep their saved address; upload them again to change it.
 

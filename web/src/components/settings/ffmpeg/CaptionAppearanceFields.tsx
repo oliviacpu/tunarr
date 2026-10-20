@@ -26,6 +26,7 @@ import {
   CaptionTextColors,
 } from '@tunarr/types/schemas';
 import { map } from 'lodash-es';
+import { HelpTooltip } from '../../base/HelpTooltip.tsx';
 
 const CaptionRows = Array.from({ length: 15 }, (_, i) => i + 1);
 
@@ -203,12 +204,18 @@ export function CaptionAppearanceFields({
         </Select>
         <FormHelperText>
           <Trans>
-            Stacked shows both in one block, older above newer, at the bottom
-            when the file places them apart. Each where the file puts it needs a
-            player that places every line; test pattern sample 38 shows whether
-            yours does. Newest shows one at a time, bringing the earlier back
-            when the newer ends. Roll-up and paint-on show them one at a time.
+            What shows when two subtitles are on screen at once. Roll-up and
+            paint-on show them one at a time.
           </Trans>
+          <HelpTooltip about={t`When subtitles overlap`}>
+            <Trans>
+              Stacked shows both in one block, older above newer, at the bottom
+              when the file places them apart. Each where the file puts it needs
+              a player that places every line; test pattern sample 38 shows
+              whether yours does. Newest shows one at a time, bringing the
+              earlier back when the newer ends.
+            </Trans>
+          </HelpTooltip>
         </FormHelperText>
       </FormControl>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -285,11 +292,15 @@ export function CaptionAppearanceFields({
       </Stack>
       <FormHelperText>
         <Trans>
-          The screen has 15 caption rows. Captions end on the bottom row; ones
-          the subtitle file places at the top start on the top row, and ones it
-          places in the middle sit between the two. A narrower line wraps
-          sooner.
+          The screen has 15 caption rows, and captions end on the bottom row. A
+          narrower line wraps sooner.
         </Trans>
+        <HelpTooltip about={t`Caption rows`}>
+          <Trans>
+            Captions the subtitle file places at the top start on the top row,
+            and ones it places in the middle sit between the two.
+          </Trans>
+        </HelpTooltip>
       </FormHelperText>
       <Box>
         <FormControlLabel

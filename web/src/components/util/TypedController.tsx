@@ -309,9 +309,11 @@ export const NumericFormControllerText = <
         }
 
         if (isNonEmptyString(fieldErrorMessage) && helperTextValue) {
+          // The default message too: a rule without its own message (such as
+          // min: 1) leaves fieldError.message empty
           helperText = (
             <>
-              {fieldError?.message}
+              {fieldErrorMessage}
               <br />
               {passedHelperText}
             </>

@@ -62,3 +62,40 @@ describe('NumericFormControllerText with its own validate', () => {
     expect(field).toHaveAccessibleDescription('Not a valid number');
   });
 });
+
+function HarnessWithHelp(): ReactNode {
+  const { control } = useForm<{ tuners: number }>({
+    defaultValues: { tuners: 2 },
+    mode: 'onBlur',
+  });
+  return (
+    <NumericFormControllerText
+      control={control}
+      name="tuners"
+      prettyFieldName="Tuners"
+      rules={{ min: 1 }}
+      TextFieldProps={{
+        id: 'tuners',
+        label: 'Tuners',
+        helperText: 'How many at once.',
+      }}
+    />
+  );
+}
+
+describe('NumericFormControllerText with help text', () => {
+  test('a rule without its own message still says what is wrong', async () => {
+    const { user } = renderWithProviders(<HarnessWithHelp />);
+    const field = screen.getByLabelText('Tuners');
+    expect(field).toHaveAccessibleDescription('How many at once.');
+
+    await user.clear(field);
+    await user.type(field, '0');
+    await user.tab();
+
+    await waitFor(() => expect(field).toBeInvalid());
+    expect(field).toHaveAccessibleDescription(
+      expect.stringMatching(/^Tuners must be >= 1\s*How many at once\.$/),
+    );
+  });
+});

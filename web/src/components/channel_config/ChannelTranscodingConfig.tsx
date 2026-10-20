@@ -26,6 +26,7 @@ import { typedProperty } from '../../helpers/util.ts';
 import { useTranscodeConfigs } from '../../hooks/settingsHooks.ts';
 import { useChannelFormContext } from '../../hooks/useChannelFormContext.ts';
 import useStore from '../../store/index.ts';
+import { LearnMoreLink } from '../base/LearnMoreLink.tsx';
 import { RouterLink } from '../base/RouterLink.tsx';
 import { ImageUploadInput } from '../settings/ImageUploadInput.tsx';
 import {
@@ -132,21 +133,17 @@ export default function ChannelTranscodingConfig() {
           </Typography>
           <Typography variant="subtitle1">
             <Trans>
-              Use these settings to override global ffmpeg settings for this
-              channel.
+              Override the global transcoding settings for this channel.
             </Trans>
           </Typography>
           <Stack direction={{ sm: 'column', md: 'row' }} useFlexGap spacing={2}>
             <FormControl margin="normal">
-              <InputLabel>{t`Channel Stream Mode`}</InputLabel>
+              <InputLabel>{t`Stream mode`}</InputLabel>
               <Controller
                 control={control}
                 name="streamMode"
                 render={({ field }) => (
-                  <Select<ChannelStreamMode>
-                    label={t`Channel Stream Mode`}
-                    {...field}
-                  >
+                  <Select<ChannelStreamMode> label={t`Stream mode`} {...field}>
                     {ChannelStreamModeOptions.map((opt) => (
                       <MenuItem key={opt.value} value={opt.value}>
                         {opt.label}
@@ -157,30 +154,18 @@ export default function ChannelTranscodingConfig() {
               />
               <FormHelperText>
                 <Trans>
-                  The streaming mode affects the type of underlying transcoding
-                  process used to create the channel's video stream.
-                  <br />
-                  Learn more about Tunarr's stream modes{' '}
-                  <Link
-                    target="_blank"
-                    href="https://tunarr.com/configure/channels/transcoding/#stream-mode"
-                  >
-                    here
-                  </Link>
-                  !
+                  How Tunarr builds this channel's video stream.{' '}
+                  <LearnMoreLink page="channelStreamMode" />
                 </Trans>
               </FormHelperText>
             </FormControl>
             <FormControl margin="normal">
-              <InputLabel>{t`Channel Transcode Config`}</InputLabel>
+              <InputLabel>{t`Transcode config`}</InputLabel>
               <Controller
                 control={control}
                 name="transcodeConfigId"
                 render={({ field }) => (
-                  <Select<string>
-                    label={t`Channel Transcode Config`}
-                    {...field}
-                  >
+                  <Select<string> label={t`Transcode config`} {...field}>
                     {transcodeConfigs.data.map((opt) => (
                       <MenuItem key={opt.id} value={opt.id}>
                         {opt.name}
@@ -191,10 +176,10 @@ export default function ChannelTranscodingConfig() {
               />
               <FormHelperText>
                 <Trans>
-                  Choose the transcode configuration to use for this channel.
-                  Configure transcode configurations on the{' '}
+                  The video and audio settings this channel uses. Edit them
+                  under{' '}
                   <RouterLink to="/settings/ffmpeg">
-                    FFmpeg settings page
+                    Settings › Transcoding
                   </RouterLink>
                   .
                 </Trans>
@@ -217,7 +202,7 @@ export default function ChannelTranscodingConfig() {
               disabled={streamMode === 'hls_direct_v2'}
             />
             <FormControlLabel
-              label={t`Enable Subtitles`}
+              label={t`Enable subtitles`}
               sx={{
                 width: 'auto',
               }}
@@ -235,9 +220,8 @@ export default function ChannelTranscodingConfig() {
               <Divider sx={{ my: 2 }} />
               <Typography>
                 <Trans>
-                  Configure subtitle preferences. Preferences are evaluated in
-                  order of priority. The first matching subtitle stream on a
-                  program will be used.
+                  Tunarr checks these preferences from the top and uses the
+                  first subtitle track that matches.
                 </Trans>
               </Typography>
               <ChannelSubtitlePreferencesTable />
@@ -262,12 +246,13 @@ export default function ChannelTranscodingConfig() {
                   }
                 />
               }
-              label={t`Enable Watermark`}
+              label={t`Enable watermark`}
             />
             <FormHelperText>
               <Trans>
-                Renders a channel icon (also known as bug or Digital On-screen
-                Graphic) on top of the channel's stream.
+                Shows a logo (a "bug") over the channel's video. Not available
+                in the HLS Direct stream modes.{' '}
+                <LearnMoreLink page="channelWatermarks" />
               </Trans>
             </FormHelperText>
           </FormControl>
@@ -332,16 +317,17 @@ export default function ChannelTranscodingConfig() {
                       />
                     }
                     label={
-                      <span>
-                        Toggle{' '}
+                      <Trans>
+                        Show{' '}
                         <Link
                           href="https://en.wikipedia.org/wiki/Safe_area_(television)#:~:text=The%20title%2Dsafe%20area%20or,screen%20location%20and%20display%20type."
                           target="_blank"
+                          rel="noopener noreferrer"
                         >
-                          Safe Title Indicator
+                          safe title area
                         </Link>{' '}
-                        lines in preview
-                      </span>
+                        lines in the preview
+                      </Trans>
                     }
                   />
                 </Stack>
@@ -358,7 +344,7 @@ export default function ChannelTranscodingConfig() {
                         <ImageUploadInput
                           // TODO: This should be something like {channel.id}_fallback_picture.ext
                           fileRenamer={typedProperty('name')}
-                          label={t`Watermark Image URL`}
+                          label={t`Watermark image URL`}
                           onFormValueChange={(newPath) =>
                             field.onChange(newPath)
                           }
@@ -402,7 +388,7 @@ export default function ChannelTranscodingConfig() {
                         min: 0, //{ value: 0, message: 'Width must be >= 0' },
                         max: 100,
                       }}
-                      TextFieldProps={{ label: 'Width %', fullWidth: true }}
+                      TextFieldProps={{ label: t`Width (%)`, fullWidth: true }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -412,7 +398,7 @@ export default function ChannelTranscodingConfig() {
                       float
                       rules={{ min: 0, max: 100 }}
                       TextFieldProps={{
-                        label: 'Horizontal Margin %',
+                        label: t`Horizontal margin (%)`,
                         fullWidth: true,
                       }}
                     />
@@ -424,7 +410,7 @@ export default function ChannelTranscodingConfig() {
                       float
                       rules={{ min: 0, max: 100 }}
                       TextFieldProps={{
-                        label: 'Vertical Margin %',
+                        label: t`Vertical margin (%)`,
                         fullWidth: true,
                       }}
                     />
@@ -465,13 +451,10 @@ export default function ChannelTranscodingConfig() {
                             name="watermark.fixedSize"
                           />
                         }
-                        label={t`Disable Image Scaling`}
+                        label={t`Disable image scaling`}
                       />
                       <FormHelperText>
-                        <Trans>
-                          The image will be rendered at its actual size without
-                          any scaling applied.
-                        </Trans>
+                        <Trans>Shows the image at its actual size.</Trans>
                       </FormHelperText>
                     </FormControl>
                   </Grid>
@@ -484,14 +467,13 @@ export default function ChannelTranscodingConfig() {
                             name="watermark.animated"
                           />
                         }
-                        label={t`Enable Animation`}
+                        label={t`Animated image`}
                       />
                       <FormHelperText>
                         <Trans>
-                          Enable if the watermark is an animated GIF or PNG. The
-                          watermark will loop according to the image's
-                          configuration. If this option is enabled and the image
-                          is not animated, there will be playback errors.
+                          Turn on for an animated GIF or PNG; it loops as the
+                          image says. A still image with this on causes playback
+                          errors.
                         </Trans>
                       </FormHelperText>
                     </FormControl>
@@ -503,10 +485,9 @@ export default function ChannelTranscodingConfig() {
                       name="watermark.fadeConfig.0.periodMins"
                       rules={{ min: 0 }}
                       TextFieldProps={{
-                        label: 'Watermark Period (mins)',
+                        label: t`Watermark period (minutes)`,
                         fullWidth: true,
-                        helperText:
-                          'Display/hide the watermark via a fade animation every N minutes. Set to 0 to disable.',
+                        helperText: t`Fades the watermark in and out every this many minutes. 0 turns fading off.`,
                       }}
                     />
                   </Grid>
@@ -520,14 +501,12 @@ export default function ChannelTranscodingConfig() {
                               name="watermark.fadeConfig.0.leadingEdge"
                             />
                           }
-                          label={t`Display Watermark on Leading Edge`}
+                          label={t`Show watermark at stream start`}
                         />
                         <FormHelperText>
                           <Trans>
-                            When enabled, intermittent watermarks fade in
-                            immediately when a stream is initialized. When
-                            disabled, the first watermark fade-in occurs after a
-                            full period.
+                            On: the watermark fades in as the stream starts.
+                            Off: it first fades in after one period.
                           </Trans>
                         </FormHelperText>
                       </FormControl>
@@ -539,10 +518,9 @@ export default function ChannelTranscodingConfig() {
                       name="watermark.duration"
                       rules={{ min: 0 }}
                       TextFieldProps={{
-                        label: 'Total Watermark Duration (seconds)',
+                        label: t`Total watermark duration (seconds)`,
                         fullWidth: true,
-                        helperText:
-                          "Sets the absolute duration of the watermark on the channel's stream. Set to 0 to make the overlay permantently visible.",
+                        helperText: t`How long the watermark shows during each program. 0 shows it throughout.`,
                       }}
                     />
                   </Grid>

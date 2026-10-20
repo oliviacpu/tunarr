@@ -33,7 +33,7 @@ export default function VersionFooter() {
             <Trans>Version: {version.tunarr}</Trans>
           </Typography>
           <Typography component="p" variant="overline">
-            <Trans>FFMPEG: {version.ffmpeg}</Trans>
+            <Trans>FFmpeg: {version.ffmpeg}</Trans>
           </Typography>
         </>
       )}

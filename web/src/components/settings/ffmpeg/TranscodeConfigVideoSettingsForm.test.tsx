@@ -73,7 +73,7 @@ describe('software video presets', () => {
         { queryClient },
       );
       expect(
-        screen.getByRole('combobox', { name: 'Video Preset' }),
+        screen.getByRole('combobox', { name: 'Video preset' }),
       ).toHaveTextContent(preset);
       await user.click(screen.getByRole('button', { name: 'Save' }));
       await waitFor(() => expect(onSave).toHaveBeenCalledWith(preset));

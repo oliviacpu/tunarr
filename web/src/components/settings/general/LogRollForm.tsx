@@ -56,7 +56,7 @@ export const LogRollForm = () => {
     <Stack gap={2}>
       <FormControl>
         <FormControlLabel
-          label={t`Enable Log File Rolling`}
+          label={t`Enable log file rolling`}
           control={
             <CheckboxFormController
               control={control}
@@ -66,7 +66,7 @@ export const LogRollForm = () => {
         />
         <FormHelperText>
           <Trans>
-            Enable rolling log files using time and/or size based criteria
+            Starts a new log file on a schedule, at a size limit, or both.
           </Trans>
         </FormHelperText>
       </FormControl>
@@ -75,7 +75,7 @@ export const LogRollForm = () => {
           <Grid size={{ xs: 6 }}>
             <FormControl>
               <FormControlLabel
-                label={t`Roll on Schedule`}
+                label={t`Roll on schedule`}
                 control={
                   <Controller
                     control={control}
@@ -116,7 +116,7 @@ export const LogRollForm = () => {
                 <NumericFormControllerText
                   control={control}
                   name="logging.logRollConfig.schedule.increment"
-                  prettyFieldName={t`Roll Schedule Increment`}
+                  prettyFieldName={t`Roll interval`}
                   // The rule outlives this field when it unmounts. Unticking
                   // the schedule writes 0, and min: 1 would block every save.
                   rules={{ min: 0 }}

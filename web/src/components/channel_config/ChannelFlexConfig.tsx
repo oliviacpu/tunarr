@@ -38,6 +38,8 @@ import { useDebounceCallback } from 'usehooks-ts';
 import { isNonEmptyString, typedProperty } from '../../helpers/util.ts';
 import { useChannelFormContext } from '../../hooks/useChannelFormContext.ts';
 import { useFillerLists } from '../../hooks/useFillerLists.ts';
+import { HelpTooltip } from '../base/HelpTooltip.tsx';
+import { LearnMoreLink } from '../base/LearnMoreLink.tsx';
 import useStore from '../../store/index.ts';
 import { RouterLink } from '../base/RouterLink.tsx';
 import { ImageUploadInput } from '../settings/ImageUploadInput.tsx';
@@ -337,12 +339,9 @@ export function ChannelFlexConfig() {
               </Typography>
               <Typography variant="body1" sx={{ mb: 2 }}>
                 <Trans>
-                  Videos from the filler list will be randomly picked to play
-                  unless there are cooldown restrictions to place or if no
-                  videos are short enough for the remaining Flex time.
-                  <br />
-                  Each filler can be assigned a cooldown, which restricts how
-                  frequently the list will be chosen during flex time.
+                  Flex time plays random videos from these lists, skipping ones
+                  on cooldown or too long to fit. A list's cooldown limits how
+                  often it plays. <LearnMoreLink page="fillerSelection" />
                 </Trans>
               </Typography>
               {!fillerListsLoading && renderFillerLists()}
@@ -360,12 +359,12 @@ export function ChannelFlexConfig() {
                 <>
                   <TextField
                     fullWidth
-                    label={t`Filler List Cooldown (seconds)`}
+                    label={t`Clip repeat cooldown (seconds)`}
                     margin="normal"
                     helperText={
                       errors.fillerRepeatCooldown?.type === 'validate'
                         ? t`Filler cooldown must be a number`
-                        : null
+                        : t`The shortest time before the same filler clip plays again, whatever list it's in.`
                     }
                     {...field}
                     onChange={(e) => {
@@ -373,12 +372,6 @@ export function ChannelFlexConfig() {
                       field.onChange(isNaN(v) ? '' : v);
                     }}
                   />
-                  <Typography variant="caption" sx={{ ml: 1 }}>
-                    <Trans>
-                      Items from any filler list will not be chosen more
-                      frequently than this cooldown setting.
-                    </Trans>
-                  </Typography>
                 </>
               )}
             />
@@ -401,8 +394,7 @@ export function ChannelFlexConfig() {
           </Typography>
           <Typography variant="body1" sx={{ mb: 2 }}>
             <Trans>
-              Configure what appears on your channel when there is no suitable
-              filler content available. Using channel fallbacks requires ffmpeg
+              What the channel shows when no filler fits the gap. Needs FFmpeg
               transcoding.
             </Trans>
           </Typography>
@@ -423,13 +415,13 @@ export function ChannelFlexConfig() {
                 control={control}
                 render={({ field }) => (
                   <FormControl fullWidth sx={{ mb: 1 }}>
-                    <InputLabel>{t`Fallback Mode`}</InputLabel>
-                    <Select fullWidth label={t`Fallback Mode`} {...field}>
+                    <InputLabel>{t`Fallback mode`}</InputLabel>
+                    <Select fullWidth label={t`Fallback mode`} {...field}>
                       <MenuItem value={'pic'}>
                         <Trans>Image</Trans>
                       </MenuItem>
                       <MenuItem disabled value={'clip'}>
-                        <Trans>Library Clip (not yet implemented)</Trans>
+                        <Trans>Library clip (not yet available)</Trans>
                       </MenuItem>
                     </Select>
                   </FormControl>
@@ -458,7 +450,7 @@ export function ChannelFlexConfig() {
                 render={({ field }) => (
                   <ImageUploadInput
                     fileRenamer={typedProperty('name')}
-                    label={t`Guide Picture for Gaps`}
+                    label={t`Guide picture for gaps`}
                     onFormValueChange={(newPath) => {
                       field.onChange(newPath);
                     }}
@@ -470,11 +462,16 @@ export function ChannelFlexConfig() {
               />
               <FormHelperText sx={{ mt: -1, mb: 1 }}>
                 <Trans>
-                  Optional. The picture gaps get in the guide. Apps such as Plex
-                  crop one picture to both tall and wide tiles, so a square
-                  picture with its content in the middle works best. Without
-                  one, gaps show the image above, or else the channel logo.
+                  The picture gaps show in the guide. Without one, they show the
+                  image above, or else the channel logo.
                 </Trans>
+                <HelpTooltip about={t`Guide picture for gaps`}>
+                  <Trans>
+                    Apps such as Plex crop one picture to both tall and wide
+                    tiles, so a square picture with its content in the middle
+                    works best.
+                  </Trans>
+                </HelpTooltip>
               </FormHelperText>
               <Controller
                 name="offline.musicListId"
@@ -500,11 +497,16 @@ export function ChannelFlexConfig() {
                     <FormHelperText>
                       <Trans>
                         Tracks from this filler list play under the image during
-                        gaps, one after another, at an even loudness. Build the
-                        list under Filler by adding artists, albums or tracks
-                        from your music library. Don't also add it as filler
-                        above, or its tracks play as programs.
+                        gaps, at an even loudness. Don't also add the list as
+                        filler above.
                       </Trans>
+                      <HelpTooltip about={t`Gap music`}>
+                        <Trans>
+                          Build the list under Filler from artists, albums or
+                          tracks in your music library. A list also added as
+                          filler above plays its tracks as programs.
+                        </Trans>
+                      </HelpTooltip>
                     </FormHelperText>
                   </FormControl>
                 )}

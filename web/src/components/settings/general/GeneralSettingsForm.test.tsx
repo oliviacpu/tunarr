@@ -71,7 +71,7 @@ async function renderForm() {
     </SnackbarProvider>,
     { queryClient },
   );
-  const backendUri = () => screen.getByLabelText('Tunarr Backend URL');
+  const backendUri = () => screen.getByLabelText('Tunarr server URL');
   await waitFor(() => expect(backendUri()).toHaveValue(LoadedBackendUri));
   // It only shows while the form has changes
   const resetButton = () =>
@@ -146,7 +146,7 @@ describe('GeneralSettingsForm', () => {
   test('the log level help names the variable the server reads', async () => {
     await renderForm();
 
-    const help = screen.getByText(/Set the log level for the Tunarr server/);
+    const help = screen.getByText(/How much the Tunarr server logs/);
     const text = help.textContent ?? '';
     expect(text).toContain('TUNARR_LOG_LEVEL');
     expect(text.replaceAll('TUNARR_LOG_LEVEL', '')).not.toContain('LOG_LEVEL');

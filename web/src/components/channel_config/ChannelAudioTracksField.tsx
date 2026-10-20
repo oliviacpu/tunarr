@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import { parseAudioTracks } from '../../helpers/channelAudioTracks.ts';
 import { useChannelFormContext } from '../../hooks/useChannelFormContext.ts';
+import { HelpTooltip } from '../base/HelpTooltip.tsx';
 
 type InputProps = {
   value: string[] | undefined;
@@ -84,16 +85,23 @@ export function ChannelAudioTracksField({ disabled }: { disabled: boolean }) {
           />
           <FormHelperText error={fieldState.error !== undefined}>
             {fieldState.error?.message ?? (
-              <Trans>
-                For switchable audio in Plex Live TV: up to four language codes
-                (ISO 639-2, such as eng, jpn), in order. Every program, gap and
-                commercial on this channel then carries exactly these audio
-                tracks, so the audio menu stays the same all session, and Plex
-                picks each viewer's preferred language. A program without one of
-                the languages repeats its main audio there. Leave empty for one
-                audio track. Not available in HLS Direct v2, which copies each
-                program's own tracks.
-              </Trans>
+              <>
+                <Trans>
+                  Up to four language codes (ISO 639-2, such as eng, jpn), in
+                  order, for switchable audio in Plex Live TV. Leave empty for
+                  one audio track.
+                </Trans>
+                <HelpTooltip about={t`Audio tracks`}>
+                  <Trans>
+                    Every program, gap and commercial on this channel carries
+                    exactly these audio tracks, so the audio menu stays the same
+                    all session, and Plex picks each viewer's preferred
+                    language. A program without one of the languages repeats its
+                    main audio there. Not available in HLS Direct v2, which
+                    copies each program's own tracks.
+                  </Trans>
+                </HelpTooltip>
+              </>
             )}
           </FormHelperText>
         </FormControl>

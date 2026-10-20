@@ -34,10 +34,10 @@ Backup settings can be configured in the Tunarr web UI under **Settings > System
 |--------|---------|-------------|
 | **Enabled** | `true` | Enable or disable scheduled backups |
 | **Schedule** | Daily at 4:00 AM | When to run automatic backups |
-| **Output Path** | `{data directory}/backups/` | Where backup files are stored |
+| **Backup folder** | `{data directory}/backups/` | Where backup files are stored |
 | **Archive Format** | `tar` | Archive format: `tar` or `zip` |
 | **Gzip Compression** | `false` | Enable gzip compression (tar only) |
-| **Max Backups** | `3` | Number of backups to retain before deleting oldest |
+| **Backups to keep** | `3` | Number of backups to retain before deleting oldest |
 
 ### File Naming
 

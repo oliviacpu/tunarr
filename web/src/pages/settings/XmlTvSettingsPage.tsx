@@ -22,6 +22,7 @@ import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
 import type { SubmitHandler } from 'react-hook-form';
 import { Controller, useForm } from 'react-hook-form';
+import { HelpTooltip } from '../../components/base/HelpTooltip.tsx';
 import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert.tsx';
 import {
   CheckboxFormController,
@@ -92,6 +93,11 @@ export default function XmlTvSettingsPage() {
     });
   };
 
+  const guideUrl = new URL(
+    '/api/xmltv.xml',
+    isEmpty(backendUri) ? document.location.href : backendUri,
+  ).href;
+
   return (
     <Box component="form" onSubmit={handleSubmit(updateXmlTvSettings)}>
       <FormControl fullWidth>
@@ -101,31 +107,24 @@ export default function XmlTvSettingsPage() {
           render={({ field }) => (
             <TextField
               id="output-path"
-              label={t`Output Path`}
+              label={t`XMLTV output path`}
               InputProps={{
                 readOnly: true,
                 disabled: true,
               }}
               helperText={
-                <Trans>
-                  <span>
-                    You can edit this location in your settings.json within your
-                    Tunarr data directory
-                    <br />
-                    <strong>NOTE:</strong> When manually adding the XMLTV
-                    location to a client like Plex, do not use this file
-                    directly. Instead, use the generated XMLTV from the Tunarr
-                    API endpoint:{' '}
-                    {
-                      new URL(
-                        '/api/xmltv.xml',
-                        isEmpty(backendUri)
-                          ? document.location.href
-                          : backendUri,
-                      ).href
-                    }
-                  </span>
-                </Trans>
+                <>
+                  <Trans>
+                    Add the guide to clients such as Plex from {guideUrl}, not
+                    from this file.
+                  </Trans>
+                  <HelpTooltip about={t`XMLTV output path`}>
+                    <Trans>
+                      To move this file, edit settings.json in the Tunarr data
+                      directory.
+                    </Trans>
+                  </HelpTooltip>
+                </>
               }
               {...field}
             />
@@ -136,26 +135,26 @@ export default function XmlTvSettingsPage() {
         <NumericFormControllerText
           control={control}
           name="programmingHours"
-          prettyFieldName={t`EPG (Hours)`}
-          // The guide has to last the refresh timer
+          prettyFieldName={t`Guide length (hours)`}
+          // The guide has to last the refresh interval
           rules={{ deps: ['refreshHours'] }}
           TextFieldProps={{
             id: 'epg-hours',
-            label: t`EPG (Hours)`,
-            helperText: t`Number of hours to include in the XMLTV file`,
+            label: t`Guide length (hours)`,
+            helperText: t`How many hours of programs each rebuild of the guide covers.`,
             sx: { mb: 2 },
           }}
         />
         <NumericFormControllerText
           control={control}
           name="refreshHours"
-          prettyFieldName={t`Refresh Timer (Hours)`}
+          prettyFieldName={t`Refresh interval (hours)`}
           rules={{
             validate: {
-              // The server refuses it too: each rebuild writes EPG (Hours) of
-              // guide, which has to last until the next one, up to two hours late on
-              // the night the clocks go back. A value that isn't a number is
-              // left to the numeric checks
+              // The server refuses it too: each rebuild writes the guide
+              // length's worth of guide, which has to last until the next one,
+              // up to two hours late on the night the clocks go back. A value
+              // that isn't a number is left to the numeric checks
               guideLastsTheTimer: (refreshHours, { programmingHours }) => {
                 if (
                   !Number.isFinite(refreshHours) ||
@@ -165,15 +164,15 @@ export default function XmlTvSettingsPage() {
                 }
                 const minimum = minimumXmlTvGuideHours(refreshHours);
                 return programmingHours < minimum
-                  ? t`EPG (Hours) is too short for this timer: the guide would run out before the next rebuild. Set it to ${minimum} or more, two hours longer than the time between rebuilds.`
+                  ? t`The guide would run out before the next rebuild. Set Guide length to ${minimum} hours or more, two hours longer than the interval.`
                   : undefined;
               },
             },
           }}
           TextFieldProps={{
             id: 'refresh-hours',
-            label: t`Refresh Timer (Hours)`,
-            helperText: t`How often the XMLTV file is regenerated. EPG (Hours) has to be at least two hours longer.`,
+            label: t`Refresh interval (hours)`,
+            helperText: t`How often the guide is rebuilt. Guide length must be at least two hours longer.`,
           }}
         />
         <Controller
@@ -183,8 +182,8 @@ export default function XmlTvSettingsPage() {
             <TextField
               select
               id="refresh-start-hour"
-              label={t`Refresh Timer Starts At`}
-              helperText={t`An hour (server time) the guide is rebuilt at. The refresh timer counts on from it around the clock. With a 24 hour timer, the only refresh each day.`}
+              label={t`Refreshes start at`}
+              helperText={t`An hour in server time. The guide rebuilds then and every interval after it, around the clock; with 24 hours, only then.`}
               sx={{ minWidth: 200 }}
               {...field}
               onChange={(e) => field.onChange(Number(e.target.value))}
@@ -211,18 +210,25 @@ export default function XmlTvSettingsPage() {
           render={({ field, fieldState }) => (
             <TextField
               id="public-url"
-              label={t`Public Address for Guide Pictures`}
+              label={t`Public address for guide pictures`}
               placeholder="https://tunarr.example.com"
               error={!!fieldState.error}
               helperText={
                 fieldState.error?.message ?? (
-                  <Trans>
-                    The address programme and channel pictures in the guide link
-                    to. Set it when a client such as Plex reads the guide from a
-                    local address (like 127.0.0.1) but its apps load the
-                    pictures themselves: they can only reach a public address.
-                    Leave empty to use the address the guide was requested on.
-                  </Trans>
+                  <>
+                    <Trans>
+                      The address guide pictures link to. Leave empty to use the
+                      address the guide was requested on.
+                    </Trans>
+                    <HelpTooltip about={t`Public address for guide pictures`}>
+                      <Trans>
+                        Set it when a client such as Plex reads the guide from a
+                        local address (like 127.0.0.1) but its apps load the
+                        pictures themselves: they can only reach a public
+                        address.
+                      </Trans>
+                    </HelpTooltip>
+                  </>
                 )
               }
               {...field}
@@ -251,13 +257,10 @@ export default function XmlTvSettingsPage() {
           control={
             <CheckboxFormController control={control} name="useShowPoster" />
           }
-          label={t`Use Show Poster`}
+          label={t`Use show poster`}
         />
         <FormHelperText>
-          <Trans>
-            If enabled, TV show episodes will use the poster of their show,
-            instead of the individual episode poster.
-          </Trans>
+          <Trans>Episodes use their show's poster instead of their own.</Trans>
         </FormHelperText>
       </FormControl>
       <UnsavedNavigationAlert isDirty={isDirty} />
