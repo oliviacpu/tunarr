@@ -27,13 +27,15 @@ export const LogRollForm = () => {
 
   // Ticking "Roll on schedule" with no usable schedule starts from daily at
   // midnight. Unticking keeps the schedule, so ticking again brings it back;
-  // it is only left out of the save
+  // it is only left out of the save. A cron schedule, which only
+  // settings.json can set, is always usable and comes back as it was
   const scheduleOnTick = () => {
     const schedule = getValues('logging.logRollConfig.schedule');
     if (
-      schedule?.type === 'every' &&
-      typeof schedule.increment === 'number' &&
-      schedule.increment >= 1
+      schedule?.type === 'cron' ||
+      (schedule?.type === 'every' &&
+        typeof schedule.increment === 'number' &&
+        schedule.increment >= 1)
     ) {
       return;
     }

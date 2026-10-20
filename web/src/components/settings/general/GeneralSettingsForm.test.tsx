@@ -1,6 +1,8 @@
 import useStore from '@/store/index.ts';
 import { setBackendUri } from '@/store/settings/actions.ts';
 import { renderWithProviders, screen, waitFor } from '@/test/utils';
+import { LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { QueryClient } from '@tanstack/react-query';
 import type { SystemSettings } from '@tunarr/types';
 import type { UpdateSystemSettingsRequest } from '@tunarr/types/api';
@@ -88,7 +90,9 @@ async function renderForm(settings: SystemSettings = systemSettings) {
   });
   const rendered = renderWithProviders(
     <SnackbarProvider>
-      <GeneralSettingsForm systemSettings={settings} />
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <GeneralSettingsForm systemSettings={settings} />
+      </LocalizationProvider>
     </SnackbarProvider>,
     { queryClient },
   );
@@ -226,5 +230,43 @@ describe('GeneralSettingsForm', () => {
       maxFileSizeBytes: undefined,
       schedule: undefined,
     });
+  });
+
+  test('unticking and ticking Roll on schedule keeps a cron schedule, and a save sends it', async () => {
+    const cron = { type: 'cron', cron: '0 3 * * *' } as const;
+    const cronRolling = {
+      ...systemSettings,
+      logging: {
+        ...systemSettings.logging,
+        logRollConfig: { enabled: true, rolledFileLimit: 3, schedule: cron },
+      },
+    } satisfies SystemSettings;
+    const { user, saveButton } = await renderForm(cronRolling);
+    const rollOnSchedule = () =>
+      screen.getByRole('checkbox', { name: 'Roll on schedule' });
+    const cronText =
+      'Runs on the cron schedule 0 3 * * *, set in settings.json.';
+    expect(rollOnSchedule()).toBeChecked();
+    expect(screen.getByText(/Runs on the cron schedule/)).toHaveTextContent(
+      cronText,
+    );
+
+    await user.click(rollOnSchedule());
+    await user.click(rollOnSchedule());
+
+    expect(rollOnSchedule()).toBeChecked();
+    expect(screen.getByText(/Runs on the cron schedule/)).toHaveTextContent(
+      cronText,
+    );
+    // Another change, so there is something to save
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Roll based on size' }),
+    );
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
+    const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
+    expect(sent?.logging?.logRollConfig?.schedule).toEqual(cron);
   });
 });
