@@ -26,9 +26,17 @@ type Props = {
   confirmLabel?: string;
   /**
    * True while the delete is running: the confirm button shows a spinner and
-   * both buttons are disabled, and the dialog can't be dismissed.
+   * both buttons are disabled, and the dialog can't be dismissed. Pair it
+   * with `closeOnConfirm={false}`, otherwise the dialog closes on confirm and
+   * the spinner is never seen.
    */
   busy?: boolean;
+  /**
+   * Whether confirming also calls `onClose`. Defaults to true. Pass false to
+   * keep the dialog open while the delete runs (with `busy`); the caller then
+   * closes it when the mutation settles.
+   */
+  closeOnConfirm?: boolean;
   dialogProps?: Omit<DialogProps, 'open' | 'onClose'>;
 };
 
@@ -40,6 +48,7 @@ const DeleteConfirmationDialogContent = ({
   details,
   confirmLabel,
   busy = false,
+  closeOnConfirm = true,
   onClose,
   onCancel,
   onConfirm,
@@ -47,7 +56,9 @@ const DeleteConfirmationDialogContent = ({
   const actions = useActions();
   const confirm = () => {
     onConfirm();
-    onClose();
+    if (closeOnConfirm) {
+      onClose();
+    }
   };
   const cancel = () => {
     onCancel?.();
@@ -89,6 +100,9 @@ export const DeleteConfirmationDialog = (props: Props) => {
   return (
     <Dialog
       open={open}
+      // The dialog is a React child of whatever rendered it, such as a
+      // clickable table row; its clicks must not reach that parent.
+      onClick={(e) => e.stopPropagation()}
       onClose={() => {
         if (busy !== true) {
           onClose();

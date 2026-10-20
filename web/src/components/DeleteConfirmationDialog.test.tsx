@@ -228,4 +228,43 @@ describe('DeleteConfirmationDialog', () => {
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  test('clicks inside the dialog do not reach a clickable ancestor', async () => {
+    const rowClick = vi.fn();
+
+    const { user } = renderWithProviders(
+      // oxlint-disable-next-line jsx-a11y/click-events-have-key-events
+      <div onClick={rowClick}>
+        <DeleteConfirmationDialog
+          open={true}
+          title="Delete it?"
+          onConfirm={() => {}}
+          onClose={() => {}}
+        />
+      </div>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(rowClick).not.toHaveBeenCalled();
+  });
+
+  test('closeOnConfirm false calls onConfirm and leaves closing to the caller', async () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+
+    const { user } = renderWithProviders(
+      <DeleteConfirmationDialog
+        open={true}
+        title="Delete it?"
+        closeOnConfirm={false}
+        onConfirm={onConfirm}
+        onClose={onClose}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
