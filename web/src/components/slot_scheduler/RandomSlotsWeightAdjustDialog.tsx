@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { useAdjustRandomSlotWeights } from '@/hooks/slot_scheduler/useAdjustRandomSlotWeights';
 import { useRandomSlotFormContext } from '@/hooks/useRandomSlotFormContext';
 import { Trans } from '@lingui/react/macro';
@@ -25,6 +26,7 @@ type Props = {
 export const UnlockedWeightScale = 24;
 
 export const RandomSlotsWeightAdjustDialog = ({ open, onClose }: Props) => {
+  const actions = useActions();
   const { slotArray, setValue, watch } = useRandomSlotFormContext();
   const getSlotName = useSlotName();
 
@@ -155,9 +157,7 @@ export const RandomSlotsWeightAdjustDialog = ({ open, onClose }: Props) => {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button onClick={() => onCommit()} variant="contained">
           <Trans>Commit</Trans>
         </Button>

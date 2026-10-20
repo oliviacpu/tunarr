@@ -1,4 +1,4 @@
-// The action vocabulary for the save / cancel / delete / reset family: the only
+// The action vocabulary for the save / cancel / close / delete / reset family: the only
 // labels for these actions, and the toast that confirms each one. Use one verb
 // through the whole flow (Save -> Saved, Delete -> Deleted). Do not write
 // "Update", "Submit", "Reset Options" or "Settings Saved!" by hand. Other verbs
@@ -20,6 +20,7 @@ export function useActions() {
     () => ({
       save: t`Save`,
       cancel: t`Cancel`,
+      close: t`Close`,
       delete: t`Delete`,
       resetChanges: t`Reset changes`,
       restoreDefaults: t`Restore defaults`,

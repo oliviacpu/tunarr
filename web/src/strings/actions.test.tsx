@@ -1,6 +1,7 @@
 import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { I18nProvider } from '@lingui/react';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { useActions, useToasts, withReason } from './actions';
@@ -15,6 +16,7 @@ describe('action vocabulary', () => {
     expect(Object.keys(result.current).sort()).toEqual([
       'add',
       'cancel',
+      'close',
       'delete',
       'resetChanges',
       'restoreDefaults',
@@ -51,12 +53,38 @@ describe('action vocabulary', () => {
     const { result: actions } = renderHook(() => useActions(), { wrapper });
     const { result: toasts } = renderHook(() => useToasts(), { wrapper });
     expect(actions.current.save).toBe('Save');
+    expect(actions.current.cancel).toBe('Cancel');
+    expect(actions.current.close).toBe('Close');
+    expect(actions.current.delete).toBe('Delete');
     expect(actions.current.resetChanges).toBe('Reset changes');
     expect(actions.current.restoreDefaults).toBe('Restore defaults');
     expect(toasts.current.saved).toBe('Saved');
     expect(toasts.current.deleted).toBe('Deleted');
     expect(toasts.current.couldNotSave).toBe('Could not save');
     expect(toasts.current.couldNotSaveSettings).toBe('Could not save settings');
+  });
+
+  it('updates dismissal and destructive labels when the locale changes', () => {
+    const { result } = renderHook(() => useActions(), { wrapper });
+    try {
+      act(() =>
+        i18n.loadAndActivate({
+          locale: 'fr',
+          messages: {
+            [msg`Cancel`.id]: 'Annuler',
+            [msg`Close`.id]: 'Fermer',
+            [msg`Delete`.id]: 'Supprimer',
+          },
+        }),
+      );
+      expect(result.current).toMatchObject({
+        cancel: 'Annuler',
+        close: 'Fermer',
+        delete: 'Supprimer',
+      });
+    } finally {
+      act(() => i18n.loadAndActivate({ locale: 'en', messages: {} }));
+    }
   });
 
   it('appends a reason only when there is one', () => {

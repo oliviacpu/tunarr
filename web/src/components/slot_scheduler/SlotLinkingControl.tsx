@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { Link as LinkIcon, LinkOff } from '@mui/icons-material';
 import {
@@ -129,6 +130,7 @@ export function SlotLinkingControl({
   onUnlinkFromGroup,
 }: SlotLinkingControlProps) {
   const { t } = useLingui();
+  const actions = useActions();
   const getSlotName = useSlotName();
   const [showPicker, setShowPicker] = useState(false);
   const { control, setValue, reset, getValues } =
@@ -310,7 +312,7 @@ export function SlotLinkingControl({
           )}
         />
         <Button size="small" onClick={() => setShowPicker(false)}>
-          <Trans>Cancel</Trans>
+          {actions.cancel}
         </Button>
       </Stack>
     );

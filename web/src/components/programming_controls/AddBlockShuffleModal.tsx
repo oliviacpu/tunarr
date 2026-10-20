@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import {
   ArrowDownward,
   ArrowUpward,
@@ -52,6 +53,7 @@ const AddBlockShuffleModalContent = ({
   initialPreset = 'block',
 }: Omit<AddBlockShuffleModalProps, 'open'>) => {
   const { t } = useLingui();
+  const actions = useActions();
   const [preset, setPreset] = useState<BlockShufflePreset>(initialPreset);
   const { control, watch, getValues, reset } = useForm<BlockShuffleConfig>({
     defaultValues: BlockShufflePresets[initialPreset],
@@ -361,9 +363,7 @@ const AddBlockShuffleModalContent = ({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button
           onClick={() => handleBlockShuffle()}
           startIcon={<ShuffleIcon />}

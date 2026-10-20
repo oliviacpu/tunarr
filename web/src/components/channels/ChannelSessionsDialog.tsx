@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions.ts';
 import {
   Button,
   Dialog,
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export const ChannelSessionsDialog = ({ open, onClose, channel }: Props) => {
+  const actions = useActions();
   if (!channel) {
     return null;
   }
@@ -29,9 +31,7 @@ export const ChannelSessionsDialog = ({ open, onClose, channel }: Props) => {
         <pre>{JSON.stringify(channel.sessions, undefined, 2)}</pre>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Close</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.close}</Button>
       </DialogActions>
     </Dialog>
   );
