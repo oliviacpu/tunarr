@@ -589,7 +589,6 @@ export const programmingApi: RouterPluginAsyncCallback = async (fastify) => {
             sourceType: string;
             externalKey: string;
             mediaSourceId: string | null;
-            externalSourceId: string | null;
           }
         | undefined;
 
@@ -625,9 +624,7 @@ export const programmingApi: RouterPluginAsyncCallback = async (fastify) => {
 
       const server = find(
         mediaSources,
-        (source) =>
-          source.uuid === externalId.mediaSourceId ||
-          source.name === externalId.externalSourceId,
+        (source) => source.uuid === externalId.mediaSourceId,
       );
 
       if (isNil(server)) {

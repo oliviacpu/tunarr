@@ -5,7 +5,6 @@ import type { Channel, ChannelOrm } from '../../db/schema/Channel.ts';
 import type { ProgramDao } from '../../db/schema/Program.ts';
 import { ProgramTypes } from '../../db/schema/Program.ts';
 import type { MinimalProgramExternalId } from '../../db/schema/ProgramExternalId.ts';
-import type { MediaSourceName } from '../../db/schema/base.js';
 import { type MediaSourceId } from '../../db/schema/base.js';
 import type {
   ProgramGroupingOrmWithRelations,
@@ -43,7 +42,6 @@ function createFakeMultiExternalId(): MinimalProgramExternalId {
   return {
     sourceType: typ,
     externalKey: faker.string.alphanumeric(),
-    externalSourceId: tag<MediaSourceName>(faker.string.alphanumeric()),
     mediaSourceId: tag<MediaSourceId>(faker.string.uuid()),
   } satisfies MinimalProgramExternalId;
 }
@@ -76,7 +74,6 @@ export function createFakeProgramOrm(
       {
         sourceType: faker.helpers.arrayElement(MultiExternalIdType),
         externalKey: faker.string.alphanumeric(),
-        externalSourceId: tag<MediaSourceName>(faker.string.alphanumeric()),
         mediaSourceId: tag<MediaSourceId>(faker.string.uuid()),
         createdAt: 0,
         uuid: faker.string.uuid(),
