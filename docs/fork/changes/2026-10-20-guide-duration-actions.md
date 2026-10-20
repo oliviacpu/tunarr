@@ -1,4 +1,4 @@
-### Make guide minus reduce hours and plus add hours (2026-10-20, PR pending)
+### Make guide minus reduce hours and plus add hours (2026-10-20, PR #150)
 
 - **What you saw:** The guide controls were ordered minus / duration / plus, but minus increased the displayed hours and plus decreased them.
 - **Cause:** Their handlers and accessible names followed zoom direction rather than the displayed duration.
