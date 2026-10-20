@@ -5,7 +5,12 @@ export function backupScheduleProblem(
   settings: BackupSettings,
 ): string | undefined {
   for (const [index, configuration] of settings.configurations.entries()) {
-    if (configuration.schedule.type !== 'cron') continue;
+    if (
+      !configuration.enabled ||
+      configuration.outputs.length === 0 ||
+      configuration.schedule.type !== 'cron'
+    )
+      continue;
     try {
       if (configuration.schedule.cron.trim().length === 0)
         throw new Error('Empty cron expression');
