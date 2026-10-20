@@ -438,7 +438,7 @@ saves through `useSettingsMutation` (`web/src/hooks/useSettingsMutation.ts`). Th
 (`web/src/pages/settings/XmlTvSettingsPage.tsx`) is the reference:
 
 ```tsx
-const form = useForm<XmlTvSettings>({ defaultValues: defaultXmlTvSettings, mode: 'onBlur' });
+const form = useForm<XmlTvSettings>({ defaultValues: defaultXmlTvSettings, mode: 'onTouched' });
 // Load the saved settings into the form; they become what it compares against.
 // Skip a reload that matches them (the refetch after a save), or edits made
 // while the save was in flight are lost
@@ -482,6 +482,10 @@ What every settings page gets from the shell:
   those values except the ones the user changed after pressing Save. Those keep the user's value and stay unsaved, so
   the form stays dirty and the guard stays on. It refetches the `invalidate` queries and toasts "Saved". A save that
   fails toasts "Could not save settings: " and the server's reason, and keeps the user's changes.
+
+Use `mode: 'onTouched'`: Save turns off as soon as a value stops being valid, and a field shows why once the user
+has left it. The settings pages are General, Guide (XMLTV), Transcoding (FFmpeg), Scanner, Tuner (HDHR) and Features;
+the transcode-config table on the Transcoding page sits below its form, outside it.
 
 Build the fields from the typed controllers in `web/src/components/util/TypedController.tsx` rather than wiring
 `Controller` by hand: `NumericFormControllerText`, `CheckboxFormController`, `SwitchFormController` (a switch with its

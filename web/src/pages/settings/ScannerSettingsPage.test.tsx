@@ -57,6 +57,11 @@ vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
     mockPutSettings(options),
 }));
 
+// It blocks navigation through the router, which these tests don't have
+vi.mock('../../components/settings/UnsavedNavigationAlert.tsx', () => ({
+  default: () => null,
+}));
+
 const IntervalLabel = 'Rescan interval (hours)';
 
 async function renderPage() {
@@ -135,11 +140,11 @@ describe('ScannerSettingsPage', () => {
     expect(screen.queryByText(/Next scan/)).not.toBeInTheDocument();
   });
 
-  test('an interval under 1 hour is flagged and not saved', async () => {
-    const { setRescanInterval, save } = await renderPage();
+  test('an interval under 1 hour is flagged and cannot be saved', async () => {
+    const { setRescanInterval } = await renderPage();
 
+    // Leaving the field flags it
     await setRescanInterval('0');
-    await save();
 
     // Its helper text, which starts with its error, is its accessible
     // description
@@ -150,6 +155,22 @@ describe('ScannerSettingsPage', () => {
       ),
     );
     expect(field).toBeInvalid();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(mockPutSettings).not.toHaveBeenCalled();
+  });
+
+  test('Reset changes puts the saved interval back', async () => {
+    const { user, setRescanInterval } = await renderPage();
+
+    await setRescanInterval('12');
+    await user.click(
+      await screen.findByRole('button', { name: 'Reset changes' }),
+    );
+
+    expect(screen.getByLabelText(IntervalLabel)).toHaveValue('6');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
+    );
     expect(mockPutSettings).not.toHaveBeenCalled();
   });
 });

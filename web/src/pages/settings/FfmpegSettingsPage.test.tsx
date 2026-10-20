@@ -189,4 +189,47 @@ describe('FfmpegSettingsPage', () => {
       expect(screen.queryByText(/FFmpeg is working/)).not.toBeInTheDocument(),
     );
   });
+
+  test('a changed tone-map curve is saved, and the saved form is clean', async () => {
+    // The server keeps what it is sent
+    mockPutFfmpegSettings.mockImplementation(({ body }) =>
+      Promise.resolve({ data: { ...saved, ...body } }),
+    );
+    const { user } = await renderPage();
+    const curve = () =>
+      screen.getByRole('combobox', { name: 'HDR tone-map curve' });
+    const save = () => screen.getByRole('button', { name: 'Save' });
+
+    await user.click(curve());
+    await user.click(await screen.findByRole('option', { name: 'BT.2390' }));
+    await waitFor(() => expect(save()).toBeEnabled());
+    await user.click(save());
+
+    await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
+    expect(mockPutFfmpegSettings.mock.calls[0]?.[0].body).toMatchObject({
+      tonemapAlgorithm: 'bt2390',
+      ffmpegExecutablePath: '/usr/bin/ffmpeg',
+    });
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    await waitFor(() => expect(save()).toBeDisabled());
+    expect(curve()).toHaveTextContent('BT.2390');
+  });
+
+  test('caption alignment can be chosen once closed captions are on', async () => {
+    const { user } = await renderPage();
+    const alignment = () =>
+      screen.getByRole('combobox', { name: 'Caption alignment' });
+    expect(alignment()).toHaveAttribute('aria-disabled', 'true');
+
+    const captions = screen.getByRole('checkbox', {
+      name: 'Closed captions for HDHomeRun clients (Plex)',
+    });
+    await user.click(captions);
+
+    expect(captions).toBeChecked();
+    expect(alignment()).not.toHaveAttribute('aria-disabled');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
+    );
+  });
 });

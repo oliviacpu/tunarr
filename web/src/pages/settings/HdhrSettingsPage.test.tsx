@@ -129,13 +129,43 @@ describe('HdhrSettingsPage', () => {
     ).toBeInTheDocument();
   });
 
-  test('a save that fails without a reason still says so', async () => {
+  test('a save that fails without a reason from the server still says so', async () => {
     mockPutHdhrSettings.mockRejectedValue(new Error('Network Error'));
 
     await renderAndSave();
 
+    // The settings form gives the error's own message when the server sent none
     expect(
-      await screen.findByText('Could not save settings'),
+      await screen.findByText('Could not save settings: Network Error'),
     ).toBeInTheDocument();
+  });
+
+  test('Restore defaults fills in the defaults, can be undone, and saves with Save', async () => {
+    const { user, tunerCount, saveButton } = await renderPage();
+    const restoreDefaults = () =>
+      screen.queryByRole('button', { name: 'Restore defaults' });
+
+    const restore = restoreDefaults();
+    if (restore === null) {
+      throw new Error('4 tuners are not the defaults, so they can be restored');
+    }
+    await user.click(restore);
+
+    expect(tunerCount()).toHaveValue('2');
+    expect(restoreDefaults()).not.toBeInTheDocument();
+    // Nothing is saved yet, so it is a change like any other
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(tunerCount()).toHaveValue('4');
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+
+    await user.click(screen.getByRole('button', { name: 'Restore defaults' }));
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+    await waitFor(() => expect(mockPutHdhrSettings).toHaveBeenCalledOnce());
+    expect(mockPutHdhrSettings.mock.calls[0]?.[0].body).toEqual({
+      autoDiscoveryEnabled: true,
+      tunerCount: 2,
+    });
   });
 });
