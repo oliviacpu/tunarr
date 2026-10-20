@@ -14291,6 +14291,17 @@ export type GetApiFfmpegInfoData = {
     url: '/api/ffmpeg-info';
 };
 
+export type GetApiFfmpegInfoErrors = {
+    /**
+     * Default Response
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiFfmpegInfoError = GetApiFfmpegInfoErrors[keyof GetApiFfmpegInfoErrors];
+
 export type GetApiFfmpegInfoResponses = {
     /**
      * Default Response

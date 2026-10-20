@@ -4,6 +4,8 @@ Tunarr requires FFmpeg for transcoding / remuxing content when outputting channe
 
 ## Executable Paths
 
+If Tunarr cannot inspect FFmpeg, capability loading reports an error. Check the configured executable path and its execute permissions before retrying.
+
 !!! info
     Only non-Docker installs must provide FFmpeg executable paths. Docker installs come with a bundled version of FFmpeg.
 

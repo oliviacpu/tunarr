@@ -107,3 +107,14 @@ describe('legacy HDHR tuner count', () => {
     expect(parsed.settings.hdhr.tunerCount).toBe(2);
   });
 });
+
+test('default settings own their tuner configuration', () => {
+  const first = defaultSettings('/tmp/first');
+  const second = defaultSettings('/tmp/second');
+  first.settings.hdhr.tunerCount = 17;
+  first.settings.hdhr.autoDiscoveryEnabled = false;
+  expect(second.settings.hdhr).toEqual(HdhrSettingsSchema.parse({}));
+  expect(defaultSettings('/tmp/third').settings.hdhr).toEqual(
+    HdhrSettingsSchema.parse({}),
+  );
+});

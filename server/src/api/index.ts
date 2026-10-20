@@ -1,4 +1,3 @@
-import type { FfmpegEncoder } from '@/ffmpeg/ffmpegInfo.js';
 import { FfmpegInfo } from '@/ffmpeg/ffmpegInfo.js';
 import { globalOptions, serverOptions } from '@/globals.js';
 import { GlobalScheduler } from '@/services/Scheduler.js';
@@ -10,7 +9,7 @@ import { uploadedImageUrl } from '@/util/iconUtil.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import { getTunarrVersion } from '@/util/version.js';
 import fpStatic from '@fastify/static';
-import { VersionApiResponseSchema } from '@tunarr/types/api';
+import { BaseErrorSchema, VersionApiResponseSchema } from '@tunarr/types/api';
 import { fileTypeFromStream } from 'file-type';
 import { isEmpty } from 'lodash-es';
 import { createReadStream, promises as fsPromises } from 'node:fs';
@@ -24,7 +23,7 @@ import {
 } from '../services/PlexGuideNotifier.ts';
 import { TruthyQueryParam } from '../types/schemas.ts';
 import { getBooleanEnvVar, TUNARR_ENV_VARS } from '../util/env.ts';
-import { isDev, isNonEmptyString, run } from '../util/index.js';
+import { isDev, isNonEmptyString } from '../util/index.js';
 import { channelsApi } from './channelsApi.js';
 import { nativePlaybackApi } from './nativePlaybackApi.js';
 import { CreditsApiController } from './creditsApi.ts';
@@ -138,27 +137,30 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
               .array(),
             hardwareAccelerationTypes: z.string().array(),
           }),
+          500: BaseErrorSchema,
         },
       },
     },
     async (_, res) => {
       const info = container.get<FfmpegInfo>(FfmpegInfo);
-      const [audioEncoders, videoEncoders] = await Promise.all([
-        run(async () => {
-          const res = await info.getAvailableAudioEncoders();
-          return res.getOrElse(() => [] as FfmpegEncoder[]);
-        }),
-        run(async () => {
-          const res = await info.getAvailableVideoEncoders();
-          return res.getOrElse(() => [] as FfmpegEncoder[]);
-        }),
-      ]);
-      const hwAccels = await info.getHwAccels();
-      return res.send({
-        audioEncoders,
-        videoEncoders,
-        hardwareAccelerationTypes: hwAccels,
-      });
+      try {
+        const [audioEncoders, videoEncoders] = await Promise.all([
+          info.getAvailableAudioEncoders(),
+          info.getAvailableVideoEncoders(),
+        ]);
+        const hardwareAccelerationTypes = await info.getHwAccels();
+        return res.send({
+          audioEncoders: audioEncoders.get(),
+          videoEncoders: videoEncoders.get(),
+          hardwareAccelerationTypes,
+        });
+      } catch (error) {
+        logger.error(error, 'Could not inspect FFmpeg capabilities');
+        return res.status(500).send({
+          message:
+            'Could not inspect FFmpeg capabilities. Check the executable path and permissions.',
+        });
+      }
     },
   );
 
