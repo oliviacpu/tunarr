@@ -1,4 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   afterAll,
   afterEach,
@@ -9,6 +12,9 @@ import {
   vi,
 } from 'vitest';
 import { FfmpegInfo } from '../src/ffmpeg/ffmpegInfo.ts';
+import { container } from '../src/container.ts';
+import type { ISettingsDB } from '../src/db/interfaces/ISettingsDB.ts';
+import { KEYS } from '../src/types/inject.ts';
 import { Result } from '../src/types/result.ts';
 import { getAvailablePort } from '../src/util/net.ts';
 import { initTestApp } from './testServer.ts';
@@ -30,7 +36,9 @@ function successfulProbes() {
   vi.spyOn(FfmpegInfo.prototype, 'getAvailableVideoEncoders').mockResolvedValue(
     Result.success([{ name: 'H.264', ffmpegName: 'libx264' }]),
   );
-  vi.spyOn(FfmpegInfo.prototype, 'getHwAccels').mockResolvedValue(['vaapi']);
+  vi.spyOn(FfmpegInfo.prototype, 'getHwAccelsResult').mockResolvedValue(
+    Result.success(['vaapi']),
+  );
 }
 
 describe('GET /ffmpeg-info', () => {
@@ -68,7 +76,7 @@ describe('GET /ffmpeg-info', () => {
 
   test('reports an unexpected hardware probe failure with the same error shape', async () => {
     successfulProbes();
-    vi.spyOn(FfmpegInfo.prototype, 'getHwAccels').mockRejectedValue(
+    vi.spyOn(FfmpegInfo.prototype, 'getHwAccelsResult').mockRejectedValue(
       new Error('probe failed'),
     );
     const response = await app.inject({
@@ -77,5 +85,40 @@ describe('GET /ffmpeg-info', () => {
     });
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ message: expect.any(String) });
+  });
+
+  test('reports a real hardware probe failure while retaining the capability fallback', async () => {
+    const settings = container.get<ISettingsDB>(KEYS.SettingsDB);
+    const original = { ...settings.ffmpegSettings() };
+    const directory = await mkdtemp(path.join(tmpdir(), 'tunarr-hwaccels-'));
+    const executable = path.join(directory, 'ffmpeg');
+    try {
+      await writeFile(
+        executable,
+        [
+          '#!/bin/sh',
+          'case "$*" in',
+          '  *-hwaccels*) exit 1 ;;',
+          "  *-encoders*) printf 'Encoders:\\n A..... aac AAC\\n V..... libx264 H.264\\n' ;;",
+          'esac',
+          '',
+        ].join('\n'),
+        { mode: 0o755 },
+      );
+      await settings.updateFfmpegSettings({
+        ...original,
+        ffmpegExecutablePath: executable,
+      });
+      expect(await container.get(FfmpegInfo).getHwAccels()).toEqual([]);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/ffmpeg-info',
+      });
+      expect(response.statusCode, response.body).toBe(500);
+      expect(response.json()).toEqual({ message: expect.any(String) });
+    } finally {
+      await settings.updateFfmpegSettings(original);
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

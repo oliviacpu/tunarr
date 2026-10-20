@@ -148,7 +148,9 @@ export const apiRouter: RouterPluginAsyncCallback = async (fastify) => {
           info.getAvailableAudioEncoders(),
           info.getAvailableVideoEncoders(),
         ]);
-        const hardwareAccelerationTypes = await info.getHwAccels();
+        const hardwareAccelerationTypes = (
+          await info.getHwAccelsResult()
+        ).get();
         return res.send({
           audioEncoders: audioEncoders.get(),
           videoEncoders: videoEncoders.get(),
