@@ -1,57 +1,64 @@
 import { styled } from '@mui/material';
-import type { TvGuideProgram } from '@tunarr/types';
-import Color from 'colorjs.io';
-import { isUndefined } from 'lodash-es';
-import { alternateColors } from '../../helpers/util.ts';
 import { TvGuideGridChild } from './TvGuideGridChild.tsx';
+import type { GuideCellStyle } from './guideColors.ts';
+
+const ItemOnlyProps = new Set<PropertyKey>([
+  'cellStyle',
+  'left',
+  'compact',
+  'ringColor',
+  'paused',
+  'clickable',
+]);
 
 export const TvGuideItem = styled(TvGuideGridChild, {
-  shouldForwardProp: (prop) =>
-    prop !== 'backgroundColor' &&
-    prop !== 'program' &&
-    prop !== 'left' &&
-    prop !== 'compact',
+  shouldForwardProp: (prop) => !ItemOnlyProps.has(prop),
 })<{
-  program?: TvGuideProgram;
-  backgroundColor?: Color;
+  cellStyle: GuideCellStyle;
 
   // Percentages of the guide window
   left: number;
   width: number;
-  index: number;
 
   // Too narrow for text. Drops the gap and padding so neighboring slivers
   // stay visible instead of collapsing into their borders.
   compact?: boolean;
-}>(({ theme, left, width, index, backgroundColor, program, compact }) => {
-  const bgColor =
-    backgroundColor?.toString({ format: 'hex' }) ??
-    alternateColors(index, theme.palette.mode);
-  const bgLighter = new Color(bgColor).set('oklch.l', (l) => l * 1.05);
-  const bgDarker = new Color(bgColor).set('oklch.l', (l) => l * 0.95);
 
-  const background =
-    isUndefined(program) || program.type === 'flex' || program.isPaused
-      ? `repeating-linear-gradient(-45deg,
-              ${bgColor},
-              ${bgColor} 10px,
-              ${bgDarker.toString()} 10px,
-              ${bgDarker.toString()} 20px)`
-      : bgColor;
+  // The program on air now gets a ring in the guide's one accent (primary).
+  ringColor?: string;
 
-  const hoverBackground =
-    isUndefined(program) || program.type === 'flex' || program.isPaused
-      ? `repeating-linear-gradient(-45deg,
-  ${bgLighter.toString()},
-  ${bgLighter.toString()} 10px,
-  ${bgColor} 10px,
-  ${bgColor} 20px)`
-      : bgLighter.toString();
+  // A paused program (on-demand channel) is striped with its own colour.
+  paused?: boolean;
+
+  clickable?: boolean;
+}>(({ left, width, cellStyle, compact, ringColor, paused, clickable }) => {
+  const stripes = (base: string, stripe: string) =>
+    `repeating-linear-gradient(-45deg,
+      ${base},
+      ${base} 10px,
+      ${stripe} 10px,
+      ${stripe} 20px)`;
+
+  const background = paused
+    ? stripes(cellStyle.background, cellStyle.hoverBackground)
+    : cellStyle.background;
+  const hoverBackground = paused
+    ? stripes(cellStyle.hoverBackground, cellStyle.background)
+    : cellStyle.hoverBackground;
+
+  const ringWidth = compact ? 1 : 2;
+  const boxShadow =
+    ringColor !== undefined
+      ? `inset 0 0 0 ${ringWidth}px ${ringColor}`
+      : compact
+        ? 'inset -1px 0 0 rgba(0, 0, 0, 0.3)'
+        : undefined;
 
   return {
     display: 'flex',
     alignItems: 'flex-start',
     background,
+    color: cellStyle.color,
 
     // Blocks are placed by time. The transparent border draws the gap between
     // neighbors without taking width from the layout.
@@ -67,18 +74,24 @@ export const TvGuideItem = styled(TvGuideGridChild, {
     borderWidth: compact ? '2px 0' : '2px',
     borderColor: 'transparent',
     borderRadius: compact ? 0 : '5px',
+    // The dashed outline of a flex gap sits just inside the fill, so the gap
+    // between neighbours stays clear.
+    outline: cellStyle.outline,
+    outlineOffset: cellStyle.outline !== undefined ? '-3px' : undefined,
     padding: compact ? 0 : '1px 4px',
-    boxShadow: compact ? 'inset -1px 0 0 rgba(0, 0, 0, 0.3)' : undefined,
+    boxShadow,
     transition: 'left 0.5s ease-in, width 0.5s ease-in',
+    '@media (prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
     overflow: 'hidden',
     whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
     flexDirection: 'column',
     justifyContent: 'flex-start',
-    cursor: 'pointer',
+    cursor: clickable ? 'pointer' : 'default',
     '&:hover': {
       background: hoverBackground,
-      // color: getTextContrast(bgLighter, theme.palette.mode),
     },
   };
 });

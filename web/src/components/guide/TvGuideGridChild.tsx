@@ -8,5 +8,8 @@ export const TvGuideGridChild = styled(Box)<{ width: number | string }>(
     borderWidth: '0 1px 0 0',
     width: isNumber(width) ? `${width}%` : width,
     transition: 'width 0.5s ease-in',
+    '@media (prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
   }),
 );

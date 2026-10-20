@@ -1,4 +1,5 @@
-import { useColorScheme } from '@mui/material';
+import type { Palette, Theme as MuiTheme } from '@mui/material';
+import { useColorScheme, useTheme } from '@mui/material';
 import { useMemo } from 'react';
 import { Theme } from '../theme.ts';
 
@@ -14,6 +15,43 @@ export const useSetColorScheme = () => {
 
 export const useIsDarkMode = () => {
   return useColorScheme().colorScheme === 'dark';
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isPalette = (value: unknown): value is Palette =>
+  isRecord(value) &&
+  isRecord(value['text']) &&
+  isRecord(value['background']) &&
+  isRecord(value['primary']);
+
+/**
+ * A colour scheme's finished palette, as createTheme keeps it on the theme.
+ * MUI only types `colorSchemes` when CSS variables are on, so it is narrowed
+ * here.
+ */
+export function schemePaletteOf(
+  theme: MuiTheme,
+  scheme: ColorMode,
+): Palette | undefined {
+  const schemes = 'colorSchemes' in theme ? theme.colorSchemes : undefined;
+  const system = isRecord(schemes) ? schemes[scheme] : undefined;
+  const palette = isRecord(system) ? system['palette'] : undefined;
+  return isPalette(palette) ? palette : undefined;
+}
+
+/**
+ * The palette of the colour scheme on screen. With CSS variables on,
+ * `theme.palette` stays on the default (light) scheme, so code that computes
+ * colours from palette values reads them here.
+ */
+export const useActivePalette = (): Palette => {
+  const theme = useTheme();
+  const { colorScheme } = useColorScheme();
+  return (
+    schemePaletteOf(theme, colorScheme ?? theme.palette.mode) ?? theme.palette
+  );
 };
 
 /**

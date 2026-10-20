@@ -21,10 +21,10 @@ import { match, P } from 'ts-pattern';
 import { useInterval, useResizeObserver } from 'usehooks-ts';
 import { betterHumanize } from '../../helpers/dayjs.ts';
 import { extractProgramGrandparent } from '../../helpers/programUtil.ts';
-import { alternateColors, isNonEmptyString } from '../../helpers/util';
-import { useRandomProgramBackgroundColor } from '../../hooks/colorHooks.ts';
+import { isNonEmptyString } from '../../helpers/util';
 import { useChannelsSuspense } from '../../hooks/useChannels.ts';
 import { useServerEvents } from '../../hooks/useServerEvents.ts';
+import { useActivePalette } from '../../hooks/useTunarrTheme.ts';
 import { useTvGuides, useTvGuidesPrefetch } from '../../hooks/useTvGuide';
 import type { Maybe, Nullable } from '../../types/util.ts';
 import { LoadingIcon } from '../base/LoadingIcon.tsx';
@@ -32,8 +32,16 @@ import PaddedPaper from '../base/PaddedPaper';
 import { ChannelIconDisplay } from '../channels/ChannelIconDisplay.tsx';
 import { ChannelOptionsMenu } from '../channels/ChannelOptionsMenu.tsx';
 import ProgramDetailsDialog from '../programs/ProgramDetailsDialog.tsx';
+import {
+  guideCellType,
+  guideColorKey,
+  isProgramCell,
+  typeStyle,
+} from './guideColors.ts';
+import { TvGuideCell } from './TvGuideCell.tsx';
 import { TvGuideGridChild } from './TvGuideGridChild.tsx';
 import { TvGuideItem } from './TvGuideItem.tsx';
+import { TvGuideNowMarker } from './TvGuideNowMarker.tsx';
 
 const GridParent = styled(Box)({
   borderStyle: 'solid',
@@ -48,9 +56,8 @@ const StyledButton = styled(Button)`
   }
 `;
 
-// Below these pixel widths, blocks drop their text and header times shorten
-// or thin out, because the full text would only show as clipped fragments.
-const CompactBlockPx = 24;
+// Below these pixel widths, header times shorten or thin out, because the
+// full text would only show as clipped fragments.
 const ShortTimeSlotPx = 80;
 const SparseTimeSlotPx = 48;
 
@@ -70,6 +77,9 @@ type Props = {
 export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
   const { t } = useLingui();
   const theme = useTheme();
+  // Guide colours are computed from palette values, so they read the palette
+  // of the scheme on screen (theme.palette stays light under CSS variables).
+  const palette = useActivePalette();
   // Workaround for issue with page jumping on-zoom or nav caused by collapsing
   // div when loading new guide data
   const ref = useRef<HTMLDivElement | null>(null);
@@ -188,8 +198,6 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
     ) : null;
   };
 
-  const randomBackgroundColor = useRandomProgramBackgroundColor();
-
   const renderProgram = ({
     id: channelId,
     name: channelName,
@@ -271,8 +279,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
         return null;
       }
 
-      const isCompact =
-        gridWidth > 0 && (pct / 100) * gridWidth < CompactBlockPx;
+      const pixelWidth = gridWidth > 0 ? (pct / 100) * gridWidth : undefined;
 
       const endOfAvailableProgramming =
         index === lineup.length - 1 && programEnd.isBefore(end);
@@ -286,49 +293,45 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
         remainingTime = betterHumanize(dayjs.duration(program.timeRemaining));
       }
 
-      const bg = randomBackgroundColor(program);
+      const cellType = guideCellType(program);
 
       return (
         <Fragment key={key}>
-          <TvGuideItem
+          <TvGuideCell
             left={left}
             width={pct}
-            compact={isCompact}
-            title={isCompact ? title : undefined}
-            index={index}
+            pixelWidth={pixelWidth}
+            title={title}
+            subtitle={episodeTitle}
             onClick={() => handleModalOpen(program)}
-            backgroundColor={bg}
-            program={program}
+            cellStyle={typeStyle(palette, cellType, guideColorKey(program))}
+            nowPlaying={isPlaying}
+            paused={program.isPaused}
+            clickable={isProgramCell(cellType)}
           >
-            {isCompact ? null : (
-              <>
-                <Box sx={{ fontSize: '14px', fontWeight: '600' }}>{title}</Box>
-                <Box sx={{ fontSize: '13px', fontStyle: 'italic' }}>
-                  {episodeTitle}
-                </Box>
-                {(smallViewport && pct > 20) ||
-                  (!smallViewport && pct > 8 && (
-                    <>
-                      {!program.isPaused && (
-                        <Box sx={{ fontSize: '12px' }}>
-                          {`${programStart.format('LT')} - ${programEnd.format('LT')}`}
-                        </Box>
-                      )}
-                      <Box sx={{ fontSize: '12px' }}>
-                        {remainingTime ? (
-                          <Trans>{remainingTime} left</Trans>
-                        ) : null}
-                      </Box>
-                    </>
-                  ))}
-              </>
-            )}
-          </TvGuideItem>
+            {(smallViewport && pct > 20) ||
+              (!smallViewport && pct > 8 && (
+                <>
+                  {!program.isPaused && (
+                    <Box
+                      sx={{
+                        fontSize: '12px',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {`${programStart.format('LT')} - ${programEnd.format('LT')}`}
+                    </Box>
+                  )}
+                  <Box sx={{ fontSize: '12px' }}>
+                    {remainingTime ? <Trans>{remainingTime} left</Trans> : null}
+                  </Box>
+                </>
+              ))}
+          </TvGuideCell>
           {endOfAvailableProgramming
             ? renderUnavailableProgramming(
                 toPercent(program.stop - +start),
                 toPercent(+end - program.stop),
-                index,
               )
             : null}
         </Fragment>
@@ -336,12 +339,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
     };
   };
 
-  const renderUnavailableProgramming = (
-    left: number,
-    width: number,
-    index: number,
-  ) => {
-    const bg = alternateColors(index, theme.palette.mode);
+  const renderUnavailableProgramming = (left: number, width: number) => {
     return (
       <Tooltip
         title={t`No programming scheduled for this time period`}
@@ -350,15 +348,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
         <TvGuideItem
           left={left}
           width={width}
-          index={index}
-          sx={{
-            background: `repeating-linear-gradient(
-              45deg,
-              ${bg},
-              ${bg} 10px,
-              ${bg} 10px,
-              ${bg} 20px)`,
-          }}
+          cellStyle={typeStyle(palette, 'flex')}
         >
           <Box
             sx={{
@@ -374,7 +364,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
     );
   };
 
-  const channels = seq.collect(channelLineup, (lineup, index) => {
+  const channels = seq.collect(channelLineup, (lineup) => {
     const channel = channelsInfo.find((c) => c.id === lineup.id);
     if (!channel) {
       return;
@@ -424,7 +414,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
       >
         {alignedLineup.length > 0
           ? alignedLineup.map(renderProgram(lineup))
-          : renderUnavailableProgramming(0, 100, index)}
+          : renderUnavailableProgramming(0, 100)}
       </Box>
     );
   });
@@ -543,11 +533,11 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
                     minWidth: 0,
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
-                    borderLeft: '1px solid white',
-                    // textAlign: 'center',
+                    borderLeft: `1px solid ${palette.divider}`,
+                    fontVariantNumeric: 'tabular-nums',
                     pl: 1,
                     '&:last-child': {
-                      borderRight: '1px solid white',
+                      borderRight: `1px solid ${palette.divider}`,
                     },
                   }}
                   key={slot}
@@ -589,55 +579,7 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
               channels
             )}
             {dayjs().isBetween(start, end) && (
-              <>
-                {/* Shifting the pill left by its own progress fraction keeps it
-                    inside the grid at both edges. */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    left: `${progress}%`,
-                    transform: `translateX(-${progress}%)`,
-                    transition: 'left 0.5s linear, transform 0.5s linear',
-                    zIndex: 11,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      position: 'relative',
-                      background: theme.palette.primary.main,
-                      color: theme.palette.primary.contrastText,
-                      minWidth: '50px',
-                      width: 'max-content',
-                      px: 1,
-                      borderRadius: '5px',
-                      fontSize: '14px',
-                      textAlign: 'center',
-                      zIndex: 2,
-                    }}
-                  >
-                    {currentTime}
-                  </Box>
-                </Box>
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    left: `${progress}%`,
-                    transition: 'left 0.5s linear',
-                    height: '100%',
-                    zIndex: 10,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      position: 'relative',
-                      width: '2px',
-                      background: theme.palette.primary.main,
-                      height: '100%',
-                      mt: '-2px',
-                    }}
-                  ></Box>
-                </Box>
-              </>
+              <TvGuideNowMarker progress={progress} label={currentTime} />
             )}
           </Box>
         </Box>

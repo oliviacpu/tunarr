@@ -1,83 +1,14 @@
-import type { Palette, Theme as MuiTheme } from '@mui/material';
+import type { Theme as MuiTheme } from '@mui/material';
 import { createTheme } from '@mui/material';
 import { esES } from '@mui/material/locale';
-import { decomposeColor, hslToRgb } from '@mui/material/styles';
 import { FormHelperText, Paper } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { render, screen } from '@testing-library/react';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import { StyledMenu } from './components/base/StyledMenu.tsx';
+import { contrastRatio, type Scheme, schemePalette } from './test/contrast.ts';
 import { Theme } from './theme.ts';
-
-type Rgba = { r: number; g: number; b: number; a: number };
-
-function parseColor(color: string): Rgba {
-  const parsed = decomposeColor(
-    color.startsWith('hsl') ? hslToRgb(color) : color,
-  );
-  if (parsed.type !== 'rgb' && parsed.type !== 'rgba') {
-    throw new Error(`Unsupported colour: ${color}`);
-  }
-  const [r, g, b, a = 1] = parsed.values;
-  return { r, g, b, a };
-}
-
-// A translucent colour (MUI's text colours are black or white at an alpha)
-// is seen blended over what is behind it.
-function composite(foreground: Rgba, background: Rgba): Rgba {
-  if (background.a !== 1) {
-    throw new Error('The background colour must be opaque');
-  }
-  const mix = (fg: number, bg: number) =>
-    fg * foreground.a + bg * (1 - foreground.a);
-  return {
-    r: mix(foreground.r, background.r),
-    g: mix(foreground.g, background.g),
-    b: mix(foreground.b, background.b),
-    a: 1,
-  };
-}
-
-// WCAG 2 relative luminance, with the sRGB transfer function's 0.04045 knee.
-function relativeLuminance({ r, g, b }: Rgba): number {
-  const linear = (channel: number) => {
-    const c = channel / 255;
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
-}
-
-function contrastRatio(foreground: string, background: string): number {
-  const bg = parseColor(background);
-  const fg = composite(parseColor(foreground), bg);
-  const a = relativeLuminance(fg);
-  const b = relativeLuminance(bg);
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
-
-type Scheme = 'light' | 'dark';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const isPalette = (value: unknown): value is Palette =>
-  isRecord(value) &&
-  isRecord(value['text']) &&
-  isRecord(value['background']) &&
-  isRecord(value['primary']);
-
-// createTheme keeps each scheme's finished palette on the theme. MUI only
-// types `colorSchemes` when CSS variables are on, so narrow it here.
-function schemePalette(scheme: Scheme, theme: MuiTheme = Theme): Palette {
-  const schemes = 'colorSchemes' in theme ? theme.colorSchemes : undefined;
-  const system = isRecord(schemes) ? schemes[scheme] : undefined;
-  const palette = isRecord(system) ? system['palette'] : undefined;
-  if (!isPalette(palette)) {
-    throw new Error(`The theme has no ${scheme} palette`);
-  }
-  return palette;
-}
 
 type Pairing = {
   scheme: Scheme;
@@ -124,7 +55,30 @@ function textPairings(scheme: Scheme): Pairing[] {
     foregroundColor: palette.primary.contrastText,
     backgroundColor: palette.primary.main,
   });
+  // Labels on filled secondary chips and buttons.
+  pairings.push({
+    scheme,
+    foreground: 'secondary.contrastText',
+    background: 'secondary.main',
+    foregroundColor: palette.secondary.contrastText,
+    backgroundColor: palette.secondary.main,
+  });
   return pairings;
+}
+
+// Colours that are not text but must stand out from the surface (WCAG 1.4.11,
+// 3:1): the secondary spinner on the guide, and secondary outlines and icons.
+function nonTextPairings(scheme: Scheme): Pairing[] {
+  const palette = schemePalette(scheme);
+  return [
+    {
+      scheme,
+      foreground: 'secondary.main',
+      background: 'background.paper',
+      foregroundColor: palette.secondary.main,
+      backgroundColor: palette.background.paper,
+    },
+  ];
 }
 
 describe('contrastRatio', () => {
@@ -164,6 +118,25 @@ describe('Theme', () => {
       `${foregroundColor} on ${backgroundColor} is ${ratio.toFixed(2)}:1`,
     ).toBeGreaterThanOrEqual(4.5);
   });
+
+  it.each(
+    [...nonTextPairings('light'), ...nonTextPairings('dark')].map(
+      (pairing) =>
+        [
+          `${pairing.scheme}: ${pairing.foreground} on ${pairing.background}`,
+          pairing,
+        ] as const,
+    ),
+  )(
+    '%s passes the non-text minimum (3:1)',
+    (_, { foregroundColor, backgroundColor }) => {
+      const ratio = contrastRatio(foregroundColor, backgroundColor);
+      expect(
+        ratio,
+        `${foregroundColor} on ${backgroundColor} is ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(3);
+    },
+  );
 
   it('sets IBM Plex Sans as the UI font', () => {
     expect(Theme.typography.fontFamily).toMatch(/^'IBM Plex Sans/);
