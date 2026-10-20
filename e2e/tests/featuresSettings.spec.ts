@@ -17,7 +17,7 @@ test('a switched flag saves, survives a reload and moves nothing else', async ({
 }) => {
   const before = await savedSettings<FeatureFlagsResponse>(page, SETTINGS_URL);
   expect(before.flags.xmltvCreditImagesEnabled).toBe(false);
-  await page.goto('/web/settings/features');
+  await page.goto('/web/settings/experimental');
   const flag = page.getByRole('checkbox', { name: 'XMLTV Credit Images' });
   await expect(flag).not.toBeChecked();
   await expect(saveButton(page)).toBeDisabled();

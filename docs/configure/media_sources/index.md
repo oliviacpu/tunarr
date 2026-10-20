@@ -43,6 +43,6 @@ When you add a media source, Tunarr will scan its libraries and index the availa
 
 ## Scheduled Scans
 
-Tunarr rescans every enabled library on a timer. Set it under **Settings > Scanner** as **Rescan Interval (hours)**, 6 by default. The interval counts from midnight, so every 6 hours scans at 00:30, 06:30, 12:30 and 18:30. Scans start at half past the hour so they don't overlap the hourly check of each media server's library list. An interval of 24 or more scans once a day, at 00:30. Collections from Plex, Jellyfin and Emby, and [synced Custom Shows](../library/custom-shows.md), sync on the same interval, on the hour.
+Tunarr rescans every enabled library on a timer. Set it under **Settings > Library** as **Rescan Interval (hours)**, 6 by default. The interval counts from midnight, so every 6 hours scans at 00:30, 06:30, 12:30 and 18:30. Scans start at half past the hour so they don't overlap the hourly check of each media server's library list. An interval of 24 or more scans once a day, at 00:30. Collections from Plex, Jellyfin and Emby, and [synced Custom Shows](../library/custom-shows.md), sync on the same interval, on the hour.
 
 A new interval takes effect when you save it, with no restart. The Scanner page shows when the next scan will run, and **System > Tasks** lists the next run of every scheduled task. The interval must be a whole number of hours, 1 or more.

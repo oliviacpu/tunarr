@@ -1,6 +1,7 @@
-import FfmpegSettingsPage from '@/pages/settings/FfmpegSettingsPage';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/settings/ffmpeg')({
-  component: FfmpegSettingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/playback', replace: true });
+  },
 });

@@ -112,14 +112,14 @@ function renderForm(
   const rootRoute = createRootRoute();
   const newRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/settings/ffmpeg/new',
+    path: '/settings/playback/new',
     component: () => (
       <TranscodeConfigSettingsForm initialConfig={initialConfig} isNew />
     ),
   });
   const editRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/settings/ffmpeg/$configId',
+    path: '/settings/playback/$configId',
     component: () => (
       <TranscodeConfigSettingsForm initialConfig={initialConfig} />
     ),
@@ -129,8 +129,8 @@ function renderForm(
     history: createMemoryHistory({
       initialEntries: [
         mode === 'new'
-          ? '/settings/ffmpeg/new'
-          : `/settings/ffmpeg/${config.id}`,
+          ? '/settings/playback/new'
+          : `/settings/playback/${config.id}`,
       ],
     }),
   });
@@ -435,7 +435,7 @@ describe('TranscodeConfigSettingsForm saving', () => {
     expect(body).not.toHaveProperty('id');
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(
-        `/settings/ffmpeg/${createdId}`,
+        `/settings/playback/${createdId}`,
       ),
     );
     expect(await screen.findByText('Saved')).toBeInTheDocument();
@@ -471,7 +471,7 @@ describe('TranscodeConfigSettingsForm saving', () => {
 
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(
-        `/settings/ffmpeg/${createdId}`,
+        `/settings/playback/${createdId}`,
       ),
     );
     expect(await screen.findByLabelText('Name')).toBeEnabled();
@@ -515,7 +515,7 @@ describe('TranscodeConfigSettingsForm saving', () => {
     });
     expect(await screen.findByText('Saved')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(
-      `/settings/ffmpeg/${config.id}`,
+      `/settings/playback/${config.id}`,
     );
     // What was saved is what the form now compares against
     await waitFor(() => expect(saveButton()).toBeDisabled());

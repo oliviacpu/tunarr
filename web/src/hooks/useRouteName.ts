@@ -135,11 +135,11 @@ const useNamedRoutes = () => {
         name: t`Add Programming`,
       },
       {
-        matcher: /^\/settings\/ffmpeg$/g,
-        name: t`Transcoding settings`,
+        matcher: /^\/settings\/playback$/g,
+        name: t`Playback`,
       },
       {
-        matcher: entityPageMatcher('settings/ffmpeg', ''),
+        matcher: entityPageMatcher('settings/playback', ''),
         name: t`Edit transcode config`,
       },
       {

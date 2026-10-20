@@ -26,27 +26,36 @@ function renderLayout() {
 }
 
 describe('SettingsLayout', () => {
-  test('names the tabs in the words people use, on the same routes', async () => {
+  test('groups the tabs by task and describes the current tab', async () => {
     renderLayout();
 
     await screen.findByRole('tab', { name: 'General' });
     const tabs = screen.getAllByRole('tab');
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       'General',
+      'Playback',
+      'Captions & audio',
       'Guide',
-      'Transcoding',
-      'Scanner',
       'Tuner',
-      'Features',
+      'Library',
+      'Experimental',
     ]);
-    // Only the labels changed: bookmarks to the old paths still work
     expect(tabs.map((tab) => tab.getAttribute('href'))).toEqual([
       '/settings/general',
-      '/settings/xmltv',
-      '/settings/ffmpeg',
-      '/settings/scanner',
-      '/settings/hdhr',
-      '/settings/features',
+      '/settings/playback',
+      '/settings/captions-audio',
+      '/settings/guide',
+      '/settings/tuner',
+      '/settings/library',
+      '/settings/experimental',
     ]);
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'General' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Manage web preferences, server access, logging, and backups.',
+      ),
+    ).toBeInTheDocument();
   });
 });

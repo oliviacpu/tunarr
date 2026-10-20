@@ -1,6 +1,7 @@
-import { NewTranscodeConfigSettingsPage } from '@/pages/settings/NewTranscodeConfigSettingsPage';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/settings/ffmpeg_/new')({
-  component: NewTranscodeConfigSettingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/playback/new', replace: true });
+  },
 });

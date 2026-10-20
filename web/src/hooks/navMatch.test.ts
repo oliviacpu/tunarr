@@ -36,7 +36,7 @@ describe('navItemForPath', () => {
   });
 
   test.each([
-    ['/settings/ffmpeg/new', '/settings'],
+    ['/settings/playback/new', '/settings'],
     ['/settings/scanner', '/settings'],
     ['/system/tasks', '/system'],
     ['/system/troubleshoot', '/system'],

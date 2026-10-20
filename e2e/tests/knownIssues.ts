@@ -31,6 +31,7 @@ export const KNOWN_ISSUES: KnownIssue[] = [
       '/library/smart_collections',
       '/media_sources',
       '/settings/ffmpeg',
+      '/settings/playback',
     ],
     note: 'setState during render. The shared cause is likely in a table or layout component these pages use.',
   },

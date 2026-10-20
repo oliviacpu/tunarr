@@ -39,7 +39,7 @@ function FlagSection({
 
   return (
     <Box>
-      <Typography variant="h2" gutterBottom>
+      <Typography variant="h3" gutterBottom>
         {title}
       </Typography>
       <Stack spacing={2}>
@@ -72,7 +72,20 @@ function FlagSection({
   );
 }
 
-export default function FeaturesSettingsPage() {
+type FlagGroup = 'playback' | 'captions-audio' | 'experimental';
+
+const flagGroups: Partial<Record<FlagKey, FlagGroup>> = {
+  tonemapEnabled: 'playback',
+  disableVulkan: 'playback',
+  disableVaapiPad: 'playback',
+  webvttSidecarEnabled: 'captions-audio',
+};
+
+export default function FeaturesSettingsPage({
+  group = 'experimental',
+}: {
+  group?: FlagGroup;
+}) {
   const { t } = useLingui();
   // The route's loader fetches the flags, and the router's pending and error
   // components cover loading and failure
@@ -106,7 +119,11 @@ export default function FeaturesSettingsPage() {
     saveMutation.mutate({ body: flags });
   };
 
-  const metadata = data.metadata.filter((meta) => isFlagMeta(meta, data.flags));
+  const metadata = data.metadata.filter(
+    (meta): meta is FlagMeta =>
+      isFlagMeta(meta, data.flags) &&
+      (flagGroups[meta.key] ?? 'experimental') === group,
+  );
   const experimental = metadata.filter((m) => m.category === 'experimental');
   const escapeHatches = metadata.filter((m) => m.category === 'escape-hatch');
 
@@ -118,12 +135,16 @@ export default function FeaturesSettingsPage() {
     >
       <Stack spacing={4}>
         <FlagSection
-          title={t`Experimental Features`}
+          title={
+            group === 'experimental'
+              ? t`Experimental features`
+              : t`Optional features`
+          }
           flags={experimental}
           control={control}
         />
         <FlagSection
-          title={t`Escape Hatches`}
+          title={t`Escape hatches`}
           flags={escapeHatches}
           control={control}
         />
