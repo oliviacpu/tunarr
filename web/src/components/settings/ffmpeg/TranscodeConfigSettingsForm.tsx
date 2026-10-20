@@ -70,7 +70,7 @@ export const TranscodeConfigSettingsForm = ({
         sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
       >
         <Stack spacing={2} divider={<Divider />}>
-          <Stack direction={'row'}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             <Typography variant="h4">
               {isNew ? (
                 <Trans>New transcode config</Trans>
@@ -101,7 +101,7 @@ export const TranscodeConfigSettingsForm = ({
               <Trans>General</Trans>
             </Typography>
             <Grid container columnSpacing={2}>
-              <Grid size={{ sm: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Controller
                   control={control}
                   name="name"
@@ -116,7 +116,7 @@ export const TranscodeConfigSettingsForm = ({
                   )}
                 />
               </Grid>
-              <Grid size={{ sm: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <NumericFormControllerText
                   control={control}
                   rawValue

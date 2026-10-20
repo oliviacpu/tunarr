@@ -39,7 +39,7 @@ export const TranscodeConfigErrorOptions = () => {
   const { control } = useTranscodeConfigFormContext();
   return (
     <Grid container spacing={2}>
-      <Grid size={{ sm: 12, md: 6 }}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <SelectFormController
           control={control}
           name="errorScreen"
@@ -55,7 +55,7 @@ export const TranscodeConfigErrorOptions = () => {
           }
         />
       </Grid>
-      <Grid size={{ sm: 12, md: 6 }}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <SelectFormController
           control={control}
           name="errorScreenAudio"
