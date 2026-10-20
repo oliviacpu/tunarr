@@ -2,6 +2,8 @@
 
 The Stream Troubleshooter helps diagnose playback issues for individual programs. It runs a full diagnostic session that exercises the same code path as real streaming — from media source connectivity through stream selection, pipeline construction, and a short test transcode.
 
+Stream Selection Profiles remain internal: their management API is not exposed in the public API documentation or generated client, and there is no profile editor in the UI.
+
 ## Accessing the Troubleshooter
 
 There are two ways to open the troubleshooter:

@@ -23,6 +23,7 @@ export const streamSelectionRouter: RouterPluginCallback = (
     '/stream-selection-profiles',
     {
       schema: {
+        hide: true,
         tags: ['Stream Selection'],
         response: {
           200: z.array(
@@ -74,6 +75,7 @@ export const streamSelectionRouter: RouterPluginCallback = (
     '/stream-selection-profiles/:id',
     {
       schema: {
+        hide: true,
         tags: ['Stream Selection'],
         params: z.object({ id: z.string() }),
         response: {
@@ -103,6 +105,7 @@ export const streamSelectionRouter: RouterPluginCallback = (
     '/stream-selection-profiles',
     {
       schema: {
+        hide: true,
         tags: ['Stream Selection'],
         body: CreateStreamSelectionProfileSchema,
         response: {
@@ -138,6 +141,7 @@ export const streamSelectionRouter: RouterPluginCallback = (
     '/stream-selection-profiles/:id',
     {
       schema: {
+        hide: true,
         tags: ['Stream Selection'],
         params: z.object({ id: z.string() }),
         body: UpdateStreamSelectionProfileSchema,
@@ -183,6 +187,7 @@ export const streamSelectionRouter: RouterPluginCallback = (
     '/stream-selection-profiles/:id',
     {
       schema: {
+        hide: true,
         tags: ['Stream Selection'],
         params: z.object({ id: z.string() }),
         response: {
@@ -217,6 +222,7 @@ export const streamSelectionRouter: RouterPluginCallback = (
     '/stream-selection-profiles/validate-expression',
     {
       schema: {
+        hide: true,
         tags: ['Stream Selection'],
         body: z.object({ expression: z.string() }),
         response: {
