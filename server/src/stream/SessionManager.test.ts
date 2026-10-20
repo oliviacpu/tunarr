@@ -7,7 +7,7 @@ import type { OnDemandChannelService } from '@/services/OnDemandChannelService.j
 import type { Logger } from '@/util/logging/LoggerFactory.js';
 import type { DeepRequired } from 'ts-essentials';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ConcatSession } from './ConcatSession.ts';
+import { ConcatSession } from './ConcatSession.ts';
 import type { HlsSessionOptions } from './hls/HlsSession.ts';
 
 // Mock modules that create circular dependency chains through Inversify
@@ -53,6 +53,10 @@ class StubHlsSession extends BaseHlsSession<HlsSessionOptions> {
       deleteThreshold: null,
       appendSegments: true,
     };
+  }
+
+  markError() {
+    this.state = 'error';
   }
 
   // Skip all real startup work — just mark as started
@@ -109,6 +113,7 @@ function makeSessionManager(
     channel: ChannelOrmWithTranscodeConfig,
     options: HlsSessionOptions,
   ) => StubHlsSession,
+  concatFactory = vi.fn(),
 ) {
   const channelDB: Partial<IChannelDB> = {
     getChannelOrm: vi.fn().mockResolvedValue(makeChannel()),
@@ -133,15 +138,15 @@ function makeSessionManager(
   };
 
   // Construct SessionManager directly, bypassing Inversify
-  const manager = new (SessionManager as any)(
+  const manager = new SessionManager(
     channelDB,
     onDemandService,
-    hlsFactory,
+    hlsFactory as unknown as ConstructorParameters<typeof SessionManager>[2],
     vi.fn(), // hlsSlowerSessionFactory — not used in these tests
-    vi.fn(), // concatSessionFactory
+    concatFactory, // concatSessionFactory
     eventService,
     settingsDB,
-  ) as SessionManager;
+  );
 
   // Override the @InjectLogger() property with a noop mock so
   // tests don't require an initialized LoggerFactory.
@@ -587,4 +592,415 @@ describe('SessionManager', () => {
       expect(manager.getHlsSession(channelUuid)).toBe(session);
     });
   });
+});
+
+describe('tune-in recovery', () => {
+  test.each(['endSession', 'endSessionInBackground'] as const)(
+    '%s of an old instance preserves its replacement',
+    async (method) => {
+      const manager = makeSessionManager(
+        (channel, opts) => new StubHlsSession(channel, opts),
+      );
+      const old = (
+        await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+      ).get();
+      await manager.endSession(old);
+      const current = (
+        await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+      ).get();
+      await manager[method](old);
+      expect(manager.getHlsSession(channelUuid)).toBe(current);
+      expect(current.started).toBe(true);
+      await manager.endSession(current);
+    },
+  );
+
+  test('an errored session is replaced instead of reused', async () => {
+    const manager = makeSessionManager(
+      (channel, opts) => new StubHlsSession(channel, opts),
+    );
+    const old = (
+      await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+    ).get();
+    (old as unknown as StubHlsSession).markError();
+    const result = await manager.getOrCreateHlsSession(
+      channelUuid,
+      'new',
+      connection,
+    );
+    expect(result.isSuccess()).toBe(true);
+    expect(result.get()).not.toBe(old);
+    await manager.endSession(result.get());
+  });
+
+  test('a wrapper waiting for its first backing session survives a second tune', async () => {
+    class Wrapper extends ConcatSession {
+      protected override async startInternal() {}
+      protected override async stopInternal() {
+        this.emit('stop');
+      }
+    }
+    const factory = vi.fn((channel, opts) => new Wrapper(channel, opts));
+    const manager = makeSessionManager(
+      (channel, opts) => new StubHlsSession(channel, opts),
+      factory,
+    );
+    const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+    const one = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'one',
+        connection,
+        options,
+      )
+    ).get();
+    const two = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'two',
+        connection,
+        options,
+      )
+    ).get();
+    expect(two).toBe(one);
+    expect(factory).toHaveBeenCalledOnce();
+    await manager.endSession(one);
+  });
+
+  test('a wrapper bound to a missing backing instance is replaced', async () => {
+    class Wrapper extends ConcatSession {
+      protected override async startInternal() {}
+      protected override async stopInternal() {
+        this.emit('stop');
+      }
+    }
+    const factory = vi.fn((channel, opts) => new Wrapper(channel, opts));
+    const manager = makeSessionManager(
+      (channel, opts) => new StubHlsSession(channel, opts),
+      factory,
+    );
+    const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+    const old = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'one',
+        connection,
+        options,
+      )
+    ).get();
+    old.underlyingSessionId = 'previous-backing-instance';
+    const current = (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'two',
+        connection,
+        options,
+      )
+    ).get();
+    expect(current).not.toBe(old);
+    expect(current.started).toBe(true);
+    await manager.endSession(current);
+  });
+});
+
+test('obsolete teardown cannot pause an on-demand channel during replacement lookup', async () => {
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const old = (
+    await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+  ).get();
+  old.removeConnection('old');
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  (old as unknown as StubHlsSession).markError();
+  let release: (channel: ChannelOrmWithTranscodeConfig) => void = () => {};
+  const lookup = new Promise<ChannelOrmWithTranscodeConfig>((resolve) => {
+    release = resolve;
+  });
+  const query = vi
+    .spyOn(internals.channelDB, 'getChannelOrm')
+    .mockReturnValueOnce(lookup);
+  query.mockClear();
+  const replacement = manager.getOrCreateHlsSession(
+    channelUuid,
+    'new',
+    connection,
+  );
+  await vi.waitFor(() => expect(query).toHaveBeenCalled());
+  expect(manager.getHlsSession(channelUuid)).toBeUndefined();
+  old.emit('stop');
+  await Promise.resolve();
+  expect(pause).not.toHaveBeenCalled();
+  release(makeChannel());
+  const current = (await replacement).get();
+  expect(current).not.toBe(old);
+  await manager.endSession(current);
+});
+
+test('stale wrapper teardown cannot pause an on-demand channel during replacement lookup', async () => {
+  class Wrapper extends ConcatSession {
+    protected override async startInternal() {}
+    protected override async stopInternal() {
+      this.emit('stop');
+    }
+  }
+  const factory = vi.fn((channel, opts) => new Wrapper(channel, opts));
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+    factory,
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+  const old = (
+    await manager.getOrCreateConcatSession(
+      channelUuid,
+      'old',
+      connection,
+      options,
+    )
+  ).get();
+  old.removeConnection('old');
+  old.underlyingSessionId = 'missing';
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  let release: (channel: ChannelOrmWithTranscodeConfig) => void = () => {};
+  const lookup = new Promise<ChannelOrmWithTranscodeConfig>((resolve) => {
+    release = resolve;
+  });
+  const query = vi
+    .spyOn(internals.channelDB, 'getChannelOrm')
+    .mockReturnValueOnce(lookup);
+  query.mockClear();
+  const replacement = manager.getOrCreateConcatSession(
+    channelUuid,
+    'new',
+    connection,
+    options,
+  );
+  await vi.waitFor(() => expect(query).toHaveBeenCalled());
+  expect(old.stopped).toBe(true);
+  expect(pause).not.toHaveBeenCalled();
+  release(makeChannel());
+  const current = (await replacement).get();
+  expect(current).not.toBe(old);
+  await manager.endSession(current);
+});
+
+test.each([
+  'lookup rejection',
+  'missing channel',
+  'factory exception',
+] as const)(
+  'failed replacement pauses an unwatched channel: %s',
+  async (failure) => {
+    let failFactory = false;
+    const manager = makeSessionManager((channel, opts) => {
+      if (failFactory) throw new Error('factory failed');
+      return new StubHlsSession(channel, opts);
+    });
+    const internals = manager as unknown as {
+      channelDB: IChannelDB;
+      onDemandChannelService: OnDemandChannelService;
+    };
+    const old = (
+      await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+    ).get();
+    old.removeConnection('old');
+    (old as unknown as StubHlsSession).markError();
+    const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+    pause.mockClear();
+    if (failure === 'lookup rejection')
+      vi.spyOn(internals.channelDB, 'getChannelOrm').mockRejectedValueOnce(
+        new Error('lookup failed'),
+      );
+    if (failure === 'missing channel')
+      vi.spyOn(internals.channelDB, 'getChannelOrm').mockResolvedValueOnce(
+        undefined,
+      );
+    failFactory = failure === 'factory exception';
+    const result = await manager.getOrCreateHlsSession(
+      channelUuid,
+      'new',
+      connection,
+    );
+    expect(result.isFailure()).toBe(true);
+    expect(pause).toHaveBeenCalledOnce();
+    old.emit('stop');
+    expect(pause).toHaveBeenCalledOnce();
+  },
+);
+
+test('a failed replacement preserves another active session on the channel', async () => {
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const old = (
+    await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+  ).get();
+  const other = (
+    await manager.getOrCreateHlsSession(channelUuid, 'other', connection, {
+      streamMode: 'hls_direct_v2',
+    })
+  ).get();
+  old.removeConnection('old');
+  (old as unknown as StubHlsSession).markError();
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  vi.spyOn(internals.channelDB, 'getChannelOrm').mockRejectedValueOnce(
+    new Error('lookup failed'),
+  );
+  expect(
+    (
+      await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+    ).isFailure(),
+  ).toBe(true);
+  old.emit('stop');
+  expect(pause).not.toHaveBeenCalled();
+  expect(other.started).toBe(true);
+  await manager.endSession(other);
+});
+
+test('a failed stale-wrapper replacement pauses its unwatched channel', async () => {
+  class Wrapper extends ConcatSession {
+    protected override async startInternal() {}
+    protected override async stopInternal() {
+      this.emit('stop');
+    }
+  }
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+    vi.fn((channel, opts) => new Wrapper(channel, opts)),
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const options = { sessionType: 'hls_concat', audioOnly: false } as const;
+  const old = (
+    await manager.getOrCreateConcatSession(
+      channelUuid,
+      'old',
+      connection,
+      options,
+    )
+  ).get();
+  old.removeConnection('old');
+  old.underlyingSessionId = 'missing';
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  vi.spyOn(internals.channelDB, 'getChannelOrm').mockRejectedValueOnce(
+    new Error('lookup failed'),
+  );
+  expect(
+    (
+      await manager.getOrCreateConcatSession(
+        channelUuid,
+        'new',
+        connection,
+        options,
+      )
+    ).isFailure(),
+  ).toBe(true);
+  expect(pause).toHaveBeenCalledOnce();
+});
+
+class FailedReadySession extends StubHlsSession {
+  protected override async waitForStreamReady() {
+    const { Result } = await import('@/types/result.js');
+    return Result.forError(new Error('readiness failed'));
+  }
+}
+
+test.each(['fresh', 'replacement'] as const)(
+  '%s HLS readiness failure pauses the unwatched channel',
+  async (kind) => {
+    let failReady = kind === 'fresh';
+    const manager = makeSessionManager((channel, opts) =>
+      failReady
+        ? new FailedReadySession(channel, opts)
+        : new StubHlsSession(channel, opts),
+    );
+    const service = (
+      manager as unknown as { onDemandChannelService: OnDemandChannelService }
+    ).onDemandChannelService;
+    if (kind === 'replacement') {
+      const old = (
+        await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+      ).get();
+      old.removeConnection('old');
+      (old as unknown as StubHlsSession).markError();
+      failReady = true;
+    }
+    const pause = vi.spyOn(service, 'pauseChannel');
+    pause.mockClear();
+    expect(
+      (
+        await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+      ).isFailure(),
+    ).toBe(true);
+    expect(pause).toHaveBeenCalledOnce();
+  },
+);
+
+test('HLS readiness failure preserves another active viewer', async () => {
+  let failReady = false;
+  const manager = makeSessionManager((channel, opts) =>
+    failReady
+      ? new FailedReadySession(channel, opts)
+      : new StubHlsSession(channel, opts),
+  );
+  const other = (
+    await manager.getOrCreateHlsSession(channelUuid, 'other', connection, {
+      streamMode: 'hls_direct_v2',
+    })
+  ).get();
+  failReady = true;
+  const service = (
+    manager as unknown as { onDemandChannelService: OnDemandChannelService }
+  ).onDemandChannelService;
+  const pause = vi.spyOn(service, 'pauseChannel');
+  pause.mockClear();
+  expect(
+    (
+      await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+    ).isFailure(),
+  ).toBe(true);
+  expect(pause).not.toHaveBeenCalled();
+  expect(other.started).toBe(true);
+  await manager.endSession(other);
+});
+
+test('a rejected start promise pauses the unwatched channel', async () => {
+  const created: StubHlsSession[] = [];
+  const manager = makeSessionManager((channel, opts) => {
+    const session = new StubHlsSession(channel, opts);
+    created.push(session);
+    vi.spyOn(session, 'start').mockRejectedValue(new Error('start failed'));
+    return session;
+  });
+  const service = (
+    manager as unknown as { onDemandChannelService: OnDemandChannelService }
+  ).onDemandChannelService;
+  expect(
+    (
+      await manager.getOrCreateHlsSession(channelUuid, 'new', connection)
+    ).isFailure(),
+  ).toBe(true);
+  expect(service.pauseChannel).toHaveBeenCalledOnce();
+  expect(manager.getHlsSession(channelUuid)).toBeUndefined();
+  vi.mocked(service.pauseChannel).mockClear();
+  created[0]?.emit('stop');
+  expect(service.pauseChannel).not.toHaveBeenCalled();
 });
