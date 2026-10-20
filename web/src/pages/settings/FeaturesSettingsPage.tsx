@@ -24,6 +24,7 @@ import {
   putApiSystemFeatureFlagsMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import type { GetApiSystemFeatureFlagsResponse } from '../../generated/types.gen.ts';
+import { featureFlagMessages } from './featureFlagMessages.ts';
 
 type FlagFormValues = GetApiSystemFeatureFlagsResponse['flags'];
 type FlagKey = keyof FlagFormValues;
@@ -45,6 +46,7 @@ function FlagSection({
   flags: FlagMeta[];
   control: Control<FlagFormValues>;
 }) {
+  const { i18n } = useLingui();
   if (flags.length === 0) return null;
 
   return (
@@ -53,33 +55,41 @@ function FlagSection({
         {title}
       </Typography>
       <Stack spacing={2}>
-        {flags.map((meta) => (
-          <Stack
-            key={meta.key}
-            direction="row"
-            alignItems="flex-start"
-            spacing={1}
-            useFlexGap
-            sx={{ flexWrap: 'wrap' }}
-          >
-            <SwitchFormController
-              control={control}
-              name={meta.key}
-              label={meta.displayName}
-              helperText={meta.description}
-              // The environment variable wins over the saved value
-              disabled={meta.envOverride}
-            />
-            <AppliesWhen setting={FeatureFlagsApplicationGroups[meta.key]} />
-            {meta.envOverride && (
-              <Chip
-                label={<Trans>Set by environment variable</Trans>}
-                size="small"
-                sx={{ mt: 1 }}
+        {flags.map((meta) => {
+          const messages = featureFlagMessages[meta.key];
+          const timing = FeatureFlagsApplicationGroups[meta.key];
+          return (
+            <Stack
+              key={meta.key}
+              direction="row"
+              alignItems="flex-start"
+              spacing={1}
+              useFlexGap
+              sx={{ flexWrap: 'wrap' }}
+            >
+              <SwitchFormController
+                control={control}
+                name={meta.key}
+                label={
+                  messages ? i18n._(messages.displayName) : meta.displayName
+                }
+                helperText={
+                  messages ? i18n._(messages.description) : meta.description
+                }
+                // The environment variable wins over the saved value
+                disabled={meta.envOverride}
               />
-            )}
-          </Stack>
-        ))}
+              {timing !== undefined && <AppliesWhen setting={timing} />}
+              {meta.envOverride && (
+                <Chip
+                  label={<Trans>Set by environment variable</Trans>}
+                  size="small"
+                  sx={{ mt: 1 }}
+                />
+              )}
+            </Stack>
+          );
+        })}
       </Stack>
     </Box>
   );
