@@ -1,5 +1,7 @@
 # Channel Trancoding Settings
 
+Open the channel editor's **Streaming** tab for stream mode, transcode config, audio, and subtitles. Logo overlays are configured in the separate [Watermark](watermarks.md) tab.
+
 ## Stream Mode
 
 Tunarr supports several different stream modes that can be set at the channel level.
