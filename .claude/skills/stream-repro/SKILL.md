@@ -36,6 +36,7 @@ node .claude/skills/stream-repro/scripts/repro.mjs [options]
 | `--channel ID` | | `copy` only: channel number or uuid to stream |
 | `--mode hls\|hls_slower\|hls_direct_v2\|mpegts\|hdhr` | `hls` | Stream mode to request. `hdhr` reads the channel's HDHomeRun `.ts` (an HLS channel behind the .ts wrapper), what Plex's tuner reads; with `--ffmpeg-setting hdhrClosedCaptions=true` it carries CEA-608 captions, and `report.captions` gives the video's frame rate and frame spacing and the captions decoded from it |
 | `--seconds S` | `60` | How much stream to capture |
+| `--tune-ins N` | `0` | Synthetic HDHR only: alternate N tune-ins across two channels, with periodic cold resets and a second viewer; record failures and first-byte timings in `report.tuneIns`. Runs before capture, including with `--seconds 0` |
 | `--out DIR` | temp dir | Where clips, database, capture, and `report.json` go |
 | `--keep-server` | off | Leave the server running afterward for manual poking |
 | `--rewind N` | | HLS only. After the capture, jump back N segments, then play on (see below) |
