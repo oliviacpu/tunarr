@@ -1,17 +1,19 @@
-import { useActions, useToasts, withReason } from '@/strings/actions';
+import { useToasts } from '@/strings/actions';
+import { PageHeader } from '@/components/base/PageHeader.tsx';
+import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { RandomSlotFormProvider } from '@/components/slot_scheduler/RandomSlotFormProvider.tsx';
 import { RandomSlotSettingsForm } from '@/components/slot_scheduler/RandomSlotSettingsForm';
 import { RandomSlotTable } from '@/components/slot_scheduler/RandomSlotTable.tsx';
 import { useSlotProgramOptions } from '@/hooks/programming_controls/useSlotProgramOptions';
 import { defaultRandomSlotSchedule } from '@/model/SlotModels.ts';
 import { useChannelEditor } from '@/store/selectors';
+import useStore from '@/store/index.ts';
 import { plural } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import { ArrowBack, HelpOutline } from '@mui/icons-material';
 import {
   Alert,
   Box,
-  Button,
   Divider,
   Stack,
   Tooltip,
@@ -19,7 +21,6 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { useQueryClient } from '@tanstack/react-query';
 import { seq } from '@tunarr/shared/util';
 import type { RandomSlotSchedule } from '@tunarr/types/api';
 import { useToggle } from '@uidotdev/usehooks';
@@ -36,30 +37,26 @@ import {
   sum,
 } from 'lodash-es';
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  FormProvider,
-  useFieldArray,
-  useForm,
-  useWatch,
-} from 'react-hook-form';
-import { useSnackbar } from 'notistack';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import PaddedPaper from '../../components/base/PaddedPaper';
 import { RouterButtonLink } from '../../components/base/RouterButtonLink.tsx';
 import ChannelLineupList from '../../components/channel_config/ChannelLineupList.tsx';
-import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert';
 import { SlotProgrammingOptionsProvider } from '../../components/slot_scheduler/SlotProgrammingOptionsProvider.tsx';
+import { postApiChannelsByIdProgramming } from '../../generated/sdk.gen.ts';
 import { getProgramGroupingKey } from '../../helpers/programUtil.ts';
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
-import { getApiErrorMessage } from '../../helpers/apiError.ts';
 import {
   lineupItemAppearsInSchedule,
   unavailableCustomShowSlotIndexes,
 } from '../../helpers/slotSchedulerUtil';
 import { useChannelSchedule } from '../../hooks/useChannelSchedule.ts';
-import { useUpdateLineup } from '../../hooks/useUpdateLineup';
+import { useSettingsMutation } from '../../hooks/useSettingsMutation.ts';
 import type { RandomSlotForm } from '../../model/SlotModels.ts';
-import { resetLineup } from '../../store/channelEditor/actions';
+import {
+  resetCurrentLineup,
+  resetLineup,
+} from '../../store/channelEditor/actions';
 import type { Maybe } from '../../types/util.ts';
 
 dayjs.extend(duration);
@@ -68,25 +65,7 @@ export default function RandomSlotEditorPage() {
   const { currentEntity: channel, programList: newLineup } = useChannelEditor();
   const { data: channelSchedule } = useChannelSchedule(channel!.id);
 
-  const actions = useActions();
   const toasts = useToasts();
-  const snackbar = useSnackbar();
-  const queryClient = useQueryClient();
-  const updateLineupMutation = useUpdateLineup({
-    onSuccess() {
-      queryClient
-        .invalidateQueries({
-          predicate: invalidateTaggedQueries('Channels'),
-        })
-        .catch(console.error);
-    },
-    onError(error) {
-      const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave, message), {
-        variant: 'error',
-      });
-    },
-  });
 
   const theme = useTheme();
   const smallViewport = useMediaQuery(theme.breakpoints.down('sm'));
@@ -118,8 +97,7 @@ export default function RandomSlotEditorPage() {
         : defaultRandomSlotSchedule,
   });
 
-  const { control, getValues, formState, reset } = randomSlotForm;
-  const { isDirty } = formState;
+  const { control } = randomSlotForm;
 
   const slotArray = useFieldArray({
     control,
@@ -134,49 +112,59 @@ export default function RandomSlotEditorPage() {
     programOptions,
   ).length;
 
-  const resetLineupToSaved = useCallback(() => {
-    resetLineup();
-    reset();
-  }, [reset]);
+  // A refreshed preview is a new lineup to save, even with no slot changed
+  const previewChanged = useStore((s) => s.channelEditor.dirty.programs);
 
-  const onSave = () => {
-    const value = getValues();
-    const schedule: RandomSlotSchedule = {
-      ...value,
-      // Index is controlled by the field array functions
-      slots: value.slots.map((slot, idx) => ({ ...slot, index: idx })),
-      timeZoneOffset: new Date().getTimezoneOffset(),
-      type: 'random',
-    };
+  const saveMutation = useSettingsMutation({
+    form: randomSlotForm,
+    mutation: {
+      mutationFn: async (values: RandomSlotForm) => {
+        if (channel === undefined) {
+          throw new Error('No channel is open to save the schedule to');
+        }
+        const schedule: RandomSlotSchedule = {
+          ...values,
+          // Index is controlled by the field array functions
+          slots: values.slots.map((slot, idx) => ({ ...slot, index: idx })),
+          timeZoneOffset: new Date().getTimezoneOffset(),
+          type: 'random',
+        };
 
-    // Find programs that have active slots
-    const filteredLineup = filter(newLineup, (item) =>
-      lineupItemAppearsInSchedule(getValues('slots'), item),
-    );
+        // Find programs that have active slots
+        const filteredLineup = filter(newLineup, (item) =>
+          lineupItemAppearsInSchedule(values.slots, item),
+        );
 
-    updateLineupMutation.mutate({
-      path: {
-        id: channel!.id,
+        const { data } = await postApiChannelsByIdProgramming({
+          path: { id: channel.id },
+          body: {
+            type: 'random',
+            schedule,
+            programs: seq.collect(filteredLineup, (l) => {
+              switch (l.type) {
+                case 'custom':
+                case 'content':
+                  return l.id;
+                case 'redirect':
+                case 'flex':
+                case 'filler':
+                  return null;
+              }
+            }),
+            seed: randomState?.seed,
+            discardCount: randomState?.discardCount,
+          },
+          throwOnError: true,
+        });
+        return data;
       },
-      body: {
-        type: 'random',
-        schedule,
-        programs: seq.collect(filteredLineup, (l) => {
-          switch (l.type) {
-            case 'custom':
-            case 'content':
-              return l.id;
-            case 'redirect':
-            case 'flex':
-            case 'filler':
-              return null;
-          }
-        }),
-        seed: randomState?.seed,
-        discardCount: randomState?.discardCount,
-      },
-    });
-  };
+      // The saved lineup replaces the preview
+      onSuccess: (lineup) => resetCurrentLineup(lineup),
+    },
+    toFormValues: (_lineup, values) => values,
+    invalidate: { predicate: invalidateTaggedQueries('Channels') },
+    failureMessage: toasts.couldNotSave,
+  });
 
   const programFrequency = useMemo(() => {
     const total = newLineup.length;
@@ -219,12 +207,33 @@ export default function RandomSlotEditorPage() {
   }
 
   return (
-    <>
-      <Breadcrumbs />
+    <SettingsForm
+      form={randomSlotForm}
+      onSubmit={(values) => saveMutation.mutate(values)}
+      isSubmitting={saveMutation.isPending}
+      hasOtherChanges={previewChanged}
+      // Leaving or resetting puts the saved lineup back in place of the
+      // preview
+      onDiscardChanges={resetLineup}
+      // The alert above the slots says why
+      saveDisabled={unavailableSlotCount > 0}
+      // The preview saved is the one shown when Save was pressed
+      disabled={saveMutation.isPending}
+    >
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={<Trans>Slot Scheduler</Trans>}
+        actions={
+          <RouterButtonLink
+            variant="outlined"
+            to=".."
+            startIcon={<ArrowBack />}
+          >
+            <Trans>Back to Programming</Trans>
+          </RouterButtonLink>
+        }
+      />
       <Stack gap={2} useFlexGap>
-        <Typography variant="h4">
-          <Trans>Slot Scheduler</Trans>
-        </Typography>
         {hasExistingTimeSlotSchedule && (
           <Alert severity="warning">
             <Trans>
@@ -253,12 +262,10 @@ export default function RandomSlotEditorPage() {
               <RandomSlotTable />
             </RandomSlotFormProvider>
             <Divider sx={{ my: 2 }} />
-            <FormProvider {...randomSlotForm}>
-              <RandomSlotSettingsForm
-                onCalculateStart={() => toggleIsCalculatingSlots(true)}
-                onCalculateEnd={onCalculateSlotsEnd}
-              />
-            </FormProvider>
+            <RandomSlotSettingsForm
+              onCalculateStart={() => toggleIsCalculatingSlots(true)}
+              onCalculateEnd={onCalculateSlotsEnd}
+            />
           </SlotProgrammingOptionsProvider>
         </PaddedPaper>
         <PaddedPaper>
@@ -292,34 +299,6 @@ export default function RandomSlotEditorPage() {
           </Box>
         </PaddedPaper>
       </Stack>
-      <UnsavedNavigationAlert
-        isDirty={isDirty}
-        onProceed={resetLineupToSaved}
-      />
-      <Box sx={{ display: 'flex', justifyContent: 'end', pt: 1, columnGap: 1 }}>
-        <Box flexGrow={1}>
-          <RouterButtonLink
-            variant="outlined"
-            to=".."
-            startIcon={<ArrowBack />}
-            sx={{ justifyContent: 'flex-start' }}
-          >
-            <Trans>Back to Programming</Trans>
-          </RouterButtonLink>
-        </Box>
-        {isDirty && (
-          <Button onClick={() => resetLineupToSaved()}>
-            {actions.resetChanges}
-          </Button>
-        )}
-        <Button
-          variant="contained"
-          disabled={unavailableSlotCount > 0}
-          onClick={() => onSave()}
-        >
-          {actions.save}
-        </Button>
-      </Box>
-    </>
+    </SettingsForm>
   );
 }

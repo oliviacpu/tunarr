@@ -1,3 +1,4 @@
+import { emptyEntityEditor } from '@/store/entityEditor/util.ts';
 import { zipWithIndex } from '@/helpers/util.ts';
 import useStore from '@/store/index.ts';
 import type { AddedMedia } from '@/types/index.ts';
@@ -80,15 +81,28 @@ export const updateCurrentFillerList = (show: Partial<FillerList>) =>
     );
   });
 
-export const resetFillerList = () =>
-  useStore.setState((state) => {
-    state.fillerListEditor.programList =
-      state.fillerListEditor.originalProgramList;
-    state.fillerListEditor.dirty.programs = false;
+/**
+ * Throws away the draft's unsaved changes: the programs and the name kept for
+ * the trip to add programs go back to how the list was saved.
+ */
+export const discardFillerListChanges = () =>
+  useStore.setState(({ fillerListEditor }) => {
+    fillerListEditor.currentEntity = fillerListEditor.originalEntity;
+    fillerListEditor.programList = fillerListEditor.originalProgramList;
+    fillerListEditor.dirty.programs = false;
   });
 
+/** Removes every program from the draft, as an unsaved change. */
 export const clearCurrentFillerList = () =>
   useStore.setState((state) => {
     state.fillerListEditor.dirty.programs = true;
     state.fillerListEditor.programList = [];
+  });
+
+/**
+ * Empties the editor, so the next new filler list starts from a blank draft.
+ */
+export const resetFillerListEditor = () =>
+  useStore.setState((state) => {
+    state.fillerListEditor = emptyEntityEditor();
   });

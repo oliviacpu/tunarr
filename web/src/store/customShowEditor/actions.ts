@@ -112,13 +112,25 @@ export const clearCurrentCustomShow = () =>
     state.customShowEditor = emptyEntityEditor();
   });
 
-export const resetCustomShowProgramming = () =>
+/**
+ * Throws away the draft's unsaved changes: the programs and the name kept for
+ * the trip to add programs go back to how the show was saved.
+ */
+export const discardCustomShowChanges = () =>
   useStore.setState(({ customShowEditor }) => {
+    customShowEditor.currentEntity = customShowEditor.originalEntity;
     customShowEditor.programList = customShowEditor.originalProgramList;
     customShowEditor.dirty.programs = false;
   });
 
-export const setCustomShowProgramDirty = (isDirty: boolean) =>
-  useStore.setState((state) => {
-    state.customShowEditor.dirty.programs = isDirty;
+/**
+ * Makes the saved show and the draft's programs what the draft compares
+ * against, after a save.
+ */
+export const markCustomShowSaved = (show: CustomShow) =>
+  useStore.setState(({ customShowEditor }) => {
+    customShowEditor.currentEntity = show;
+    customShowEditor.originalEntity = show;
+    customShowEditor.originalProgramList = customShowEditor.programList;
+    customShowEditor.dirty.programs = false;
   });

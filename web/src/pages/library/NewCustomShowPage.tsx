@@ -9,7 +9,10 @@ import PaddedPaper from '../../components/base/PaddedPaper.tsx';
 import { condenseCustomShowEditorPrograms } from '../../store/selectors.ts';
 
 export function NewCustomShowPage() {
-  const customShow = useSuspendedStore((s) => s.customShowEditor.currentEntity);
+  // The new show as the route started it; the draft holds the changes
+  const customShow = useSuspendedStore(
+    (s) => s.customShowEditor.originalEntity,
+  );
   const customShowPrograms = useStore((s) =>
     condenseCustomShowEditorPrograms(s.customShowEditor.programList),
   );

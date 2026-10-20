@@ -1,5 +1,7 @@
-import { useActions, useToasts, withReason } from '@/strings/actions';
+import { useToasts } from '@/strings/actions';
 import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
+import { PageHeader } from '@/components/base/PageHeader.tsx';
+import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import ChannelLineupList from '@/components/channel_config/ChannelLineupList.tsx';
 import { TimeSlotFormProvider } from '@/components/slot_scheduler/TimeSlotFormProvider.tsx';
 import { TimeSlotTable } from '@/components/slot_scheduler/TimeSlotTable.tsx';
@@ -21,6 +23,7 @@ import type {
   TimeSlotViewModel,
 } from '@/model/TimeSlotModels.ts';
 import { useChannelEditorLazy } from '@/store/selectors.ts';
+import useStore from '@/store/index.ts';
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { ArrowBack, Autorenew, ExpandMore } from '@mui/icons-material';
@@ -44,7 +47,6 @@ import {
   useTheme,
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers';
-import { useQueryClient } from '@tanstack/react-query';
 import { dayjsMod } from '@tunarr/shared';
 import { seq } from '@tunarr/shared/util';
 import type {
@@ -68,21 +70,22 @@ import {
 } from 'lodash-es';
 import { useCallback, useState } from 'react';
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
-import { useSnackbar } from 'notistack';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import PaddedPaper from '../../components/base/PaddedPaper.tsx';
 import { RouterButtonLink } from '../../components/base/RouterButtonLink.tsx';
-import UnsavedNavigationAlert from '../../components/settings/UnsavedNavigationAlert.tsx';
 import { SlotProgrammingOptionsProvider } from '../../components/slot_scheduler/SlotProgrammingOptionsProvider.tsx';
-import { getApiErrorMessage } from '../../helpers/apiError.ts';
 import { useSlotProgramOptions } from '../../hooks/programming_controls/useSlotProgramOptions.ts';
 import { NumericFormControllerText } from '../../components/util/TypedController.tsx';
+import { postApiChannelsByIdProgramming } from '../../generated/sdk.gen.ts';
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import { toggle } from '../../helpers/util.ts';
 import { useScheduleSlots } from '../../hooks/slot_scheduler/useScheduleSlots.ts';
 import { useChannelSchedule } from '../../hooks/useChannelSchedule.ts';
-import { useUpdateLineup } from '../../hooks/useUpdateLineup.ts';
-import { resetLineup } from '../../store/channelEditor/actions.ts';
+import { useSettingsMutation } from '../../hooks/useSettingsMutation.ts';
+import {
+  resetCurrentLineup,
+  resetLineup,
+} from '../../store/channelEditor/actions.ts';
 import type { Maybe } from '../../types/util.ts';
 
 dayjs.extend(utc);
@@ -117,7 +120,6 @@ function convertToViewModel(
 
 export default function TimeSlotEditorPage() {
   const { t } = useLingui();
-  const actions = useActions();
   const toasts = useToasts();
   const {
     channelEditor: { currentEntity: channel },
@@ -150,8 +152,7 @@ export default function TimeSlotEditorPage() {
     control,
     getValues,
     setValue,
-    formState: { isDirty, errors },
-    reset,
+    formState: { errors },
   } = formMethods;
 
   const slotArray = useFieldArray({
@@ -168,71 +169,58 @@ export default function TimeSlotEditorPage() {
     programOptions,
   ).length;
 
-  const queryClient = useQueryClient();
-  const snackbar = useSnackbar();
-  const updateLineupMutation = useUpdateLineup({
-    onSuccess() {
-      queryClient
-        .invalidateQueries({
-          predicate: invalidateTaggedQueries('Channels'),
-        })
-        .catch(console.error);
-    },
-    onError(error) {
-      const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave, message), {
-        variant: 'error',
-      });
-    },
-  });
+  // A refreshed preview is a new lineup to save, even with no slot changed
+  const previewChanged = useStore((s) => s.channelEditor.dirty.programs);
 
-  const resetLineupToSaved = useCallback(() => {
-    resetLineup();
-    reset();
-  }, [reset]);
-
-  const onSave = () => {
-    const schedule = {
-      ...getValues(),
-      timeZoneOffset: new Date().getTimezoneOffset(),
-      type: 'time',
-    } satisfies TimeSlotSchedule;
-
-    // Find programs that have active slots
-    const filteredLineup = filter(materializeOriginalProgramList(), (item) =>
-      lineupItemAppearsInSchedule(getValues('slots'), item),
-    );
-
-    updateLineupMutation.mutate(
-      {
-        path: {
-          id: channel!.id,
-        },
-        body: {
+  const saveMutation = useSettingsMutation({
+    form: formMethods,
+    mutation: {
+      mutationFn: async (values: TimeSlotForm) => {
+        if (channel === undefined) {
+          throw new Error('No channel is open to save the schedule to');
+        }
+        const schedule = {
+          ...values,
+          timeZoneOffset: new Date().getTimezoneOffset(),
           type: 'time',
-          schedule,
-          programs: seq.collect(filteredLineup, (l) => {
-            switch (l.type) {
-              case 'custom':
-              case 'content':
-                return l.id;
-              case 'redirect':
-              case 'flex':
-              case 'filler':
-                return null;
-            }
-          }),
-          seed: randomState?.seed,
-          discardCount: randomState?.discardCount,
-        },
+        } satisfies TimeSlotSchedule;
+
+        // Find programs that have active slots
+        const filteredLineup = filter(
+          materializeOriginalProgramList(),
+          (item) => lineupItemAppearsInSchedule(values.slots, item),
+        );
+
+        const { data } = await postApiChannelsByIdProgramming({
+          path: { id: channel.id },
+          body: {
+            type: 'time',
+            schedule,
+            programs: seq.collect(filteredLineup, (l) => {
+              switch (l.type) {
+                case 'custom':
+                case 'content':
+                  return l.id;
+                case 'redirect':
+                case 'flex':
+                case 'filler':
+                  return null;
+              }
+            }),
+            seed: randomState?.seed,
+            discardCount: randomState?.discardCount,
+          },
+          throwOnError: true,
+        });
+        return data;
       },
-      {
-        onSuccess() {
-          reset(schedule, { keepDirty: false });
-        },
-      },
-    );
-  };
+      // The saved lineup replaces the preview
+      onSuccess: (lineup) => resetCurrentLineup(lineup),
+    },
+    toFormValues: (_lineup, values) => values,
+    invalidate: { predicate: invalidateTaggedQueries('Channels') },
+    failureMessage: toasts.couldNotSave,
+  });
 
   const handlePeriodChange = useCallback(
     (e: SelectChangeEvent<'day' | 'week' | 'month'>) => {
@@ -297,10 +285,33 @@ export default function TimeSlotEditorPage() {
   };
 
   return (
-    <div>
-      <Breadcrumbs />
+    <SettingsForm
+      form={formMethods}
+      onSubmit={(values) => saveMutation.mutate(values)}
+      isSubmitting={saveMutation.isPending}
+      hasOtherChanges={previewChanged}
+      // Leaving or resetting puts the saved lineup back in place of the
+      // preview
+      onDiscardChanges={resetLineup}
+      // The alert above the slots says why
+      saveDisabled={unavailableSlotCount > 0}
+      // The preview saved is the one shown when Save was pressed
+      disabled={saveMutation.isPending}
+    >
+      <PageHeader
+        breadcrumbs={<Breadcrumbs />}
+        title={channel?.name}
+        actions={
+          <RouterButtonLink
+            variant="outlined"
+            to=".."
+            startIcon={<ArrowBack />}
+          >
+            <Trans>Back to Programming</Trans>
+          </RouterButtonLink>
+        }
+      />
       <Stack gap={2} useFlexGap>
-        <Typography variant="h4">{channel!.name}</Typography>
         {errors.slots?.message && (
           <Alert severity="error">{errors.slots.message}</Alert>
         )}
@@ -531,7 +542,7 @@ export default function TimeSlotEditorPage() {
           <Divider sx={{ my: 4 }} />
           <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
             <Button
-              variant="contained"
+              variant="outlined"
               onClick={() => calculateSlots()}
               disabled={isCalculatingSlots}
               startIcon={isCalculatingSlots ? <LoadingIcon /> : <Autorenew />}
@@ -565,35 +576,6 @@ export default function TimeSlotEditorPage() {
           />
         </PaddedPaper>
       </Stack>
-      <UnsavedNavigationAlert
-        isDirty={isDirty}
-        onProceed={resetLineupToSaved}
-      />
-      <Box sx={{ display: 'flex', justifyContent: 'end', pt: 1, columnGap: 1 }}>
-        <Box flexGrow={1}>
-          <RouterButtonLink
-            variant="outlined"
-            to=".."
-            startIcon={<ArrowBack />}
-            sx={{ justifyContent: 'flex-start' }}
-          >
-            <Trans>Back to Programming</Trans>
-          </RouterButtonLink>
-        </Box>
-        {isDirty && (
-          <Button onClick={() => resetLineupToSaved()}>
-            {actions.resetChanges}
-          </Button>
-        )}
-        <Button
-          variant="contained"
-          // disabled={(!isValid || !isDirty) && !programsDirty}
-          disabled={unavailableSlotCount > 0}
-          onClick={() => onSave()}
-        >
-          {actions.save}
-        </Button>
-      </Box>
-    </div>
+    </SettingsForm>
   );
 }
