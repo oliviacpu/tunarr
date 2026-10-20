@@ -29,13 +29,14 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { compact, isEmpty, map, reject } from 'lodash-es';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
 import { match } from 'ts-pattern';
 import {
   getApiSystemHealthQueryKey,
+  getApiSystemDebugEnvOptions,
   postApiSystemFixersByFixerIdRunMutation,
 } from '../../generated/@tanstack/react-query.gen.ts';
 
@@ -83,6 +84,7 @@ export const StatusPage = () => {
   const { t } = useLingui();
   const { backendUri } = useSettings();
   const systemSettings = useSystemSettings();
+  const environmentOverrides = useQuery(getApiSystemDebugEnvOptions());
   const systemHealthQuery = useSystemHealthChecks();
   const xmlTvLink = useXmlTvLink();
   const m3uLink = useM3ULink();
@@ -205,7 +207,7 @@ export const StatusPage = () => {
     <Box>
       <Stack gap={2} useFlexGap>
         <Stack gap={2} useFlexGap direction={['column', 'row']}>
-          <Box sx={{ pb: 2, flex: 1 }}>
+          <Box sx={{ pb: 2, flex: 1, minWidth: 0, overflowX: 'auto' }}>
             <Typography sx={{ mb: 1 }} variant="h2">
               <Trans>System Health</Trans>
             </Typography>
@@ -215,7 +217,7 @@ export const StatusPage = () => {
           <Divider orientation={'vertical'} flexItem={true} />
           {/* <PaddedPaper> */}
 
-          <Box sx={{ pb: 2, flex: 1 }}>
+          <Box sx={{ pb: 2, flex: 1, minWidth: 0, overflowX: 'auto' }}>
             <Typography sx={{ mb: 1 }} variant="h2">
               <Trans>System Info</Trans>
             </Typography>
@@ -355,6 +357,51 @@ export const StatusPage = () => {
             )}
           </Box>
         </Stack>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Typography variant="h2">
+            <Trans>Environment Overrides</Trans>
+          </Typography>
+          <Typography sx={{ my: 1 }}>
+            <Trans>
+              Read-only values from the server environment. Change the server
+              environment and restart to update them. Credentials and filesystem
+              paths are omitted.
+            </Trans>
+          </Typography>
+          {environmentOverrides.isPending && <LinearProgress />}
+          {environmentOverrides.isError && (
+            <Typography color="error">
+              <Trans>Unable to load environment overrides.</Trans>
+            </Typography>
+          )}
+          {environmentOverrides.data &&
+            (Object.keys(environmentOverrides.data).length === 0 ? (
+              <Typography>
+                <Trans>No environment overrides are set.</Trans>
+              </Typography>
+            ) : (
+              <Table aria-label={t`Environment overrides`}>
+                <TableBody>
+                  {Object.entries(environmentOverrides.data).map(
+                    ([name, value]) => (
+                      <TableRow key={name}>
+                        <TableCell
+                          component="th"
+                          scope="row"
+                          sx={{ overflowWrap: 'anywhere' }}
+                        >
+                          {name}
+                        </TableCell>
+                        <TableCell sx={{ overflowWrap: 'anywhere' }}>
+                          {value}
+                        </TableCell>
+                      </TableRow>
+                    ),
+                  )}
+                </TableBody>
+              </Table>
+            ))}
+        </Box>
       </Stack>
     </Box>
   );

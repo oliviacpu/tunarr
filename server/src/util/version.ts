@@ -16,7 +16,9 @@ export const getTunarrVersion = () => {
       TUNARR_ENV_VARS.IS_EDGE_BUILD_ENV_VAR,
       false,
     );
-    const tunarrBuild = getEnvVar(TUNARR_ENV_VARS.COMMIT_SHA_ENV_VAR);
+    const tunarrBuild =
+      getEnvVar(TUNARR_ENV_VARS.COMMIT_SHA_ENV_VAR) ??
+      getEnvVar(TUNARR_ENV_VARS.LEGACY_BUILD_ENV_VAR);
 
     if (isNonEmptyString(tunarrBuild) && isEdgeBuild) {
       tunarrVersion += `-${tunarrBuild}`;

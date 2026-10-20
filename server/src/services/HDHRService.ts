@@ -1,3 +1,4 @@
+import { getRawEnvVar, TUNARR_ENV_VARS } from '@/util/env.js';
 import type { SettingsDB } from '@/db/SettingsDB.js';
 import { serverOptions } from '@/globals.js';
 import { KEYS } from '@/types/inject.js';
@@ -19,7 +20,7 @@ export class HdhrService {
       udn: `uuid:d936e232-6671-4cd7-a8ab-34b5956ff4d6`,
       allowWildcards: true,
       ssdpSig: 'Tunarr/0.1 UPnP/1.0',
-      customLogger: process.env['ENABLE_SSDP_DEBUG_LOGGING']
+      customLogger: getRawEnvVar(TUNARR_ENV_VARS.SSDP_DEBUG_LOGGING)
         ? console.debug
         : undefined,
     });
