@@ -3,6 +3,7 @@ import { isNotFound } from '@tanstack/react-router';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, expect, test, vi } from 'vitest';
 import {
+  orNotFound,
   preloadChannelAndProgramming,
   preloadCustomShowAndProgramming,
   preloadFillerAndProgramming,
@@ -77,5 +78,27 @@ describe.each(loaders)('the %s loader', (_, load) => {
     );
 
     expect(thrown).toBe(serverError);
+  });
+});
+
+describe('orNotFound', () => {
+  test('returns a successful lookup unchanged', async () => {
+    const entity = { id: 'found' };
+    expect(await orNotFound(Promise.resolve(entity))).toBe(entity);
+  });
+
+  test.each([400, 404])(
+    'maps lookup status %d to not found',
+    async (status) => {
+      const thrown = await orNotFound(
+        Promise.reject(statusError(status)),
+      ).catch((error: unknown) => error);
+      expect(isNotFound(thrown)).toBe(true);
+    },
+  );
+
+  test('keeps server failures available to the route error UI', async () => {
+    const error = statusError(500);
+    await expect(orNotFound(Promise.reject(error))).rejects.toBe(error);
   });
 });

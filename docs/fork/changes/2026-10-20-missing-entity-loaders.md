@@ -1,0 +1,7 @@
+### Missing detail entities and suspense loading (2026-10-20, D7)
+
+- **What you saw:** Missing smart collections, media sources/libraries and transcode configurations reached the error page; missing media details rendered blank. Suspense-backed filler/custom-show lists retained unreachable loading branches.
+- **Cause:** Several existing ID loaders did not map lookup failures to the shared not-found UI, and media details fetched only inside the component. The outer lists suspend until their data is ready, while per-show previews genuinely load on expansion.
+- **Fix:** Reuse the existing orNotFound helper in detail ID loaders and add a terminal/grouping media loader. Lookup 400/404 responses use the existing not-found page; unexpected failures retain the existing retryable error UI. Remove only the two outer suspense loading branches, preserving lazy preview loading. No API, schema, dependency or report-link changes.
+- **Tests:** Lookup success/400/404/500 tests, a deferred lazy-preview regression, existing missing-entity browser cases expanded to the affected routes, an unexpected-server-error browser case, and the documented route sweep. Web/e2e typechecks, existing quick preflight, scoped lint and production bundle validate the frontend-only change; 14 focused tests and 65 browser tests pass, with one existing route skip.
+- **Upstream:** Fork-only follow-up to approved audit D7 (approval PR #85), stacked on the D2/D6 header/navigation PR #131; no upstream submission.

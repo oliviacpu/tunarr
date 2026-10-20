@@ -1,3 +1,4 @@
+import { orNotFound } from '@/helpers/routeLoaders.ts';
 import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { Trans } from '@lingui/react/macro';
 import { Stack } from '@mui/material';
@@ -13,12 +14,14 @@ import useStore from '../../../store/index.ts';
 
 export const Route = createFileRoute('/library/smart_collections/$id')({
   loader: async ({ context: { queryClient }, params }) => {
-    const smartCollection = await queryClient.ensureQueryData(
-      getApiSmartCollectionsByIdOptions({
-        path: {
-          id: params.id,
-        },
-      }),
+    const smartCollection = await orNotFound(
+      queryClient.ensureQueryData(
+        getApiSmartCollectionsByIdOptions({
+          path: {
+            id: params.id,
+          },
+        }),
+      ),
     );
 
     const searchRequest: SearchRequest = {

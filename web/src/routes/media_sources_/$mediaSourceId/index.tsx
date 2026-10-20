@@ -1,3 +1,4 @@
+import { orNotFound } from '@/helpers/routeLoaders.ts';
 import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { Trans } from '@lingui/react/macro';
 import { Box, Stack } from '@mui/material';
@@ -13,12 +14,14 @@ import { setSearchRequest } from '../../../store/programmingSelector/actions.ts'
 export const Route = createFileRoute('/media_sources_/$mediaSourceId/')({
   component: MediaSourceBrowserPage,
   loader: async ({ context, params: { mediaSourceId } }) => {
-    await context.queryClient.ensureQueryData(
-      getApiMediaSourcesByMediaSourceIdOptions({
-        path: {
-          mediaSourceId,
-        },
-      }),
+    await orNotFound(
+      context.queryClient.ensureQueryData(
+        getApiMediaSourcesByMediaSourceIdOptions({
+          path: {
+            mediaSourceId,
+          },
+        }),
+      ),
     );
     setSearchRequest(null);
   },
