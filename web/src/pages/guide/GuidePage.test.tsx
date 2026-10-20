@@ -21,51 +21,60 @@ vi.mock('../../components/channel_config/NoChannelsCreated.tsx', () => ({
 
 const savedDuration = useStore.getState().theme.guideDuration;
 
-describe('Guide zoom controls', () => {
+describe('Guide duration controls', () => {
   beforeEach(() => setGuideDurationState(3 * 60 * 60 * 1000));
   afterEach(() => {
     act(() => setGuideDurationState(savedDuration));
   });
 
-  test('flanks the duration with zoom controls and stops at one hour', async () => {
+  test('minus decreases three hours and stops at one hour', async () => {
     const { user } = renderWithProviders(<GuidePage channelId="all" />);
-    const group = screen.getByRole('group', { name: 'Guide zoom' });
-    const zoomIn = within(group).getByRole('button', { name: 'Zoom in' });
-    const zoomOut = within(group).getByRole('button', { name: 'Zoom out' });
+    const group = screen.getByRole('group', { name: 'Guide duration' });
+    const minus = within(group).getByRole('button', {
+      name: 'Show one hour less',
+    });
+    const plus = within(group).getByRole('button', {
+      name: 'Show one hour more',
+    });
     const duration = within(group).getByText('3 hours');
 
-    expect(duration.previousElementSibling).toBe(zoomOut);
-    expect(duration.nextElementSibling).toBe(zoomIn);
-    await user.click(zoomIn);
+    expect(duration.previousElementSibling).toBe(minus);
+    expect(within(minus).getByTestId('ZoomOutIcon')).toBeInTheDocument();
+    expect(duration.nextElementSibling).toBe(plus);
+    expect(within(plus).getByTestId('ZoomInIcon')).toBeInTheDocument();
+    await user.click(minus);
     expect(within(group).getByText('2 hours')).toBeInTheDocument();
     expect(screen.getByLabelText('Rendered guide hours')).toHaveTextContent(
       '2',
     );
-    await user.click(zoomIn);
+    await user.click(minus);
     expect(within(group).getByText('an hour')).toBeInTheDocument();
-    expect(zoomIn).toBeDisabled();
+    expect(minus).toBeDisabled();
     expect(screen.getByLabelText('Rendered guide hours')).toHaveTextContent(
       '1',
     );
     expect(useStore.getState().theme.guideDuration).toBe(60 * 60 * 1000);
+    expect(plus).toBeEnabled();
   });
 
-  test('zooms out to eight hours and enables zooming back in', async () => {
+  test('plus increases three hours to eight and enables increasing again after minus', async () => {
     const { user } = renderWithProviders(<GuidePage channelId="all" />);
-    const zoomOut = screen.getByRole('button', { name: 'Zoom out' });
+    const plus = screen.getByRole('button', { name: 'Show one hour more' });
 
     for (let hours = 4; hours <= 8; hours++) {
-      await user.click(zoomOut);
+      await user.click(plus);
       expect(screen.getByText(`${hours} hours`)).toBeInTheDocument();
       expect(screen.getByLabelText('Rendered guide hours')).toHaveTextContent(
         `${hours}`,
       );
     }
 
-    expect(zoomOut).toBeDisabled();
+    expect(plus).toBeDisabled();
     expect(useStore.getState().theme.guideDuration).toBe(8 * 60 * 60 * 1000);
-    await user.click(screen.getByRole('button', { name: 'Zoom in' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Show one hour less' }),
+    );
     expect(screen.getByText('7 hours')).toBeInTheDocument();
-    expect(zoomOut).toBeEnabled();
+    expect(plus).toBeEnabled();
   });
 });
