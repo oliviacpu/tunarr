@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
 import {
@@ -46,6 +46,8 @@ export const CreateSmartCollectionDialog = ({
   initialQuery,
 }: Props) => {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const { data: existingCollections } = useSmartCollections();
   const snackbar = useSnackbar();
   const {
@@ -107,12 +109,12 @@ export const CreateSmartCollectionDialog = ({
       snackbar.enqueueSnackbar({
         variant: 'error',
         message: withReason(
-          toasts.couldNotSave(),
+          toasts.couldNotSave,
           t`Check server logs and browser console for details`,
         ),
       });
     },
-    [snackbar, t],
+    [snackbar, t, toasts],
   );
 
   return (
@@ -192,16 +194,14 @@ export const CreateSmartCollectionDialog = ({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button
           variant="contained"
           disabled={!isValid}
           startIcon={<Save />}
           onClick={handleSubmit(saveSmartCollection, handleError)}
         >
-          {actions.save()}
+          {actions.save}
         </Button>
       </DialogActions>
     </>

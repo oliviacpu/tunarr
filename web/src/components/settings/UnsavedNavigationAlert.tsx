@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import { Trans } from '@lingui/react/macro';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -25,6 +26,7 @@ export default function UnsavedNavigationAlert({
   exceptTargetPaths,
   onProceed,
 }: Props) {
+  const actions = useActions();
   const { proceed, status, reset } = useBlocker({
     shouldBlockFn: ({ next }) => {
       if (exceptTargetPaths && !isEmpty(exceptTargetPaths)) {
@@ -67,9 +69,7 @@ export default function UnsavedNavigationAlert({
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={reset}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={reset}>{actions.cancel}</Button>
         <Button onClick={handleProceed} autoFocus variant="contained">
           <Trans>Proceed</Trans>
         </Button>

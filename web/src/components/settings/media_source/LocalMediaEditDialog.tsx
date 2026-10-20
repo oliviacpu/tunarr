@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { plural, t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import { Add, CloudDoneOutlined, CloudOff, Delete } from '@mui/icons-material';
@@ -89,6 +89,8 @@ const LocalMediaEditDialogContent = ({ onClose, source }: Props) => {
   });
 
   const snackbar = useSnackbar();
+  const actions = useActions();
+  const toasts = useToasts();
 
   const paths = watch('paths');
 
@@ -166,13 +168,13 @@ const LocalMediaEditDialogContent = ({ onClose, source }: Props) => {
       console.error(err);
       snackbar.enqueueSnackbar({
         message: withReason(
-          toasts.couldNotSave(),
+          toasts.couldNotSave,
           t`See console logs for details`,
         ),
         variant: 'error',
       });
     },
-    [snackbar],
+    [snackbar, toasts],
   );
 
   useEffect(() => {
@@ -335,7 +337,7 @@ const LocalMediaEditDialogContent = ({ onClose, source }: Props) => {
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={() => onClose()} autoFocus>
-          <Trans>Cancel</Trans>
+          {actions.cancel}
         </Button>
         <Button
           variant="contained"
@@ -343,7 +345,7 @@ const LocalMediaEditDialogContent = ({ onClose, source }: Props) => {
           type="submit"
           onClick={handleSubmit(onSubmitSuccess, onSubmitError)}
         >
-          {source?.id ? actions.save() : actions.add()}
+          {source?.id ? actions.save : actions.add}
         </Button>
       </DialogActions>
     </>

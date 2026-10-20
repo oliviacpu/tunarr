@@ -1,4 +1,4 @@
-import { toasts, withReason } from '@/strings/actions';
+import { useToasts, withReason } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit, Sync } from '@mui/icons-material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
@@ -38,6 +38,7 @@ import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
 
 export default function CustomShowsPage() {
   const { t } = useLingui();
+  const toasts = useToasts();
   const { data: customShows } = useCustomShows();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ export default function CustomShowsPage() {
       snackbar.enqueueSnackbar({
         message: (
           <span>
-            {withReason(toasts.couldNotDelete(), e.message)}
+            {withReason(toasts.couldNotDelete, e.message)}
             <br />
             <Trans>Please consider opening a bug with details!</Trans>
           </span>

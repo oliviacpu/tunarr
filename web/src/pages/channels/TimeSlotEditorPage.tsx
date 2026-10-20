@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
 import ChannelLineupList from '@/components/channel_config/ChannelLineupList.tsx';
 import { TimeSlotFormProvider } from '@/components/slot_scheduler/TimeSlotFormProvider.tsx';
@@ -117,6 +117,7 @@ function convertToViewModel(
 
 export default function TimeSlotEditorPage() {
   const { t } = useLingui();
+  const actions = useActions();
   const {
     channelEditor: { currentEntity: channel },
     materializeOriginalProgramList,
@@ -582,7 +583,7 @@ export default function TimeSlotEditorPage() {
         </Box>
         {isDirty && (
           <Button onClick={() => resetLineupToSaved()}>
-            {actions.resetChanges()}
+            {actions.resetChanges}
           </Button>
         )}
         <Button
@@ -591,7 +592,7 @@ export default function TimeSlotEditorPage() {
           disabled={unavailableSlotCount > 0}
           onClick={() => onSave()}
         >
-          {actions.save()}
+          {actions.save}
         </Button>
       </Box>
     </div>

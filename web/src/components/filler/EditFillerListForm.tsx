@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { removeFillerListProgram } from '@/store/entityEditor/util.ts';
 import {
@@ -48,6 +48,7 @@ export function EditFillerListForm({
   isNew,
 }: EditFillerListFormProps) {
   const { t } = useLingui();
+  const actions = useActions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const {
@@ -170,7 +171,7 @@ export function EditFillerListForm({
                 startIcon={<Undo />}
                 variant="outlined"
               >
-                {actions.resetChanges()}
+                {actions.resetChanges}
               </Button>
             )}
             <Tooltip
@@ -200,7 +201,7 @@ export function EditFillerListForm({
                 saveShowMutation.isPending ? <RotatingLoopIcon /> : <Save />
               }
             >
-              {actions.save()}
+              {actions.save}
             </Button>
           </Stack>
           <ChannelLineupList

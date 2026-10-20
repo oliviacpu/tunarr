@@ -11,7 +11,12 @@ import {
   serializeObjectParam,
   serializePrimitiveParam,
 } from '../core/pathSerializer.gen';
-import type { Client, ClientOptions, Config, RequestOptions } from './types.gen';
+import type {
+  Client,
+  ClientOptions,
+  Config,
+  RequestOptions,
+} from './types.gen';
 
 interface PathSerializer {
   path: Record<string, unknown>;

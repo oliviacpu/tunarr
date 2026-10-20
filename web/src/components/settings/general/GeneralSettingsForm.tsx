@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { isValidUrl } from '@/helpers/util.ts';
@@ -140,6 +140,8 @@ export function GeneralSettingsForm({
   systemSettings,
 }: GeneralSetingsFormProps) {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const settings = useSettings();
   const snackbar = useSnackbar();
   const versionInfo = useVersion({
@@ -212,14 +214,17 @@ export function GeneralSettingsForm({
       {
         onSuccess(data) {
           reset(getDefaultFormValues(settings, data), { keepDirty: false });
-          snackbar.enqueueSnackbar(toasts.saved(), {
+          snackbar.enqueueSnackbar(toasts.saved, {
             variant: 'success',
           });
         },
         onError: (err) => {
           console.error(err);
           snackbar.enqueueSnackbar(
-            withReason(toasts.couldNotSaveSettings(), t`Check the console for details`),
+            withReason(
+              toasts.couldNotSaveSettings,
+              t`Check the console for details`,
+            ),
             {
               variant: 'error',
             },
@@ -454,7 +459,7 @@ export function GeneralSettingsForm({
               // Reset is the way out of an invalid value, so it stays enabled
               disabled={isSubmitting || !isDirty}
             >
-              {actions.resetChanges()}
+              {actions.resetChanges}
             </Button>
           )}
           <Button
@@ -462,7 +467,7 @@ export function GeneralSettingsForm({
             type="submit"
             disabled={!isValid || isSubmitting || !isDirty}
           >
-            {actions.save()}
+            {actions.save}
           </Button>
         </Stack>
       </FormProvider>

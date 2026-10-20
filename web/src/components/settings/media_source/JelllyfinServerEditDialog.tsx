@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { isNonEmptyString, isValidUrlWithError, toggle } from '@/helpers/util';
 
 import { RotatingLoopIcon } from '@/components/base/LoadingIcon.tsx';
@@ -73,6 +73,8 @@ const emptyDefaults: JellyfinServerSettingsForm = {
 
 export function JellyfinServerEditDialog({ open, onClose, server }: Props) {
   const snackbar = useSnackbar();
+  const actions = useActions();
+  const toasts = useToasts();
 
   const [showAccessToken, setShowAccessToken] = useState(false);
 
@@ -121,7 +123,7 @@ export function JellyfinServerEditDialog({ open, onClose, server }: Props) {
     snackbar.enqueueSnackbar({
       variant: 'error',
       message: withReason(
-        toasts.couldNotSave(),
+        toasts.couldNotSave,
         t`See browser console and server logs for details`,
       ),
     });
@@ -586,7 +588,7 @@ export function JellyfinServerEditDialog({ open, onClose, server }: Props) {
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={() => handleClose()} autoFocus>
-          <Trans>Cancel</Trans>
+          {actions.cancel}
         </Button>
         <Button
           variant="contained"
@@ -599,7 +601,7 @@ export function JellyfinServerEditDialog({ open, onClose, server }: Props) {
           type="submit"
           onClick={onSubmit}
         >
-          {server?.id ? actions.save() : actions.add()}
+          {server?.id ? actions.save : actions.add}
         </Button>
       </DialogActions>
     </Dialog>

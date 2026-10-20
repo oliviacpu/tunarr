@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import { betterHumanize } from '@/helpers/dayjs.ts';
 import type {
@@ -69,6 +69,7 @@ export const EditRandomSlotDialogContent = ({
   onCancel,
 }: EditRandomSlotDialogContentProps) => {
   const { t } = useLingui();
+  const actions = useActions();
   const randomSlotForm = useRandomSlotFormContext();
   const programOptions = useSlotProgramOptionsContext();
   const { slotArray } = randomSlotForm;
@@ -597,15 +598,13 @@ export const EditRandomSlotDialogContent = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onCancel()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onCancel()}>{actions.cancel}</Button>
         <Button
           disabled={!isDirty || !isValid}
           onClick={() => commit()}
           variant="contained"
         >
-          {actions.save()}
+          {actions.save}
         </Button>
       </DialogActions>
     </>

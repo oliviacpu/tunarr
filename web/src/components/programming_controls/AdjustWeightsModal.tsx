@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import { Box, ButtonGroup, DialogContentText } from '@mui/material';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -13,6 +13,7 @@ type AdjustWeightsModalProps = {
 };
 
 const AdjustWeightsModal = ({ open, onClose }: AdjustWeightsModalProps) => {
+  const actions = useActions();
   const adjustWeightProgramming = () => {
     console.log('To do');
   };
@@ -40,11 +41,9 @@ const AdjustWeightsModal = ({ open, onClose }: AdjustWeightsModalProps) => {
         <Box sx={{ display: 'flex', my: 1 }}>{/* To do */}</Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button variant="contained" onClick={() => adjustWeightProgramming()}>
-          {actions.save()}
+          {actions.save}
         </Button>
       </DialogActions>
     </Dialog>

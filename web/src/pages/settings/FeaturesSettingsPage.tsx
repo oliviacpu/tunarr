@@ -1,4 +1,4 @@
-import { actions, toasts } from '@/strings/actions';
+import { useActions, useToasts } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
@@ -92,6 +92,8 @@ function FlagSection({
 
 export default function FeaturesSettingsPage() {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const { data, isPending, error } = useQuery(
     getApiSystemFeatureFlagsOptions(),
   );
@@ -111,14 +113,14 @@ export default function FeaturesSettingsPage() {
   const updateMutation = useMutation({
     ...putApiSystemFeatureFlagsMutation(),
     onSuccess: (result) => {
-      snackbar.enqueueSnackbar(toasts.saved(), { variant: 'success' });
+      snackbar.enqueueSnackbar(toasts.saved, { variant: 'success' });
       reset(result.flags, { keepValues: true });
       return queryClient.invalidateQueries({
         queryKey: getApiSystemFeatureFlagsQueryKey(),
       });
     },
     onError: () => {
-      snackbar.enqueueSnackbar(toasts.couldNotSaveSettings(), {
+      snackbar.enqueueSnackbar(toasts.couldNotSaveSettings, {
         variant: 'error',
       });
     },
@@ -165,7 +167,7 @@ export default function FeaturesSettingsPage() {
             onClick={() => reset(data?.flags)}
             disabled={isSubmitting}
           >
-            {actions.resetChanges()}
+            {actions.resetChanges}
           </Button>
         )}
         <Button
@@ -173,7 +175,7 @@ export default function FeaturesSettingsPage() {
           type="submit"
           disabled={!isDirty || isSubmitting}
         >
-          {actions.save()}
+          {actions.save}
         </Button>
       </Stack>
     </Box>

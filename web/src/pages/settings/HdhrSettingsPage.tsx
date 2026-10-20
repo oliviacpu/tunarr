@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
@@ -31,6 +31,8 @@ import { useHdhrSettings } from '../../hooks/settingsHooks.ts';
 
 export default function HdhrSettingsPage() {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const [restoreTunarrDefaults, setRestoreTunarrDefaults] =
     React.useState<boolean>(false);
 
@@ -58,7 +60,7 @@ export default function HdhrSettingsPage() {
   const updateHdhrSettingsMutation = useMutation({
     ...putApiHdhrSettingsMutation(),
     onSuccess: (data) => {
-      snackbar.enqueueSnackbar(toasts.saved(), {
+      snackbar.enqueueSnackbar(toasts.saved, {
         variant: 'success',
       });
       setRestoreTunarrDefaults(false);
@@ -69,9 +71,12 @@ export default function HdhrSettingsPage() {
     },
     onError: (error) => {
       const message = getApiErrorMessage(error);
-      snackbar.enqueueSnackbar(withReason(toasts.couldNotSaveSettings(), message), {
-        variant: 'error',
-      });
+      snackbar.enqueueSnackbar(
+        withReason(toasts.couldNotSaveSettings, message),
+        {
+          variant: 'error',
+        },
+      );
     },
   });
 
@@ -145,7 +150,7 @@ export default function HdhrSettingsPage() {
                 setRestoreTunarrDefaults(true);
               }}
             >
-              {actions.restoreDefaults()}
+              {actions.restoreDefaults}
             </Button>
           )}
         </Stack>
@@ -158,7 +163,7 @@ export default function HdhrSettingsPage() {
                 setRestoreTunarrDefaults(false);
               }}
             >
-              {actions.resetChanges()}
+              {actions.resetChanges}
             </Button>
           )}
           <Button
@@ -168,7 +173,7 @@ export default function HdhrSettingsPage() {
             }
             type="submit"
           >
-            {actions.save()}
+            {actions.save}
           </Button>
         </Stack>
       </Stack>

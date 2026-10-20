@@ -1,5 +1,5 @@
 import { t } from '@lingui/core/macro';
-import { toasts, withReason } from '@/strings/actions';
+import { useToasts, withReason } from '@/strings/actions';
 import {
   useMutation,
   useQueryClient,
@@ -37,13 +37,14 @@ type MutationCallbacks = {
 
 export const useCreateSmartCollection = (callbacks?: MutationCallbacks) => {
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
   return useMutation({
     ...postApiSmartCollectionsMutation(),
     onSuccess: () => {
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: toasts.saved(),
+        message: toasts.saved,
       });
       queryClient
         .invalidateQueries({
@@ -57,7 +58,7 @@ export const useCreateSmartCollection = (callbacks?: MutationCallbacks) => {
       snackbar.enqueueSnackbar({
         variant: 'error',
         message: withReason(
-          toasts.couldNotSave(),
+          toasts.couldNotSave,
           t`Check server logs and browser console for details`,
         ),
       });
@@ -67,13 +68,14 @@ export const useCreateSmartCollection = (callbacks?: MutationCallbacks) => {
 
 export const useUpdateSmartCollection = (opts?: MutationCallbacks) => {
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
   return useMutation({
     ...putApiSmartCollectionsByIdMutation(),
     onSuccess: () => {
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: toasts.saved(),
+        message: toasts.saved,
       });
       queryClient
         .invalidateQueries({
@@ -87,7 +89,7 @@ export const useUpdateSmartCollection = (opts?: MutationCallbacks) => {
       snackbar.enqueueSnackbar({
         variant: 'error',
         message: withReason(
-          toasts.couldNotSave(),
+          toasts.couldNotSave,
           t`Check server logs and browser console for details`,
         ),
       });
@@ -97,6 +99,7 @@ export const useUpdateSmartCollection = (opts?: MutationCallbacks) => {
 
 export const useDeleteSmartCollection = () => {
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -104,7 +107,7 @@ export const useDeleteSmartCollection = () => {
     onSuccess: () => {
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: toasts.deleted(),
+        message: toasts.deleted,
       });
       queryClient
         .invalidateQueries({
@@ -117,7 +120,7 @@ export const useDeleteSmartCollection = () => {
       snackbar.enqueueSnackbar({
         variant: 'error',
         message: withReason(
-          toasts.couldNotDelete(),
+          toasts.couldNotDelete,
           t`Check server logs and browser console for details`,
         ),
       });

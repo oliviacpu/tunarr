@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import {
   getApiSettingsMediaSourceOptions,
@@ -34,6 +34,8 @@ function nextScanEpoch(tasks: Task[] | undefined): number | undefined {
 
 export const ScannerSettingsPage = () => {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const dayjs = useDayjs();
   const queryClient = useQueryClient();
   const { data: mediaSourceSettings } = useSuspenseQuery(
@@ -56,7 +58,7 @@ export const ScannerSettingsPage = () => {
       settingsForm.reset(returned);
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: toasts.saved(),
+        message: toasts.saved,
       });
       // The server moved the scheduled scan to the saved interval
       return queryClient.invalidateQueries({
@@ -68,7 +70,7 @@ export const ScannerSettingsPage = () => {
       snackbar.enqueueSnackbar({
         variant: 'error',
         message: withReason(
-          toasts.couldNotSaveSettings(),
+          toasts.couldNotSaveSettings,
           t`Check the server and browser logs for details`,
         ),
       });
@@ -88,11 +90,11 @@ export const ScannerSettingsPage = () => {
     snackbar.enqueueSnackbar({
       variant: 'error',
       message: withReason(
-        toasts.couldNotSaveSettings(),
+        toasts.couldNotSaveSettings,
         t`Check the form and try again`,
       ),
     });
-  }, [snackbar, t]);
+  }, [snackbar, t, toasts]);
 
   return (
     <Stack>
@@ -129,7 +131,7 @@ export const ScannerSettingsPage = () => {
               variant="contained"
               disabled={!settingsForm.formState.isDirty}
             >
-              {actions.save()}
+              {actions.save}
             </Button>
           </Box>
         </Stack>

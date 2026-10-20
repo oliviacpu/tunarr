@@ -1,4 +1,4 @@
-import { actions, toasts } from '@/strings/actions';
+import { useActions, useToasts } from '@/strings/actions';
 import { useChannelEditor } from '@/store/selectors.ts';
 import { Trans } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
@@ -31,6 +31,8 @@ export default function ChannelEditActions({
   } = useChannelFormContext();
   const [lastState, setLastState] = useState<MutationStatus>('idle');
   const snackbar = useSnackbar();
+  const actions = useActions();
+  const toasts = useToasts();
 
   const mutationState = useMutationState<
     MutationState<unknown, Error, SaveableChannel>
@@ -49,13 +51,13 @@ export default function ChannelEditActions({
 
       if (lastState === 'pending') {
         if (currentState === 'success' && !isNewChannel) {
-          snackbar.enqueueSnackbar(toasts.saved(), {
+          snackbar.enqueueSnackbar(toasts.saved, {
             variant: 'success',
           });
         } else if (currentState === 'error') {
           snackbar.enqueueSnackbar(
             <span>
-              {toasts.couldNotSave()}
+              {toasts.couldNotSave}
               <br />
               <Trans>Check browser console for details</Trans>
             </span>,
@@ -67,7 +69,7 @@ export default function ChannelEditActions({
         }
       }
     }
-  }, [isNewChannel, currentState, lastState, snackbar]);
+  }, [isNewChannel, currentState, lastState, snackbar, toasts]);
 
   return (
     <Stack spacing={2} direction="row" justifyContent="right" sx={{ mt: 2 }}>
@@ -75,7 +77,7 @@ export default function ChannelEditActions({
         <>
           {isDirty && (
             <Button onClick={() => reset()} variant="outlined">
-              {actions.resetChanges()}
+              {actions.resetChanges}
             </Button>
           )}
           <Button
@@ -93,7 +95,7 @@ export default function ChannelEditActions({
               )
             }
           >
-            {actions.save()}
+            {actions.save}
           </Button>
         </>
       ) : (
@@ -113,7 +115,7 @@ export default function ChannelEditActions({
               )
             }
           >
-            {actions.save()}
+            {actions.save}
           </Button>
         </>
       )}

@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { useUpdateChannel } from '@/hooks/useUpdateChannel.ts';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { useUpdateLineup } from '@/hooks/useUpdateLineup.ts';
@@ -51,6 +51,8 @@ export function ChannelProgrammingConfig() {
   const theme = useTheme();
   const smallViewport = useMediaQuery(theme.breakpoints.down('sm'));
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const programsDirty = useStore((s) => s.channelEditor.dirty.programs);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const snackbar = useSnackbar();
@@ -80,13 +82,13 @@ export function ChannelProgrammingConfig() {
       setIsSubmitting(false);
     },
     onSuccess: () => {
-      snackbar.enqueueSnackbar(toasts.saved(), {
+      snackbar.enqueueSnackbar(toasts.saved, {
         variant: 'success',
       });
     },
     onError: (error, vars) => {
       const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave(), message), {
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave, message), {
         variant: 'error',
       });
 
@@ -233,7 +235,7 @@ export function ChannelProgrammingConfig() {
                     disabled={!programsDirty}
                     startIcon={<Undo />}
                   >
-                    {actions.resetChanges()}
+                    {actions.resetChanges}
                   </Button>
                 )}
               </Tooltip>
@@ -268,7 +270,7 @@ export function ChannelProgrammingConfig() {
                   )
                 }
               >
-                {actions.save()}
+                {actions.save}
               </Button>
             )}
           </Stack>

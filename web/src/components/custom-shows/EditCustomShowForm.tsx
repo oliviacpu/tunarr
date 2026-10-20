@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import { isNonEmptyString } from '@/helpers/util.ts';
 import { customShowQuery } from '@/hooks/useCustomShows.ts';
 import useStore from '@/store';
@@ -77,6 +77,7 @@ export function EditCustomShowsForm({
   isNew,
 }: Props) {
   const { t } = useLingui();
+  const actions = useActions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const customShowProgrammingChanged = useStore(
@@ -434,7 +435,7 @@ export function EditCustomShowsForm({
                         startIcon={<Undo />}
                         onClick={() => resetCustomShowProgramming()}
                       >
-                        {actions.resetChanges()}
+                        {actions.resetChanges}
                       </Button>
                     </Tooltip>
                   )}
@@ -465,7 +466,7 @@ export function EditCustomShowsForm({
                 type="submit"
                 startIcon={<Save />}
               >
-                {actions.save()}
+                {actions.save}
               </Button>
             </Stack>
           </Box>

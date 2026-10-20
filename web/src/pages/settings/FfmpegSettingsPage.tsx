@@ -1,4 +1,4 @@
-import { actions, toasts, withReason } from '@/strings/actions';
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { useSystemState } from '@/hooks/useSystemSettings.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -118,6 +118,8 @@ function FfmpegProbeStatus({ isInContainer }: { isInContainer: boolean }) {
 
 export default function FfmpegSettingsPage() {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const { data: ffmpegSettings, error } = useFfmpegSettings();
 
   const queryClient = useQueryClient();
@@ -187,7 +189,7 @@ export default function FfmpegSettingsPage() {
     ...putApiFfmpegSettingsMutation(),
     // mutationFn: apiClient.updateFfmpegSettings,
     onSuccess: (data) => {
-      snackbar.enqueueSnackbar(toasts.saved(), {
+      snackbar.enqueueSnackbar(toasts.saved, {
         variant: 'success',
       });
       reset(data, { keepValues: true });
@@ -206,9 +208,12 @@ export default function FfmpegSettingsPage() {
     },
     onError: (error) => {
       const message = getApiErrorMessage(error);
-      snackbar.enqueueSnackbar(withReason(toasts.couldNotSaveSettings(), message), {
-        variant: 'error',
-      });
+      snackbar.enqueueSnackbar(
+        withReason(toasts.couldNotSaveSettings, message),
+        {
+          variant: 'error',
+        },
+      );
     },
   });
 
@@ -658,7 +663,7 @@ export default function FfmpegSettingsPage() {
       <Stack spacing={2} direction="row" justifyContent="right">
         {(isDirty || (isDirty && !isSubmitting)) && (
           <Button variant="outlined" onClick={() => reset(ffmpegSettings)}>
-            {actions.resetChanges()}
+            {actions.resetChanges}
           </Button>
         )}
         <Button
@@ -666,7 +671,7 @@ export default function FfmpegSettingsPage() {
           disabled={!isValid || isSubmitting || !isDirty}
           type="submit"
         >
-          {actions.save()}
+          {actions.save}
         </Button>
       </Stack>
       <Divider sx={{ mt: 2 }} />

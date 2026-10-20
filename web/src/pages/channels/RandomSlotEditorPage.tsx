@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import { RandomSlotFormProvider } from '@/components/slot_scheduler/RandomSlotFormProvider.tsx';
 import { RandomSlotSettingsForm } from '@/components/slot_scheduler/RandomSlotSettingsForm';
 import { RandomSlotTable } from '@/components/slot_scheduler/RandomSlotTable.tsx';
@@ -69,6 +69,7 @@ export default function RandomSlotEditorPage() {
   const { data: channelSchedule } = useChannelSchedule(channel!.id);
 
   const { t } = useLingui();
+  const actions = useActions();
   const snackbar = useSnackbar();
   const queryClient = useQueryClient();
   const updateLineupMutation = useUpdateLineup({
@@ -308,7 +309,7 @@ export default function RandomSlotEditorPage() {
         </Box>
         {isDirty && (
           <Button onClick={() => resetLineupToSaved()}>
-            {actions.resetChanges()}
+            {actions.resetChanges}
           </Button>
         )}
         <Button
@@ -316,7 +317,7 @@ export default function RandomSlotEditorPage() {
           disabled={unavailableSlotCount > 0}
           onClick={() => onSave()}
         >
-          {actions.save()}
+          {actions.save}
         </Button>
       </Box>
     </>

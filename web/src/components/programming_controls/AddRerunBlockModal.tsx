@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import {
   DialogContentText,
   FormControl,
@@ -20,6 +20,7 @@ type AddRerunModalProps = {
 };
 
 const AddRerunBlockModal = ({ open, onClose }: AddRerunModalProps) => {
+  const actions = useActions();
   const rerunBlockProgramming = () => {
     console.log('To do');
   };
@@ -95,11 +96,9 @@ const AddRerunBlockModal = ({ open, onClose }: AddRerunModalProps) => {
         </FormGroup>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button variant="contained" onClick={() => rerunBlockProgramming()}>
-          {actions.save()}
+          {actions.save}
         </Button>
       </DialogActions>
     </Dialog>

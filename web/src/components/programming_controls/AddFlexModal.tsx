@@ -1,4 +1,4 @@
-import { actions } from '@/strings/actions';
+import { useActions } from '@/strings/actions';
 import { TextField } from '@mui/material';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -34,6 +34,7 @@ const AddFlexModal = ({
   initialProgram,
 }: AddRedirectModalProps) => {
   const { t } = useLingui();
+  const actions = useActions();
   const [duration, setDuration] = useState(
     (initialProgram?.duration
       ? initialProgram.duration / 1000
@@ -112,11 +113,9 @@ const AddFlexModal = ({
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button variant="contained" onClick={() => addFlex()}>
-          {actions.save()}
+          {actions.save}
         </Button>
       </DialogActions>
     </Dialog>
