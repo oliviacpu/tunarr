@@ -215,7 +215,7 @@ The web app uses a generated API client (`generated/`) created from the server's
 
 - Playwright suite that visits every web route against a seeded server. Local only; CI does not run it yet.
 - Run with `cd e2e && pnpm e2e`. First time only: `pnpm e2e:install-browsers`. Needs `ffmpeg` on the PATH and the Meilisearch binary (`cd server && pnpm install-meilisearch`).
-- Uses its own ports (server 18000, search 17700, web 15173), so it can run beside `pnpm turbo dev`.
+- Uses its own ports (server 18000, search 17700, web 15173), so it can run beside `pnpm turbo dev`. For simultaneous runs in separate worktrees, set a distinct `TUNARR_E2E_PORT_OFFSET` (for example `TUNARR_E2E_PORT_OFFSET=1000 pnpm e2e` adds 1000 to all three ports). Keep their data directories separate.
 - The fixture is rebuilt on every run: generated test clips, three local media sources, three channels, a custom show, a filler list, and a smart collection (`e2e/fixture/seed.ts`).
 - A route fails on uncaught exceptions, `console.error` output (including React warnings), 5xx API responses, or the error page.
 - New routes must be added to `e2e/tests/routes.ts`; a coverage test compares it against `routeTree.gen.ts`.

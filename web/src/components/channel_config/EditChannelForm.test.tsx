@@ -246,7 +246,7 @@ describe('EditChannelForm, editing a channel', () => {
       });
     });
     expect(name).toHaveValue('Movie Night Late Draft');
-    expect(saveButton()).toBeEnabled();
+    await waitFor(() => expect(saveButton()).toBeEnabled());
     await user.click(screen.getByRole('button', { name: 'Reset changes' }));
     expect(name).toHaveValue('Movie Night Late');
   });
