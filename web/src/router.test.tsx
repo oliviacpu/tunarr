@@ -74,14 +74,14 @@ describe('router', () => {
     },
   );
 
-  test('/settings/sources redirects to the media sources page', async () => {
+  test('/settings/sources, which no longer exists, renders the not-found page', async () => {
     const router = createTestRouter('/settings/sources');
 
-    await router.load();
+    renderWithProviders(<RouterProvider router={router} />);
 
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe('/media_sources'),
-    );
+    expect(
+      await screen.findByRole('heading', { name: 'Not found' }),
+    ).toBeInTheDocument();
   });
 
   test('an address no route matches renders the not-found page', async () => {

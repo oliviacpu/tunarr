@@ -43,7 +43,6 @@ export const ROUTES: Record<string, RouteTarget> = {
   '/settings/general': () => ['/settings/general'],
   '/settings/hdhr': () => ['/settings/hdhr'],
   '/settings/scanner': () => ['/settings/scanner'],
-  '/settings/sources': () => ['/settings/sources'],
   '/settings/xmltv': () => ['/settings/xmltv'],
   '/system': () => ['/system'],
   '/system/': () => ['/system/'],
