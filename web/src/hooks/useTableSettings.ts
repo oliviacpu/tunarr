@@ -10,7 +10,7 @@ import type {
   MRT_RowSelectionState,
   MRT_TableOptions,
 } from 'material-react-table';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   setTableColumnModel,
   setTablePaginationState,
@@ -35,54 +35,46 @@ export const useTableSettings = (
   const sortState = useState<SortingState>(
     tableSettings?.sortState ?? defaultSortState,
   );
+  // Consecutive callbacks must compose before React renders the queued state.
+  const pendingVisibility = useRef(colVisibilityState[0]);
+  const pendingPagination = useRef(paginationState[0]);
+  const pendingSort = useRef(sortState[0]);
+  const setVisibility = colVisibilityState[1];
+  const setPagination = paginationState[1];
+  const setSort = sortState[1];
 
   const visibilityUpdater: OnChangeFn<VisibilityState> = useCallback(
     (updater) => {
-      if (isFunction(updater)) {
-        colVisibilityState[1]((prev) => {
-          const next = updater(prev);
-          setTableColumnModel(tableName, next);
-          return next;
-        });
-      } else {
-        setTableColumnModel(tableName, updater);
-        colVisibilityState[1](updater);
-      }
+      const next = isFunction(updater)
+        ? updater(pendingVisibility.current)
+        : updater;
+      pendingVisibility.current = next;
+      setVisibility(next);
+      setTableColumnModel(tableName, next);
     },
-    [colVisibilityState, tableName],
+    [setVisibility, tableName],
   );
 
   const paginationUpdater: OnChangeFn<PaginationState> = useCallback(
     (updater) => {
-      if (isFunction(updater)) {
-        paginationState[1]((prev) => {
-          const next = updater(prev);
-          setTablePaginationState(tableName, next);
-          return next;
-        });
-      } else {
-        setTablePaginationState(tableName, updater);
-        paginationState[1](updater);
-      }
+      const next = isFunction(updater)
+        ? updater(pendingPagination.current)
+        : updater;
+      pendingPagination.current = next;
+      setPagination(next);
+      setTablePaginationState(tableName, next);
     },
-    [paginationState, tableName],
+    [setPagination, tableName],
   );
 
   const sortUpdater: OnChangeFn<SortingState> = useCallback(
     (updater) => {
-      if (isFunction(updater)) {
-        sortState[1]((prev) => {
-          const next = updater(prev);
-          console.log(next);
-          setTableSortState(tableName, next);
-          return next;
-        });
-      } else {
-        setTableSortState(tableName, updater);
-        sortState[1](updater);
-      }
+      const next = isFunction(updater) ? updater(pendingSort.current) : updater;
+      pendingSort.current = next;
+      setSort(next);
+      setTableSortState(tableName, next);
     },
-    [sortState, tableName],
+    [setSort, tableName],
   );
 
   return {
