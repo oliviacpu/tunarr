@@ -431,6 +431,59 @@ Key directories:
 - `store/` - Zustand stores
 - `generated/` - Auto-generated API client
 
+#### Settings pages
+
+A settings page is only its fields. It puts them inside `SettingsForm` (`web/src/components/form/SettingsForm.tsx`) and
+saves through `useSettingsMutation` (`web/src/hooks/useSettingsMutation.ts`). The XMLTV page
+(`web/src/pages/settings/XmlTvSettingsPage.tsx`) is the reference:
+
+```tsx
+const form = useForm<XmlTvSettings>({ defaultValues: defaultXmlTvSettings, mode: 'onBlur' });
+// Load the saved settings into the form; they become what it compares against
+useEffect(() => {
+  form.reset(data);
+}, [data, form]);
+
+const saveMutation = useSettingsMutation({
+  form,
+  mutation: putApiXmltvSettingsMutation(),
+  toFormValues: (saved) => saved, // what the form holds once saved
+  invalidate: { predicate: invalidateTaggedQueries('Settings') },
+});
+
+return (
+  <SettingsForm
+    form={form}
+    onSubmit={(settings) => saveMutation.mutate({ body: settings })}
+    isSubmitting={saveMutation.isPending}
+    onRestoreDefaults={() => form.reset(defaultXmlTvSettings, { keepDefaultValues: true })}
+  >
+    {/* fields */}
+  </SettingsForm>
+);
+```
+
+What every settings page gets from the shell:
+
+- One save bar at the bottom of the form. "Restore defaults" is on the left, only when the page passes
+  `onRestoreDefaults`. "Reset changes" and Save are on the right. The labels come from `useActions()`.
+- Save is the page's only contained button. It is enabled only when the form has changes, they are valid, and no save
+  is in flight. While a save is in flight it shows a spinner.
+- "Reset changes" appears only while there are changes, and puts the saved values back.
+- "Restore defaults" fills in the defaults without saving. Use `form.reset(defaults, { keepDefaultValues: true })` so
+  they count as a change: Save and "Reset changes" work, and leaving the page asks first. Pass `undefined` to hide the
+  button, for example while the form already holds the defaults.
+- The unsaved-changes guard (`UnsavedNavigationAlert`) is mounted. Leaving the page, reloading or closing the tab with
+  changes asks first. A form that spans routes passes `exceptTargetPaths`.
+- A save that works resets the form to `toFormValues(response, variables)`, so the form is clean and holds what the
+  server saved. It refetches the `invalidate` queries and toasts "Saved". A save that fails toasts "Could not save
+  settings: " and the server's reason, and keeps the user's changes.
+
+Build the fields from the typed controllers in `web/src/components/util/TypedController.tsx` rather than wiring
+`Controller` by hand: `NumericFormControllerText`, `CheckboxFormController`, `SwitchFormController` (a switch with its
+label and help text) and `SelectFormController` (a select with its label, `{ value, label }` options and help text;
+a number field stays a number).
+
 ## Getting Help
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/chrisbenincasa/tunarr/issues)
