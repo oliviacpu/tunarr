@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import {
   Box,
   DialogContentText,
@@ -35,6 +36,7 @@ const AddReplicateModalContent = ({
   onClose,
 }: Omit<AddReplicateModalProps, 'open'>) => {
   const { t } = useLingui();
+  const actions = useActions();
   const replicateProgram = useReplicatePrograms();
 
   const {
@@ -114,11 +116,9 @@ const AddReplicateModalContent = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button variant="contained" form="replication-form" type="submit">
-          <Trans>Save</Trans>
+          {actions.save}
         </Button>
       </DialogActions>
     </>

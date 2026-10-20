@@ -1,3 +1,4 @@
+import { useToasts, withReason } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit, Sync } from '@mui/icons-material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
@@ -37,6 +38,7 @@ import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
 
 export default function CustomShowsPage() {
   const { t } = useLingui();
+  const toasts = useToasts();
   const { data: customShows } = useCustomShows();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -56,13 +58,11 @@ export default function CustomShowsPage() {
     onError: (e) => {
       snackbar.enqueueSnackbar({
         message: (
-          <Trans>
-            <span>
-              Error deleting custom show: {e.message}
-              <br />
-              Please consider opening a bug with details!
-            </span>
-          </Trans>
+          <span>
+            {withReason(toasts.couldNotDelete, e.message)}
+            <br />
+            <Trans>Please consider opening a bug with details!</Trans>
+          </span>
         ),
         variant: 'error',
       });

@@ -1,3 +1,4 @@
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
 import {
@@ -26,6 +27,8 @@ type Props = {
 
 export const EditSmartCollectionDialog = (props: Props) => {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const snackbar = useSnackbar();
 
   const {
@@ -84,7 +87,7 @@ export const EditSmartCollectionDialog = (props: Props) => {
     console.error(err);
     snackbar.enqueueSnackbar({
       variant: 'error',
-      message: t`Error updating Smart Collection. Check logs for details.`,
+      message: withReason(toasts.couldNotSave, t`Check logs for details`),
     });
   };
 
@@ -111,16 +114,14 @@ export const EditSmartCollectionDialog = (props: Props) => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={props.onClose}>
-            <Trans>Cancel</Trans>
-          </Button>
+          <Button onClick={props.onClose}>{actions.cancel}</Button>
           <Button
             disabled={!isValid || !isDirty}
             startIcon={<Save />}
             variant="contained"
             onClick={handleSubmit(handleSave, handleSubmitError)}
           >
-            <Trans>Save</Trans>
+            {actions.save}
           </Button>
         </DialogActions>
       </>

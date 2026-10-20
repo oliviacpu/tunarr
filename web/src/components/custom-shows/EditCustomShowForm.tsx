@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import { isNonEmptyString } from '@/helpers/util.ts';
 import { customShowQuery } from '@/hooks/useCustomShows.ts';
 import useStore from '@/store';
@@ -76,6 +77,7 @@ export function EditCustomShowsForm({
   isNew,
 }: Props) {
   const { t } = useLingui();
+  const actions = useActions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const customShowProgrammingChanged = useStore(
@@ -430,11 +432,10 @@ export function EditCustomShowsForm({
                       title={t`Reset programming to most recently saved state`}
                     >
                       <Button
-                        variant="contained"
                         startIcon={<Undo />}
                         onClick={() => resetCustomShowProgramming()}
                       >
-                        <Trans>Reset</Trans>
+                        {actions.resetChanges}
                       </Button>
                     </Tooltip>
                   )}
@@ -465,7 +466,7 @@ export function EditCustomShowsForm({
                 type="submit"
                 startIcon={<Save />}
               >
-                <Trans>Save</Trans>
+                {actions.save}
               </Button>
             </Stack>
           </Box>

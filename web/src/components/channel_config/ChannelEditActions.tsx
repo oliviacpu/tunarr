@@ -1,5 +1,6 @@
+import { useActions, useToasts } from '@/strings/actions';
 import { useChannelEditor } from '@/store/selectors.ts';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { Trans } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import Button from '@mui/material/Button';
@@ -23,7 +24,6 @@ type ChannelEditActionsProps = {
 export default function ChannelEditActions({
   isNewChannel,
 }: ChannelEditActionsProps) {
-  const { t } = useLingui();
   const { currentEntity: channel } = useChannelEditor();
   const {
     formState: { isValid, isDirty, isSubmitting },
@@ -31,6 +31,8 @@ export default function ChannelEditActions({
   } = useChannelFormContext();
   const [lastState, setLastState] = useState<MutationStatus>('idle');
   const snackbar = useSnackbar();
+  const actions = useActions();
+  const toasts = useToasts();
 
   const mutationState = useMutationState<
     MutationState<unknown, Error, SaveableChannel>
@@ -49,17 +51,15 @@ export default function ChannelEditActions({
 
       if (lastState === 'pending') {
         if (currentState === 'success' && !isNewChannel) {
-          snackbar.enqueueSnackbar(t`Channel settings saved!`, {
+          snackbar.enqueueSnackbar(toasts.saved, {
             variant: 'success',
           });
         } else if (currentState === 'error') {
           snackbar.enqueueSnackbar(
             <span>
-              <Trans>
-                Error updating channel.
-                <br />
-                Check browser console for details
-              </Trans>
+              {toasts.couldNotSave}
+              <br />
+              <Trans>Check browser console for details</Trans>
             </span>,
             {
               variant: 'error',
@@ -69,7 +69,7 @@ export default function ChannelEditActions({
         }
       }
     }
-  }, [isNewChannel, currentState, lastState, snackbar]);
+  }, [isNewChannel, currentState, lastState, snackbar, toasts]);
 
   return (
     <Stack spacing={2} direction="row" justifyContent="right" sx={{ mt: 2 }}>
@@ -77,7 +77,7 @@ export default function ChannelEditActions({
         <>
           {isDirty && (
             <Button onClick={() => reset()} variant="outlined">
-              <Trans>Reset Changes</Trans>
+              {actions.resetChanges}
             </Button>
           )}
           <Button
@@ -95,7 +95,7 @@ export default function ChannelEditActions({
               )
             }
           >
-            <Trans>Save</Trans>
+            {actions.save}
           </Button>
         </>
       ) : (
@@ -115,7 +115,7 @@ export default function ChannelEditActions({
               )
             }
           >
-            <Trans>Save</Trans>
+            {actions.save}
           </Button>
         </>
       )}

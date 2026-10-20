@@ -199,7 +199,7 @@ describe('XmlTvSettingsPage', () => {
 
     expect(
       await screen.findByText(
-        'Error saving XMLTV settings. The refresh timer is too long.',
+        'Could not save settings: The refresh timer is too long.',
       ),
     ).toBeInTheDocument();
   });

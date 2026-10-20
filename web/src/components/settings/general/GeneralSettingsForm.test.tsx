@@ -75,9 +75,9 @@ async function renderForm() {
   await waitFor(() => expect(backendUri()).toHaveValue(LoadedBackendUri));
   // It only shows while the form has changes
   const resetButton = () =>
-    screen.getByRole('button', { name: 'Reset Options' });
+    screen.getByRole('button', { name: 'Reset changes' });
   const isResetShown = () =>
-    screen.queryByRole('button', { name: 'Reset Options' }) !== null;
+    screen.queryByRole('button', { name: 'Reset changes' }) !== null;
   const saveButton = () => screen.getByRole('button', { name: 'Save' });
   const setBackendUriField = async (value: string) => {
     await rendered.user.clear(backendUri());

@@ -1,3 +1,4 @@
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { LearnMoreLink } from '@/components/base/LearnMoreLink.tsx';
 import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
@@ -131,6 +132,8 @@ export function GeneralSettingsForm({
   systemSettings,
 }: GeneralSetingsFormProps) {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const categoryLogLevelLabels: Record<
     (typeof LogCategorySelectInputs)[number],
     string
@@ -210,14 +213,17 @@ export function GeneralSettingsForm({
       {
         onSuccess(data) {
           reset(getDefaultFormValues(settings, data), { keepDirty: false });
-          snackbar.enqueueSnackbar(t`Settings Saved!`, {
+          snackbar.enqueueSnackbar(toasts.saved, {
             variant: 'success',
           });
         },
         onError: (err) => {
           console.error(err);
           snackbar.enqueueSnackbar(
-            t`Error while saving settings. Please check console for details.`,
+            withReason(
+              toasts.couldNotSaveSettings,
+              t`Check the console for details`,
+            ),
             {
               variant: 'error',
             },
@@ -448,7 +454,7 @@ export function GeneralSettingsForm({
               // Reset is the way out of an invalid value, so it stays enabled
               disabled={isSubmitting || !isDirty}
             >
-              <Trans>Reset Options</Trans>
+              {actions.resetChanges}
             </Button>
           )}
           <Button
@@ -456,7 +462,7 @@ export function GeneralSettingsForm({
             type="submit"
             disabled={!isValid || isSubmitting || !isDirty}
           >
-            <Trans>Save</Trans>
+            {actions.save}
           </Button>
         </Stack>
       </FormProvider>

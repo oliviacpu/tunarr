@@ -1,3 +1,5 @@
+import { t } from '@lingui/core/macro';
+import { useToasts, withReason } from '@/strings/actions';
 import {
   useMutation,
   useQueryClient,
@@ -30,6 +32,7 @@ export const useMediaSource = (mediaSourceId: string) => {
 export const useUpdateMediaSource = (callbacks?: Callbacks) => {
   const queryClient = useQueryClient();
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   return useMutation({
     ...putApiMediaSourcesByIdMutation(),
     onSuccess: async () => {
@@ -40,8 +43,10 @@ export const useUpdateMediaSource = (callbacks?: Callbacks) => {
     },
     onError: (err) => {
       snackbar.enqueueSnackbar({
-        message:
-          'Error while updating media source. Please check browser and server logs for details.',
+        message: withReason(
+          toasts.couldNotSave,
+          t`Check browser and server logs for details`,
+        ),
         variant: 'error',
       });
       console.error(err);
@@ -53,6 +58,7 @@ export const useUpdateMediaSource = (callbacks?: Callbacks) => {
 export const useCreateMediaSource = (callbacks?: Callbacks) => {
   const queryClient = useQueryClient();
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   return useMutation({
     ...postApiMediaSourcesMutation(),
     onSuccess: async () => {
@@ -63,8 +69,10 @@ export const useCreateMediaSource = (callbacks?: Callbacks) => {
     },
     onError(error) {
       snackbar.enqueueSnackbar({
-        message:
-          'Error while creating media source. Please check browser and server logs for details.',
+        message: withReason(
+          toasts.couldNotSave,
+          t`Check browser and server logs for details`,
+        ),
         variant: 'error',
       });
       console.error(error);

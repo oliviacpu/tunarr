@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Save } from '@mui/icons-material';
 import {
@@ -45,6 +46,7 @@ type Props = {
 
 const SlotSchedulerCyclicShuffleDialogContent = ({ onClose }: Props) => {
   const { t } = useLingui();
+  const actions = useActions();
   const { reset } = useRandomSlotFormContext();
   const [searchQueryString, setSearchQueryString] = useState('');
   const enabled = useMemo(
@@ -297,9 +299,7 @@ const SlotSchedulerCyclicShuffleDialogContent = ({ onClose }: Props) => {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button
           startIcon={<Save />}
           variant="contained"
@@ -308,7 +308,7 @@ const SlotSchedulerCyclicShuffleDialogContent = ({ onClose }: Props) => {
           )}
           onClick={() => confirmSchedule()}
         >
-          <Trans>Save</Trans>
+          {actions.save}
         </Button>
       </DialogActions>
     </>

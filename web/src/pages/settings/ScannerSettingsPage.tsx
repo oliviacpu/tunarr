@@ -1,3 +1,4 @@
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import {
   getApiSettingsMediaSourceOptions,
@@ -33,6 +34,8 @@ function nextScanEpoch(tasks: Task[] | undefined): number | undefined {
 
 export const ScannerSettingsPage = () => {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const dayjs = useDayjs();
   const queryClient = useQueryClient();
   const { data: mediaSourceSettings } = useSuspenseQuery(
@@ -55,7 +58,7 @@ export const ScannerSettingsPage = () => {
       settingsForm.reset(returned);
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: t`Successfully updated Media Source settings.`,
+        message: toasts.saved,
       });
       // The server moved the scheduled scan to the saved interval
       return queryClient.invalidateQueries({
@@ -66,7 +69,10 @@ export const ScannerSettingsPage = () => {
       console.error(err);
       snackbar.enqueueSnackbar({
         variant: 'error',
-        message: t`Failed to update Media Source settings. Please check server and browser logs for details.`,
+        message: withReason(
+          toasts.couldNotSaveSettings,
+          t`Check the server and browser logs for details`,
+        ),
       });
     },
   });
@@ -83,9 +89,12 @@ export const ScannerSettingsPage = () => {
   const onError = useCallback(() => {
     snackbar.enqueueSnackbar({
       variant: 'error',
-      message: t`There was an error submitting the request to update Media Source settings. Please check the form and try again`,
+      message: withReason(
+        toasts.couldNotSaveSettings,
+        t`Check the form and try again`,
+      ),
     });
-  }, [snackbar, t]);
+  }, [snackbar, t, toasts]);
 
   return (
     <Stack>
@@ -122,7 +131,7 @@ export const ScannerSettingsPage = () => {
               variant="contained"
               disabled={!settingsForm.formState.isDirty}
             >
-              <Trans>Save</Trans>
+              {actions.save}
             </Button>
           </Box>
         </Stack>

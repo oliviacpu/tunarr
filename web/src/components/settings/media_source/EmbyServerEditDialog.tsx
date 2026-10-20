@@ -1,3 +1,4 @@
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { isNonEmptyString, isValidUrlWithError, toggle } from '@/helpers/util';
 
 import { LoadingIcon } from '@/components/base/LoadingIcon.tsx';
@@ -73,6 +74,8 @@ const emptyDefaults: EmbyServerSettingsForm = {
 export function EmbyServerEditDialog({ open, onClose, server }: Props) {
   const queryClient = useQueryClient();
   const snackbar = useSnackbar();
+  const actions = useActions();
+  const toasts = useToasts();
 
   const [showAccessToken, setShowAccessToken] = useState(false);
 
@@ -144,7 +147,10 @@ export function EmbyServerEditDialog({ open, onClose, server }: Props) {
   const showErrorSnack = (e: unknown) => {
     snackbar.enqueueSnackbar({
       variant: 'error',
-      message: t`Error saving new Emby server. See browser console and server logs for details`,
+      message: withReason(
+        toasts.couldNotSave,
+        t`See browser console and server logs for details`,
+      ),
     });
     console.error(e);
   };
@@ -500,7 +506,7 @@ export function EmbyServerEditDialog({ open, onClose, server }: Props) {
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={() => handleClose()} autoFocus>
-          <Trans>Cancel</Trans>
+          {actions.cancel}
         </Button>
         <Button
           variant="contained"
@@ -513,7 +519,7 @@ export function EmbyServerEditDialog({ open, onClose, server }: Props) {
           type="submit"
           onClick={onSubmit}
         >
-          {server?.id ? <Trans>Update</Trans> : <Trans>Add</Trans>}
+          {server?.id ? actions.save : actions.add}
         </Button>
       </DialogActions>
     </Dialog>

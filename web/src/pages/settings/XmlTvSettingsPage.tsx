@@ -1,3 +1,4 @@
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { useSettings } from '@/store/settings/selectors.ts';
 import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
@@ -33,6 +34,8 @@ import { useXmlTvSettings } from '../../hooks/settingsHooks.ts';
 
 export default function XmlTvSettingsPage() {
   const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const [restoreTunarrDefaults, setRestoreTunarrDefaults] = useState(false);
   const { backendUri } = useSettings();
   const { data } = useXmlTvSettings();
@@ -68,7 +71,7 @@ export default function XmlTvSettingsPage() {
   const updateXmlTvSettingsMutation = useMutation({
     ...putApiXmltvSettingsMutation(),
     onSuccess: (data) => {
-      snackbar.enqueueSnackbar(t`Settings Saved!`, {
+      snackbar.enqueueSnackbar(toasts.saved, {
         variant: 'success',
       });
       setRestoreTunarrDefaults(false);
@@ -79,9 +82,12 @@ export default function XmlTvSettingsPage() {
     },
     onError: (error) => {
       const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(t`Error saving XMLTV settings. ${message}`, {
-        variant: 'error',
-      });
+      snackbar.enqueueSnackbar(
+        withReason(toasts.couldNotSaveSettings, message),
+        {
+          variant: 'error',
+        },
+      );
     },
   });
 
@@ -282,7 +288,7 @@ export default function XmlTvSettingsPage() {
                 setRestoreTunarrDefaults(true);
               }}
             >
-              <Trans>Restore Default Settings</Trans>
+              {actions.restoreDefaults}
             </Button>
           )}
         </Stack>
@@ -300,7 +306,7 @@ export default function XmlTvSettingsPage() {
                 setRestoreTunarrDefaults(false);
               }}
             >
-              <Trans>Reset Changes</Trans>
+              {actions.resetChanges}
             </Button>
           )}
           <Button
@@ -310,7 +316,7 @@ export default function XmlTvSettingsPage() {
             }
             type="submit"
           >
-            <Trans>Save</Trans>
+            {actions.save}
           </Button>
         </Stack>
       </Stack>

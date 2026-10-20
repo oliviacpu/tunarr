@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
@@ -48,6 +49,7 @@ type FormValues = {
 
 const AddRedirectModal = (props: AddRedirectModalProps) => {
   const { t } = useLingui();
+  const actions = useActions();
   const currentChannel = useStore((s) => s.channelEditor.currentEntity);
   const { isPending, error, data: channels } = useChannels();
   const previousData = usePrevious(channels);
@@ -190,11 +192,9 @@ const AddRedirectModal = (props: AddRedirectModalProps) => {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => props.onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => props.onClose()}>{actions.cancel}</Button>
         <Button variant="contained" form="redirect-channel-form" type="submit">
-          <Trans>Save</Trans>
+          {actions.save}
         </Button>
       </DialogActions>
     </Dialog>

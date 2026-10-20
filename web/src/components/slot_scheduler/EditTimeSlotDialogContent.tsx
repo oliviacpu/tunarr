@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import type {
   CustomShowProgramOption,
   FillerProgramOption,
@@ -9,7 +10,7 @@ import {
   withSlotTimeOfDay,
 } from '@/helpers/slotSchedulerUtil';
 import type { TimeSlotViewModel } from '@/model/TimeSlotModels.ts';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
 import {
   Box,
   Button,
@@ -67,6 +68,7 @@ export const EditTimeSlotDialogContent = ({
   onClose,
 }: EditTimeSlotDialogContentProps) => {
   const { t } = useLingui();
+  const actions = useActions();
   const {
     getValues: getSlotFormValues,
     setValue: setSlotFormValue,
@@ -415,15 +417,13 @@ export const EditTimeSlotDialogContent = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => cancel()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => cancel()}>{actions.cancel}</Button>
         <Button
           disabled={!isValid || isSubmitting}
           onClick={() => commit()}
           variant="contained"
         >
-          <Trans>Save</Trans>
+          {actions.save}
         </Button>
       </DialogActions>
     </>

@@ -1,3 +1,4 @@
+import { useActions, useToasts, withReason } from '@/strings/actions';
 import { RandomSlotFormProvider } from '@/components/slot_scheduler/RandomSlotFormProvider.tsx';
 import { RandomSlotSettingsForm } from '@/components/slot_scheduler/RandomSlotSettingsForm';
 import { RandomSlotTable } from '@/components/slot_scheduler/RandomSlotTable.tsx';
@@ -5,7 +6,7 @@ import { useSlotProgramOptions } from '@/hooks/programming_controls/useSlotProgr
 import { defaultRandomSlotSchedule } from '@/model/SlotModels.ts';
 import { useChannelEditor } from '@/store/selectors';
 import { plural } from '@lingui/core/macro';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { Trans } from '@lingui/react/macro';
 import { ArrowBack, HelpOutline } from '@mui/icons-material';
 import {
   Alert,
@@ -67,7 +68,8 @@ export default function RandomSlotEditorPage() {
   const { currentEntity: channel, programList: newLineup } = useChannelEditor();
   const { data: channelSchedule } = useChannelSchedule(channel!.id);
 
-  const { t } = useLingui();
+  const actions = useActions();
+  const toasts = useToasts();
   const snackbar = useSnackbar();
   const queryClient = useQueryClient();
   const updateLineupMutation = useUpdateLineup({
@@ -80,7 +82,7 @@ export default function RandomSlotEditorPage() {
     },
     onError(error) {
       const message = getApiErrorMessage(error) ?? error.message;
-      snackbar.enqueueSnackbar(t`Error saving schedule. ${message}`, {
+      snackbar.enqueueSnackbar(withReason(toasts.couldNotSave, message), {
         variant: 'error',
       });
     },
@@ -306,8 +308,8 @@ export default function RandomSlotEditorPage() {
           </RouterButtonLink>
         </Box>
         {isDirty && (
-          <Button variant="contained" onClick={() => resetLineupToSaved()}>
-            <Trans>Reset Options</Trans>
+          <Button onClick={() => resetLineupToSaved()}>
+            {actions.resetChanges}
           </Button>
         )}
         <Button
@@ -315,7 +317,7 @@ export default function RandomSlotEditorPage() {
           disabled={unavailableSlotCount > 0}
           onClick={() => onSave()}
         >
-          <Trans>Save</Trans>
+          {actions.save}
         </Button>
       </Box>
     </>

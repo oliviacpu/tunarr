@@ -1,4 +1,4 @@
-import { Trans } from '@lingui/react/macro';
+import { useActions } from '@/strings/actions';
 import type { DialogProps } from '@mui/material';
 import {
   Button,
@@ -38,6 +38,7 @@ const DeleteConfirmationDialogContent = ({
   onCancel,
   onConfirm,
 }: ContentProps) => {
+  const actions = useActions();
   const confirm = () => {
     onConfirm();
     onClose();
@@ -56,11 +57,9 @@ const DeleteConfirmationDialogContent = ({
         </DialogContent>
       )}
       <DialogActions>
-        <Button onClick={() => cancel()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => cancel()}>{actions.cancel}</Button>
         <Button variant="contained" color="error" onClick={() => confirm()}>
-          {confirmLabel ?? <Trans>Delete</Trans>}
+          {confirmLabel ?? actions.delete}
         </Button>
       </DialogActions>
     </>

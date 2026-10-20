@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import { LoadingIcon } from '@/components/base/LoadingIcon';
 import { isNonEmptyString, isValidUrlWithError, toggle } from '@/helpers/util';
 import { useMediaSourceBackendStatus } from '@/hooks/media-sources/useMediaSourceBackendStatus';
@@ -70,6 +71,7 @@ const emptyDefaults: PlexServerSettingsForm = {
 };
 
 export function PlexServerEditDialog({ open, onClose, server }: Props) {
+  const actions = useActions();
   const queryClient = useQueryClient();
 
   const [showAccessToken, setShowAccessToken] = useState(false);
@@ -383,14 +385,14 @@ export function PlexServerEditDialog({ open, onClose, server }: Props) {
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={() => handleClose()} autoFocus>
-          <Trans>Cancel</Trans>
+          {actions.cancel}
         </Button>
         <Button
           variant="contained"
           disabled={!isDirty || !isValid}
           type="submit"
         >
-          {server?.id ? <Trans>Update</Trans> : <Trans>Add</Trans>}
+          {server?.id ? actions.save : actions.add}
         </Button>
       </DialogActions>
     </Dialog>

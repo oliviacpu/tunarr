@@ -1,3 +1,4 @@
+import { useToasts, withReason } from '@/strings/actions';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 
 import { isNonEmptyString } from '@/helpers/util.ts';
@@ -43,6 +44,7 @@ const TableName = 'FillerLists';
 
 export default function FillerListsPage() {
   const { t } = useLingui();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<
     string | undefined
@@ -62,13 +64,11 @@ export default function FillerListsPage() {
     onError: (e) => {
       snackbar.enqueueSnackbar({
         message: (
-          <Trans>
-            <span>
-              Error deleting filler list: {e.message}
-              <br />
-              Please consider opening a bug with details!
-            </span>
-          </Trans>
+          <span>
+            {withReason(toasts.couldNotDelete, e.message)}
+            <br />
+            <Trans>Please consider opening a bug with details!</Trans>
+          </span>
         ),
         variant: 'error',
       });

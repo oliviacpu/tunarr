@@ -1,3 +1,5 @@
+import { t } from '@lingui/core/macro';
+import { useToasts, withReason } from '@/strings/actions';
 import {
   useMutation,
   useQueryClient,
@@ -35,13 +37,14 @@ type MutationCallbacks = {
 
 export const useCreateSmartCollection = (callbacks?: MutationCallbacks) => {
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
   return useMutation({
     ...postApiSmartCollectionsMutation(),
-    onSuccess: (vars) => {
+    onSuccess: () => {
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: `Successfully created Smart Collection "${vars.name}"`,
+        message: toasts.saved,
       });
       queryClient
         .invalidateQueries({
@@ -54,8 +57,10 @@ export const useCreateSmartCollection = (callbacks?: MutationCallbacks) => {
       console.error(err);
       snackbar.enqueueSnackbar({
         variant: 'error',
-        message:
-          'Error saving new Smart Collection. Check server logs and browser console for details.',
+        message: withReason(
+          toasts.couldNotSave,
+          t`Check server logs and browser console for details`,
+        ),
       });
     },
   });
@@ -63,13 +68,14 @@ export const useCreateSmartCollection = (callbacks?: MutationCallbacks) => {
 
 export const useUpdateSmartCollection = (opts?: MutationCallbacks) => {
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
   return useMutation({
     ...putApiSmartCollectionsByIdMutation(),
-    onSuccess: (vars) => {
+    onSuccess: () => {
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: `Successfully updated Smart Collection "${vars.name}"`,
+        message: toasts.saved,
       });
       queryClient
         .invalidateQueries({
@@ -82,8 +88,10 @@ export const useUpdateSmartCollection = (opts?: MutationCallbacks) => {
       console.error(err);
       snackbar.enqueueSnackbar({
         variant: 'error',
-        message:
-          'Error updating Smart Collection. Check server logs and browser console for details.',
+        message: withReason(
+          toasts.couldNotSave,
+          t`Check server logs and browser console for details`,
+        ),
       });
     },
   });
@@ -91,6 +99,7 @@ export const useUpdateSmartCollection = (opts?: MutationCallbacks) => {
 
 export const useDeleteSmartCollection = () => {
   const snackbar = useSnackbar();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -98,7 +107,7 @@ export const useDeleteSmartCollection = () => {
     onSuccess: () => {
       snackbar.enqueueSnackbar({
         variant: 'success',
-        message: `Successfully deletied Smart Collection`,
+        message: toasts.deleted,
       });
       queryClient
         .invalidateQueries({
@@ -110,8 +119,10 @@ export const useDeleteSmartCollection = () => {
       console.error(err);
       snackbar.enqueueSnackbar({
         variant: 'error',
-        message:
-          'Error deleting Smart Collection. Check server logs and browser console for details.',
+        message: withReason(
+          toasts.couldNotDelete,
+          t`Check server logs and browser console for details`,
+        ),
       });
     },
   });

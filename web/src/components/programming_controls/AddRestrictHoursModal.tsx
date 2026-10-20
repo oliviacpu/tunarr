@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import { DialogContentText, Stack, Typography } from '@mui/material';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -24,6 +25,7 @@ const AddRestrictHoursModalContent = ({
   onClose,
 }: Omit<AddRestrictHoursModalProps, 'open'>) => {
   const { t } = useLingui();
+  const actions = useActions();
   const [startOffset, setStartOffset] = useState(0);
   const [endOffset, setEndOffset] = useState(
     dayjs.duration({ hours: 4 }).asMilliseconds(),
@@ -141,11 +143,9 @@ const AddRestrictHoursModalContent = ({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button variant="contained" onClick={() => handleClick()}>
-          <Trans>Save</Trans>
+          {actions.save}
         </Button>
       </DialogActions>
     </>

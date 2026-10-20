@@ -1,3 +1,4 @@
+import { useActions } from '@/strings/actions';
 import { useAddBreaks } from '@/hooks/programming_controls/useAddBreaks';
 import {
   Box,
@@ -34,6 +35,7 @@ const AddBreaksModalContent = ({
   onClose,
 }: Omit<AddBreaksModalProps, 'open'>) => {
   const { t } = useLingui();
+  const actions = useActions();
   const addBreaks = useAddBreaks();
 
   const {
@@ -210,11 +212,9 @@ const AddBreaksModalContent = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => onClose()}>
-          <Trans>Cancel</Trans>
-        </Button>
+        <Button onClick={() => onClose()}>{actions.cancel}</Button>
         <Button variant="contained" type="submit">
-          <Trans>Save</Trans>
+          {actions.save}
         </Button>
       </DialogActions>
     </Box>
