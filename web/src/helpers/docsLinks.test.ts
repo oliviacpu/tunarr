@@ -14,10 +14,8 @@ const DocsMarkdown = new Map(
   ).map(([file, markdown]) => [file.slice(DocsSource.length), markdown]),
 );
 
-// The page mkdocs serves at a path: "a/b/" is a/b/index.md or a/b.md
 function docsPageAt(pagePath: string): string | undefined {
-  const dir = pagePath.replace(/\/$/, '');
-  return DocsMarkdown.get(`${dir}/index.md`) ?? DocsMarkdown.get(`${dir}.md`);
+  return DocsMarkdown.get(pagePath);
 }
 
 // Python-Markdown's toc slugify, which mkdocs uses for heading anchors
@@ -57,7 +55,7 @@ const pages = Object.entries(DocsPages) as [DocsPage, string][];
 describe('DocsPages', () => {
   test.each(pages)('%s points at a page in docs/', (_, path) => {
     const [pagePath] = path.split('#');
-    expect(pagePath).toMatch(/\/$/);
+    expect(pagePath).toMatch(/\.md$/);
     expect(docsPageAt(pagePath ?? '')).toBeDefined();
   });
 
@@ -83,9 +81,9 @@ describe('DocsPages', () => {
     );
   });
 
-  test('builds links on the docs site', () => {
+  test('builds links to the fork documentation source', () => {
     expect(docsUrl('channelStreamMode')).toBe(
-      'https://tunarr.com/configure/channels/transcoding/#stream-mode',
+      'https://github.com/oliviacpu/tunarr/blob/main/docs/configure/channels/transcoding.md#stream-mode',
     );
   });
 });

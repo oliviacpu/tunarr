@@ -1,3 +1,4 @@
+import { docsUrl } from '@/helpers/docsLinks.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Clear, Help } from '@mui/icons-material';
 import {
@@ -77,10 +78,7 @@ export function SearchFilterBuilder({
                           <span>
                             <Trans>
                               Could not parse this filter expression. Check the{' '}
-                              <Link
-                                href="https://tunarr.com/misc/search"
-                                target="_blank"
-                              >
+                              <Link href={docsUrl('search')} target="_blank">
                                 documentation
                               </Link>{' '}
                               for information about filter expressions.
