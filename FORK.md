@@ -34,13 +34,13 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 - **Tests:** the failures were observed in full CI and the combined browser sweep. Focused settings suites and the real transcode browser file verify the corrected waits/locator; e2e typecheck, changed-file lint and formatting checks cover the test-only change.
 - **Upstream:** not sent.
 
-# Keep table preference updates outside React state updaters
+### Keep table preference updates outside React state updaters (2026-10-20, PR #155)
 
-The combined browser route sweep caught a React warning when the channel Streaming tab updated table preferences: a functional state updater notified settings subscribers while React was rendering the subtitle table.
-
-Resolve visibility, pagination and sorting callbacks against their latest pending values before queuing concrete React state and persisting preferences. Consecutive functional updates still compose, direct values still work, and selection/reset behavior remains unchanged. No API, schema or scheduling behavior changed.
-
-Validation: the StrictMode settings-subscriber regression reproduces the warning before the fix; all seven hook tests now pass, covering composed/direct updates, persisted remount values and existing selection/reset behavior. The focused Streaming route and subtitle browser suite passed all six tests including fixture seed. Web/E2E typechecks, changed-file lint, formatting and quick preflight passed.
+- **What you saw:** the combined browser route sweep caught a React warning when the channel Streaming tab updated table preferences.
+- **Cause:** a functional state updater notified settings subscribers while React was rendering the subtitle table.
+- **Fix:** resolve visibility, pagination and sorting callbacks against their latest pending values before queuing concrete React state and persisting preferences. Consecutive functional updates still compose, direct values still work, and selection/reset behavior remains unchanged. No API, schema or scheduling behavior changed.
+- **Tests:** the StrictMode settings-subscriber regression reproduces the warning before the fix; all seven hook tests pass, covering composed/direct updates, persisted remount values and existing selection/reset behavior. The focused Streaming route and subtitle browser suite passed all six tests including seed. Web/E2E typechecks, changed-file lint, formatting and quick preflight pass.
+- **Upstream:** not sent.
 
 ### Channel updates preserve omitted filler and subtitle relations (2026-10-20, PR #152)
 
