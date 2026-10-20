@@ -1,4 +1,4 @@
-### Guide zoom controls sit around the duration (2026-10-20, PR pending)
+### Guide zoom controls sit around the duration (2026-10-20, PR #116)
 
 - **What you saw:** the guide duration and its zoom controls were in separate groups, with Show Stealth between
   them on wide screens and unrelated controls between them when the header wrapped.
