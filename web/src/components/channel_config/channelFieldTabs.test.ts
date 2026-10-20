@@ -25,8 +25,9 @@ describe('tabsWithErrors', () => {
     ['startTime', 'properties'],
     ['onDemand', 'properties'],
     ['disableFillerOverlay', 'flex'],
-    ['transcodeConfigId', 'ffmpeg'],
-    ['guideMinimumDuration', 'epg'],
+    ['transcodeConfigId', 'streaming'],
+    ['guideMinimumDuration', 'guide'],
+    ['watermark', 'watermark'],
   ])('an error in %s marks the %s tab', (field, tab) => {
     expect([...tabsWithErrors([field])]).toEqual([tab]);
   });
@@ -34,7 +35,7 @@ describe('tabsWithErrors', () => {
   test('marks each tab with an error once', () => {
     expect(
       tabsWithErrors(['name', 'startTime', 'streamMode', 'captions']),
-    ).toEqual(new Set(['properties', 'ffmpeg']));
+    ).toEqual(new Set(['properties', 'streaming']));
   });
 
   test('ignores keys that are not channel fields', () => {
