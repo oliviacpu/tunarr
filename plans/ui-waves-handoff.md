@@ -23,12 +23,14 @@ starting anything.
 | 5 | P1–P5 | not started; P1 shelve and P2 retire were approved 2026-10-19 |
 
 Release `oliviacpu-2026.10.20` was tagged at the wave-2 fold-in (waves 1–2 plus C5/C6) and the
-fork image built from it. After wave 3 lands: run the wave-3 fold-in (move `docs/fork/changes/*.md`
-into FORK.md, update this file and the plan's wave status), tag `oliviacpu-2026.10.21` (or `.20.2`
-if the same day), wait for the fork-image workflow, then deploy to the box (the user asked for
-this explicitly: `~/apps/tunarr` on the seedbox, source `~/apps/_lib.sh` before any podman command,
-pull `ghcr.io/oliviacpu/tunarr:<tag>` and restart the container the way `~/apps/tunarr` scripts do;
-read them first, SSH access must be set up in the session that does it).
+fork image built from it. After wave 3 lands: run the wave-3 fold-in (move every note in `docs/fork/changes/` except its
+`README.md` into FORK.md, update this file and the plan's wave status), tag `oliviacpu-2026.10.21`
+(or `.20.2` if the same day), wait for the fork-image workflow (its build of the newest `oliviacpu-`
+tag also moves `ghcr.io/oliviacpu/tunarr:latest`, which is what the seedbox runs; see FORK.md's
+first section), then deploy to the box (the user asked for this explicitly: `~/apps/tunarr` on the
+seedbox, source `~/apps/_lib.sh` before any podman command, pull `:latest` and restart the container
+the way the `~/apps/tunarr` scripts do; read them first, and SSH access must be set up in the
+session that does it).
 
 ## Remaining rows, in order
 
@@ -87,7 +89,6 @@ what the previous session learned that the row's agent needs.
     `@tanstack/react-devtools` dev dependency; "Reset changes" still works while a create is in
     flight (harmless) (C4).
   - XMLTV at 390px: "Refreshes start at" label overlaps the previous field's two-line help (D2/C2).
-  - `getApiErrorMessage` does not read the `{ error }` body `PUT /api/channels/:id` sends (S6).
 
 - From C7: a server bulk endpoint for channels/lists (one guide and M3U rebuild instead of N);
   `getApiErrorMessage` does not read the `{ error }` body that `PUT /api/channels/:id` sends; the
