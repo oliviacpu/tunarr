@@ -1,3 +1,5 @@
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
+import { useToasts, withReason } from '@/strings/actions';
 import type { channelListOptions } from '@/types/index.ts';
 import {
   ContentCopy,
@@ -14,15 +16,19 @@ import { Link } from '@tanstack/react-router';
 import type { Channel } from '@tunarr/types';
 import { isEmpty, trimEnd } from 'lodash-es';
 import type { SyntheticEvent } from 'react';
+import { useSnackbar } from 'notistack';
 import { useCallback, useState } from 'react';
-import { deleteApiChannelsByIdSessionsMutation } from '../../generated/@tanstack/react-query.gen.ts';
+import {
+  deleteApiChannelsByIdMutation,
+  deleteApiChannelsByIdSessionsMutation,
+  getChannelsQueryKey,
+} from '../../generated/@tanstack/react-query.gen.ts';
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import { isNonEmptyString } from '../../helpers/util.ts';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard.ts';
 import { useCreateChannel } from '../../hooks/useCreateChannel.ts';
 import { useSettings } from '../../store/settings/selectors.ts';
 import type { PopoverAnchorEl } from '../../types/dom.ts';
-import { ChannelDeleteDialog } from './ChannelDeleteDialog.tsx';
 
 type Props = {
   row: Channel;
@@ -45,6 +51,23 @@ export const ChannelOptionsMenu = ({
   const { t } = useLingui();
 
   const queryClient = useQueryClient();
+  const toasts = useToasts();
+  const snackbar = useSnackbar();
+  const deleteChannelMutation = useMutation({
+    ...deleteApiChannelsByIdMutation(),
+    onSuccess: async () => {
+      snackbar.enqueueSnackbar({ message: toasts.deleted, variant: 'success' });
+      await queryClient.invalidateQueries({
+        queryKey: getChannelsQueryKey(),
+      });
+    },
+    onError: (e) => {
+      snackbar.enqueueSnackbar({
+        message: withReason(toasts.couldNotDelete, e.message),
+        variant: 'error',
+      });
+    },
+  });
   const stopSessionsMutation = useMutation({
     ...deleteApiChannelsByIdSessionsMutation(),
     onSuccess: () => {
@@ -240,13 +263,15 @@ export const ChannelOptionsMenu = ({
           </MenuItem>
         )}
       </Menu>
-      <ChannelDeleteDialog
+      <DeleteConfirmationDialog
         open={deleteConfirmOpen}
-        onClose={(e) => {
+        onClose={() => {
           setDeleteConfirmOpen(false);
-          handleClose(e);
+          onClose();
         }}
-        channel={row}
+        title={t`Delete Channel "${row.name}"?`}
+        body={t`Deleting a channel removes all of its programming. This cannot be undone.`}
+        onConfirm={() => deleteChannelMutation.mutate({ path: { id: row.id } })}
       />
     </>
   );

@@ -2,17 +2,8 @@ import { useToasts, withReason } from '@/strings/actions';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit, Sync } from '@mui/icons-material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
-import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  IconButton,
-  Tooltip,
-} from '@mui/material';
+import { IconButton, Tooltip } from '@mui/material';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import TableContainer from '@mui/material/TableContainer';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -29,10 +20,10 @@ import { useSnackbar } from 'notistack';
 import React, { useCallback, useMemo, useState } from 'react';
 import { PageHeader } from '../../components/base/PageHeader.tsx';
 import { RouterButtonLink } from '../../components/base/RouterButtonLink.tsx';
+import { DeleteConfirmationDialog } from '../../components/DeleteConfirmationDialog.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import { deleteCustomShowMutation } from '../../generated/@tanstack/react-query.gen.ts';
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
-import { isNonEmptyString } from '../../helpers/util.ts';
 import { useCustomShows } from '../../hooks/useCustomShows.ts';
 import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
 
@@ -46,11 +37,13 @@ export default function CustomShowsPage() {
     string | undefined
   >(undefined);
   const snackbar = useSnackbar();
+  const deletingShow = find(customShows, { id: deleteConfirmationId });
   const tableState = useStoreBackedTableSettings('CustomShows');
 
   const deleteShowMutation = useMutation({
     ...deleteCustomShowMutation(),
     onSuccess: async () => {
+      snackbar.enqueueSnackbar({ message: toasts.deleted, variant: 'success' });
       await queryClient.invalidateQueries({
         predicate: invalidateTaggedQueries('Custom Shows'),
       });
@@ -68,9 +61,6 @@ export default function CustomShowsPage() {
       });
       console.error(e);
     },
-    onSettled: () => {
-      setDeleteConfirmationId(undefined);
-    },
   });
 
   const handleCustomShowDelete = useCallback(
@@ -80,45 +70,6 @@ export default function CustomShowsPage() {
     },
     [],
   );
-
-  const renderConfirmationDialog = () => {
-    return (
-      <Dialog
-        open={isNonEmptyString(deleteConfirmationId)}
-        onClose={() => setDeleteConfirmationId(undefined)}
-        aria-labelledby="delete-custom-show-title"
-        aria-describedby="delete-custom-show-description"
-      >
-        <DialogTitle id="delete-custom-show-title">
-          <Trans>
-            Delete Custom Show "
-            {find(customShows, { id: deleteConfirmationId })?.name}"?
-          </Trans>
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-custom-show-description">
-            <Trans>
-              Deleting a Custom Show will remove its programming from channels
-              that use it. This action cannot be undone.
-            </Trans>
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmationId(undefined)} autoFocus>
-            <Trans>Cancel</Trans>
-          </Button>
-          <Button
-            onClick={() =>
-              deleteShowMutation.mutate({ path: { id: deleteConfirmationId! } })
-            }
-            variant="contained"
-          >
-            <Trans>Delete</Trans>
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
 
   const renderActionCell = useCallback(
     ({ row: { original: show } }: { row: MRT_Row<CustomShow> }) => {
@@ -222,7 +173,17 @@ export default function CustomShowsPage() {
       <TableContainer component={Paper} sx={{ width: '100%' }}>
         <MaterialReactTable table={table} />
       </TableContainer>
-      {renderConfirmationDialog()}
+      <DeleteConfirmationDialog
+        open={deletingShow !== undefined}
+        onClose={() => setDeleteConfirmationId(undefined)}
+        title={t`Delete Custom Show "${deletingShow?.name}"?`}
+        body={t`Deleting a custom show removes its programming from channels that use it. This cannot be undone.`}
+        onConfirm={() => {
+          if (deletingShow !== undefined) {
+            deleteShowMutation.mutate({ path: { id: deletingShow.id } });
+          }
+        }}
+      />
     </Box>
   );
 }
