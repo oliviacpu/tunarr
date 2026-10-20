@@ -311,13 +311,14 @@ must still be checked at 390px in the e2e fixture. PRs in a parallel wave write 
 
 ## 5. Execution notes
 
-### Proposed C7 continuation (not approved)
+### C7 continuation: C7a approved; batching held
 
 `plans/channel-update-and-bulk-followups-2026-10-20.md` proposes three separate rows beyond
 the original C7 UI scope: C7a preserves omitted channel relations; C7b batches stealth changes;
-C7c batches channel deletion. They require explicit approval before implementation. New bulk
+C7c batches channel deletion. Olivia Hunter approved C7a only on 2026-10-20 while reviewing
+PR #149; C7b and C7c remain held pending explicit approval. New bulk
 list endpoints are deferred for lack of the repeated XMLTV/M3U work seen in channel actions.
-This proposal does not expand the approval gate for the original rows or authorize S5 implementation.
+This decision does not expand the approval gate for the original rows or authorize S5 implementation.
 
 - **Wave 1 status (2026-10-19):** all ten PRs merged (#86–#95), each reviewed by Claude and Codex with CI green.
 - **Wave 2 status (2026-10-20):** D1–D7 merged (#98–#104).
