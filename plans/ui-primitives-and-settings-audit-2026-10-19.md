@@ -280,21 +280,39 @@ Reported by the wave-1 agents; each is assigned to the issue that should absorb 
 - **S6:** `/ffmpeg-info` answers 200 with empty encoder lists when ffmpeg cannot run, while `/version` answers 500; the probe should report failure as failure. (B3)
 - **B6 leftovers, P2 or S6:** `DeepWritable<HdhrSettings>` cast in the reset route; `defaultSettings()` stores the shared `defaultHdhrSettings` object by reference. (B6, PR #93)
 - **D4:** `hooks/colorHooks.ts` picks the palette from `mode === 'dark'`, not the resolved scheme. (B7, PR #87)
-- **Test health (new item T1, S):** under load the web suite times out in `ChannelCaptionsField`, `LanguagePreferencesList`, `CustomShowSortToolsMenu` and `XmlTvSettingsPage` (the last relies on `waitFor`'s 1 s default for first render); `router.test.ts` imports the whole route tree (45–80 s under load); `ReviewLibraryTable.test.tsx` uses inline `typeof import(...)`, which CLAUDE.md forbids. Raise the per-test timeout for first-render waits, or render less, and fix the import. (B1, B5, B8, B9)
-- **FORK.md:** already fails `prettier --check` on main and is missing a blank line between two entries; every PR adds an entry at the top so parallel PRs always conflict there. Decision pending with the user: per-PR note files folded into FORK.md after each wave, and stacked branches for the dependent waves.
+- **Test health (new item T1, S):** under load the web suite times out in `ChannelCaptionsField`, `LanguagePreferencesList`, `CustomShowSortToolsMenu` and `XmlTvSettingsPage` (the last relies on `waitFor`'s 1 s default for first render); `router.test.ts` imports the whole route tree (45–80 s under load); `ReviewLibraryTable.test.tsx` uses inline `typeof import(...)`, which CLAUDE.md forbids. Raise the per-test timeout for first-render waits, or render less, and fix the import. (B1, B5, B8, B9) Added while landing wave 2: the e2e ports are fixed in `e2e/fixture/env.ts`, so parallel runs collide (D4); `server/src/stream/hls/HlsSession.test.ts > trimPlaylist > never lists a segment below the pruning floor` failed on CI for a web-only PR (#100, run 39368733676) while main passed; it is timing-dependent (expected `data000040.ts`, got `data000036.ts`) and comes from the playlist-window commits 58380adc and 5baea7ce.
+- **FORK.md:** already fails `prettier --check` on main and is missing a blank line between two entries; every PR adds an entry at the top so parallel PRs always conflict there. Decided 2026-10-20: wave PRs write per-PR note files under `docs/fork/changes/` and the wave's fold-in PR moves them into FORK.md (see its README); dependent rows are stacked where it helps, and the orchestrating session merges main into each PR before landing it.
+
+### Follow-ups found while landing wave 2 (2026-10-20)
+
+Reported by the wave-2 agents; each is assigned to the issue that should absorb it.
+
+- **D4 / C-wave:** D1 left out small inputs in tables and dialogs (no theme-level hook), which needs a shared input wrapper; it also left out tabular-nums on guide and lineup rows (no styled root). (D1, PR #98)
+- **D5:** the in-app docs links go to tunarr.com (upstream), not the fork's docs. (PR #104)
+- **D2 (reopened):** the mobile top-bar overflow (⋮) renders as an outlined box and should be an `IconButton`; detail pages (filler and custom show new/edit, slot editors, smart collection, welcome) are still on h4 titles. (D1, D2)
+- **D3 leftovers (C-wave, C1):** remaining `contained` buttons outside save bars (Refresh Preview, Add Media, Proceed, New, Close); inline Cancel, Delete and Close literals in files D3 did not touch; delete success toasts are missing on custom show and filler delete; non-save failure toasts keep their own wording.
+- **D4 (second pass):** (dark `secondary` was fixed in PR #103: `#5b8fb9` with explicit contrast text) the redirect guide title shows the channel UUID; the sliver divider is a hard-coded rgba; the lineup editor, mid-roll and slot calendars still use the random palette (they could use `guideRamp`); `TvGuideTimeControls.tsx` is empty; the dark ramp's yellow step reads muddy; TvGuide's small-viewport times and "N left" never render (a pre-existing condition bug).
+- **D6:** `/` and `/search` highlight no nav item; `/settings/ffmpeg/new` lacks the Settings breadcrumb.
+- **C2:** evaluate 16px inputs on a phone before porting the settings pages: iOS Safari zooms into inputs under 16px and floating labels shrink to 10.5px at the 14px body size; decide whether inputs (and the MUI X picker inputs) move to 16px.
+- **D7:** the error page's "File a Bug Report" targets upstream's issue form; the smart collection, media source, transcode config and `/media` pages show the error page for missing ids (no loader); `ChannelFlexConfig` and `CustomShowProgrammingSelector` have dead loading branches.
+- **D5 leftovers (C6, or a translation pass):** feature-flag descriptions are untranslated; the stream mode, watermark position, error screen and Hour/Day option lists are untranslated; the filler list delete icon has no aria-label.
+- **Lingui:** a full extract adds about 1,800 lines of strings that were never extracted. The `lingui-extract` workflow commits the catalogs after merge, so no PR needs to do it.
+- **Process:** wave PRs write their notes to `docs/fork/changes/<date>-<slug>.md` and the fold-in PR moves them into `FORK.md` (see `docs/fork/changes/README.md`).
 
 ### Not in scope here
 
 Data-layer items from `plans/frontend-audit-plan.md` (FE1–FE5, C1–C6) stay there; C3 above
 depends on its FE5 (query-key invalidation) being fixed first for channel delete to refresh the
 list. Infinite schedules UI waits for the dev branch. Mobile layout was not screenshotted; D1–D2
-must still be checked at 390px in the e2e fixture.
+must still be checked at 390px in the e2e fixture. PRs in a parallel wave write their fork notes to
+`docs/fork/changes/` (see its README) instead of FORK.md.
 
 ---
 
 ## 5. Execution notes
 
 - **Wave 1 status (2026-10-19):** all ten PRs merged (#86–#95), each reviewed by Claude and Codex with CI green.
+- **Wave 2 status (2026-10-20):** D1–D7 merged (#98–#104).
 - **Order:** Wave 1 all at once (ten S-sized PRs, one Opus agent each, worktrees). D1 alone, then
   D2–D7 in parallel. C1 alone, then C2–C7. S1 after C2. Wave 5 after decisions P1 and P2 are taken
   by the user.

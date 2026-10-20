@@ -26,6 +26,243 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Every top-level page opens with the same header, and headings follow one outline (2026-10-20, PR #101)
+
+- **What you saw:** each page set its own title. Channels, Settings, System, Guide and Media Sources used h3; Fillers,
+  Custom Shows, Smart Collections, Trash and the channel pages used h4; Library switched to h5 on phones. Search had no
+  title at all, only its two inputs, and with no query it listed the whole library. Inside pages, sections were h5 or
+  h6 and the Tasks heading was an h4. The top bar's "Tunarr" was the page's `h1`, and after the D1 type scale it read
+  at body size.
+- **Cause:** there was no shared header component, so every page picked a Typography variant by eye.
+- **Fix:** issue D2 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+  - New `web/src/components/base/PageHeader.tsx`: optional breadcrumbs, the title as the page's only `h1`, an optional
+    one-line description (body2, secondary colour, at most 72 characters wide) and actions on the right that wrap
+    under the title on phones. It leaves `theme.spacing(2)` below itself.
+  - Used by Channels, Guide (its date, zoom and paging controls are the header's actions), Library, Filler Lists,
+    Custom Shows, Smart Collections, Trash, Media Sources, Search, the Settings and System layouts, and the channel
+    summary, edit, programming, watch and new-channel pages.
+  - Search has the title "Search" and, until a query is entered, the line "Type to search your libraries" in place
+    of the results. `docs/misc/search/index.md` says so.
+  - Section headings inside a page are h2 and groups inside a section h3: General (Web Settings, Server Settings,
+    Logging, Backups), FFmpeg, Features, System Status, Debug, Tasks and Troubleshoot.
+  - The top bar wordmark is no longer a heading and is set at 18px, weight 600.
+- **Tests:** `PageHeader.test.tsx` (title is the `h1`; description, actions and breadcrumbs render when given and
+  nothing extra when not). `SearchPage.test.tsx` (title, empty state with the inputs kept, results once there are
+  keywords or a filter). `TrashPage.test.tsx` asserts the page has exactly one `h1`. The e2e spec
+  `e2e/tests/pageHeadings.spec.ts` checks that every top-level page has exactly one `h1` with its title.
+- **Upstream:** not sent.
+
+### One word per action, and a toast that matches it (2026-10-20, PR #100)
+
+Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue D3, approved by the maintainer 2026-10-19 (PR #85).
+
+- **What you saw:** the same action had several names. Saving said Save, Update or Submit; undoing said Reset, Reset
+  Changes, Reset Options or Restore Default Settings. The toast after a save was "Settings Saved!", "Feature flags
+  saved!", "Channel settings saved!", "Programs saved!" or "Successfully updated Media Source settings.". On slot pages
+  and the custom show form the Reset button was as loud as Save (both `contained`).
+- **Cause:** every site wrote its own label and message inline, and nothing said which buttons are primary.
+- **Fix:** issue D3 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`. `web/src/strings/actions.ts` (the `useActions` and `useToasts` hooks) holds the
+  labels (Save, Cancel, Delete, Reset changes, Restore defaults, Add) and toasts (Saved, Deleted,
+  Changes reset, Defaults restored, Could not save, Could not save settings, Could not delete). Save-bar buttons use them; Update and
+  Submit became Save, Reset Options and Reset became Reset changes, Restore Default Settings became Restore defaults.
+  Success toasts say "Saved" or "Deleted". Failures open with "Could not save" (generic) or "Could not save settings" (settings
+  pages only) or "Could not delete", then the server's reason after a colon. Reset buttons on slot pages and the custom show form are no longer `contained`, so
+  Save is the one primary button.
+- **Tests:** `web/src/strings/actions.test.tsx` (keys, no duplicate labels, reason formatting); the settings page tests
+  and the general settings form test follow the new wording.
+- **Upstream:** not sent.
+
+### Guide programs are muted tints keyed by show, and only "now" is teal (2026-10-20, PR #103)
+
+- **What you saw:** every program on the Guide had a loud random hue (pink, purple, orange, green), unrelated to the
+  theme, and a show's hue changed on every reload. Nothing said whether a block was a program, a flex gap or a
+  redirect: flex was a faint stripe and "No programming scheduled" was a grey block. The time header drew white
+  lines, invisible on the white paper. In the dark scheme the only secondary colour, `#004b79`, was 1.7:1 on the
+  paper, so the Guide's loading spinner barely showed. The lineup and slot-calendar colours used the light set under
+  the `system` mode on a dark computer.
+- **Cause:** `useRandomProgramBackgroundColor` picked from 100 OKLCH hues at lightness 0.8 and chroma 0.2, drawn
+  from an auto-seeded generator at each page load, by summing the key's character codes. `colorHooks.ts` chose the
+  light or dark set from `useColorScheme().mode === 'dark'`, which is `system` until a mode is picked, not the scheme
+  on screen.
+- **Fix:** issue D4 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+  - New `web/src/components/guide/guideColors.ts`, pure functions of the palette. `guideRamp(palette)` is 8 OKLCH
+    steps 45° apart, starting half a step (22.5°) from the primary's hue so no program looks like the accent. Light:
+    lightness 0.90, chroma 0.05, `#bbe6f7 #d1ddff #ebd5f6 #fbd1dd #fcd4c3 #ebddb9 #d0e6c5 #bbe9df` (text 12.3 to
+    12.7:1). Dark: lightness 0.36, chroma 0.05, `#1c4351 #323c58 #473550 #53323c #533427 #483c1c #324328 #1b463e`
+    (text 10.5 to 11.1:1). Hover is 0.04 darker in light and 0.04 lighter in dark.
+  - `programColor(palette, key)` picks the step by 32-bit FNV-1a of the key. The key is the show (or artist) for
+    episodes and tracks, the program for movies and other videos, and the wrapped program for custom-show entries, so
+    a show keeps its colour across reloads.
+  - `typeStyle(palette, type)` encodes the type without relying on colour. Movies, episodes, tracks and other videos
+    keep their ramp colour and get their `ProgramTypeIcon` (14px) before the title in cells at least 64px wide.
+    Cells from 24px show the title without it, so narrow cells keep their letters; slivers show neither. Flex gaps
+    and "No programming scheduled" take the page background, `text.secondary` and a dashed divider outline.
+    Redirects are the secondary colour at 16% over the paper with an arrow before the title. Only programs open the
+    details dialog, so only they get the hand cursor.
+  - The now-playing cell gets a 2px primary ring, and the time marker (now `TvGuideNowMarker.tsx`) keeps primary.
+    Nothing else on the grid uses primary. The marker jumps instead of gliding when the system asks for reduced
+    motion, and block and column width transitions stop too.
+  - The guide reads palette values through `useActivePalette()` (`hooks/useTunarrTheme.ts`), the palette of the
+    scheme on screen, because with CSS variables on `theme.palette` stays on the light scheme.
+  - Header lines use the theme divider. Times on the grid use tabular numerals.
+  - Dark secondary is `#5b8fb9` (4.6:1 on the paper), with dark label text (5.4:1), since white on it is only 3.5:1.
+  - `colorHooks.ts` reads the resolved scheme (`useIsDarkMode`), so the lineup editor, mid-roll rows and slot
+    calendars pick the dark set under `system` on a dark computer. Those views keep their random colours.
+  - The tints are muted on purpose, so they are a grouping aid, not the identity channel. The dataviz palette
+    validator fails them as chart marks: below its lightness band and chroma floor, and about 4 OKLab ΔE apart for
+    neighbouring hues. Every block prints its title, neighbours are separated by a gap, and type has its own shape.
+- **Tests:** `guideColors.test.ts`: 8 distinct steps per scheme; `text.primary` at 4.5:1 or more on every step and
+  hover step; no step within 15° of the primary's hue; the same key gives the same step, with the FNV-1a values
+  pinned; episodes of one show share a key and movies do not; flex and redirect backgrounds are not ramp steps, carry
+  the dashed outline and the arrow, and keep their text at 4.5:1. `guideCellType` tells movies from episodes and
+  classifies custom-show entries by the program they wrap. `TvGuideItem.test.tsx`: the ramp fill, the primary ring
+  only on the now-playing cell, the dashed flex outline, and the hand cursor only on programs; at 100px a movie cell
+  shows the movie icon and an episode cell the TV icon, a redirect the arrow and a flex gap none; a 40px cell shows
+  its text without the icon, and a sliver neither.
+  `TvGuideNowMarker.test.tsx`: the marker animates by default, does not under `prefers-reduced-motion`, and is
+  primary. `colorHooks.test.tsx`: `system` on a dark OS picks the dark set (fails on the old code), and on a light OS
+  the light set. `theme.test.ts` adds `secondary.contrastText` on `secondary.main` at 4.5:1 and a non-text list with
+  `secondary.main` on the paper at 3:1; the contrast helpers moved to `web/src/test/contrast.ts`.
+  `useTunarrTheme.test.ts`: under a CSS-variables theme, `useActivePalette()` returns the dark palette in dark mode
+  and the light one in light mode (the first fails when it returns `theme.palette`).
+- **Upstream:** not sent.
+
+### Settings and the channel editor use people's words, and help fits in two lines (2026-10-20, PR #104)
+
+- **What you saw:** the settings tabs were General, XMLTV, FFMPEG, Scanner, HDHR and Features, and the channel editor's
+  third tab was EPG. Help under fields ran up to 464 characters, seven lines at the 72-character help width, and the
+  same page spelled FFMPEG, ffmpeg and FFmpeg. Creating a transcode config opened a page titled
+  `Edit Transcode Config: "New Config"`. The subtitle switch said "extaction". The help under Auto Deinterlace Video
+  described watermarks. The backup folder help gave the server's run directory as the default, though an empty path
+  saves to the data directory's `backups` folder. A tuner count of 0 was outlined in red with no message, because a
+  field with help text dropped the default "must be >= 1" message.
+- **Cause:** copy was written field by field as features landed, with no shared way to hold a longer explanation, so
+  each one went into the help line. `NumericFormControllerText` printed `fieldError.message`, which is empty for a
+  rule without its own message, when the field also had help.
+- **Fix:** issue D5 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+
+  - 85 help texts on the settings pages, the transcode config form, the media source dialogs and the channel editor
+    tabs were rewritten: one sentence where possible, at most two lines, active voice, sentence case. Facts that
+    change what you do stay in the visible line (units, defaults, "applies from the next program", "needs a
+    restart").
+  - Longer explanations moved behind an info icon (16 fields, new `web/src/components/base/HelpTooltip.tsx`, shown on
+    hover, keyboard focus or tap) or a "Learn more" link to the matching `docs/configure/` page (12 fields, new
+    `LearnMoreLink.tsx`). The links come from one table, `web/src/helpers/docsLinks.ts`.
+  - Labels use the words people use. Routes are unchanged (`/settings/xmltv` still opens Guide, `?tab=epg` still
+    opens the channel's Guide tab), and "XMLTV" stays where it names the file.
+
+    | Where                                            | Before                                           | After                                                                       |
+    | ------------------------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------- |
+    | Settings tab                                     | XMLTV                                            | Guide                                                                       |
+    | Settings tab                                     | FFMPEG                                           | Transcoding                                                                 |
+    | Settings tab                                     | HDHR                                             | Tuner                                                                       |
+    | Channel editor tab                               | EPG                                              | Guide                                                                       |
+    | Guide                                            | Output Path                                      | XMLTV output path                                                           |
+    | Guide                                            | EPG (Hours)                                      | Guide length (hours)                                                        |
+    | Guide                                            | Refresh Timer (Hours)                            | Refresh interval (hours)                                                    |
+    | Guide                                            | Refresh Timer Starts At                          | Refreshes start at                                                          |
+    | Transcoding                                      | FFMPEG Log Method / FFMPEG Log Level             | FFmpeg logging / FFmpeg log level                                           |
+    | Transcoding                                      | Enable embedded subtitle extraction              | Extract embedded subtitles                                                  |
+    | Tuner                                            | Enable SSDP server (help: "\* Restart required") | Network discovery (help says what it announces and that it needs a restart) |
+    | General                                          | Server Listen Port                               | Server port                                                                 |
+    | General                                          | Tunarr Backend URL                               | Tunarr server URL                                                           |
+    | General                                          | Output Path / Max Backups (backups)              | Backup folder / Backups to keep                                             |
+    | Transcode config title on `/settings/ffmpeg/new` | Edit Transcode Config: "New Config"              | New transcode config                                                        |
+    | Transcode config                                 | Audio Loudness Normalization                     | Loudness normalization                                                      |
+    | Transcode config                                 | "Advanced Video Options" above the audio options | Advanced Audio Options                                                      |
+    | Channel › Properties                             | Thumbnail URL                                    | Icon URL                                                                    |
+    | Channel › Flex                                   | Filler List Cooldown (seconds)                   | Clip repeat cooldown (seconds)                                              |
+    | Channel › Guide                                  | Placeholder Program Title                        | Guide title for flex                                                        |
+    | Channel › Guide                                  | Min. Visible in Guide Duration Program (seconds) | Shortest program in the guide (seconds)                                     |
+    | Channel › Streaming                              | Channel Stream Mode / Channel Transcode Config   | Stream mode / Transcode config                                              |
+    | Channel › Streaming                              | Display Watermark on Leading Edge                | Show watermark at stream start                                              |
+    | Breadcrumb                                       | FFmpeg Settings                                  | Transcoding settings                                                        |
+    | Sidebar version                                  | FFMPEG:                                          | FFmpeg:                                                                     |
+
+  - Other labels on these pages moved to sentence case without new words (for example "Tuner count", "Video preset",
+    "Caption alignment"). The welcome page and sidebar say FFmpeg. Watermark size, margin and period labels and the
+    category log level labels are now translatable.
+  - The server's refusal of a too-short guide names the new fields: "Guide length is 12 hours, too short for a
+    12-hour refresh interval…".
+  - `NumericFormControllerText` shows the default validation message above the help text.
+  - Docs that named the old tabs or fields say Settings > Guide, Settings > Transcoding and Settings > Tuner
+    (`docs/configure/channels/epg.md` is titled Guide, and now says the guide URL is on Settings > Guide, not "HDHR /
+    M3U"). `docs/configure/clients/index.md` says where network discovery and the tuner count are. Screenshots in the
+    docs were not retaken.
+
+- **Tests:** `SettingsLayout.test.tsx` (the six tab labels, on the old routes), `TranscodeConfigSettingsForm.test.tsx`
+  (New title on create, Edit with the name otherwise), `channelTabLabels.test.tsx` (Guide and Streaming on the epg
+  and ffmpeg tabs), `HelpTooltip.test.tsx` (opens on keyboard focus, keeps its own name and is described by the
+  tooltip, clicking it beside a switch leaves the switch alone), `docsLinks.test.ts` (every link points at a page in
+  `docs/` and every anchor at one of its headings, slugged the way mkdocs does), `TypedController.test.tsx` (a `min`
+  rule's default message shows with help text; fails before the fix). The XMLTV, General, HDHR, FFmpeg, Scanner,
+  log-roll, caption and preset tests, the e2e log-roll and subtitle specs, and the server's XMLTV settings test follow
+  the new labels.
+- **Upstream:** not sent.
+
+### The nav highlights the right section on every page, and Settings and System pages have breadcrumbs (2026-10-20, PR #99)
+
+- **What you saw:** the drawer highlighted an item only on its exact path. The scanner and features settings, the
+  FFmpeg config editor, System tasks and troubleshoot, and every detail page (channel programming, filler edit, source
+  pages) left the drawer with nothing selected. The mobile bottom bar used a different rule, so the two disagreed.
+  Settings and System sub-pages had no breadcrumbs.
+- **Cause:** `useNavItems` compared the last matched route's path to each item with `===`, and hidden child entries
+  patched a few settings and system pages. `BottomNavBar` compared the first path segment.
+- **Fix:** issue D6 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`. `navItemForPath` in
+  `web/src/hooks/navMatch.ts` picks the visible item whose path is the longest segment-wise prefix of the current
+  route; both navs use it. The Settings item now points at `/settings` (which redirects to General), and the hidden
+  settings and system child entries were removed. `SettingsLayout` and `SystemLayout` render `Breadcrumbs` with an
+  explicit `trail` built from their tab definitions (for example Settings › XMLTV, System › Tasks). The FFmpeg config
+  pages keep their own trail.
+- **Tests:** `navMatch.test.ts` maps every `fullPath` in `routeTree.gen.ts` to one top-level item and checks the
+  settings, system, filler edit and time-slot-editor cases; `Breadcrumbs.test.tsx` covers the trail for a settings and
+  a system page.
+- **Upstream:** not sent.
+
+### Every page has the same loading, error and not-found screens (2026-10-20, PR #102)
+
+- **What you saw:** while a page loaded, Settings and System showed a progress bar and most other pages showed
+  nothing until the data arrived. Spinners came in three kinds: a rotating arrow icon, MUI's circle, and a bar. A
+  failed load showed the "Oops!" page with the error only inside the stack trace, and its one button reloaded the
+  browser. An unknown address showed a bare "Not found!" link, a deleted filler list or custom show showed the error
+  page instead, and a server error on a channel page showed "Not found!". On System › Troubleshoot, adjacent report
+  sections were split by a doubled 2px line.
+- **Cause:** the router had no `defaultPendingComponent`, `defaultErrorComponent` or `defaultNotFoundComponent`, so each
+  page handled these itself or not at all. Pages that read with `useSuspenseQuery` kept `isPending`/`error` branches
+  that could never run. The filler list and custom show loaders had `TODO handle not found`, and the channel loader
+  turned every failure, a server error included, into "not found". The Troubleshoot sections are flat bordered Paper
+  since the D1 theme, and each drew its own border plus MUI's divider line.
+- **Fix:** issue D7 of `plans/ui-primitives-and-settings-audit-2026-10-19.md`.
+  - `web/src/routerDefaults.ts`, spread into `createRouter`: a centred progress bar in place of the page
+    (`PagePending`), shown after 300ms and kept for at least 300ms so it doesn't flash; the error page
+    (`RouteErrorPage`), which now shows the server's message and a "Try again" button that clears the failed queries
+    and reruns the route's loaders; and a "Not found" page with a link to Channels. They render inside the app shell
+    (and inside the Settings and System tabs), so the per-route error component on `/settings` and the `Suspense`
+    wrappers in the Settings and System layouts are gone.
+  - One spinner: `components/base/LoadingIcon.tsx` is an icon-sized `CircularProgress` with a "Loading" label.
+    `RotatingLoopIcon` is gone; its 15 uses and the page-level circles in the guide, the media grid and the redirect
+    dialog use `LoadingIcon`. Spinners inside buttons and input adornments stay as they were.
+  - Skeletons: the Channels, Filler Lists, Custom Shows, Smart Collections, Media Sources and Tasks routes show a
+    `TableSkeleton` with the table's column count while they load. The channel summary's now-playing card has a
+    card-shaped skeleton.
+  - The unreachable loading and error branches are gone from the XMLTV, HDHR, FFmpeg and channel edit pages. General
+    and Features read their settings with suspense queries that their route loaders prefetch, so the router's
+    screens cover them.
+  - The channel, filler list and custom show loaders throw `notFound()` when the server answers 404 or 400 for the
+    id, and pass any other failure to the error page.
+  - Troubleshoot's sections stack as one group with a single 1px line between them.
+  - The e2e fixture finds ffmpeg and ffprobe through `TUNARR_TEST_FFMPEG` / `TUNARR_TEST_FFPROBE`, then the `PATH`,
+    then `/usr/bin` (`e2e/fixture/ffmpeg.ts`), and sets them on the fixture server before it scans, so the sweep runs
+    on macOS.
+- **Tests:** `router.test.tsx` renders the app's route tree at `/does-not-exist` and gets the not-found page; a loader
+  that throws gets the error page with its message, and "Try again" reruns the loader; a loader that throws
+  `notFound()` gets the not-found page. `routeLoaders.test.ts` checks each entity loader throws `notFound()` on 404 and
+  400 and passes a 500 on. `TableSkeleton.test.tsx`, `LoadingIcon.test.tsx`, `apiError.test.ts` (missing-entity check,
+  error message), and `stackedAccordionSx.test.tsx` (the second and third of three stacked accordions have no top
+  border; it fails without the style). The e2e `notFound.spec.ts` visits an unknown address and missing channel,
+  filler list and custom show ids; the route sweep checks for the new not-found heading.
+- **Upstream:** not sent.
+
 ### The web UI has a theme: IBM Plex Sans, a type scale, and colours that pass AA in both schemes (2026-10-19)
 
 - **What you saw:** stock Material UI. No font was loaded, so Roboto's stack fell through to Helvetica or Arial.

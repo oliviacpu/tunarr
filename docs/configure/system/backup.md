@@ -26,7 +26,7 @@ The file contains a credential; do not include it in support reports.
 
 ## Configuration
 
-Backup settings can be configured in the Tunarr web UI under **Settings > System > Backup**, or via the API.
+Backup settings can be configured in the Tunarr web UI under **Settings > General > Backup**, or via the API.
 
 ### Backup Options
 
@@ -78,7 +78,7 @@ Use a cron expression for more complex schedules:
 
 ### Via Web UI
 
-Navigate to **Settings > System > Backup** and click the **Backup Now** button.
+Navigate to **Settings > General > Backup** and click the **Backup Now** button.
 
 ### Via API
 

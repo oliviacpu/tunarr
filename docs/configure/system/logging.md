@@ -36,7 +36,7 @@ The following log categories are available:
 
 A category log level overrides the global level for that category only. For example, you can keep the global level at `info` while setting `streaming` to `debug` to get detailed stream logs without extra noise from elsewhere.
 
-Per-category log levels are configured in **Settings > System > Logging**, or via the API:
+Per-category log levels are configured in **Settings > General > Logging**, or via the API:
 
 ```bash
 curl -X PUT "http://localhost:8000/api/system/settings" \
@@ -70,7 +70,7 @@ LOG_DIRECTORY=/path/to/logs
 
 ### Via Web UI
 
-Navigate to **Settings > System > Logging** to configure:
+Navigate to **Settings > General > Logging** to configure:
 
 - Log level
 - Per-category log levels
@@ -139,7 +139,7 @@ Log rolling is on by default. Tunarr rotates the log every day at midnight, or s
 Size and schedule rotation can be combined. The log rotates when either one triggers, so heavy logging at `debug` or `trace` can rotate out older days early.
 
 !!! note "Upgrading"
-    Earlier releases left log rolling off by default. On the first start after upgrading, Tunarr turns on daily rolling for any install that had it off. Installs that already had rolling enabled keep their settings. To turn it off again, disable it under **Settings > System > Logging**. Tunarr will not turn it back on.
+    Earlier releases left log rolling off by default. On the first start after upgrading, Tunarr turns on daily rolling for any install that had it off. Installs that already had rolling enabled keep their settings. To turn it off again, disable it under **Settings > General > Logging**. Tunarr will not turn it back on.
 
 ### Rotated File Naming
 
