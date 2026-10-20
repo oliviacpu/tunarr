@@ -13,9 +13,10 @@ import { programSearchQueryOpts } from '../../../hooks/useProgramSearchQuery.ts'
 import useStore from '../../../store/index.ts';
 
 export const Route = createFileRoute('/library/smart_collections/$id')({
+  gcTime: 0,
   loader: async ({ context: { queryClient }, params }) => {
     const smartCollection = await orNotFound(
-      queryClient.ensureQueryData(
+      queryClient.fetchQuery(
         getApiSmartCollectionsByIdOptions({
           path: {
             id: params.id,

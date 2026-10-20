@@ -15,12 +15,11 @@ import { setSearchRequest } from '../../../store/programmingSelector/actions.ts'
 export const Route = createFileRoute(
   '/media_sources_/$mediaSourceId/libraries_/$libraryId',
 )({
+  gcTime: 0,
   component: MediaSourceBrowserPage,
   loader: async ({ context, params: { libraryId } }) => {
     await orNotFound(
-      context.queryClient.ensureQueryData(
-        MediaSourceLibraryQueryOpts(libraryId),
-      ),
+      context.queryClient.fetchQuery(MediaSourceLibraryQueryOpts(libraryId)),
     );
     setSearchRequest(null);
   },

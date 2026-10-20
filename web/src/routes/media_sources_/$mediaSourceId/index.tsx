@@ -12,10 +12,11 @@ import { useMediaSource } from '../../../hooks/media-sources/mediaSourceHooks.ts
 import { setSearchRequest } from '../../../store/programmingSelector/actions.ts';
 
 export const Route = createFileRoute('/media_sources_/$mediaSourceId/')({
+  gcTime: 0,
   component: MediaSourceBrowserPage,
   loader: async ({ context, params: { mediaSourceId } }) => {
     await orNotFound(
-      context.queryClient.ensureQueryData(
+      context.queryClient.fetchQuery(
         getApiMediaSourcesByMediaSourceIdOptions({
           path: {
             mediaSourceId,
