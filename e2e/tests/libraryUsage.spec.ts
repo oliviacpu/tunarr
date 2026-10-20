@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
 import { api } from '../fixture/api.ts';
 import { readFixtureIds } from './routes.ts';
 
@@ -46,13 +45,14 @@ for (const [path, count, channels] of [
 ] as const) {
   test(`${path} shows references and warns by channel name before deletion`, async ({
     page,
-  }) => {
-    mkdirSync('/private/tmp/tunarr-p3-screenshots', { recursive: true });
+  }, testInfo) => {
     for (const width of [390, 1440]) {
       for (const darkMode of [false, true]) {
         await page.setViewportSize({ width, height: 1000 });
         await page.goto(`/web/library/${path}`);
-        await expect(page.getByRole('button', { name: /Enable (light|dark) Mode/ })).toBeVisible();
+        await expect(
+          page.getByRole('button', { name: /Enable (light|dark) Mode/ }),
+        ).toBeVisible();
         const toggle = page.getByRole('button', {
           name: darkMode ? 'Enable dark Mode' : 'Enable light Mode',
           exact: true,
@@ -83,7 +83,7 @@ for (const [path, count, channels] of [
           .scrollIntoViewIfNeeded();
         const filename = `${path}-${width}-${darkMode ? 'dark' : 'light'}`;
         await page.screenshot({
-          path: `/private/tmp/tunarr-p3-screenshots/${filename}.png`,
+          path: testInfo.outputPath(`${filename}.png`),
           fullPage: true,
           animations: 'disabled',
         });
@@ -98,7 +98,7 @@ for (const [path, count, channels] of [
           dialog.getByRole('button', { name: 'Delete', exact: true }),
         ).toBeEnabled();
         await page.screenshot({
-          path: `/private/tmp/tunarr-p3-screenshots/${filename}-delete.png`,
+          path: testInfo.outputPath(`${filename}-delete.png`),
           fullPage: true,
           animations: 'disabled',
         });
