@@ -1,4 +1,10 @@
+import {
+  BulkActionsToolbar,
+  SelectedNames,
+} from '@/components/base/BulkActionsToolbar.tsx';
+import { useBulkDelete } from '@/hooks/useBulkAction.ts';
 import { useToasts, withReason } from '@/strings/actions';
+import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit, Sync } from '@mui/icons-material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
@@ -23,9 +29,13 @@ import { RouterButtonLink } from '../../components/base/RouterButtonLink.tsx';
 import { DeleteConfirmationDialog } from '../../components/DeleteConfirmationDialog.tsx';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
 import { deleteCustomShowMutation } from '../../generated/@tanstack/react-query.gen.ts';
+import { deleteCustomShow } from '../../generated/sdk.gen.ts';
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import { useCustomShows } from '../../hooks/useCustomShows.ts';
-import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
+import { useSelectableTableSettings } from '../../hooks/useTableSettings.ts';
+
+const showId = (show: CustomShow) => show.id;
+const showName = (show: CustomShow) => show.name;
 
 export default function CustomShowsPage() {
   const { t } = useLingui();
@@ -38,7 +48,23 @@ export default function CustomShowsPage() {
   >(undefined);
   const snackbar = useSnackbar();
   const deletingShow = find(customShows, { id: deleteConfirmationId });
-  const tableState = useStoreBackedTableSettings('CustomShows');
+  const { tableOptions, selectedRows, clearSelection } =
+    useSelectableTableSettings('CustomShows', customShows, showId);
+
+  const bulkDelete = useBulkDelete<CustomShow>({
+    getId: showId,
+    getName: showName,
+    deleteOne: (show) =>
+      deleteCustomShow({ path: { id: show.id }, throwOnError: true }),
+    onDone: () => {
+      clearSelection();
+      queryClient
+        .invalidateQueries({
+          predicate: invalidateTaggedQueries('Custom Shows'),
+        })
+        .catch(console.error);
+    },
+  });
 
   const deleteShowMutation = useMutation({
     ...deleteCustomShowMutation(),
@@ -145,7 +171,14 @@ export default function CustomShowsPage() {
       },
     },
     positionActionsColumn: 'last',
-    ...tableState,
+    renderTopToolbarCustomActions: () => (
+      <BulkActionsToolbar
+        selectedCount={selectedRows.length}
+        busy={bulkDelete.busy}
+        onDelete={() => bulkDelete.open(selectedRows)}
+      />
+    ),
+    ...tableOptions,
   });
 
   return (
@@ -183,6 +216,19 @@ export default function CustomShowsPage() {
             deleteShowMutation.mutate({ path: { id: deletingShow.id } });
           }
         }}
+      />
+      <DeleteConfirmationDialog
+        {...bulkDelete.dialogProps}
+        title={t`${plural(bulkDelete.count, {
+          one: 'Delete # custom show?',
+          other: 'Delete # custom shows?',
+        })}`}
+        body={t`${plural(bulkDelete.count, {
+          one: 'Deleting a custom show removes its programming from channels that use it. This cannot be undone.',
+          other:
+            'Deleting these custom shows removes their programming from channels that use them. This cannot be undone.',
+        })}`}
+        details={<SelectedNames items={bulkDelete.named} />}
       />
     </Box>
   );

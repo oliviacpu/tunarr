@@ -1,7 +1,13 @@
 import { useToasts, withReason } from '@/strings/actions';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 
+import {
+  BulkActionsToolbar,
+  SelectedNames,
+} from '@/components/base/BulkActionsToolbar.tsx';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
+import { useBulkDelete } from '@/hooks/useBulkAction.ts';
+import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit } from '@mui/icons-material';
 import { IconButton, Link, Tooltip } from '@mui/material';
@@ -28,10 +34,14 @@ import {
   deleteApiFillerListsByIdMutation,
   getApiFillerListsQueryKey,
 } from '../../generated/@tanstack/react-query.gen.ts';
+import { deleteApiFillerListsById } from '../../generated/sdk.gen.ts';
 import { useFillerLists } from '../../hooks/useFillerLists.ts';
-import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
+import { useSelectableTableSettings } from '../../hooks/useTableSettings.ts';
 
 const TableName = 'FillerLists';
+
+const fillerId = (filler: FillerList) => filler.id;
+const fillerName = (filler: FillerList) => filler.name;
 
 export default function FillerListsPage() {
   const { t } = useLingui();
@@ -41,8 +51,6 @@ export default function FillerListsPage() {
     string | undefined
   >(undefined);
   const snackbar = useSnackbar();
-
-  const tableState = useStoreBackedTableSettings(TableName);
 
   const deleteFillerList = useMutation({
     ...deleteApiFillerListsByIdMutation(),
@@ -70,6 +78,27 @@ export default function FillerListsPage() {
 
   const { data: fillerLists } = useFillerLists();
   const deletingFiller = find(fillerLists, { id: deleteConfirmationId });
+  const { tableOptions, selectedRows, clearSelection } =
+    useSelectableTableSettings(TableName, fillerLists, fillerId);
+
+  const bulkDelete = useBulkDelete<FillerList>({
+    getId: fillerId,
+    getName: fillerName,
+    deleteOne: (filler) =>
+      deleteApiFillerListsById({
+        path: { id: filler.id },
+        throwOnError: true,
+      }),
+    onDone: () => {
+      clearSelection();
+      queryClient
+        .invalidateQueries({
+          queryKey: getApiFillerListsQueryKey(),
+          exact: false,
+        })
+        .catch(console.error);
+    },
+  });
   const navigate = useNavigate();
 
   const handleFillterNavigation = (
@@ -161,7 +190,14 @@ export default function FillerListsPage() {
       },
     },
     positionActionsColumn: 'last',
-    ...tableState,
+    renderTopToolbarCustomActions: () => (
+      <BulkActionsToolbar
+        selectedCount={selectedRows.length}
+        busy={bulkDelete.busy}
+        onDelete={() => bulkDelete.open(selectedRows)}
+      />
+    ),
+    ...tableOptions,
   });
 
   return (
@@ -176,6 +212,19 @@ export default function FillerListsPage() {
             deleteFillerList.mutate({ path: { id: deletingFiller.id } });
           }
         }}
+      />
+      <DeleteConfirmationDialog
+        {...bulkDelete.dialogProps}
+        title={t`${plural(bulkDelete.count, {
+          one: 'Delete # filler list?',
+          other: 'Delete # filler lists?',
+        })}`}
+        body={t`${plural(bulkDelete.count, {
+          one: 'Deleting a filler list removes it from every channel that uses it. This cannot be undone.',
+          other:
+            'Deleting these filler lists removes them from every channel that uses them. This cannot be undone.',
+        })}`}
+        details={<SelectedNames items={bulkDelete.named} />}
       />
       <PageHeader
         breadcrumbs={<Breadcrumbs />}

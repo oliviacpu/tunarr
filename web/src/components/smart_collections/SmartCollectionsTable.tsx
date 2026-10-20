@@ -1,3 +1,5 @@
+import { useBulkDelete } from '@/hooks/useBulkAction.ts';
+import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Delete, Edit, Search, Visibility } from '@mui/icons-material';
 import {
@@ -9,30 +11,64 @@ import {
   Typography,
 } from '@mui/material';
 import { isNonEmptyString } from '@tunarr/shared/util';
+import { useQueryClient } from '@tanstack/react-query';
 import type { SmartCollection } from '@tunarr/types';
 import {
   MaterialReactTable,
   useMaterialReactTable,
 } from 'material-react-table';
 import { useCallback, useState } from 'react';
+import { deleteApiSmartCollectionsById } from '../../generated/sdk.gen.ts';
+import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import {
   useDeleteSmartCollection,
   useSmartCollections,
 } from '../../hooks/smartCollectionHooks.ts';
-import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
+import { useSelectableTableSettings } from '../../hooks/useTableSettings.ts';
 import type { RootSearchQueryParams } from '../../routes/__root.tsx';
 import { Route } from '../../routes/__root.tsx';
 import type { Maybe } from '../../types/util.ts';
 import { RouterButtonLink } from '../base/RouterButtonLink.tsx';
+import {
+  BulkActionsToolbar,
+  SelectedNames,
+} from '../base/BulkActionsToolbar.tsx';
 import { RouterLink } from '../base/RouterLink.tsx';
 import { DeleteConfirmationDialog } from '../DeleteConfirmationDialog.tsx';
 import { EditSmartCollectionDialog } from './EditSmartCollectionDialog.tsx';
+
+const collectionId = (collection: SmartCollection) => collection.uuid;
+const collectionName = (collection: SmartCollection) => collection.name;
 
 export const SmartCollectionsTable = () => {
   const { t } = useLingui();
   const navigate = Route.useNavigate();
   const smartColletionsQuery = useSmartCollections();
-  const tableSettings = useStoreBackedTableSettings('SmartCollections');
+  const queryClient = useQueryClient();
+  const { tableOptions, selectedRows, clearSelection } =
+    useSelectableTableSettings(
+      'SmartCollections',
+      smartColletionsQuery.data,
+      collectionId,
+    );
+
+  const bulkDelete = useBulkDelete<SmartCollection>({
+    getId: collectionId,
+    getName: collectionName,
+    deleteOne: (collection) =>
+      deleteApiSmartCollectionsById({
+        path: { id: collection.uuid },
+        throwOnError: true,
+      }),
+    onDone: () => {
+      clearSelection();
+      queryClient
+        .invalidateQueries({
+          predicate: invalidateTaggedQueries('Smart Collections'),
+        })
+        .catch(console.error);
+    },
+  });
 
   const [editingSmartCollection, setEditingSmartCollection] =
     useState<Maybe<string>>();
@@ -98,6 +134,11 @@ export const SmartCollectionsTable = () => {
           >
             <Trans>Create</Trans>
           </RouterButtonLink>
+          <BulkActionsToolbar
+            selectedCount={selectedRows.length}
+            busy={bulkDelete.busy}
+            onDelete={() => bulkDelete.open(selectedRows)}
+          />
         </Stack>
       );
     },
@@ -133,7 +174,7 @@ export const SmartCollectionsTable = () => {
         </Box>
       );
     },
-    ...tableSettings,
+    ...tableOptions,
   });
 
   return (
@@ -157,6 +198,15 @@ export const SmartCollectionsTable = () => {
         }
         title={t`Delete "${deletingSmartCollection?.name}"`}
         body={t`Are you sure you want to delete Smart Collection "${deletingSmartCollection?.name}"?`}
+      />
+      <DeleteConfirmationDialog
+        {...bulkDelete.dialogProps}
+        title={t`${plural(bulkDelete.count, {
+          one: 'Delete # smart collection?',
+          other: 'Delete # smart collections?',
+        })}`}
+        body={t`This cannot be undone.`}
+        details={<SelectedNames items={bulkDelete.named} />}
       />
     </>
   );
