@@ -8,9 +8,9 @@ exports[`settings application timing > the reviewed runtime mapping stays explic
     "when": "next-program",
   },
   "backendAddress": {
-    "description": "Saving changes the server this browser connects to immediately.",
+    "description": "Reload this browser page after saving the server address so all API clients connect to the saved server.",
     "title": "Server address",
-    "when": "live",
+    "when": "reload",
   },
   "backups": {
     "description": "Saving replaces the backup schedules immediately. A backup already running keeps its original output options.",

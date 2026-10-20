@@ -5,6 +5,7 @@ export type SettingsApplicationWhen =
   | 'live'
   | 'next-session'
   | 'next-program'
+  | 'reload'
   | 'restart';
 
 export const SettingsApplicationTiming = {
@@ -15,9 +16,9 @@ export const SettingsApplicationTiming = {
   },
   backendAddress: {
     title: 'Server address',
-    when: 'live',
+    when: 'reload',
     description:
-      'Saving changes the server this browser connects to immediately.',
+      'Reload this browser page after saving the server address so all API clients connect to the saved server.',
   },
   serverPort: {
     title: 'Server port',

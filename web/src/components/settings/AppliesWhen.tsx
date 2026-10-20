@@ -19,6 +19,7 @@ export function AppliesWhen({ setting }: { setting: SettingsApplicationKey }) {
     live: t`Live`,
     'next-session': t`Next session`,
     'next-program': t`Next program`,
+    reload: t`Reload required`,
     restart: t`Restart required`,
   };
   return (

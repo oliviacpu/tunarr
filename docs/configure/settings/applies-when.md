@@ -1,13 +1,13 @@
 # When settings take effect
 
-Timing chips describe when saved settings are read. **Live** means Tunarr reads the setting without a restart; it does not interrupt work already running. **Next program** means a new program pipeline, which may already be preparing ahead of playback. **Next session** means the channel must stop streaming before it starts again; stop all viewers first. **Restart required** means restart the Tunarr server.
+Timing chips describe when saved settings are read. **Live** means Tunarr reads the setting without a restart; it does not interrupt work already running. **Next program** means a new program pipeline, which may already be preparing ahead of playback. **Next session** means the channel must stop streaming before it starts again; stop all viewers first. **Reload required** means reload the browser page. **Restart required** means restart the Tunarr server.
 
 Browser preferences apply as they change. Other controls apply after a successful save. Environment overrides still take precedence over saved settings.
 
 | Setting or group | Applies | Details |
 | --- | --- | --- |
 | Browser preferences | Live | Changes apply in this browser as you make them. |
-| Server address | Live | Saving changes the server this browser connects to immediately. |
+| Server address | Reload required | Reload this browser page after saving the server address so all API clients connect to the saved server. |
 | Server port | Restart required | Restart Tunarr to listen on the saved port. |
 | Base logging and log rotation | Live | Saving updates the base log level and rotation rules immediately. |
 | Category log level | Live | Saving an explicit category log level updates that category immediately. |
