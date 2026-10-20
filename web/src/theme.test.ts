@@ -2,6 +2,10 @@ import type { Palette, Theme as MuiTheme } from '@mui/material';
 import { createTheme } from '@mui/material';
 import { esES } from '@mui/material/locale';
 import { decomposeColor, hslToRgb } from '@mui/material/styles';
+import { FormHelperText, Paper } from '@mui/material';
+import { ThemeProvider } from '@mui/material/styles';
+import { render, screen } from '@testing-library/react';
+import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import { Theme } from './theme.ts';
 
@@ -183,5 +187,52 @@ describe('Theme', () => {
         schemePalette(scheme).primary.main,
       );
     }
+  });
+
+  describe('colour scheme overrides in dark mode', () => {
+    const renderDark = (theme: MuiTheme) =>
+      render(
+        createElement(
+          ThemeProvider,
+          { theme, defaultMode: 'dark' },
+          createElement(FormHelperText, null, 'helper text'),
+          createElement(Paper, { elevation: 0 }, 'flat paper'),
+        ),
+      );
+
+    it('does not render helper text as translucent black', () => {
+      renderDark(Theme);
+      const { color } = getComputedStyle(screen.getByText('helper text'));
+      expect(color).not.toMatch(/^rgba\(0,\s*0,\s*0,/);
+    });
+
+    it('draws the flat Paper border with the dark divider', () => {
+      renderDark(Theme);
+      const paper = screen.getByText('flat paper');
+      expect(getComputedStyle(paper).borderTopColor).toBe(
+        'rgba(255, 255, 255, 0.12)',
+      );
+    });
+
+    // With CSS variables the theme's own palette stays on the default (light)
+    // scheme, so only (theme.vars || theme) follows the active scheme. jsdom
+    // does not resolve var(), so assert the light literal is not baked in.
+    it('does not bake the light palette in when CSS variables are on', () => {
+      const light = schemePalette('light');
+      renderDark(
+        createTheme({
+          cssVariables: true,
+          colorSchemes: {
+            light: { palette: light },
+            dark: { palette: schemePalette('dark') },
+          },
+          components: Theme.components,
+        }),
+      );
+      const helper = getComputedStyle(screen.getByText('helper text'));
+      const paper = getComputedStyle(screen.getByText('flat paper'));
+      expect(helper.color).not.toBe(light.text.secondary);
+      expect(paper.borderTopColor).not.toBe(light.divider);
+    });
   });
 });

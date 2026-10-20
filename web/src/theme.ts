@@ -169,7 +169,9 @@ export const Theme = createTheme({
           variants: [
             {
               props: { variant: 'elevation', elevation: 0 },
-              style: { border: `1px solid ${theme.palette.divider}` },
+              style: {
+                border: `1px solid ${(theme.vars || theme).palette.divider}`,
+              },
             },
             {
               props: { square: false },
@@ -207,7 +209,7 @@ export const Theme = createTheme({
       styleOverrides: {
         root: ({ theme }) => ({
           fontSize: rem(12.5),
-          color: theme.palette.text.secondary,
+          color: (theme.vars || theme).palette.text.secondary,
           maxWidth: '72ch',
         }),
       },
