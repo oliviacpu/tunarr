@@ -26,6 +26,22 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Keep week-calendar days aligned inside a bounded viewport (2026-10-20, PR #157)
+
+- **What you saw:** in the local seeded preview at phone width, week headers expanded the page to 1048px while the separately scrolling body clipped later days.
+- **Cause:** headers and body used separate width/overflow rules, and their leading gutters differed by the divider width.
+- **Fix:** put both rows and the hour gutter inside one native horizontal scroll viewport, share day sizing and gutter alignment, keep the time axis and divider visible while scrolling, and allow the toolbar to wrap. All seven days remain reachable; desktop columns fill the available width. The scroll region is named and keyboard focusable. Scheduling, date selection, navigation, zoom and palette behavior are unchanged.
+- **Tests:** the new browser regression fails on the old 1048px document at a 390px viewport. GET-only synthetic programming starts on Tuesday with a 24-hour cycle; checks cover bounded page width, all seven header/column pairs before and after scrolling, keyboard scrolling with persistent hour labels, reachable Tuesday/Saturday programs and selecting a later day. Captures cover 390px/1440px in both schemes. A component regression preserves date callbacks and week navigation across zoom changes; existing calendar palette tests remain covered.
+- **Upstream:** not sent; scoped correction to the existing web preview.
+
+### Advance calendar preview timestamps for repeated cycles (2026-10-20, PR #156)
+
+- **What you saw:** in the local seeded seven-hour calendar preview, start times repeated the first cycle and React emitted duplicate key warnings in Day and Week. A review regression also reproduced duplicate timestamps and incorrect phase after unsaved lineup edits changed its length. These were local fixture findings, not reported production incidents.
+- **Cause:** the preview loop reused its first cycle timestamp, saved channel duration could differ from the current editor lineup, and the range lookup omitted the final item's closing boundary.
+- **Fix:** memoize the current materialized lineup's duration, use it for the initial phase and advance the cycle timestamp whenever the index wraps. Pass the complete cycle boundaries to the existing range helper so the final item is selected at and after its start. Empty or zero-length current lineups return no preview. No store synchronization is needed. Program order, existing first-partial/final-day clipping, shared helpers, server scheduling, API contracts and calendar layout stay unchanged.
+- **Tests:** timestamp, stale-duration and final-item boundary regressions fail before their fixes. All twelve hook cases now pass, including appended/shortened lists, empty cycles, exact final-item starts and positive partial durations with full-day coverage. GET-only browser cases check seven-hour, stale saved-duration and final-item-phase previews with distinct visible time labels and Day/Week health. Existing route-specific known issues remain unchanged. Types, changed-file lint, formatting and quick preflight pass.
+- **Upstream:** not sent; bounded correction to the existing web preview.
+
 ### Settings tests follow the integrated loading and navigation behavior (2026-10-20, PR #154)
 
 - **What you saw:** full CI exceeded the isolation test's one-second initial executable-field wait while system state was still loading. The combined browser sweep also waited for the transcode editor's retired breadcrumb name.

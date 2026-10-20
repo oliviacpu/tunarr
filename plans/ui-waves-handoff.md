@@ -6,6 +6,45 @@ session, Codex, or a person can continue without the previous session's memory. 
 "Approval gate" paragraph, the row you are about to work on, and this file's "Working rules" before
 starting anything.
 
+## Calendar continuation after the .20.4 deployment (2026-10-20)
+
+The bounded continuation through `2bdc1ed7` is deployed as `oliviacpu-2026.10.20.4`, reporting
+`2026.10.3-oliviacpu-2026.10.20.4`. Its candidate and restore CLI rehearsals passed. The existing
+Whatbox guard completed its backup and idle checks, and Tunarr became ready in 12 seconds.
+Live checks preserved the 81-migration ledger, catalog counts, external-ID hashes, settings
+version 2 and all schedule/seed hashes. Authenticated settings/version, web assets, one bounded
+HLS segment and Plex guide refresh passed. The exact running image and corrected full OCI
+revision label match the release commit. Only the release-owned automatic-update pause was
+cleared. The observed outcome is recorded in the
+[release notes](https://github.com/oliviacpu/tunarr/releases/tag/oliviacpu-2026.10.20.4)
+and [closing PR #153](https://github.com/oliviacpu/tunarr/pull/153#issuecomment-6301559237).
+Apple TV acceptance remains unverified.
+
+The separate local calendar findings are addressed by two web-only source PRs, folded into
+`FORK.md` here:
+
+- #156: advance repeated-cycle timestamps using the current edited lineup's duration for both
+  cycle phase and advancement. This also covers unsaved append/shorten edits whose saved channel
+  duration is stale, selects the final item both at and inside its range, and returns no preview for an empty/zero-length current cycle.
+- #157: keep week headers and day columns aligned in one bounded native horizontal viewport,
+  with a fixed hour axis/divider and header gutter, keyboard scrolling and all seven days reachable.
+  Date selection, navigation, zoom and palette behavior remain covered.
+
+The focused regressions pass: twelve hook tests, nine component/palette tests, four timestamp
+browser cases including seed, and two layout browser cases including seed. Old-code runs
+reproduced repeated timestamps/keys, stale-duration and final-item selection errors, and the 390px-to-1048px page overflow.
+No known-issue exclusions were added. The combined branch still requires full CI, exact-head
+review and the complete seeded browser suite before landing and release.
+
+This snapshot predates their deployment. They change no server scheduling, API contracts,
+migrations or settings version. Follow the existing release-tag, owned automatic-update pause,
+fresh private on-host backup, pinned candidate/restore rehearsal and guarded deployment procedure.
+Both rehearsal images must preserve the same 81 migrations and settings version 2. Record the
+observed deployment outcome in that release's notes and this closing PR afterward.
+
+C7b/C7c batching and S5 implementation remain held. The older continuation snapshots below
+predate the `.20.4` deployment; their pending-release statements describe those snapshots.
+
 ## Continuation after the .20.3 deployment (2026-10-20)
 
 The work through `0eba0856` is deployed as `oliviacpu-2026.10.20.3`, reporting
