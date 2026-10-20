@@ -7,7 +7,7 @@ Browser preferences apply as they change. The server address is stored in this b
 | Setting or group | Applies | Details |
 | --- | --- | --- |
 | Browser preferences | Live | Changes apply in this browser as you make them. |
-| Server address | Reload required | Selecting Save stores the address in this browser even if the server settings request fails. Reload the page so all API clients connect to that address. |
+| Server address | Reload required | Reload this browser page after saving the server address so all API clients connect to the saved server. |
 | Server port | Restart required | Restart Tunarr to listen on the saved port. |
 | Base logging and log rotation | Live | Saving updates the base log level and rotation rules immediately. |
 | Category log level | Live | Saving an explicit category log level updates that category immediately. |
