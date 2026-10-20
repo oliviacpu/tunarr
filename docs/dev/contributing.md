@@ -492,6 +492,28 @@ Build the fields from the typed controllers in `web/src/components/util/TypedCon
 label and help text) and `SelectFormController` (a select with its label, `{ value, label }` options and help text;
 a number field stays a number).
 
+#### Entity editors
+
+The channel, filler list, custom show, time slot and random slot editors sit in the same `SettingsForm` and save
+through `useSettingsMutation`, with `failureMessage: useToasts().couldNotSave` (their failures are not about
+settings). `SettingsForm` has props for what an editor needs beyond a settings page:
+
+- `isNew`: the form creates something. Save is enabled whenever the values are valid, changed or not.
+- `hasOtherChanges` and `onDiscardChanges`: changes held outside the form's fields, such as the program list in the
+  filler list or custom show draft in the store, or a slot editor's refreshed preview. They count as changes for Save,
+  "Reset changes" and the unsaved guard. `onDiscardChanges` puts them back; it runs after "Reset changes" resets the
+  fields, and when the user leaves through the guard.
+- `saveDisabled`: keeps Save disabled for a reason the validation doesn't cover, such as an empty program list. The
+  page says why.
+- `disabled`: locks the fields. Pass the mutation's `isPending` while a create is in flight, because the page moves
+  on once it is saved and an edit made meanwhile would be lost. The filler list, custom show and slot editors lock for
+  every save, because the draft outside the form is saved as it was when Save was pressed.
+
+A create moves on with `navigate({ ..., ignoreBlocker: true })` from the mutation's `onSuccess`: the save has left the
+form clean, but the guard still holds the state from before it until it renders again. A form that spans routes, such
+as an editor and its add-programs page, passes those routes in `exceptTargetPaths`. The guard never blocks a
+navigation that only changes the query string, such as the channel editor's tabs.
+
 ## Getting Help
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/chrisbenincasa/tunarr/issues)
