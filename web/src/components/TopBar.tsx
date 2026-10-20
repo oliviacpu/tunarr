@@ -1,3 +1,4 @@
+import { ForkDocsUrl } from '@/helpers/forkLinks.ts';
 import { useLingui } from '@lingui/react/macro';
 import DiscordIcon from '@/assets/icon_clyde_black_RGB.svg?react';
 import {
@@ -137,7 +138,7 @@ export const TopBar = () => {
         ).catch(console.error);
       }
     },
-    [copyToClipboard],
+    [copyToClipboard, t],
   );
 
   const settings = useSettings();
@@ -183,12 +184,12 @@ export const TopBar = () => {
       },
       {
         name: t`Documentation`,
-        path: 'https://tunarr.com/',
+        path: ForkDocsUrl,
         visible: true,
         icon: <TextSnippet />,
       },
     ],
-    [actualBackendUri],
+    [actualBackendUri, t],
   );
 
   return (
@@ -239,13 +240,22 @@ export const TopBar = () => {
         <DarkModeButton iconOnly />
         {smallViewport ? (
           <>
-            <Button onClick={handleClick} color="inherit">
+            <IconButton
+              id="mobile-links-button"
+              aria-label={t`More links`}
+              aria-haspopup="menu"
+              aria-controls={mobileLinksOpen ? 'mobile-links-menu' : undefined}
+              aria-expanded={mobileLinksOpen ? 'true' : undefined}
+              onClick={handleClick}
+              color="inherit"
+            >
               <MoreVert />
-            </Button>
+            </IconButton>
             <StyledMenu
+              id="mobile-links-menu"
               slotProps={{
                 list: {
-                  'aria-labelledby': 'demo-customized-button',
+                  'aria-labelledby': 'mobile-links-button',
                 },
               }}
               anchorEl={anchorEl}

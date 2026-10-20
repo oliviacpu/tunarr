@@ -25,9 +25,9 @@ describe('useChannelTabLabels', () => {
     ).toEqual([
       ['properties', 'Properties'],
       ['flex', 'Flex'],
-      // The tab values stay, so ?tab=epg and ?tab=ffmpeg links still open them
-      ['epg', 'Guide'],
-      ['ffmpeg', 'Streaming'],
+      ['guide', 'Guide'],
+      ['streaming', 'Streaming'],
+      ['watermark', 'Watermark'],
     ]);
   });
 });

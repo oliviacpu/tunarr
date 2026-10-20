@@ -280,7 +280,6 @@ export class ProgramDaoMinter {
           uuid: v4(),
           createdAt: now,
           updatedAt: now,
-          externalSourceId: mediaSource.name, // legacy
           mediaSourceId: mediaSource.uuid, // new
           // TODO
           directFilePath: location?.path,

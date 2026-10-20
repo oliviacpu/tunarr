@@ -1,5 +1,6 @@
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { Trans } from '@lingui/react/macro';
-import { Stack, Typography } from '@mui/material';
+import { Stack } from '@mui/material';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { isNonEmptyString } from '@tunarr/shared/util';
@@ -39,6 +40,7 @@ export const Route = createFileRoute('/library/smart_collections/$id')({
   component: RouteComponent,
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 function RouteComponent() {
   const { id } = Route.useParams();
   const { filter, query } = Route.useLoaderData();
@@ -47,9 +49,9 @@ function RouteComponent() {
   );
   return (
     <Stack gap={2}>
-      <Typography variant="h4">
-        <Trans>Smart Collection: {smartCollection.name}</Trans>
-      </Typography>
+      <PageHeader
+        title={<Trans>Smart Collection: {smartCollection.name}</Trans>}
+      />
       <SearchInput
         initialSearchFilter={filter ?? undefined}
         initialKeywords={query ?? undefined}

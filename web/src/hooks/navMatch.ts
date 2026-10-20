@@ -20,7 +20,13 @@ export function navItemForPath<T extends NavMatchItem<T>>(
   items: readonly T[],
   fullPath: string,
 ): T | undefined {
-  const target = normalize(fullPath);
+  const normalized = normalize(fullPath);
+  const target =
+    normalized === ''
+      ? '/guide'
+      : normalized === '/search' || normalized.startsWith('/media/')
+        ? '/library'
+        : normalized;
   let best: T | undefined;
   let bestLength = -1;
   const visit = (candidates: readonly T[]) => {

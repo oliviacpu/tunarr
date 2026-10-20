@@ -7,7 +7,7 @@
 
 Tunarr features a built-in search index powered by [Meilisearch](https://www.meilisearch.com/). When scanning libraries from your media sources, Tunarr will add information to the search index, which can then be queried to filter content.
 
-Tunarr's search supports a basic query language to create structured searches, as well as a "free text" search which looks within all fields. A syntax diagram of the Tunarr query language can be viewed [here](/search_syntax.html).
+Tunarr's search supports a basic query language to create structured searches, as well as a "free text" search which looks within all fields. The query-language syntax diagram is included as [HTML](../../search_syntax.html).
 
 The Search page lists results once you enter keywords or a query, and until then asks you to type one. To browse everything in a library, open it from the Library page instead.
 

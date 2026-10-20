@@ -166,6 +166,12 @@ afterEach(() => {
 });
 
 describe('TranscodeConfigSettingsForm title', () => {
+  test('error options is a peer of the other settings sections', async () => {
+    renderForm('edit');
+    expect(
+      await screen.findByRole('heading', { name: 'Error Options', level: 2 }),
+    ).toBeInTheDocument();
+  });
   test('says New when creating a config', async () => {
     renderForm('new');
 
@@ -280,6 +286,12 @@ describe('TranscodeConfigSettingsForm validation', () => {
     const { user } = renderForm('edit');
 
     await pick(user, 'Loudness normalization', 'Enabled (loudnorm)');
+    expect(
+      screen.getByRole('heading', { name: 'Audio Options', level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Advanced Audio Options', level: 3 }),
+    ).toBeInTheDocument();
     const target = await screen.findByLabelText('Loudness target');
     expect(target).toHaveValue('-24');
     await user.clear(target);

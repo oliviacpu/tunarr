@@ -391,7 +391,6 @@ export class ProgramGroupingMinter {
           uuid: v4(),
           createdAt: now,
           updatedAt: now,
-          // externalSourceId: mediaSource.name, // legacy
           mediaSourceId: mediaSource.uuid, // new
         } satisfies NewSingleOrMultiProgramGroupingExternalId;
       }

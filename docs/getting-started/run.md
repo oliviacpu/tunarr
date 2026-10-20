@@ -23,7 +23,7 @@ services:
     ports:
       - ${TUNARR_SERVER_PORT:-8000}:8000
     environment:
-      - LOG_LEVEL=${TUNARR_LOG_LEVEL:-INFO}
+      - TUNARR_LOG_LEVEL=${TUNARR_LOG_LEVEL:-INFO}
       # Replace this with your timezone to ensure accurate guide
       # data and scheduling.
       - TZ=America/New_York
@@ -47,7 +47,7 @@ Tunarr has various command line / environment variables for configuration. These
 
 | Environment Variable | Command Line Flag | Default | Description |
 | -------------------- | ----------------- | ------- | ----------- |
-| `TUNARR_DATABASE_NAME` | `--database` | `''` | Sets the path where Tunarr will write its data to. **NOTE** Do not set this if using Docker; use a bind mount pointed to `/config/tunarr` instead. |
+| `TUNARR_DATABASE_PATH` | `--database` | (platform data directory) | Sets the directory where Tunarr will write its data to. **NOTE** Do not set this if using Docker; use a bind mount pointed to `/config/tunarr` instead. |
 | `TUNARR_SERVER_PORT` | `--port`/`-p` | `8000` | Sets the port that the Tunarr server will listen on. **NOTE** When using Docker, prefer using a port mapping instead of setting this. |
 | `TUNARR_BIND_ADDR` | N/A | `0.0.0.0` | Sets the interface that Tunarr will bind to. By default, Tunarr listens on all network interfaces. **NOTE** This generally does not have to be changed. |
 | `TUNARR_SERVER_TRUST_PROXY` | `--trust_proxy` | `false` | Enables [trust proxy](/configure/system/security/#trust-proxy) for using Tunarr behind a reverse proxy. |
@@ -58,7 +58,7 @@ Tunarr has various command line / environment variables for configuration. These
 | Environment Variable | Command Line Flag | Default | Description |
 | -------------------- | ----------------- | ------- | ----------- |
 | `TUNARR_LOG_LEVEL` | N/A | `info` | Sets the log level. Valid values: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`. Overrides the UI setting. |
-| `LOG_DIRECTORY` | N/A | (data dir) | Sets a custom directory for log files. |
+| `TUNARR_LOG_LEVEL_<CLASSNAME>` | N/A | (global level) | Override one logger class, with its name uppercased; for example `TUNARR_LOG_LEVEL_SERVER=debug`. |
 
 ### Streaming
 | Environment Variable | Command Line Flag | Default | Description |
@@ -73,7 +73,7 @@ Tunarr has various command line / environment variables for configuration. These
 | `TUNARR_SEARCH_PORT` | N/A | (random available) | Port for the embedded Meilisearch instance. |
 | `TUNARR_SEARCH_MAX_MEMORY` | N/A | (unlimited) | Maximum memory for Meilisearch indexing (e.g., `1024Mb`, `2Gb`). See [Meilisearch docs](https://www.meilisearch.com/docs/learn/self_hosted/configure_meilisearch_at_launch#max-indexing-memory). |
 | `TUNARR_SEARCH_MAX_INDEXING_THREADS` | N/A | (all cores) | Maximum threads for Meilisearch indexing. Useful for limiting CPU usage. |
-| `TUNARR_SEARCH_REDUCE_INDEXER_MEMORY_USAGE` | N/A | `true` | Reduces Meilisearch memory usage during indexing. See [Meilisearch docs](https://www.meilisearch.com/docs/learn/self_hosted/configure_meilisearch_at_launch#reduce-indexing-memory-usage). May [impact file storage](https://github.com/chrisbenincasa/tunarr/issues/1558). Not available on Windows. |
+| `TUNARR_SEARCH_REDUCE_INDEXER_MEMORY_USAGE` | N/A | `false` | Reduces Meilisearch memory usage during indexing. See [Meilisearch docs](https://www.meilisearch.com/docs/learn/self_hosted/configure_meilisearch_at_launch#reduce-indexing-memory-usage). May [impact file storage](https://github.com/chrisbenincasa/tunarr/issues/1558). Not available on Windows. |
 | `TUNARR_DISABLE_SEARCH_SNAPSHOT_IN_BACKUP` | N/A | `false` | When set to `true`, excludes Meilisearch snapshots from backups. The search index will be rebuilt on restore. |
 
 ### Artwork
@@ -104,6 +104,47 @@ Tunarr has various command line / environment variables for configuration. These
 | Environment Variable | Command Line Flag | Default | Description |
 | -------------------- | ----------------- | ------- | ----------- |
 | `TUNARR_SERVER_PRINT_ROUTES` | `--print_routes` | `false` | Prints all server routes at startup. Useful for debugging. |
+
+### Additional environment variables
+
+| Environment Variable | Default | Description |
+| --- | --- | --- |
+| `TUNARR_DATABASE_NAME` | `db.db` | SQLite filename within the data directory; distinct from `TUNARR_DATABASE_PATH`. |
+| `TUNARR_BASIC_AUTH_USER` | (unset) | HTTP Basic authentication username; set together with the password. |
+| `TUNARR_BASIC_AUTH_PASSWORD` | (unset) | HTTP Basic authentication password. Never include credentials in bug reports. |
+| `TUNARR_SESSION_STALENESS_MS` | (session default) | Override the HLS session staleness window in milliseconds. |
+| `TUNARR_WEBVTT_SIDECAR_ENABLED` | `false` | Enable WebVTT subtitle sidecars. |
+| `TUNARR_XMLTV_CREDIT_IMAGES_ENABLED` | `false` | Include person images in XMLTV credits when the guide is regenerated. |
+| `TUNARR_MOUNT_DEBUG_ENDPOINTS` | `false` | Mount additional debug endpoints outside development mode. |
+| `DATABASE_DEBUG_LOGGING` | (unset) | Any nonempty value enables SQL debug logging; may include query parameters. Unset it to disable. |
+| `ENABLE_SSDP_DEBUG_LOGGING` | (unset) | Any nonempty value enables SSDP discovery debug logging. Unset it to disable. |
+| `TUNARR_VERSION` | (package version) | Build metadata: release version. |
+| `TUNARR_BUILD_SHA` | (unset) | Build metadata: commit suffix for edge builds. |
+| `TUNARR_BUILD` | (unset) | Legacy build commit suffix; used only when `TUNARR_BUILD_SHA` is absent. |
+| `TUNARR_EDGE_BUILD` | `false` | Build metadata: mark an edge build. |
+| `TUNARR_BUILD_BASE_TAG` | (unset) | Build metadata: container base-image tag for health checks. |
+| `NODE_ENV` | `production` | Runtime environment; development enables extra diagnostics and test changes test behavior. |
+| `APPDATA` | (platform supplied) | Windows application-data root used to choose the default data directory. |
+| `HOME` | (platform supplied) | Home directory used to choose the default macOS or Linux data directory. |
+| `CONTAINER` | (unset) | A value of `podman` identifies a Podman environment. |
+| `container` | (unset) | Lowercase Podman environment marker, with the same meaning as `CONTAINER`. |
+
+System → Status shows safe environment overrides read-only. Credentials, filesystem
+paths, and platform/build metadata are omitted. Boolean and numeric values are
+shown as parsed by the server; invalid values that are ignored are omitted.
+Some overrides are evaluated only at startup, so restart after changing the environment.
+The removed `TUNARR_DEBUG_PROGRAM_GROUP_CHUNK_SIZE` variable has no effect.
+
+The CLI can update persisted settings, including system settings and feature flags:
+
+```sh
+tunarr settings update --system.server.port=8000
+tunarr settings update --featureFlags.proxyArtwork=true
+tunarr settings update --settings.ffmpeg.ffmpegExecutablePath=/usr/bin/ffmpeg
+```
+
+Environment overrides still take precedence over persisted settings. Use
+`tunarr settings view --pretty` to inspect the complete settings file.
 
 ## Hardware Transcoding
 

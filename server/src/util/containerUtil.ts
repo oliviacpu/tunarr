@@ -1,3 +1,4 @@
+import { getEnvVar, TUNARR_ENV_VARS } from '@/util/env.js';
 import { attempt, isError, isUndefined } from 'lodash-es';
 import { existsSync, readFileSync } from 'node:fs';
 import type { Maybe } from '../types/util.ts';
@@ -36,8 +37,8 @@ export function isDocker() {
 
 export function isPodman() {
   return (
-    process.env['CONTAINER'] === 'podman' ||
-    process.env['container'] === 'podman' ||
+    getEnvVar(TUNARR_ENV_VARS.CONTAINER) === 'podman' ||
+    getEnvVar(TUNARR_ENV_VARS.CONTAINER_LOWERCASE) === 'podman' ||
     existsSync('/run/.containerenv') ||
     existsSync('/var/run/.containerenv')
   );

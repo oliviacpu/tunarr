@@ -62,7 +62,7 @@ The simplest way to configure logging is through environment variables:
 
 ```bash
 # Set log level (overrides UI setting)
-LOG_LEVEL=debug
+TUNARR_LOG_LEVEL=debug
 
 # Set custom log directory
 LOG_DIRECTORY=/path/to/logs
@@ -274,7 +274,7 @@ Index update completed
 
 To temporarily increase log verbosity for debugging:
 
-1. Set `LOG_LEVEL=debug` environment variable
+1. Set `TUNARR_LOG_LEVEL=debug` environment variable
 2. Restart Tunarr
 3. Reproduce the issue
 4. Check logs for detailed information
@@ -283,7 +283,7 @@ To temporarily increase log verbosity for debugging:
 For Docker:
 
 ```bash
-docker run -e LOG_LEVEL=debug ... chrisbenincasa/tunarr
+docker run -e TUNARR_LOG_LEVEL=debug ... chrisbenincasa/tunarr
 ```
 
 ## Performance Considerations

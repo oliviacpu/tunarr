@@ -22,7 +22,7 @@ Printing or persisting FFmpeg logs to disk is useful when debugging streaming is
 
 ### HLS Direct Output Format
 
-When using the HLS Direct stream mode in a channel (see [channel stream modes](../channels/transcoding/#hls-direct)), use this setting to change the output container format for the stream.
+When using the HLS Direct stream mode in a channel (see [channel stream modes](../channels/transcoding.md#hls-direct)), use this setting to change the output container format for the stream.
 
 ### Scaling and deinterlacing
 
