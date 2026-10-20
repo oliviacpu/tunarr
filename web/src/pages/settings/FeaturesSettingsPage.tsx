@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { FeatureFlagsApplicationGroups } from '@tunarr/types';
-import { isEqual } from 'lodash-es';
+import { isEqual, pick } from 'lodash-es';
 import { useEffect } from 'react';
 import type { Control, SubmitHandler } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
@@ -190,7 +190,12 @@ function FeatureFlagsForm({
   });
 
   const save: SubmitHandler<FlagFormValues> = (flags) => {
-    saveMutation.mutate({ body: flags });
+    saveMutation.mutate({
+      body: pick(
+        flags,
+        metadata.map((meta) => meta.key),
+      ),
+    });
   };
 
   const metadata = data.metadata.filter(
