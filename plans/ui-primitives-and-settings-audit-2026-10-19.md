@@ -311,6 +311,16 @@ must still be checked at 390px in the e2e fixture. PRs in a parallel wave write 
 
 ## 5. Execution notes
 
+### Continuation after .20.3 (2026-10-20)
+
+The combined settings/tune-in release `oliviacpu-2026.10.20.3` deployed successfully; its actual
+verification is recorded in the release notes and `plans/ui-waves-handoff.md`. The later bounded
+continuation comprises image metadata #146, dialog labels #147, legacy error reasons #148,
+guide duration actions #150, lineup/calendar presentation #151 and C7a #152. Their fork notes are
+folded into `FORK.md` here. They await a separate release through the existing guarded procedure.
+C7b/C7c batching and S5 implementation remain held. Local calendar timestamp/phone-overflow
+findings are recorded in the handoff and are not implemented by this continuation.
+
 ### C7 continuation: C7a approved; batching held
 
 `plans/channel-update-and-bulk-followups-2026-10-20.md` proposes three separate rows beyond
