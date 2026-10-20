@@ -38,3 +38,11 @@ The Library contains reusable collections of content that can be used across mul
 | **Custom Shows** | YouTube series, home videos, or any content you want to treat as episodic |
 | **Smart Collections** | Auto-updating playlists based on genre, year, rating, etc. |
 | **Trash** | Reviewing and permanently removing content that disappeared from your media |
+
+## Deleting several at once
+
+The Filler Lists, Custom Shows and Smart Collections tables have a checkbox on each row and one in the header that
+selects every row on the current page. While rows are selected, the table shows how many and a **Delete** button. Delete
+asks once, listing the names (the first ten, then how many more), and stays open until every delete has finished. If some
+fail, the message says how many were deleted and names each one that was not, with the reason. The selection clears
+when the action finishes and when you change page.

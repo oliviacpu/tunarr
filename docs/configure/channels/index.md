@@ -46,6 +46,20 @@ Click the **NEW** button to create your first channel, which will take you to th
 
 </div>
 
+## Working with several channels
+
+On the Channels page (on a computer; phones show the channel cards without checkboxes), tick the box on each channel
+you want, or the box in the header to select the whole page. The table then shows how many are selected and:
+
+- **Delete** asks once, listing the channels, and deletes them all. If some fail, the message names each one that was
+  not deleted and why.
+- **Hide from guide** and **Show in guide** turn the channel's **Stealth mode** on or off for every selected channel.
+  Stealth mode hides a channel from the guide, the HDHomeRun tuner and the M3U playlist; you can still stream it
+  directly or redirect to it. Only the channels that need the change are saved, and each keeps its other settings,
+  including its filler lists.
+
+The selection clears when the action finishes and when you change page.
+
 ## Getting Started
 
 1. Create a new channel with [Properties](properties.md)

@@ -1,13 +1,29 @@
+import {
+  BulkActionsToolbar,
+  SelectedNames,
+} from '@/components/base/BulkActionsToolbar.tsx';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
+import { toStealthUpdateRequest } from '@/helpers/channelUpdateRequest.ts';
 import { betterHumanize } from '@/helpers/dayjs.ts';
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
+import { useBulkAction, useBulkDelete } from '@/hooks/useBulkAction.ts';
 import { useTranscodeConfigs } from '@/hooks/settingsHooks.ts';
 import type { Maybe } from '@/types/util.ts';
+import { plural } from '@lingui/core/macro';
 import { Plural, Trans, useLingui } from '@lingui/react/macro';
-import { Check, Close, Edit, MoreVert } from '@mui/icons-material';
+import {
+  Check,
+  Close,
+  Edit,
+  MoreVert,
+  Visibility,
+  VisibilityOff,
+} from '@mui/icons-material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import type { BoxProps } from '@mui/material';
 import {
   Box,
+  Button,
   Card,
   CardActionArea,
   CardContent,
@@ -49,11 +65,36 @@ import NoChannelsCreated from '../../components/channel_config/NoChannelsCreated
 import { ChannelIconDisplay } from '../../components/channels/ChannelIconDisplay.tsx';
 import { ChannelOptionsMenu } from '../../components/channels/ChannelOptionsMenu.tsx';
 import { ChannelSessionsDialog } from '../../components/channels/ChannelSessionsDialog.tsx';
+import {
+  deleteApiChannelsById,
+  getChannelsByNumberV2,
+  putApiChannelsById,
+} from '../../generated/sdk.gen.ts';
 import { useChannelsSuspense } from '../../hooks/useChannels.ts';
 import { useServerEvents } from '../../hooks/useServerEvents.ts';
-import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
+import { useSelectableTableSettings } from '../../hooks/useTableSettings.ts';
 
 type ChannelRow = Channel;
+
+const channelId = (channel: Channel) => channel.id;
+const channelName = (channel: Channel) => channel.name;
+
+/**
+ * Shows or hides one channel in the guide. Reads the whole channel first: the
+ * list's copy has no filler lists or subtitle preferences, and the update
+ * replaces both.
+ */
+async function setChannelStealth(id: string, stealth: boolean) {
+  const { data: channel } = await getChannelsByNumberV2({
+    path: { id },
+    throwOnError: true,
+  });
+  await putApiChannelsById({
+    path: { id },
+    body: toStealthUpdateRequest(channel, stealth),
+    throwOnError: true,
+  });
+}
 
 interface GlowingCircleProps extends BoxProps {
   color?: string;
@@ -98,8 +139,46 @@ export default function ChannelsPage() {
   const [channelMenuOpen, setChannelMenuOpen] = React.useState<string | null>(
     null,
   );
-  const tableSettings = useStoreBackedTableSettings('Channels');
+  const {
+    tableOptions: tableSettings,
+    selectedRows,
+    clearSelection,
+  } = useSelectableTableSettings('Channels', channels, channelId);
   const { addListener, removeListener } = useServerEvents();
+
+  const refreshChannels = () => {
+    queryClient
+      .invalidateQueries({ predicate: invalidateTaggedQueries('Channels') })
+      .catch(console.error);
+  };
+
+  const bulkDelete = useBulkDelete<Channel>({
+    getId: channelId,
+    getName: channelName,
+    deleteOne: (channel) =>
+      deleteApiChannelsById({ path: { id: channel.id }, throwOnError: true }),
+    onDone: () => {
+      clearSelection();
+      refreshChannels();
+    },
+  });
+
+  const bulkStealth = useBulkAction<Channel>('save', channelName);
+  const bulkBusy = bulkDelete.busy || bulkStealth.busy;
+
+  // Only the channels not already in the wanted state are saved
+  const setStealthForSelection = (stealth: boolean) => {
+    const changing = selectedRows.filter(
+      (channel) => channel.stealth !== stealth,
+    );
+    bulkStealth
+      .run(changing, (channel) => setChannelStealth(channel.id, stealth))
+      .then(() => {
+        clearSelection();
+        refreshChannels();
+      })
+      .catch(console.error);
+  };
 
   useEffect(() => {
     const key = addListener((ev) => {
@@ -517,6 +596,31 @@ export default function ChannelsPage() {
       },
     },
     renderRowActions: renderActionCell,
+    positionActionsColumn: 'last',
+    renderTopToolbarCustomActions: () => (
+      <BulkActionsToolbar
+        selectedCount={selectedRows.length}
+        busy={bulkBusy}
+        onDelete={() => bulkDelete.open(selectedRows)}
+      >
+        <Button
+          variant="outlined"
+          startIcon={<VisibilityOff />}
+          disabled={bulkBusy || selectedRows.every((c) => c.stealth)}
+          onClick={() => setStealthForSelection(true)}
+        >
+          <Trans>Hide from guide</Trans>
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<Visibility />}
+          disabled={bulkBusy || selectedRows.every((c) => !c.stealth)}
+          onClick={() => setStealthForSelection(false)}
+        >
+          <Trans>Show in guide</Trans>
+        </Button>
+      </BulkActionsToolbar>
+    ),
     autoResetPageIndex: false,
   });
 
@@ -543,6 +647,19 @@ export default function ChannelsPage() {
         </TableContainer>
       )}
 
+      <DeleteConfirmationDialog
+        {...bulkDelete.dialogProps}
+        title={t`${plural(bulkDelete.count, {
+          one: 'Delete # channel?',
+          other: 'Delete # channels?',
+        })}`}
+        body={t`${plural(bulkDelete.count, {
+          one: 'Deleting a channel removes all of its programming. This cannot be undone.',
+          other:
+            'Deleting these channels removes all of their programming. This cannot be undone.',
+        })}`}
+        details={<SelectedNames items={bulkDelete.named} />}
+      />
       <NoChannelsCreated />
       <ChannelSessionsDialog
         open={!!sessionDetailDialog}
