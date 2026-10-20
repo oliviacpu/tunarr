@@ -2,22 +2,20 @@ import { GeneralSettingsForm } from '@/components/settings/general/GeneralSettin
 import { WebSettings } from '@/components/settings/general/WebSettings.tsx';
 import { Box, Divider } from '@mui/material';
 import Stack from '@mui/material/Stack';
-import { useSystemSettings } from '../../hooks/useSystemSettings.ts';
+import { useSystemSettingsSuspense } from '../../hooks/useSystemSettings.ts';
 
+// The route's loader fetches the settings, and the router's pending and error
+// components cover loading and failure
 export default function GeneralSettingsPage() {
-  const systemSettings = useSystemSettings();
-
-  // TODO: Handle loading and error states.
+  const { data: systemSettings } = useSystemSettingsSuspense();
 
   return (
-    systemSettings.data && (
-      <Box>
-        <Stack direction="column" gap={2}>
-          <WebSettings />
-          <Divider />
-          <GeneralSettingsForm systemSettings={systemSettings.data} />
-        </Stack>
-      </Box>
-    )
+    <Box>
+      <Stack direction="column" gap={2}>
+        <WebSettings />
+        <Divider />
+        <GeneralSettingsForm systemSettings={systemSettings} />
+      </Stack>
+    </Box>
   );
 }

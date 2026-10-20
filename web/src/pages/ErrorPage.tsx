@@ -1,10 +1,15 @@
+import { describeError } from '@/helpers/apiError';
 import { useBrowserInfo } from '@/hooks/useBrowserInfo';
 import { Trans } from '@lingui/react/macro';
 import GitHub from '@mui/icons-material/GitHub';
 import Refresh from '@mui/icons-material/Refresh';
-import { Box, Button, Collapse, Stack, Typography } from '@mui/material';
+import Replay from '@mui/icons-material/Replay';
+import { Alert, Box, Button, Collapse, Stack, Typography } from '@mui/material';
+import { useQueryErrorResetBoundary } from '@tanstack/react-query';
+import type { ErrorComponentProps } from '@tanstack/react-router';
+import { useRouter } from '@tanstack/react-router';
 import { isError } from 'lodash-es';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import errorImage from '../assets/error_this_is_fine.png';
 import { LoadingIcon } from '../components/base/LoadingIcon';
 import { useVersion } from '../hooks/useVersion.tsx';
@@ -14,10 +19,11 @@ type Props = {
   resetRoute: () => void;
 };
 
-export function ErrorPage({ error }: Props) {
+export function ErrorPage({ error, resetRoute }: Props) {
   const browser = useBrowserInfo();
   const { data: version, isLoading: versionLoading } = useVersion();
   const stack = (isError(error) ? error.stack : '') ?? '';
+  const message = describeError(error);
 
   const bugReportLink = useMemo(() => {
     const url = new URL(`https://github.com/chrisbenincasa/tunarr/issues/new`);
@@ -56,19 +62,29 @@ export function ErrorPage({ error }: Props) {
           <Trans>Looks like something went wrong.</Trans>
         </Typography>
       </div>
-      <Stack direction="row" sx={{ justifyContent: 'center' }} gap={2}>
-        <Button
-          onClick={handleRefresh}
-          variant="contained"
-          startIcon={<Refresh />}
+      {message !== undefined && (
+        <Alert
+          severity="error"
+          sx={{ my: 2, mx: 'auto', maxWidth: '72ch', wordBreak: 'break-word' }}
         >
+          {message}
+        </Alert>
+      )}
+      <Stack
+        direction="row"
+        sx={{ justifyContent: 'center', flexWrap: 'wrap', mt: 2 }}
+        gap={2}
+      >
+        <Button onClick={resetRoute} variant="contained" startIcon={<Replay />}>
+          <Trans>Try again</Trans>
+        </Button>
+        <Button onClick={handleRefresh} startIcon={<Refresh />}>
           <Trans>Refresh Page</Trans>
         </Button>
         <Button
           component="a"
           href={bugReportLink.toString()}
           target="_blank"
-          variant="contained"
           startIcon={versionLoading ? <LoadingIcon /> : <GitHub />}
           disabled={versionLoading}
         >
@@ -91,4 +107,25 @@ export function ErrorPage({ error }: Props) {
       )}
     </Box>
   );
+}
+
+// The router's error component. "Try again" clears the failed queries' error
+// state and reruns the route's loaders, instead of reloading the browser.
+export function RouteErrorPage({ error, reset }: ErrorComponentProps) {
+  const router = useRouter();
+  const queryErrorResetBoundary = useQueryErrorResetBoundary();
+
+  // A suspense query that failed stays failed until the boundary is reset,
+  // so the retry below would rethrow the old error without fetching again
+  useEffect(() => {
+    queryErrorResetBoundary.reset();
+  }, [queryErrorResetBoundary]);
+
+  const tryAgain = useCallback(() => {
+    queryErrorResetBoundary.reset();
+    reset();
+    router.invalidate().catch(console.warn);
+  }, [queryErrorResetBoundary, reset, router]);
+
+  return <ErrorPage error={error} resetRoute={tryAgain} />;
 }

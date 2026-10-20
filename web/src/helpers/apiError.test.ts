@@ -1,6 +1,10 @@
 import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, expect, test } from 'vitest';
-import { getApiErrorMessage } from './apiError.ts';
+import {
+  describeError,
+  getApiErrorMessage,
+  isMissingEntityError,
+} from './apiError.ts';
 
 const responseError = (data: unknown) =>
   new AxiosError(
@@ -39,5 +43,57 @@ describe('getApiErrorMessage', () => {
   test('ignores errors that did not come from the API client', () => {
     expect(getApiErrorMessage(new Error('boom'))).toBeUndefined();
     expect(getApiErrorMessage('boom')).toBeUndefined();
+  });
+});
+
+const statusError = (status: number) =>
+  new AxiosError(
+    `Request failed with status code ${status}`,
+    'ERR_BAD_REQUEST',
+    { headers: new AxiosHeaders() },
+    undefined,
+    {
+      data: '',
+      status,
+      statusText: '',
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    },
+  );
+
+describe('isMissingEntityError', () => {
+  test('is true for an unknown id (404) and for a malformed one (400)', () => {
+    expect(isMissingEntityError(statusError(404))).toBe(true);
+    expect(isMissingEntityError(statusError(400))).toBe(true);
+  });
+
+  test('is false for server failures and for errors without a response', () => {
+    expect(isMissingEntityError(statusError(500))).toBe(false);
+    expect(
+      isMissingEntityError(new AxiosError('Network Error', 'ERR_NETWORK')),
+    ).toBe(false);
+    expect(isMissingEntityError(new Error('boom'))).toBe(false);
+  });
+});
+
+describe('describeError', () => {
+  test("prefers the server's message to the client's", () => {
+    expect(describeError(responseError('Channel 4 has no lineup'))).toBe(
+      'Channel 4 has no lineup',
+    );
+  });
+
+  test("falls back to the error's own message", () => {
+    expect(describeError(statusError(500))).toBe(
+      'Request failed with status code 500',
+    );
+    expect(describeError(new Error('boom'))).toBe('boom');
+    expect(describeError('boom')).toBe('boom');
+  });
+
+  test('has nothing to say about an empty or unknown error', () => {
+    expect(describeError(new Error(''))).toBeUndefined();
+    expect(describeError(undefined)).toBeUndefined();
+    expect(describeError({ status: 500 })).toBeUndefined();
   });
 });
