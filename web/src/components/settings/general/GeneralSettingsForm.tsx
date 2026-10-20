@@ -49,7 +49,7 @@ import dayjs from 'dayjs';
 import { isEqual, map, trim, trimEnd } from 'lodash-es';
 import { useCallback, useEffect } from 'react';
 import type { SubmitHandler } from 'react-hook-form';
-import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import type { StrictOmit } from 'ts-essentials';
 import { BackupForm } from './BackupForm.tsx';
 import { LogRollForm } from './LogRollForm.tsx';
@@ -204,12 +204,14 @@ export function GeneralSettingsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [systemSettings]);
 
-  const { remove, append } = useFieldArray({
-    control,
-    name: 'backup.configurations',
-  });
-
-  const backupConfigurations = useWatch({
+  // The field array's own list changes with remove() and append(). A watched
+  // value would lag a render behind, and in that render the backup fields
+  // would register again and put the removed backup back
+  const {
+    fields: backupConfigurations,
+    remove,
+    append,
+  } = useFieldArray({
     control,
     name: 'backup.configurations',
   });

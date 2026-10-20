@@ -7,6 +7,7 @@ import {
   Stack,
 } from '@mui/material';
 import { defaultLogRollConfig } from '@tunarr/types';
+import { useEffect } from 'react';
 import { Controller, useFormContext, useWatch } from 'react-hook-form';
 import { formatBytes } from '../../../helpers/util.ts';
 import {
@@ -18,12 +19,22 @@ import { ScheduleFields } from './ScheduleFields.tsx';
 
 export const LogRollForm = () => {
   const { t } = useLingui();
-  const { control, getValues, setValue } =
+  const { control, getValues, setValue, trigger } =
     useFormContext<GeneralSettingsFormData>();
   const [enabled, onSchedule] = useWatch({
     control,
     name: ['logging.logRollConfig.enabled', 'logRollOnSchedule'],
   });
+
+  // Unticked, the schedule is not sent, so it must not hold up Save. Once its
+  // fields have left the page, check that part of the form again: fields no
+  // longer on the page pass, so their errors clear and Save follows the
+  // fields that are sent
+  useEffect(() => {
+    if (!onSchedule) {
+      void trigger('logging.logRollConfig.schedule');
+    }
+  }, [onSchedule, trigger]);
 
   // Ticking "Roll on schedule" with no usable schedule starts from daily at
   // midnight. Unticking keeps the schedule, so ticking again brings it back;

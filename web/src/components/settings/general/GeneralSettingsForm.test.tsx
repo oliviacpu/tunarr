@@ -269,4 +269,89 @@ describe('GeneralSettingsForm', () => {
     const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
     expect(sent?.logging?.logRollConfig?.schedule).toEqual(cron);
   });
+
+  test('an invalid roll interval stops blocking Save once Roll on schedule is unticked', async () => {
+    const hourly = {
+      ...systemSettings,
+      logging: {
+        ...systemSettings.logging,
+        logRollConfig: {
+          enabled: true,
+          rolledFileLimit: 3,
+          schedule: {
+            type: 'every',
+            increment: 1,
+            unit: 'hour',
+            offsetMs: 0,
+          },
+        },
+      },
+    } satisfies SystemSettings;
+    const { user, saveButton } = await renderForm(hourly);
+
+    await user.clear(screen.getByLabelText('Roll interval'));
+    await user.tab();
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+
+    // The schedule is no longer sent, so its empty interval no longer matters
+    const rollOnSchedule = () =>
+      screen.getByRole('checkbox', { name: 'Roll on schedule' });
+    await user.click(rollOnSchedule());
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+
+    // Ticked again, it starts from a fresh schedule with no leftover error
+    await user.click(rollOnSchedule());
+    const interval = screen.getByLabelText('Roll interval');
+    expect(interval).toHaveValue('1');
+    expect(interval).toBeValid();
+    expect(interval).not.toHaveAccessibleDescription();
+
+    await user.click(rollOnSchedule());
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
+    const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
+    expect(sent?.logging?.logRollConfig?.schedule).toBeUndefined();
+  });
+
+  test('an invalid backup interval stops blocking Save once backups are turned off', async () => {
+    const withBackup = {
+      ...systemSettings,
+      backup: {
+        configurations: [
+          {
+            enabled: true,
+            outputs: [
+              {
+                type: 'file',
+                outputPath: '',
+                archiveFormat: 'tar',
+                maxBackups: 3,
+              },
+            ],
+            schedule: {
+              type: 'every',
+              increment: 1,
+              unit: 'day',
+              offsetMs: 3 * 60 * 60 * 1000,
+            },
+          },
+        ],
+      },
+    } satisfies SystemSettings;
+    const { user, saveButton } = await renderForm(withBackup);
+
+    await user.clear(screen.getByLabelText('Backup interval'));
+    await user.tab();
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+
+    await user.click(screen.getByRole('checkbox', { name: 'Enable backups' }));
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPutSystemSettings).toHaveBeenCalledOnce());
+    const sent = mockPutSystemSettings.mock.calls[0]?.[0].body;
+    expect(sent?.backup).toEqual({ configurations: [] });
+  });
 });
