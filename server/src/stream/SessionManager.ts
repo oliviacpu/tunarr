@@ -60,6 +60,7 @@ export class SessionManager {
 
   #sessionLocker = new MutexMap();
   #sessions: Record<SessionKey, Session> = {};
+  #replacedSessions = new WeakSet<Session>();
 
   constructor(
     @inject(KEYS.ChannelDB) private channelDB: IChannelDB,
@@ -363,7 +364,10 @@ export class SessionManager {
         // process exits, so a replacement can start alongside it.
         if (isNil(session) || session.stoppingOrStopped || session.hasError) {
           reused = false;
-          if (session) this.deleteSession(channelId, sessionType);
+          if (session) {
+            this.#replacedSessions.add(session);
+            this.deleteSession(channelId, sessionType);
+          }
           const channel = await this.channelDB.getChannelOrm(channelId);
 
           if (!channel?.transcodeConfig) {
@@ -542,6 +546,7 @@ export class SessionManager {
     lastConnection: StreamConnectionDetails,
   ) {
     try {
+      if (this.#replacedSessions.has(session)) return;
       const current = this.getSession(session.keyObj.id, session.sessionType);
       if (current !== undefined && current !== session) return;
       const now = +dayjs();

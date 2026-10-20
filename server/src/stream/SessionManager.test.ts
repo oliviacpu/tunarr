@@ -702,3 +702,42 @@ describe('tune-in recovery', () => {
     await manager.endSession(current);
   });
 });
+
+test('obsolete teardown cannot pause an on-demand channel during replacement lookup', async () => {
+  const manager = makeSessionManager(
+    (channel, opts) => new StubHlsSession(channel, opts),
+  );
+  const internals = manager as unknown as {
+    channelDB: IChannelDB;
+    onDemandChannelService: OnDemandChannelService;
+  };
+  const old = (
+    await manager.getOrCreateHlsSession(channelUuid, 'old', connection)
+  ).get();
+  old.removeConnection('old');
+  const pause = vi.spyOn(internals.onDemandChannelService, 'pauseChannel');
+  pause.mockClear();
+  (old as unknown as StubHlsSession).markError();
+  let release: (channel: ChannelOrmWithTranscodeConfig) => void = () => {};
+  const lookup = new Promise<ChannelOrmWithTranscodeConfig>((resolve) => {
+    release = resolve;
+  });
+  const query = vi
+    .spyOn(internals.channelDB, 'getChannelOrm')
+    .mockReturnValueOnce(lookup);
+  query.mockClear();
+  const replacement = manager.getOrCreateHlsSession(
+    channelUuid,
+    'new',
+    connection,
+  );
+  await vi.waitFor(() => expect(query).toHaveBeenCalled());
+  expect(manager.getHlsSession(channelUuid)).toBeUndefined();
+  old.emit('stop');
+  await Promise.resolve();
+  expect(pause).not.toHaveBeenCalled();
+  release(makeChannel());
+  const current = (await replacement).get();
+  expect(current).not.toBe(old);
+  await manager.endSession(current);
+});
