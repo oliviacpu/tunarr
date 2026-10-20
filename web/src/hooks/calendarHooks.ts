@@ -88,7 +88,7 @@ export function useGetProgramsForDayFunc(channelId: string) {
         return [];
       }
 
-      const startOfCycle = +start - channelProgress;
+      let startOfCycle = +start - channelProgress;
 
       const calendarPrograms: CalendarProgramDetails[] = [];
 
@@ -120,6 +120,9 @@ export function useGetProgramsForDayFunc(channelId: string) {
         });
 
         idx = (idx + 1) % programList.length;
+        if (idx === 0) {
+          startOfCycle += channel.duration;
+        }
         t += duration;
         isFirst = false;
       }
