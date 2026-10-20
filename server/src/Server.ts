@@ -526,7 +526,7 @@ export class Server {
     const start = performance.now();
     await this.configureServer();
 
-    const host = process.env[TUNARR_ENV_VARS.BIND_ADDR_ENV_VAR] ?? '0.0.0.0';
+    const host = getEnvVar(TUNARR_ENV_VARS.BIND_ADDR_ENV_VAR) ?? '0.0.0.0';
 
     await this.app.listen({
       host,

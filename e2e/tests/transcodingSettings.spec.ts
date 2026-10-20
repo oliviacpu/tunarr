@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { SERVER_URL } from '../fixture/env.ts';
-import { save, saveButton, savedSettings } from './settingsForm.ts';
+import { savedSettings } from './settingsForm.ts';
 
 // The Transcoding page's global FFmpeg settings: a change saves, survives a
 // reload and moves nothing else.
@@ -14,14 +14,21 @@ test('a changed tone-map curve saves, survives a reload and moves nothing else',
     page,
     SETTINGS_URL,
   );
-  await page.goto('/web/settings/ffmpeg');
+  await page.goto('/web/settings/playback');
   const curve = page.getByRole('combobox', { name: 'HDR tone-map curve' });
   await expect(curve).toHaveText('Hable');
-  await expect(saveButton(page)).toBeDisabled();
+  const form = curve.locator('xpath=ancestor::form');
+  await expect(
+    form.getByRole('button', { name: 'Save', exact: true }),
+  ).toBeDisabled();
 
   await curve.click();
   await page.getByRole('option', { name: 'BT.2390', exact: true }).click();
-  await save(page, SETTINGS_URL);
+  const saved = page.waitForResponse(
+    (res) => res.request().method() === 'PUT' && res.url() === SETTINGS_URL,
+  );
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  expect((await saved).ok()).toBe(true);
 
   await page.reload();
   await expect(curve).toHaveText('BT.2390');

@@ -9,10 +9,7 @@ import {
   type CustomShow,
   type FillerList,
 } from '@tunarr/types';
-import {
-  type DynamicContentConfig,
-  type LineupSchedule,
-} from '@tunarr/types/api';
+import type { LineupSchedule } from '@tunarr/types/api';
 import { type StateCreator } from 'zustand';
 
 export type HasId = { id: string };
@@ -46,7 +43,6 @@ export type ChannelEditorState = ProgrammingEditorState<
   // the lookup record for programs by ID
   programLookup: Record<string, ContentProgram>;
   schedule?: LineupSchedule;
-  dynamicContentConfiguration?: DynamicContentConfig;
 };
 
 export type FillerListEditor = ProgrammingEditorState<
@@ -54,10 +50,17 @@ export type FillerListEditor = ProgrammingEditorState<
   ContentProgram | CustomProgram
 >;
 
+export type CustomShowEditorFormValues = {
+  name: string;
+  syncEnabled: boolean;
+  syncMediaSourceId: string;
+  syncExternalPlaylistId: string;
+};
+
 export type CustomShowEditor = ProgrammingEditorState<
   CustomShow,
   UIContentProgram // Custom shows contain content only
->;
+> & { formValues?: CustomShowEditorFormValues };
 
 export interface EditorsState {
   channelEditor: ChannelEditorState;

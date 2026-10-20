@@ -22,6 +22,10 @@ Select the library with your Filler content, then select "ADD MOVIE" for each it
 
 Expand the menu on the right to view a summary of your changes, then select "ADD ITEMS" followed by "SAVE". 
 
+Save is enabled once the name or the programs have changed, and needs at least one program. "Reset changes" puts back
+the saved name and programs. Leaving the page with unsaved changes asks first; going to "ADD MEDIA" and back keeps
+them.
+
 ![Filler menu](/assets/library-filler-menu.png)
 
 ![Filler add items](/assets/library-filler-additems.png)
@@ -49,3 +53,11 @@ When using slot-based scheduling tools ([Slot Editor](/configure/scheduling/rand
     These filler types are only available in slot-based schedulers. When adding filler directly to a channel via the Flex tab, the filler is used to fill flex time only.
 
 For details on mid-roll breaks, see the [Mid-Roll Breaks](/configure/scheduling/mid-roll-breaks) scheduling guide.
+
+## Channel References
+
+The Usage column shows how many channels reference each filler list. Hover over the chip to see channel names and any slot positions. This includes lists attached on a channel’s Flex tab, slot filler, scheduled filler items, and offline music.
+
+Deleting a list warns with the affected channel names and slots, including bulk deletion. The warning does not prevent deletion; review the affected channels afterward.
+
+Slot positions are numbered from 1 within the channel’s saved schedule. A channel counts once even if it references the same item several times. References refresh after channel or programming changes. If references cannot be loaded, the interface says so instead of reporting that the item is unused.

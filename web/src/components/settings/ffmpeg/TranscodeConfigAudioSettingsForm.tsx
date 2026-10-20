@@ -277,7 +277,7 @@ export const TranscodeConfigAudioSettingsForm = ({
       </Grid>
       {showAdvancedSettings && loudnormEnabled && (
         <Stack>
-          <Typography component="h6" variant="h6" mb={1}>
+          <Typography component="h3" variant="h3" mb={1}>
             <Trans>Advanced Audio Options</Trans>
           </Typography>
           <Typography variant="body2" sx={{ mb: 2 }}>
@@ -288,7 +288,7 @@ export const TranscodeConfigAudioSettingsForm = ({
           <Typography sx={{ mb: 1 }}>
             <Trans>Loudnorm Options</Trans>
           </Typography>
-          <Stack direction={{ sm: 'column', md: 'row' }} spacing={2}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
             {loudnormFields.map(({ name, label, helperText }) => (
               <NumericFormControllerText
                 key={name}

@@ -112,14 +112,14 @@ function renderForm(
   const rootRoute = createRootRoute();
   const newRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/settings/ffmpeg/new',
+    path: '/settings/playback/new',
     component: () => (
       <TranscodeConfigSettingsForm initialConfig={initialConfig} isNew />
     ),
   });
   const editRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/settings/ffmpeg/$configId',
+    path: '/settings/playback/$configId',
     component: () => (
       <TranscodeConfigSettingsForm initialConfig={initialConfig} />
     ),
@@ -129,8 +129,8 @@ function renderForm(
     history: createMemoryHistory({
       initialEntries: [
         mode === 'new'
-          ? '/settings/ffmpeg/new'
-          : `/settings/ffmpeg/${config.id}`,
+          ? '/settings/playback/new'
+          : `/settings/playback/${config.id}`,
       ],
     }),
   });
@@ -166,6 +166,21 @@ afterEach(() => {
 });
 
 describe('TranscodeConfigSettingsForm title', () => {
+  test('links its breadcrumb to the canonical Playback settings tab', async () => {
+    renderForm('edit');
+    expect(
+      await screen.findByRole('link', { name: 'Playback' }),
+    ).toHaveAttribute('href', '/settings/playback');
+    expect(
+      screen.queryByRole('link', { name: 'Transcoding' }),
+    ).not.toBeInTheDocument();
+  });
+  test('error options is a peer of the other settings sections', async () => {
+    renderForm('edit');
+    expect(
+      await screen.findByRole('heading', { name: 'Error Options', level: 2 }),
+    ).toBeInTheDocument();
+  });
   test('says New when creating a config', async () => {
     renderForm('new');
 
@@ -212,7 +227,7 @@ describe('TranscodeConfigSettingsForm validation', () => {
     await user.type(bitrate, 'fast');
 
     await waitFor(() => expect(bitrate).toBeInvalid());
-    expect(bitrate).toHaveAccessibleDescription(/expected number/);
+    expect(bitrate).toHaveAccessibleDescription('Enter a number.');
     expect(saveButton()).toBeDisabled();
   });
 
@@ -224,7 +239,8 @@ describe('TranscodeConfigSettingsForm validation', () => {
     await user.type(threads, 'all');
 
     await waitFor(() => expect(threads).toBeInvalid());
-    expect(threads).toHaveAccessibleDescription(/expected number/);
+    expect(threads).toHaveAccessibleDescription(/^Enter a number\./);
+    expect(threads).not.toHaveAccessibleDescription(/NaN/);
     expect(saveButton()).toBeDisabled();
   });
 
@@ -270,7 +286,7 @@ describe('TranscodeConfigSettingsForm validation', () => {
 
     await waitFor(() => expect(bitrate).toBeInvalid());
     expect(bitrate).toHaveValue('4000k');
-    expect(bitrate).toHaveAccessibleDescription(/expected number/);
+    expect(bitrate).toHaveAccessibleDescription('Enter a number.');
     expect(saveButton()).toBeDisabled();
   });
 
@@ -279,6 +295,12 @@ describe('TranscodeConfigSettingsForm validation', () => {
     const { user } = renderForm('edit');
 
     await pick(user, 'Loudness normalization', 'Enabled (loudnorm)');
+    expect(
+      screen.getByRole('heading', { name: 'Audio Options', level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Advanced Audio Options', level: 3 }),
+    ).toBeInTheDocument();
     const target = await screen.findByLabelText('Loudness target');
     expect(target).toHaveValue('-24');
     await user.clear(target);
@@ -435,7 +457,7 @@ describe('TranscodeConfigSettingsForm saving', () => {
     expect(body).not.toHaveProperty('id');
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(
-        `/settings/ffmpeg/${createdId}`,
+        `/settings/playback/${createdId}`,
       ),
     );
     expect(await screen.findByText('Saved')).toBeInTheDocument();
@@ -471,7 +493,7 @@ describe('TranscodeConfigSettingsForm saving', () => {
 
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(
-        `/settings/ffmpeg/${createdId}`,
+        `/settings/playback/${createdId}`,
       ),
     );
     expect(await screen.findByLabelText('Name')).toBeEnabled();
@@ -515,7 +537,7 @@ describe('TranscodeConfigSettingsForm saving', () => {
     });
     expect(await screen.findByText('Saved')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(
-      `/settings/ffmpeg/${config.id}`,
+      `/settings/playback/${config.id}`,
     );
     // What was saved is what the form now compares against
     await waitFor(() => expect(saveButton()).toBeDisabled());

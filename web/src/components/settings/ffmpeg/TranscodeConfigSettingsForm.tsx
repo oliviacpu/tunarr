@@ -1,3 +1,5 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Check, VisibilityOff } from '@mui/icons-material';
@@ -61,7 +63,7 @@ export const TranscodeConfigSettingsForm = ({
 
   return (
     <SettingsForm form={form} onSubmit={save} isSubmitting={isSaving}>
-      <Breadcrumbs />
+      <AppliesWhen setting="transcodeConfigs" />
       <Box
         component="fieldset"
         ref={fieldsRef}
@@ -70,38 +72,50 @@ export const TranscodeConfigSettingsForm = ({
         sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
       >
         <Stack spacing={2} divider={<Divider />}>
-          <Stack direction={'row'}>
-            <Typography variant="h4">
-              {isNew ? (
+          <PageHeader
+            headingLevel="h2"
+            breadcrumbs={
+              <Breadcrumbs
+                trail={[
+                  { label: t`Settings`, to: '/settings' },
+                  { label: t`Playback`, to: '/settings/playback' },
+                  { label: isNew ? t`New transcode config` : configName },
+                ]}
+              />
+            }
+            title={
+              isNew ? (
                 <Trans>New transcode config</Trans>
               ) : (
                 <Trans>Edit transcode config: "{configName}"</Trans>
-              )}
-            </Typography>
-            <ToggleButton
-              value={showAdvancedSettings}
-              selected={showAdvancedSettings}
-              onChange={() => setShowAdvancedSettings(!showAdvancedSettings)}
-              sx={{ ml: 'auto' }}
-            >
-              {showAdvancedSettings ? (
-                <VisibilityOff sx={{ mr: 0.5 }} />
-              ) : (
-                <Check sx={{ mr: 0.5 }} />
-              )}{' '}
-              {showAdvancedSettings ? (
-                <Trans>Hide Advanced</Trans>
-              ) : (
-                <Trans>Show Advanced</Trans>
-              )}
-            </ToggleButton>
-          </Stack>
+              )
+            }
+            actions={
+              <ToggleButton
+                value={showAdvancedSettings}
+                selected={showAdvancedSettings}
+                onChange={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                sx={{ ml: 'auto' }}
+              >
+                {showAdvancedSettings ? (
+                  <VisibilityOff sx={{ mr: 0.5 }} />
+                ) : (
+                  <Check sx={{ mr: 0.5 }} />
+                )}{' '}
+                {showAdvancedSettings ? (
+                  <Trans>Hide Advanced</Trans>
+                ) : (
+                  <Trans>Show Advanced</Trans>
+                )}
+              </ToggleButton>
+            }
+          />
           <Box>
-            <Typography variant="h5" sx={{ mb: 2 }}>
+            <Typography component="h2" variant="h2" sx={{ mb: 2 }}>
               <Trans>General</Trans>
             </Typography>
             <Grid container columnSpacing={2}>
-              <Grid size={{ sm: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Controller
                   control={control}
                   name="name"
@@ -116,7 +130,7 @@ export const TranscodeConfigSettingsForm = ({
                   )}
                 />
               </Grid>
-              <Grid size={{ sm: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <NumericFormControllerText
                   control={control}
                   rawValue
@@ -148,13 +162,13 @@ export const TranscodeConfigSettingsForm = ({
           </Box>
 
           <Stack spacing={2}>
-            <Typography component="h5" variant="h5">
+            <Typography component="h2" variant="h2">
               <Trans>Video Options</Trans>
             </Typography>
             <TranscodeConfigVideoSettingsForm />
             {showAdvancedSettings && hardwareAccelerationMode !== 'none' && (
               <Box>
-                <Typography component="h6" variant="h6" mb={1}>
+                <Typography component="h3" variant="h3" mb={1}>
                   <Trans>Advanced Video Options</Trans>
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 2 }}>
@@ -169,7 +183,7 @@ export const TranscodeConfigSettingsForm = ({
             )}
           </Stack>
           <Box>
-            <Typography component="h5" variant="h5" sx={{ mb: 2 }}>
+            <Typography component="h2" variant="h2" sx={{ mb: 2 }}>
               <Trans>Audio Options</Trans>
             </Typography>
             <TranscodeConfigAudioSettingsForm
@@ -177,7 +191,7 @@ export const TranscodeConfigSettingsForm = ({
             />
           </Box>
           <Box>
-            <Typography component="h6" variant="h6" sx={{ pb: 1 }}>
+            <Typography component="h2" variant="h2" sx={{ pb: 1 }}>
               <Trans>Error Options</Trans>
             </Typography>
             <TranscodeConfigErrorOptions />

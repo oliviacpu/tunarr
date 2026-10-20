@@ -3,6 +3,7 @@ import { serverOptions } from '@/globals.js';
 import { scheduleBackupJobs } from '@/services/Scheduler.js';
 import type { RouterPluginAsyncCallback } from '@/types/serverType.js';
 import { getDefaultLogLevel } from '@/util/defaults.js';
+import { backupScheduleProblem } from '@/util/backupScheduleValidation.js';
 import { ifDefined, mapToObj } from '@/util/index.js';
 import {
   getEnvironmentLogLevel,
@@ -10,11 +11,11 @@ import {
   LoggerFactory,
 } from '@/util/logging/LoggerFactory.js';
 import TailFile from '@logdna/tail-file';
-import { seq } from '@tunarr/shared/util';
 import type { LoggingSettings, SystemSettings } from '@tunarr/types';
 import { FeatureFlagMetadata } from '@tunarr/types';
 import type { SystemSettingsResponse } from '@tunarr/types/api';
 import {
+  BaseErrorSchema,
   GetFeatureFlagsResponseSchema,
   SystemSettingsResponseSchema,
   UpdateBackupSettingsRequestSchema,
@@ -46,7 +47,7 @@ import {
   isPodman,
   isRunningInContainer,
 } from '../util/containerUtil.ts';
-import { getEnvVar, TUNARR_ENV_VARS } from '../util/env.ts';
+import { getEnvironmentOverrides } from '../util/environmentOverrides.ts';
 import type { FeatureFlagService } from '../services/FeatureFlagService.ts';
 import { streamFileBackwards } from '../util/fsUtil.ts';
 import { take } from '../util/streams.ts';
@@ -187,10 +188,18 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
         body: UpdateSystemSettingsRequestSchema,
         response: {
           200: SystemSettingsResponseSchema,
+          400: BaseErrorSchema,
         },
       },
     },
     async (req, res) => {
+      if (req.body.backup?.configurations !== undefined) {
+        const problem = backupScheduleProblem({
+          configurations: req.body.backup.configurations,
+        });
+        if (problem !== undefined)
+          return res.status(400).send({ message: problem });
+      }
       await req.serverCtx.settings.directUpdate((file) => {
         const { system } = file;
 
@@ -286,10 +295,14 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
         body: UpdateBackupSettingsRequestSchema,
         response: {
           200: BackupSettingsSchema,
+          400: BaseErrorSchema,
         },
       },
     },
     async (req, res) => {
+      const problem = backupScheduleProblem(req.body);
+      if (problem !== undefined)
+        return res.status(400).send({ message: problem });
       await req.serverCtx.settings.directUpdate((settings) => {
         settings.system.backup = req.body;
         return settings;
@@ -571,20 +584,7 @@ export const systemApiRouter: RouterPluginAsyncCallback = async (
       },
     },
     async (_, res) => {
-      const matches = seq.collect(Object.values(TUNARR_ENV_VARS), (key) => {
-        const value = getEnvVar(key);
-        if (!value) return;
-        return [key, value] as const;
-      });
-      const obj = Object.fromEntries(matches);
-      if (process.env.NODE_ENV) {
-        obj['NODE_ENV'] = process.env.NODE_ENV;
-      }
-      if (process.env.LOG_LEVEL) {
-        obj['LOG_LEVEL'] = process.env.LOG_LEVEL;
-      }
-
-      return res.send(obj);
+      return res.send(getEnvironmentOverrides());
     },
   );
 

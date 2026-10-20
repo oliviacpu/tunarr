@@ -1,5 +1,7 @@
 # Channel Trancoding Settings
 
+Open the channel editor's **Streaming** tab for stream mode, transcode config, audio, and subtitles. Logo overlays are configured in the separate [Watermark](watermarks.md) tab.
+
 ## Stream Mode
 
 Tunarr supports several different stream modes that can be set at the channel level.
@@ -36,7 +38,7 @@ The downside to this mode is that the one of the steps (the per-program process)
 
 #### How does it work?
 
-This mode does not perform any stream normalization. When the channel m3u8 playlist is requested, it returns a playlist with a single item URL set to the duration of the current item in the channel. The URL returns a direct stream of the item, remuxed to the container set as **HLS Direct output format** under Settings > Transcoding (MPEG-TS, MKV, or MP4).
+This mode does not perform any stream normalization. When the channel m3u8 playlist is requested, it returns a playlist with a single item URL set to the duration of the current item in the channel. The URL returns a direct stream of the item, remuxed to the container set as **HLS Direct output format** under Settings > Playback (MPEG-TS, MKV, or MP4).
 
 #### Things to consider
 
@@ -105,7 +107,7 @@ Leave the field empty for one audio track, the program's own, as before.
 **Captions for this channel** (under *Audio & Subtitles* on the channel's Streaming tab) tries
 [closed-caption options](../ffmpeg/index.md#closed-captions-for-hdhomerun-clients) on one channel, a test channel for
 example, without changing them for every channel. Closed captions for HDHomeRun clients must be turned on under
-Settings > Transcoding; that switch stays the one for every channel. Changes take effect from the channel's next program.
+Settings > Captions & audio; that switch stays the one for every channel. Changes take effect from the channel's next program.
 
 - **Test pattern on this channel:** replaces this channel's captions with the numbered
   [test pattern](../ffmpeg/index.md#caption-appearance-experimental). Other channels keep their captions. When the
@@ -118,5 +120,5 @@ Settings > Transcoding; that switch stays the one for every channel. Changes tak
   Use it once a look works in your player.
 - **Reset to global:** drops the channel's own look and keeps its test pattern switch.
 
-A setting the channel doesn't change follows the global one, so a later change on the Settings > Transcoding page still
+A setting the channel doesn't change follows the global one, so a later change on the Settings > Captions & audio page still
 reaches it.

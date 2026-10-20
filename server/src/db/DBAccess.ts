@@ -1,3 +1,4 @@
+import { getRawEnvVar, TUNARR_ENV_VARS } from '@/util/env.js';
 import { databaseTuning } from './databaseTuning.ts';
 import type { TunarrMigrationInfo } from '@/migration/DrizzleMigrator.js';
 import { DrizzleMigrator } from '@/migration/DrizzleMigrator.js';
@@ -108,7 +109,7 @@ class Connection {
       log: (event) => {
         switch (event.level) {
           case 'query':
-            if (process.env['DATABASE_DEBUG_LOGGING']) {
+            if (getRawEnvVar(TUNARR_ENV_VARS.DATABASE_DEBUG_LOGGING)) {
               this.logger.debug(
                 'Query: %s (%d ms)',
                 event.query.sql,
@@ -133,7 +134,7 @@ class Connection {
       client: this.sqlite,
       casing: 'snake_case',
       schema,
-      logger: process.env['DATABASE_DEBUG_LOGGING']
+      logger: getRawEnvVar(TUNARR_ENV_VARS.DATABASE_DEBUG_LOGGING)
         ? {
             logQuery: (query, params) => {
               this.logger.debug(

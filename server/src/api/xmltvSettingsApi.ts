@@ -126,7 +126,6 @@ export const xmlTvSettingsRouter: RouterPluginCallback = (
         await req.serverCtx.settings.updateSettings('xmltv', {
           refreshHours,
           refreshStartHour: settings.refreshStartHour ?? xmltv.refreshStartHour,
-          enableImageCache: settings.enableImageCache ?? xmltv.enableImageCache,
           outputPath: xmltv.outputPath,
           programmingHours,
           useShowPoster: settings.useShowPoster ?? xmltv.useShowPoster,

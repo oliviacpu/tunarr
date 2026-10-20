@@ -1,5 +1,6 @@
+import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { Trans } from '@lingui/react/macro';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack } from '@mui/material';
 import { createFileRoute } from '@tanstack/react-router';
 import { ProgramViewToggleButton } from '../../../components/base/ProgramViewToggleButton.tsx';
 import { LibraryProgramGrid } from '../../../components/library/LibraryProgramGrid.tsx';
@@ -22,28 +23,22 @@ export const Route = createFileRoute(
   },
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 function MediaSourceBrowserPage() {
   const { libraryId } = Route.useParams();
   const { data: library } = useMediaSourceLibrary(libraryId);
 
   return (
     <Box>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h4" sx={{ display: 'inline-flex', width: '100%' }}>
-          <span>
-            <Trans>Media Source: "{library.mediaSource.name}"</Trans>
-          </span>
-          <ProgramViewToggleButton sx={{ ml: { sm: undefined, md: 'auto' } }} />
-        </Typography>
-        <Typography variant="subtitle1">
-          <Trans>Library: {library.name}</Trans>
-        </Typography>
-        <Typography variant="subtitle1">
+      <PageHeader
+        title={<Trans>Library: {library.name}</Trans>}
+        description={
           <Trans>
-            Search is currently scoped to this Media Source Library.
+            Search is scoped to {library.mediaSource.name} / {library.name}.
           </Trans>
-        </Typography>
-      </Box>
+        }
+        actions={<ProgramViewToggleButton />}
+      />
       <Stack gap={2}>
         <SearchInput libraryId={libraryId} />
         <LibraryProgramGrid

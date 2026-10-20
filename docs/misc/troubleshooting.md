@@ -166,22 +166,22 @@ There are three ways to change the log level:
 
 ### Via Environment Variable
 
-Set the `LOG_LEVEL` environment variable before starting Tunarr:
+Set the `TUNARR_LOG_LEVEL` environment variable before starting Tunarr:
 
 ```bash
 # Standalone
-LOG_LEVEL=debug node server.js
+TUNARR_LOG_LEVEL=debug node server.js
 
 # Docker
-docker run -e LOG_LEVEL=debug ... chrisbenincasa/tunarr
+docker run -e TUNARR_LOG_LEVEL=debug ... chrisbenincasa/tunarr
 
 # Docker Compose
 environment:
-  - LOG_LEVEL=debug
+  - TUNARR_LOG_LEVEL=debug
 ```
 
 !!! note
-    When `LOG_LEVEL` is set via environment variable, it overrides the UI setting. Remove the variable and restart to go back to using the UI-configured level.
+    When `TUNARR_LOG_LEVEL` is set via environment variable, it overrides the UI setting. Remove the variable and restart to go back to using the UI-configured level.
 
 ### Via the API
 

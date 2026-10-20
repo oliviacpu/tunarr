@@ -253,7 +253,7 @@ export const RandomSlotSettingsForm = ({
       <Divider sx={{ my: 4 }} />
       <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
         <Button
-          variant="contained"
+          variant="outlined"
           onClick={() => calculateSlots()}
           disabled={isCalculatingSlots}
           startIcon={isCalculatingSlots ? <LoadingIcon /> : <Autorenew />}

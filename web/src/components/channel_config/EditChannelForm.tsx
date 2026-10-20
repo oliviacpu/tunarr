@@ -1,38 +1,40 @@
-import UnsavedNavigationAlert from '@/components/settings/UnsavedNavigationAlert.tsx';
+import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { toChannelUpdateRequest } from '@/helpers/channelUpdateRequest.ts';
 import { DefaultChannel } from '@/helpers/constants.ts';
+import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
+import { useToasts } from '@/strings/actions';
 import { Badge } from '@mui/material';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
-import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import type {
   Channel,
   SaveableChannel,
   SubtitlePreference,
 } from '@tunarr/types';
-import { isEmpty, isNil, keys, map, reject } from 'lodash-es';
-import { useCallback, useState } from 'react';
-import {
-  FormProvider,
-  useForm,
-  type SubmitErrorHandler,
-  type SubmitHandler,
-} from 'react-hook-form';
+import { isEmpty, isEqual, isNil, keys, map, omit, reject } from 'lodash-es';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useForm, type SubmitHandler } from 'react-hook-form';
 import type { DeepRequired, NonEmptyArray } from 'ts-essentials';
+import {
+  createChannelV2Mutation,
+  putApiChannelsByIdMutation,
+} from '../../generated/@tanstack/react-query.gen.ts';
 import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import { isNonEmptyString } from '../../helpers/util.ts';
-import { useCreateChannel } from '../../hooks/useCreateChannel.ts';
-import { useUpdateChannel } from '../../hooks/useUpdateChannel.ts';
-import ChannelEditActions from './ChannelEditActions.tsx';
 import ChannelEpgConfig from './ChannelEpgConfig.tsx';
 import { ChannelFlexConfig } from './ChannelFlexConfig.tsx';
 import { ChannelPropertiesEditor } from './ChannelPropertiesEditor.tsx';
 import ChannelTranscodingConfig from './ChannelTranscodingConfig.tsx';
+import ChannelWatermarkConfig from './ChannelWatermarkConfig.tsx';
 import { tabsWithErrors } from './channelFieldTabs.ts';
-import { ChannelEditorTabs, useChannelTabLabels } from './channelFieldTabs.ts';
+import {
+  ChannelEditTabPaths,
+  ChannelEditorTabs,
+  useChannelTabLabels,
+} from './channelFieldTabs.ts';
 import {
   EditChannelTabPanel,
   type EditChannelTabs,
@@ -44,7 +46,7 @@ function getDefaultFormValues(
 ): DeepRequired<Omit<SaveableChannel, 'captions'>> &
   Pick<SaveableChannel, 'captions'> {
   return {
-    ...channel,
+    ...omit(channel, ['fallback', 'programCount', 'sessions']),
     streamMode: channel.streamMode ?? 'hls',
     fillerCollections: channel.fillerCollections ?? [],
     fillerRepeatCooldown:
@@ -106,55 +108,67 @@ function getDefaultFormValues(
 export function EditChannelForm({
   channel,
   isNew,
-  initialTab,
+  activeTab,
+  children,
 }: EditChannelFormProps) {
   const navigate = useNavigate({
     from: isNew ? '/channels/new' : '/channels/$channelId/edit',
   });
-  const [currentTab, setCurrentTab] = useState<EditChannelTabs>(
-    initialTab ?? 'properties',
-  );
+  const toasts = useToasts();
+  const router = useRouter();
+  const [newChannelTab, setNewChannelTab] =
+    useState<EditChannelTabs>('properties');
+  const currentTab = activeTab ?? newChannelTab;
 
-  const formMethods = useForm<SaveableChannel>({
-    mode: 'onChange',
-    // Change this so we only load the form on initial...
+  const form = useForm<SaveableChannel>({
+    mode: 'onTouched',
     defaultValues: getDefaultFormValues(channel),
   });
 
-  const queryClient = useQueryClient();
+  const {
+    reset,
+    formState: { defaultValues },
+  } = form;
+  useEffect(() => {
+    const loaded = getDefaultFormValues(channel);
+    if (!isEqual(loaded, defaultValues)) {
+      reset(loaded);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel, reset]);
 
-  const createUpdateSuccessCallback = useCallback(
-    async (data: Channel) => {
-      formMethods.reset(getDefaultFormValues(data), {
-        keepDefaultValues: false,
-        keepDirty: false,
-      });
+  // The channel list, every loaded channel and their lineups
+  const invalidate = { predicate: invalidateTaggedQueries('Channels') };
 
-      await queryClient.invalidateQueries({
-        predicate: invalidateTaggedQueries('Channels'),
-      });
+  const updateChannelMutation = useSettingsMutation({
+    form,
+    mutation: putApiChannelsByIdMutation(),
+    toFormValues: (saved) => getDefaultFormValues(saved),
+    invalidate,
+    failureMessage: toasts.couldNotSave,
+  });
 
-      if (isNew) {
+  const createChannelMutation = useSettingsMutation({
+    form,
+    mutation: {
+      ...createChannelV2Mutation(),
+      // A new channel is programmed next. The save has reset the form, but
+      // the unsaved guard keeps the state from before it until it renders
+      // again, so it would stop this
+      onSuccess: (created) =>
         navigate({
-          to: `/channels/$channelId/programming`,
-          params: { channelId: data.id },
-        }).catch(console.warn);
-      }
+          to: '/channels/$channelId/programming',
+          params: { channelId: created.id },
+          ignoreBlocker: true,
+        }),
     },
-    [formMethods, isNew, navigate, queryClient],
-  );
-
-  const updateChannelMutation = useUpdateChannel({
-    onSuccess: createUpdateSuccessCallback,
+    toFormValues: (created) => getDefaultFormValues(created),
+    invalidate,
+    failureMessage: toasts.couldNotSave,
   });
 
-  const createChannelMutation = useCreateChannel({
-    onSuccess: createUpdateSuccessCallback,
-  });
-
-  const formIsValid = formMethods.formState.isValid;
-  const tabsWithFormErrors = tabsWithErrors(keys(formMethods.formState.errors));
-  const formIsDirty = formMethods.formState.isDirty;
+  const formIsValid = form.formState.isValid;
+  const tabsWithFormErrors = tabsWithErrors(keys(form.formState.errors));
 
   const onSubmit: SubmitHandler<SaveableChannel> = (data) => {
     const fadeConfigs = reject(
@@ -203,26 +217,21 @@ export function EditChannelForm({
         path: { id: channel.id },
         body: toChannelUpdateRequest(
           dataTransform,
-          formMethods.formState.defaultValues?.startTime,
+          form.formState.defaultValues?.startTime,
         ),
       });
     }
   };
 
-  const onInvalid: SubmitErrorHandler<SaveableChannel> = (data) => {
-    console.error(data, formMethods.getValues());
-  };
-
   const handleChange = (_: React.SyntheticEvent, newValue: EditChannelTabs) => {
-    if (newValue !== currentTab) {
-      setCurrentTab(newValue);
-      // Don't enable routing for new channel, yet.
-      if (!isNew) {
-        navigate({
-          replace: true,
-          search: { tab: newValue === 'properties' ? undefined : newValue },
-        }).catch(console.warn);
-      }
+    if (newValue === currentTab) return;
+    if (isNew) {
+      setNewChannelTab(newValue);
+    } else {
+      navigate({
+        to: ChannelEditTabPaths[newValue],
+        params: { channelId: channel.id },
+      }).catch(console.warn);
     }
   };
 
@@ -236,6 +245,8 @@ export function EditChannelForm({
         key={tab}
         disabled={isNew && tab !== currentTab && !formIsValid}
         value={tab}
+        id={`channel-tab-${tab}`}
+        aria-controls={`channel-tabpanel-${tab}`}
         label={
           <Badge
             color="error"
@@ -262,32 +273,63 @@ export function EditChannelForm({
           {ChannelEditorTabs.map(renderTab)}
         </Tabs>
       </Box>
-      <FormProvider {...formMethods}>
-        <Box
-          component="form"
-          onSubmit={formMethods.handleSubmit(onSubmit, onInvalid)}
-        >
-          <EditChannelTabPanel value="properties" currentValue={currentTab}>
-            <ChannelPropertiesEditor />
-          </EditChannelTabPanel>
-          <EditChannelTabPanel value="flex" currentValue={currentTab}>
-            <ChannelFlexConfig />
-          </EditChannelTabPanel>
-          <EditChannelTabPanel value="epg" currentValue={currentTab}>
-            <ChannelEpgConfig />
-          </EditChannelTabPanel>
-          <EditChannelTabPanel value="ffmpeg" currentValue={currentTab}>
-            <ChannelTranscodingConfig />
-          </EditChannelTabPanel>
-          <ChannelEditActions isNewChannel={isNew} />
-        </Box>
-      </FormProvider>
-      {!isNew && <UnsavedNavigationAlert isDirty={formIsDirty} />}
+      <SettingsForm
+        form={form}
+        onSubmit={onSubmit}
+        isSubmitting={
+          createChannelMutation.isPending || updateChannelMutation.isPending
+        }
+        isNew={isNew}
+        exceptTargetPaths={
+          isNew
+            ? undefined
+            : ChannelEditorTabs.map(
+                (tab) =>
+                  router.buildLocation({
+                    to: ChannelEditTabPaths[tab],
+                    params: { channelId: channel.id },
+                  }).pathname,
+              )
+        }
+        // The page moves on once the channel exists, so a change made while
+        // it is being created would be lost
+        disabled={createChannelMutation.isPending}
+      >
+        {children ? (
+          <Box
+            role="tabpanel"
+            id={`channel-tabpanel-${currentTab}`}
+            aria-labelledby={`channel-tab-${currentTab}`}
+            sx={{ p: { xs: 1, sm: 3 } }}
+          >
+            {children}
+          </Box>
+        ) : (
+          <>
+            <EditChannelTabPanel value="properties" currentValue={currentTab}>
+              <ChannelPropertiesEditor />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="flex" currentValue={currentTab}>
+              <ChannelFlexConfig />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="guide" currentValue={currentTab}>
+              <ChannelEpgConfig />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="streaming" currentValue={currentTab}>
+              <ChannelTranscodingConfig />
+            </EditChannelTabPanel>
+            <EditChannelTabPanel value="watermark" currentValue={currentTab}>
+              <ChannelWatermarkConfig />
+            </EditChannelTabPanel>
+          </>
+        )}
+      </SettingsForm>
     </Paper>
   );
 }
 type EditChannelFormProps = {
   channel: Channel;
   isNew: boolean;
-  initialTab?: EditChannelTabs;
+  activeTab?: EditChannelTabs;
+  children?: ReactNode;
 };

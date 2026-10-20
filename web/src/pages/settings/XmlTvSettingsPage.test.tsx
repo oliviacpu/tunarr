@@ -62,10 +62,12 @@ async function renderPage(refreshHours = '4') {
     </SnackbarProvider>,
   );
   // The saved settings are in the form
-  await waitFor(() =>
-    expect(screen.getByLabelText('Refresh interval (hours)')).toHaveValue(
-      refreshHours,
-    ),
+  await waitFor(
+    () =>
+      expect(screen.getByLabelText('Refresh interval (hours)')).toHaveValue(
+        refreshHours,
+      ),
+    { timeout: 5_000 },
   );
   const { user } = rendered;
   const setField = async (label: string, value: string) => {

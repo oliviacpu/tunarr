@@ -29,7 +29,6 @@ const REQUEST_SCHEMA_NAMES = [
   'UpdateHdhrSettingsRequestSchema',
   'InsertMediaSourceRequestSchema',
   'JellyfinLoginRequest',
-  'PlexStreamSettingsSchema',
   'ProgramSearchRequest',
   'SaveableChannelSchema',
   'SmartCollection',
@@ -77,7 +76,6 @@ const KNOWN: Record<string, string> = {
   // Plex and Jellyfin members of the union both report it under this path.
   'UpdateMediaSourceRequestSchema.sendPlayStatusUpdates':
     'PUT /media-sources/:id replaces the whole object',
-
 };
 
 const registry: Record<string, unknown> = {

@@ -7,8 +7,8 @@ export function EditChannelTabPanel(props: EditChannelTabPanelProps) {
     <div
       role="tabpanel"
       hidden={value !== currentValue}
-      id={`simple-tabpanel-${currentValue}`}
-      aria-labelledby={`simple-tab-${currentValue}`}
+      id={`channel-tabpanel-${value}`}
+      aria-labelledby={`channel-tab-${value}`}
       {...other}
     >
       {value === currentValue && <Box sx={{ p: 3 }}>{children}</Box>}
@@ -20,4 +20,9 @@ interface EditChannelTabPanelProps {
   currentValue: EditChannelTabs;
   value: EditChannelTabs;
 }
-export type EditChannelTabs = 'properties' | 'flex' | 'epg' | 'ffmpeg';
+export type EditChannelTabs =
+  | 'properties'
+  | 'flex'
+  | 'guide'
+  | 'streaming'
+  | 'watermark';

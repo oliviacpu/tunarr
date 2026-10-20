@@ -1,12 +1,7 @@
-import FeaturesSettingsPage from '@/pages/settings/FeaturesSettingsPage';
-import { createFileRoute } from '@tanstack/react-router';
-import { getApiSettingsFeatureFlagsOptions } from '../../generated/@tanstack/react-query.gen.ts';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/settings/features')({
-  loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      getApiSettingsFeatureFlagsOptions(),
-    );
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/experimental', replace: true });
   },
-  component: FeaturesSettingsPage,
 });

@@ -1,18 +1,23 @@
-import { useActions } from '@/strings/actions';
+import { SettingsForm } from '@/components/form/SettingsForm.tsx';
+import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
 import { isNonEmptyString } from '@/helpers/util.ts';
 import { customShowQuery } from '@/hooks/useCustomShows.ts';
+import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import useStore from '@/store';
 import {
   clearCurrentCustomShow,
+  discardCustomShowChanges,
+  markCustomShowSaved,
   moveProgramInCustomShow,
-  resetCustomShowProgramming,
-  setCustomShowProgramDirty,
+  setCustomShowFormValues,
   updateCurrentCustomShow,
 } from '@/store/customShowEditor/actions.ts';
+import type { CustomShowEditorFormValues } from '@/store/channelEditor/store.ts';
 import { removeCustomShowProgram } from '@/store/entityEditor/util';
+import { useToasts } from '@/strings/actions';
 import type { UICondensedContentProgram } from '@/types';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Refresh, Save, Sync, Tv, Undo } from '@mui/icons-material';
+import { Refresh, Sync, Tv } from '@mui/icons-material';
 import {
   Alert,
   Autocomplete,
@@ -33,17 +38,12 @@ import { useNavigate } from '@tanstack/react-router';
 import { type CustomShow, type Playlist } from '@tunarr/types';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { isEqual } from 'lodash-es';
 import { useCallback, useEffect } from 'react';
-import {
-  Controller,
-  type SubmitHandler,
-  useForm,
-  useWatch,
-} from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import {
   getApiCustomShowsByIdProgramsQueryKey,
   getApiCustomShowsByIdQueryKey,
-  getApiCustomShowsQueryKey,
 } from '../../generated/@tanstack/react-query.gen.ts';
 import {
   createCustomShow,
@@ -57,27 +57,47 @@ import { CustomShowSortToolsMenu } from './CustomShowSortToolsMenu.tsx';
 
 dayjs.extend(relativeTime);
 
-type CustomShowForm = {
-  id?: string;
-  name: string;
-  syncEnabled: boolean;
-  syncMediaSourceId: string;
-  syncExternalPlaylistId: string;
+type CustomShowForm = CustomShowEditorFormValues;
+
+type CustomShowSave = CustomShowForm & {
+  programs: UICondensedContentProgram[];
 };
 
+/** The form's values for a show as it is saved. */
+function toCustomShowFormValues(
+  show: Pick<
+    CustomShow,
+    'name' | 'syncMediaSourceId' | 'syncExternalPlaylistId'
+  >,
+): CustomShowForm {
+  return {
+    name: show.name,
+    syncEnabled: isNonEmptyString(show.syncMediaSourceId),
+    syncMediaSourceId: show.syncMediaSourceId ?? '',
+    syncExternalPlaylistId: show.syncExternalPlaylistId ?? '',
+  };
+}
+
 type Props = {
+  /** The show as it is saved, or the starting values of a new one. */
   customShow: CustomShow;
   customShowPrograms: UICondensedContentProgram[];
   isNew: boolean;
 };
 
+/**
+ * The custom show editor: the show's name and playlist sync, and its
+ * programs, which live in the store's custom show draft so the add-programs
+ * page can add to them. Changes to that draft count as unsaved changes of the
+ * form.
+ */
 export function EditCustomShowsForm({
   customShow,
   customShowPrograms,
   isNew,
 }: Props) {
   const { t } = useLingui();
-  const actions = useActions();
+  const toasts = useToasts();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const customShowProgrammingChanged = useStore(
@@ -91,35 +111,46 @@ export function EditCustomShowsForm({
 
   const isSynced = !!customShow.syncMediaSourceId;
 
+  const form = useForm<CustomShowForm>({
+    mode: 'onTouched',
+    defaultValues: toCustomShowFormValues(customShow),
+  });
   const {
     control,
     reset,
-    handleSubmit,
     getValues,
     setValue,
-    formState: { isValid, isDirty },
-  } = useForm<CustomShowForm>({
-    defaultValues: {
-      name: customShow.name ?? '',
-      syncEnabled: isSynced,
-      syncMediaSourceId: customShow.syncMediaSourceId ?? '',
-      syncExternalPlaylistId: customShow.syncExternalPlaylistId ?? '',
-    },
-  });
+    trigger,
+    formState: { defaultValues },
+  } = form;
 
   const [syncEnabled, selectedMediaSourceId] = useWatch({
     control,
     name: ['syncEnabled', 'syncMediaSourceId'],
   });
 
+  // Load the saved show into the form. A reload that brings back what the
+  // form already compares against is skipped, such as the refetch after a
+  // save or every few seconds while the show syncs: resetting would drop the
+  // user's changes
   useEffect(() => {
-    reset({
-      name: customShow.name,
-      syncEnabled: !!customShow.syncMediaSourceId,
-      syncMediaSourceId: customShow.syncMediaSourceId ?? undefined,
-      syncExternalPlaylistId: customShow.syncExternalPlaylistId ?? undefined,
-    });
+    const loaded = toCustomShowFormValues(customShow);
+    if (!isEqual(loaded, defaultValues)) {
+      reset(loaded);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customShow, reset]);
+
+  useEffect(() => {
+    const draft = useStore.getState().customShowEditor.formValues;
+    if (draft !== undefined) {
+      reset(draft, { keepDefaultValues: true });
+    }
+  }, [reset]);
+
+  useEffect(() => {
+    void trigger();
+  }, [syncEnabled, trigger]);
 
   // Fetch media sources for the dropdown
   const { data: mediaSources } = useQuery({
@@ -148,73 +179,58 @@ export function EditCustomShowsForm({
 
   const playlistItems: Playlist[] = playlists?.result ?? [];
 
-  const saveShowMutation = useMutation({
-    mutationKey: ['custom-shows', isNew ? 'new' : customShow.id],
-    mutationFn: async (
-      data: CustomShowForm & { programs: UICondensedContentProgram[] },
-    ) => {
-      const body = {
-        name: data.name,
-        // Sync owns a synced show's programs, so leave them out. An explicit
-        // list replaces the show's contents.
-        ...(data.syncEnabled ? {} : { programs: data.programs }),
-        enableSync: data.syncEnabled,
-        ...(data.syncEnabled &&
-        isNonEmptyString(data.syncMediaSourceId) &&
-        isNonEmptyString(data.syncExternalPlaylistId)
-          ? {
-              syncMediaSourceId: data.syncMediaSourceId,
-              syncMediaSourceType: 'plex' as const,
-              syncExternalPlaylistId: data.syncExternalPlaylistId,
-            }
-          : {
-              syncMediaSourceId: null,
-              syncMediaSourceType: null,
-              syncExternalPlaylistId: null,
-            }),
-      };
+  const saveShowMutation = useSettingsMutation({
+    form,
+    mutation: {
+      mutationKey: ['custom-shows', isNew ? 'new' : customShow.id],
+      mutationFn: async (values: CustomShowSave) => {
+        const body = {
+          name: values.name,
+          // Sync owns a synced show's programs, so leave them out. An explicit
+          // list replaces the show's contents.
+          ...(values.syncEnabled ? {} : { programs: values.programs }),
+          enableSync: values.syncEnabled,
+          ...(values.syncEnabled &&
+          isNonEmptyString(values.syncMediaSourceId) &&
+          isNonEmptyString(values.syncExternalPlaylistId)
+            ? {
+                syncMediaSourceId: values.syncMediaSourceId,
+                syncMediaSourceType: 'plex' as const,
+                syncExternalPlaylistId: values.syncExternalPlaylistId,
+              }
+            : {
+                syncMediaSourceId: null,
+                syncMediaSourceType: null,
+                syncExternalPlaylistId: null,
+              }),
+        };
 
-      if (isNew) {
-        return createCustomShow({ body, throwOnError: true });
-      } else {
-        return putApiCustomShowsById({
+        if (isNew) {
+          const created = await createCustomShow({ body, throwOnError: true });
+          return created.data;
+        }
+        const updated = await putApiCustomShowsById({
           path: { id: customShow.id },
           body,
           throwOnError: true,
         });
-      }
+        return updated.data;
+      },
+      onSuccess: async (saved) => {
+        if (isNew) {
+          // The draft counts as unsaved until it is emptied, which happens
+          // after the page has gone
+          await navigate({ to: '/library/custom-shows', ignoreBlocker: true });
+          clearCurrentCustomShow();
+        } else {
+          markCustomShowSaved(saved);
+        }
+      },
     },
-    onSuccess: async (updatedShow) => {
-      reset({
-        name: updatedShow.data.name,
-        syncEnabled: !!updatedShow.data.syncMediaSourceId,
-        syncMediaSourceId: updatedShow.data.syncMediaSourceId ?? undefined,
-        syncExternalPlaylistId:
-          updatedShow.data.syncExternalPlaylistId ?? undefined,
-      });
-      await queryClient.invalidateQueries({
-        queryKey: getApiCustomShowsQueryKey(),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: getApiCustomShowsByIdQueryKey({
-          path: { id: updatedShow.data.id },
-        }),
-        exact: true,
-      });
-      await queryClient.invalidateQueries({
-        queryKey: getApiCustomShowsByIdProgramsQueryKey({
-          path: { id: updatedShow.data.id },
-        }),
-        exact: true,
-      });
-      if (isNew) {
-        await navigate({ to: '..' }).catch(console.error);
-        clearCurrentCustomShow();
-      } else {
-        updateCurrentCustomShow(updatedShow.data);
-        setCustomShowProgramDirty(false);
-      }
-    },
+    toFormValues: (saved) => toCustomShowFormValues(saved),
+    // The show list, the show and its programs
+    invalidate: { predicate: invalidateTaggedQueries('Custom Shows') },
+    failureMessage: toasts.couldNotSave,
   });
 
   const syncNowMutation = useMutation({
@@ -240,16 +256,12 @@ export function EditCustomShowsForm({
     },
   });
 
-  const saveCustomShow: SubmitHandler<CustomShowForm> = (
-    data: CustomShowForm,
-  ) => {
-    saveShowMutation.mutate({ ...data, programs: customShowPrograms });
-  };
-
   const navToProgramming = () => {
-    if (isNew) {
-      updateCurrentCustomShow(getValues());
-    }
+    // The form is rebuilt when this page opens again; keep the name in the
+    // draft until then
+    const values = getValues();
+    setCustomShowFormValues(values);
+    updateCurrentCustomShow({ name: values.name });
     navigate({
       to: isNew
         ? '/library/custom-shows/new/programming'
@@ -269,7 +281,26 @@ export function EditCustomShowsForm({
   );
 
   return (
-    <Box component="form" onSubmit={handleSubmit(saveCustomShow)}>
+    <SettingsForm
+      form={form}
+      onSubmit={(data) =>
+        saveShowMutation.mutate({ ...data, programs: customShowPrograms })
+      }
+      isNew={isNew}
+      isSubmitting={saveShowMutation.isPending}
+      hasOtherChanges={customShowProgrammingChanged}
+      onDiscardChanges={discardCustomShowChanges}
+      // A show that isn't synced needs at least one program
+      saveDisabled={!syncEnabled && customShowPrograms.length === 0}
+      // The programs are saved from the draft as they were when Save was
+      // pressed, so they must not change until the save is done
+      disabled={saveShowMutation.isPending}
+      // Adding programs edits the same draft on its own page
+      exceptTargetPaths={[
+        '/library/custom-shows/new/programming',
+        '/library/custom-shows/$showId/programming',
+      ]}
+    >
       <Stack gap={2}>
         <Controller
           control={control}
@@ -419,6 +450,7 @@ export function EditCustomShowsForm({
             >
               <Typography
                 variant="h6"
+                component="h2"
                 sx={{ flex: 1, flexBasis: ['100%', 'auto'] }}
               >
                 <Trans>Programming</Trans>
@@ -427,18 +459,6 @@ export function EditCustomShowsForm({
               {!syncEnabled && (
                 <>
                   <CustomShowSortToolsMenu />
-                  {customShowProgrammingChanged && (
-                    <Tooltip
-                      title={t`Reset programming to most recently saved state`}
-                    >
-                      <Button
-                        startIcon={<Undo />}
-                        onClick={() => resetCustomShowProgramming()}
-                      >
-                        {actions.resetChanges}
-                      </Button>
-                    </Tooltip>
-                  )}
                   <Tooltip
                     title={t`Add programming to custom show`}
                     placement="top"
@@ -448,26 +468,13 @@ export function EditCustomShowsForm({
                       component="button"
                       onClick={() => navToProgramming()}
                       startIcon={<Tv />}
-                      variant="contained"
+                      variant="outlined"
                     >
                       <Trans>Add Media</Trans>
                     </Button>
                   </Tooltip>
                 </>
               )}
-              <Button
-                disabled={
-                  saveShowMutation.isPending ||
-                  !isValid ||
-                  (!isDirty && !customShowProgrammingChanged) ||
-                  (!syncEnabled && customShowPrograms.length === 0)
-                }
-                variant="contained"
-                type="submit"
-                startIcon={<Save />}
-              >
-                {actions.save}
-              </Button>
             </Stack>
           </Box>
           <Paper>
@@ -488,6 +495,6 @@ export function EditCustomShowsForm({
           </Paper>
         </Box>
       </Stack>
-    </Box>
+    </SettingsForm>
   );
 }

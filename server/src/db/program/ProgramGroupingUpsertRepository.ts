@@ -5,7 +5,6 @@ import type {
 import { KEYS } from '@/types/inject.js';
 import { devAssert } from '@/util/debug.js';
 import { seq } from '@tunarr/shared/util';
-import { untag } from '@tunarr/types';
 import { isValidSingleExternalIdType } from '@tunarr/types/schemas';
 import type { RunResult } from 'better-sqlite3';
 import { and, isNull as dbIsNull, eq, or, sql } from 'drizzle-orm';
@@ -215,14 +214,11 @@ export class ProgramGroupingUpsertRepository {
   ): Promise<ProgramGroupingOrmWithRelations | undefined> {
     return await this.drizzleDB.query.programGroupingExternalId
       .findFirst({
-        where: (row, { and, or, eq }) =>
+        where: (row, { and, eq }) =>
           and(
             eq(row.externalKey, eid.externalKey),
             eq(row.sourceType, eid.sourceType),
-            or(
-              eq(row.externalSourceId, untag(eid.externalSourceId)),
-              eq(row.mediaSourceId, eid.externalSourceId),
-            ),
+            eq(row.mediaSourceId, eid.externalSourceId),
           ),
         with: {
           grouping: {
@@ -322,12 +318,6 @@ export class ProgramGroupingUpsertRepository {
             ? eq(ProgramGroupingExternalId.libraryId, id.libraryId)
             : dbIsNull(ProgramGroupingExternalId.libraryId),
           eq(ProgramGroupingExternalId.externalKey, id.externalKey),
-          id.externalSourceId
-            ? eq(
-                ProgramGroupingExternalId.externalSourceId,
-                id.externalSourceId,
-              )
-            : dbIsNull(ProgramGroupingExternalId.externalSourceId),
           eq(ProgramGroupingExternalId.sourceType, id.sourceType),
         ),
       );

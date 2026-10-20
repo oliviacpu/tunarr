@@ -48,6 +48,17 @@ const addProgrammingPage: Extract<
   search: {},
 };
 
+const channelEditPage: Extract<
+  BlockerLocation,
+  { fullPath: '/channels/$channelId/edit' }
+> = {
+  routeId: '/channels_/$channelId/edit',
+  fullPath: '/channels/$channelId/edit',
+  pathname: '/channels/abc/edit',
+  params: { channelId: 'abc' },
+  search: {},
+};
+
 const xmltvSettingsPage: Extract<
   BlockerLocation,
   { fullPath: '/settings/xmltv' }
@@ -77,10 +88,11 @@ function beforeUnloadPromptEnabled(opts: BlockerOpts): boolean {
 async function shouldBlock(
   opts: BlockerOpts,
   next: BlockerLocation,
+  current: BlockerLocation = programmingPage,
 ): Promise<boolean> {
   return await opts.shouldBlockFn({
     action: 'PUSH',
-    current: programmingPage,
+    current,
     next,
   });
 }
@@ -162,6 +174,68 @@ describe('UnsavedNavigationAlert', () => {
       await expect(
         shouldBlock(lastBlockerOpts(), addProgrammingPage),
       ).resolves.toBe(false);
+    });
+
+    test('lets a dirty form change only the query string of its page, such as a tab', async () => {
+      renderWithProviders(<UnsavedNavigationAlert isDirty={true} />);
+
+      await expect(
+        shouldBlock(
+          lastBlockerOpts(),
+          { ...channelEditPage, search: { tab: 'flex' } },
+          channelEditPage,
+        ),
+      ).resolves.toBe(false);
+    });
+
+    test('still blocks a dirty form going to the same route of another entity', async () => {
+      renderWithProviders(<UnsavedNavigationAlert isDirty={true} />);
+
+      await expect(
+        shouldBlock(
+          lastBlockerOpts(),
+          {
+            ...channelEditPage,
+            pathname: '/channels/def/edit',
+            params: { channelId: 'def' },
+          },
+          channelEditPage,
+        ),
+      ).resolves.toBe(true);
+    });
+
+    test('literal tab exemptions allow only the same channel', async () => {
+      renderWithProviders(
+        <UnsavedNavigationAlert
+          isDirty
+          exceptTargetPaths={['/web/channels/abc/edit/guide']}
+        />,
+      );
+      const guidePage: Extract<
+        BlockerLocation,
+        { fullPath: '/channels/$channelId/edit/guide' }
+      > = {
+        routeId: '/channels_/$channelId/edit/guide',
+        fullPath: '/channels/$channelId/edit/guide',
+        pathname: '/web/channels/abc/edit/guide',
+        params: { channelId: 'abc' },
+        search: {},
+      };
+      await expect(
+        shouldBlock(lastBlockerOpts(), guidePage, channelEditPage),
+      ).resolves.toBe(false);
+      await expect(
+        shouldBlock(
+          lastBlockerOpts(),
+          {
+            ...guidePage,
+            pathname: '/web/channels/def/edit/guide',
+            params: { channelId: 'def' },
+          },
+          channelEditPage,
+        ),
+      ).resolves.toBe(true);
+      expect(beforeUnloadPromptEnabled(lastBlockerOpts())).toBe(true);
     });
 
     test('still blocks a dirty form going anywhere else', async () => {

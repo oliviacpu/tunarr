@@ -1,3 +1,4 @@
+import { getFeatureFlagEnvVar } from '@/util/env.js';
 import type { ISettingsDB } from '@/db/interfaces/ISettingsDB.js';
 import { KEYS } from '@/types/inject.js';
 import { TruthyQueryParam } from '@/types/schemas.js';
@@ -13,8 +14,8 @@ import { inject, injectable } from 'inversify';
 export function resolveFeatureFlagFromEnv(flag: FeatureFlagKey): boolean {
   const meta = FeatureFlagMetadata.find((m) => m.key === flag);
   if (meta) {
-    const envValue = process.env[meta.envVar];
-    if (envValue !== undefined && envValue !== '') {
+    const envValue = getFeatureFlagEnvVar(meta.envVar);
+    if (envValue !== null) {
       return TruthyQueryParam.catch(false).parse(envValue);
     }
   }
@@ -29,8 +30,8 @@ export class FeatureFlagService {
     const envResult = resolveFeatureFlagFromEnv(flag);
     const meta = FeatureFlagMetadata.find((m) => m.key === flag);
     if (meta) {
-      const envValue = process.env[meta.envVar];
-      if (envValue !== undefined && envValue !== '') {
+      const envValue = getFeatureFlagEnvVar(meta.envVar);
+      if (envValue !== null) {
         return envResult;
       }
     }
@@ -40,8 +41,8 @@ export class FeatureFlagService {
   getAll(): FeatureFlags {
     const persisted = { ...this.settings.featureFlags() };
     for (const meta of FeatureFlagMetadata) {
-      const envValue = process.env[meta.envVar];
-      if (envValue !== undefined && envValue !== '') {
+      const envValue = getFeatureFlagEnvVar(meta.envVar);
+      if (envValue !== null) {
         persisted[meta.key] = TruthyQueryParam.catch(false).parse(envValue);
       }
     }
@@ -51,8 +52,8 @@ export class FeatureFlagService {
   getEnvOverrides(): Partial<Record<FeatureFlagKey, boolean>> {
     const result: Partial<Record<FeatureFlagKey, boolean>> = {};
     for (const meta of FeatureFlagMetadata) {
-      const envValue = process.env[meta.envVar];
-      if (envValue !== undefined && envValue !== '') {
+      const envValue = getFeatureFlagEnvVar(meta.envVar);
+      if (envValue !== null) {
         result[meta.key] = true;
       }
     }

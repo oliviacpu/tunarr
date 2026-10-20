@@ -1,4 +1,7 @@
-import { defaultTranscodeConfigLegacy } from '@/db/schema/TranscodeConfig.js';
+import {
+  TranscodeConfig,
+  defaultTranscodeConfig,
+} from '@/db/schema/TranscodeConfig.js';
 import Fixer from '@/tasks/fixers/fixer.js';
 import { KEYS } from '@/types/inject.js';
 import { InjectLogger } from '@/util/inject.js';
@@ -7,12 +10,16 @@ import { inject, injectable } from 'inversify';
 import type { Kysely } from 'kysely';
 import { head, isEmpty, map, reject } from 'lodash-es';
 import type { DB } from '../../db/schema/db.ts';
+import type { DrizzleDBAccess } from '../../db/schema/index.ts';
 
 @injectable()
 export class EnsureTranscodeConfigIds extends Fixer {
   @InjectLogger() declare protected readonly logger: Logger;
 
-  constructor(@inject(KEYS.Database) private db: Kysely<DB>) {
+  constructor(
+    @inject(KEYS.Database) private db: Kysely<DB>,
+    @inject(KEYS.DrizzleDB) private drizzleDB: DrizzleDBAccess,
+  ) {
     super();
   }
 
@@ -27,7 +34,7 @@ export class EnsureTranscodeConfigIds extends Fixer {
     if (isEmpty(defaultConfigs)) {
       this.logger.warn('No default transcode config found! Creating one.');
 
-      defaultConfig = { uuid: await this.createDefaultTranscodeConfig() };
+      defaultConfig = { uuid: this.createDefaultTranscodeConfig() };
     } else if (defaultConfigs.length > 1) {
       this.logger.debug(
         'Found multiple default transcode configs. Marking one as the default',
@@ -67,13 +74,11 @@ export class EnsureTranscodeConfigIds extends Fixer {
       .execute();
   }
 
-  private async createDefaultTranscodeConfig() {
-    return (
-      await this.db
-        .insertInto('transcodeConfig')
-        .values(defaultTranscodeConfigLegacy(true))
-        .returning('uuid')
-        .executeTakeFirstOrThrow()
-    ).uuid;
+  private createDefaultTranscodeConfig() {
+    return this.drizzleDB
+      .insert(TranscodeConfig)
+      .values(defaultTranscodeConfig(true))
+      .returning({ uuid: TranscodeConfig.uuid })
+      .get().uuid;
   }
 }
