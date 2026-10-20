@@ -1,3 +1,4 @@
+import { ThemeProvider, createTheme } from '@mui/material';
 import { renderWithProviders, screen } from '@/test/utils';
 import { describe, expect, test } from 'vitest';
 import { schemePalette } from '../../test/contrast.ts';
@@ -27,6 +28,32 @@ function renderItem(props: Partial<Parameters<typeof TvGuideItem>[0]>) {
 }
 
 describe('TvGuideItem', () => {
+  test.each(['light', 'dark'] as const)(
+    'uses the %s theme divider for a compact sliver',
+    (mode) => {
+      const divider =
+        mode === 'light'
+          ? 'rgba(12, 34, 56, 0.25)'
+          : 'rgba(210, 220, 230, 0.5)';
+      const theme = createTheme({ palette: { mode, divider } });
+      renderWithProviders(
+        <ThemeProvider theme={theme}>
+          <TvGuideItem
+            left={0}
+            width={1}
+            compact
+            cellStyle={typeStyle(schemePalette(mode), 'flex')}
+          >
+            sliver
+          </TvGuideItem>
+        </ThemeProvider>,
+      );
+      expect(getComputedStyle(screen.getByText('sliver')).boxShadow).toBe(
+        `inset -1px 0 0 ${divider}`,
+      );
+    },
+  );
+
   test('fills a program with its ramp colour and the primary text colour', () => {
     const style = renderItem({});
     const content = typeStyle(palette, 'content', 'show.a');
