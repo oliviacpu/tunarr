@@ -1,4 +1,4 @@
-### Environment overrides and settings CLI (2026-10-20, S7)
+### Environment overrides and settings CLI (2026-10-20, PR #117)
 
 **What you saw:** Some environment overrides were undocumented or read outside the central registry. Logging examples used the wrong variable, edge builds looked for a misspelled commit variable, and the settings CLI could update only the nested settings section. Status did not explain environment overrides.
 
