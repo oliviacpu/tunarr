@@ -142,7 +142,7 @@ function FfmpegBinariesFields({
   const { t } = useLingui();
   const systemState = useQuery(getApiSystemStateOptions());
   if (systemState.isPending) return <Skeleton variant="rounded" height={48} />;
-  if (systemState.isError) {
+  if (systemState.data === undefined) {
     return (
       <Alert severity="warning">
         <Trans>
@@ -154,6 +154,14 @@ function FfmpegBinariesFields({
   }
   return (
     <>
+      {systemState.isError && (
+        <Alert severity="warning">
+          <Trans>
+            Server environment could not be refreshed. Using the last loaded
+            environment; your edits are kept.
+          </Trans>
+        </Alert>
+      )}
       <FfmpegProbeStatus isInContainer={systemState.data.isInContainer} />
       {!systemState.data.isInContainer && (
         <>

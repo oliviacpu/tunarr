@@ -7,7 +7,10 @@ import {
 } from '@/test/utils';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import { QueryClient } from '@tanstack/react-query';
-import { getApiSystemFeatureFlagsQueryKey } from '../../generated/@tanstack/react-query.gen.ts';
+import {
+  getApiSystemFeatureFlagsQueryKey,
+  getApiSystemStateQueryKey,
+} from '../../generated/@tanstack/react-query.gen.ts';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -260,3 +263,43 @@ for (const section of ['playback', 'captions-audio'] as const) {
     expect(screen.getByTestId('navigation-guard')).toHaveTextContent('true');
   });
 }
+
+test('Playback preserves executable-path edits during cached system-state failures and retry', async () => {
+  flagsRequest.mockImplementation(() => new Promise(() => {}));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  const { user } = renderPage('playback', client);
+  const ffmpeg = await screen.findByLabelText('FFmpeg executable path');
+  const ffprobe = screen.getByLabelText('FFprobe executable path');
+  await user.clear(ffmpeg);
+  await user.type(ffmpeg, '/opt/custom-ffmpeg');
+  await user.clear(ffprobe);
+  await user.type(ffprobe, '/opt/custom-ffprobe');
+  stateRequest.mockRejectedValue(
+    new Error('Background system state unavailable'),
+  );
+  await act(async () => {
+    await client.refetchQueries({ queryKey: getApiSystemStateQueryKey() });
+  });
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Using the last loaded environment; your edits are kept.',
+  );
+  expect(ffmpeg).toBeVisible();
+  expect(ffprobe).toBeVisible();
+  expect(ffmpeg).toBeEnabled();
+  expect(ffprobe).toBeEnabled();
+  expect(ffmpeg).toHaveValue('/opt/custom-ffmpeg');
+  expect(ffprobe).toHaveValue('/opt/custom-ffprobe');
+  expect(screen.getByTestId('navigation-guard')).toHaveTextContent('true');
+  stateRequest.mockResolvedValue({ data: { isInContainer: false } });
+  await act(async () => {
+    await client.refetchQueries({ queryKey: getApiSystemStateQueryKey() });
+  });
+  await waitFor(() =>
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+  );
+  expect(ffmpeg).toHaveValue('/opt/custom-ffmpeg');
+  expect(ffprobe).toHaveValue('/opt/custom-ffprobe');
+  expect(screen.getByTestId('navigation-guard')).toHaveTextContent('true');
+});
