@@ -14,7 +14,7 @@ import type {
   SaveableChannel,
   SubtitlePreference,
 } from '@tunarr/types';
-import { isEmpty, isEqual, isNil, keys, map, reject } from 'lodash-es';
+import { isEmpty, isEqual, isNil, keys, map, omit, reject } from 'lodash-es';
 import { useEffect, useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import type { DeepRequired, NonEmptyArray } from 'ts-essentials';
@@ -41,7 +41,7 @@ function getDefaultFormValues(
 ): DeepRequired<Omit<SaveableChannel, 'captions'>> &
   Pick<SaveableChannel, 'captions'> {
   return {
-    ...channel,
+    ...omit(channel, ['fallback', 'programCount', 'transcoding', 'sessions']),
     streamMode: channel.streamMode ?? 'hls',
     fillerCollections: channel.fillerCollections ?? [],
     fillerRepeatCooldown:

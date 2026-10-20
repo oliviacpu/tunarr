@@ -1,5 +1,5 @@
-import { renderWithProviders, screen, waitFor } from '@/test/utils';
-import { QueryClient } from '@tanstack/react-query';
+import { act, renderWithProviders, screen, waitFor } from '@/test/utils';
+import { QueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import {
   createBrowserHistory,
   createRootRoute,
@@ -86,11 +86,16 @@ function renderEditor(mode: 'edit' | 'new') {
       tab: z.enum(['flex', 'epg', 'ffmpeg']).optional(),
     }),
     component: function EditRoute() {
+      const { data: loadedChannel } = useSuspenseQuery({
+        queryKey: ['test-channel'],
+        queryFn: async () => channel,
+        staleTime: Infinity,
+      });
       const { tab } = editRoute.useSearch();
       const initialTab: EditChannelTabs = tab ?? 'properties';
       return (
         <EditChannelForm
-          channel={channel}
+          channel={loadedChannel}
           isNew={false}
           initialTab={initialTab}
         />
@@ -131,13 +136,14 @@ function renderEditor(mode: 'edit' | 'new') {
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
+  queryClient.setQueryData(['test-channel'], channel);
   const rendered = renderWithProviders(
     <SnackbarProvider>
       <RouterProvider router={router} />
     </SnackbarProvider>,
     { queryClient },
   );
-  return { ...rendered, router };
+  return { ...rendered, router, queryClient };
 }
 
 const nameField = () => screen.findByRole('textbox', { name: 'Channel name' });
@@ -196,6 +202,53 @@ describe('EditChannelForm, editing a channel', () => {
     await user.click(screen.getByRole('button', { name: 'Reset changes' }));
     expect(name).toHaveValue('Movie Night Late');
     await waitFor(() => expect(saveButton()).toBeDisabled());
+  });
+
+  test('session-only refetches keep ordinary unsaved edits', async () => {
+    const { user, queryClient } = renderEditor('edit');
+    const name = await nameField();
+    await user.type(name, ' Draft');
+    await user.tab();
+    await act(async () => {
+      queryClient.setQueryData(['test-channel'], {
+        ...channel,
+        sessions: [
+          { type: 'hls', state: 'started', numConnections: 1, connections: [] },
+        ],
+      });
+    });
+    expect(name).toHaveValue('Movie Night Draft');
+    expect(saveButton()).toBeEnabled();
+  });
+
+  test('a GET refetch after a PUT without sessions keeps post-save edits', async () => {
+    let finish: () => void = () => {};
+    mockUpdate.mockImplementation(
+      ({ body }) =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve({ data: { ...channel, ...body, sessions: undefined } });
+        }),
+    );
+    const { user, queryClient } = renderEditor('edit');
+    const name = await nameField();
+    await user.type(name, ' Late');
+    await user.tab();
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+    await user.type(name, ' Draft');
+    finish();
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    await act(async () => {
+      queryClient.setQueryData(['test-channel'], {
+        ...channel,
+        name: 'Movie Night Late',
+      });
+    });
+    expect(name).toHaveValue('Movie Night Late Draft');
+    expect(saveButton()).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(name).toHaveValue('Movie Night Late');
   });
 
   test('an invalid change keeps Save disabled', async () => {
