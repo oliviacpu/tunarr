@@ -1,4 +1,4 @@
-### Guide redirect names, mobile times and sliver dividers (2026-10-20, PR pending)
+### Guide redirect names, mobile times and sliver dividers (2026-10-20, PR #137)
 
 - **What you saw:** Redirect guide cells displayed a channel UUID, mobile cells omitted their times and time left, and compact program dividers used the same hard-coded shadow in both themes.
 - **Cause:** The title read the redirect's ID instead of its supplied channel name; the small-viewport condition returned a boolean instead of rendering its children; the compact divider bypassed the active palette.
