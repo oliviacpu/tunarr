@@ -1,4 +1,4 @@
-### Retire legacy external source columns safely (2026-10-20, P2)
+### Retire legacy external source columns safely (2026-10-20, PR #122)
 
 **What you saw:** External-ID rows retained legacy source-name columns alongside media-source UUIDs. Compatibility queries still read those names, and startup normally backfilled them only after migrations ran. Three existing tables were missing from the Drizzle schema index.
 
