@@ -1,6 +1,6 @@
 # Channel audio and subtitle defaults
 
-Status: **proposed; awaiting Olivia Hunter's approval**. This is the design deliverable for S5 in the
+Status: **approved by Olivia Hunter on 2026-10-20; implementation stays separate**. This is the design deliverable for S5 in the
 [approved UI audit](ui-primitives-and-settings-audit-2026-10-19.md), approved through
 [PR #85](https://github.com/oliviacpu/tunarr/pull/85). Approval of that audit authorized writing this design,
 not implementing it. No schema, API, playback or UI behavior changes with this document.
@@ -90,9 +90,10 @@ with output structure; copying defaults into channels prevents later global chan
 using absence of channel rows as the only inherit signal cannot represent a custom empty list; routing
 defaults through editable CEL profiles adds an unrelated UI and reopens the approved P1 shelving decision.
 
-## Follow-up PRs, only after approval
+## Follow-up PRs, separate implementation
 
-These are proposed rows to add to the audit after approval; they are not executable assignments yet.
+These rows describe the approved design's future implementation split. Add them to the audit when that
+work is scheduled; implementation is outside this documentation PR and the current continuation scope.
 
 | Row | Change                                                                                                                                                   | Acceptance                                                                                                                                                                                                |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -107,7 +108,7 @@ unextracted embedded text, external and image tracks, both empty-list fallbacks,
 S5c must cover persistence after reload, returning from custom to inherit and back, and routes after S1/P5.
 Run focused suites, changed-file lint and typechecks for each code PR, plus the e2e route sweep for S5c.
 
-Ship S5a → S5b → S5c in that order after their reviews. Back up SQLite and `settings.json` before the
+Ship S5a → S5b → S5c in that order as separate implementation PRs after their reviews. Back up SQLite and `settings.json` before the
 migration release; downgrade by restoring both together with the prior image. Add fork notes and public
 configuration documentation with the implementation PRs. This design itself needs no runtime tests or
-release. S5 remains pending until Olivia approves or revises this recommendation.
+release. S5's design is approved; its implementation remains future work.
