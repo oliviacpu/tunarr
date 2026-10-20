@@ -38,6 +38,8 @@ export type SettingsFormProps<
   onRestoreDefaults?: () => void;
   /** Routes the unsaved-changes guard lets the user leave to without asking. */
   exceptTargetPaths?: ExceptTargetPaths;
+  /** Disable only when a containing page owns the combined unsaved guard. */
+  guardNavigation?: boolean;
   /** The fields. */
   children: ReactNode;
 };
@@ -63,6 +65,7 @@ export function SettingsForm<
   isSubmitting = false,
   onRestoreDefaults,
   exceptTargetPaths,
+  guardNavigation = true,
   children,
 }: SettingsFormProps<TFieldValues, TContext, TTransformedValues>) {
   return (
@@ -75,6 +78,7 @@ export function SettingsForm<
           isSubmitting={isSubmitting}
           onRestoreDefaults={onRestoreDefaults}
           exceptTargetPaths={exceptTargetPaths}
+          guardNavigation={guardNavigation}
         />
       </Box>
     </FormProvider>
@@ -91,6 +95,7 @@ type SaveBarProps<
   isSubmitting: boolean;
   onRestoreDefaults?: () => void;
   exceptTargetPaths?: ExceptTargetPaths;
+  guardNavigation: boolean;
 };
 
 // Subscribes to the form state on its own, so typing in a field re-renders
@@ -105,6 +110,7 @@ function SaveBar<
   isSubmitting,
   onRestoreDefaults,
   exceptTargetPaths,
+  guardNavigation,
 }: SaveBarProps<TFieldValues, TContext, TTransformedValues>) {
   const actions = useActions();
   const formState = useFormState({ control });
@@ -113,10 +119,12 @@ function SaveBar<
 
   return (
     <>
-      <UnsavedNavigationAlert
-        isDirty={isDirty}
-        exceptTargetPaths={exceptTargetPaths}
-      />
+      {guardNavigation && (
+        <UnsavedNavigationAlert
+          isDirty={isDirty}
+          exceptTargetPaths={exceptTargetPaths}
+        />
+      )}
       <Stack
         direction="row"
         useFlexGap

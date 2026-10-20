@@ -1,4 +1,4 @@
-import { renderWithProviders, screen } from '@/test/utils';
+import { renderWithProviders, screen, waitFor, within } from '@/test/utils';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
@@ -28,7 +28,9 @@ vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
 }));
 
 vi.mock('../../components/settings/UnsavedNavigationAlert.tsx', () => ({
-  default: () => null,
+  default: ({ isDirty }: { isDirty: boolean }) => (
+    <output data-testid="navigation-guard">{String(isDirty)}</output>
+  ),
 }));
 vi.mock('../../components/settings/ffmpeg/TranscodeConfigsTable.tsx', () => ({
   TranscodeConfigsTable: () => null,
@@ -138,3 +140,57 @@ describe('captions system state isolation', () => {
     });
   }
 });
+
+for (const section of ['playback', 'captions-audio'] as const) {
+  test(`${section} shares one navigation guard across both forms`, async () => {
+    const flags = {
+      proxyArtwork: false,
+      tonemapEnabled: false,
+      webvttSidecarEnabled: false,
+      xmltvCreditImagesEnabled: false,
+      disableSearchSnapshotInBackup: false,
+      disableVulkan: false,
+      disableVaapiPad: false,
+    };
+    const key =
+      section === 'playback' ? 'tonemapEnabled' : 'webvttSidecarEnabled';
+    flagsRequest.mockResolvedValue({
+      data: {
+        flags,
+        metadata: [
+          {
+            key,
+            displayName: 'Optional test feature',
+            description: 'Optional feature.',
+            category: 'experimental',
+            envOverride: false,
+          },
+        ],
+      },
+    });
+    const { user } = renderPage(section);
+    const core = await coreField(section);
+    const flag = await screen.findByRole('checkbox', {
+      name: 'Optional test feature',
+    });
+    expect(screen.getAllByTestId('navigation-guard')).toHaveLength(1);
+    if (section === 'playback') await user.type(core, '-edited');
+    else await user.click(core);
+    await user.click(flag);
+    expect(screen.getByTestId('navigation-guard')).toHaveTextContent('true');
+    const coreForm = core.closest('form');
+    const flagForm = flag.closest('form');
+    if (coreForm === null || flagForm === null)
+      throw new Error('Both settings groups have forms');
+    await user.click(
+      within(coreForm).getByRole('button', { name: 'Reset changes' }),
+    );
+    expect(screen.getByTestId('navigation-guard')).toHaveTextContent('true');
+    await user.click(
+      within(flagForm).getByRole('button', { name: 'Reset changes' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('navigation-guard')).toHaveTextContent('false'),
+    );
+  });
+}

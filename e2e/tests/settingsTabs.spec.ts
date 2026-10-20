@@ -180,3 +180,35 @@ test('settings remain usable at desktop and phone widths in both themes', async 
     }
   }
 });
+
+for (const section of ['playback', 'captions-audio'] as const) {
+  test(`${section} uses one unsaved dialog for core and optional settings`, async ({
+    page,
+  }) => {
+    await page.goto(`/web/settings/${section}`);
+    const core =
+      section === 'playback'
+        ? page.getByRole('combobox', { name: 'HDR tone-map curve' })
+        : page.getByRole('checkbox', { name: 'Extract embedded subtitles' });
+    if (section === 'playback') {
+      await core.click();
+      await page.getByRole('option', { name: 'Reinhard', exact: true }).click();
+    } else await core.click();
+    const flag = page.getByRole('checkbox', {
+      name:
+        section === 'playback' ? 'HDR Tonemapping' : 'WebVTT Sidecar Subtitles',
+      exact: true,
+    });
+    await flag.click();
+    await page.getByRole('tab', { name: 'General', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/settings/${section}$`));
+    await page.getByRole('tab', { name: 'General', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Proceed', exact: true }).click();
+    await expect(page).toHaveURL(/settings\/general$/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+}

@@ -91,8 +91,10 @@ const flagGroups: Partial<Record<FlagKey, FlagGroup>> = {
 
 export default function FeaturesSettingsPage({
   group = 'experimental',
+  onDirtyChange,
 }: {
   group?: FlagGroup;
+  onDirtyChange?: (isDirty: boolean) => void;
 }) {
   const { t } = useLingui();
   const query = useQuery(getApiSystemFeatureFlagsOptions());
@@ -117,23 +119,36 @@ export default function FeaturesSettingsPage({
         <Trans>Optional feature settings could not be loaded.</Trans>
       </Alert>
     );
-  return <FeatureFlagsForm data={query.data} group={group} />;
+  return (
+    <FeatureFlagsForm
+      data={query.data}
+      group={group}
+      onDirtyChange={onDirtyChange}
+    />
+  );
 }
 
 function FeatureFlagsForm({
   data,
   group,
+  onDirtyChange,
 }: {
   data: GetApiSystemFeatureFlagsResponse;
   group: FlagGroup;
+  onDirtyChange?: (isDirty: boolean) => void;
 }) {
   const { t } = useLingui();
   const form = useForm<FlagFormValues>({ defaultValues: data.flags });
   const {
     control,
     reset,
-    formState: { defaultValues },
+    formState: { defaultValues, isDirty },
   } = form;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // Load the saved flags into the form. The reload after a save brings back
   // what the form already compares against, so it is skipped: resetting again
@@ -167,6 +182,7 @@ function FeatureFlagsForm({
   return (
     <SettingsForm
       form={form}
+      guardNavigation={onDirtyChange === undefined}
       onSubmit={save}
       isSubmitting={saveMutation.isPending}
     >

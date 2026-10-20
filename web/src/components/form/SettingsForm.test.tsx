@@ -67,6 +67,11 @@ describe('SettingsForm', () => {
     guardProps.mockClear();
   });
 
+  test('a containing page can own navigation without registering another guard', () => {
+    renderForm({ guardNavigation: false });
+    expect(guardProps).not.toHaveBeenCalled();
+  });
+
   test('Save is disabled while nothing has changed', () => {
     const { saveButton } = renderForm();
 

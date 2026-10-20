@@ -37,7 +37,8 @@ import {
   TonemapAlgorithms,
 } from '@tunarr/types/schemas';
 import { capitalize, isEmpty, isEqual } from 'lodash-es';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import UnsavedNavigationAlert from '@/components/settings/UnsavedNavigationAlert.tsx';
 import type { Control, SubmitHandler } from 'react-hook-form';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import type { DeepRequired } from 'ts-essentials';
@@ -195,6 +196,7 @@ export default function FfmpegSettingsPage({
 }: {
   section?: 'playback' | 'captions-audio';
 }) {
+  const [flagsDirty, setFlagsDirty] = useState(false);
   const { t } = useLingui();
   const { data: ffmpegSettings } = useFfmpegSettings();
   const captionAlignmentNames = useCaptionAlignmentNames();
@@ -209,7 +211,7 @@ export default function FfmpegSettingsPage({
     reset,
     setValue,
     control,
-    formState: { defaultValues },
+    formState: { defaultValues, isDirty },
   } = form;
 
   // Load the saved settings into the form. The reload after a save brings back
@@ -286,7 +288,9 @@ export default function FfmpegSettingsPage({
 
   return (
     <Box>
+      <UnsavedNavigationAlert isDirty={isDirty || flagsDirty} />
       <SettingsForm
+        guardNavigation={false}
         form={form}
         onSubmit={save}
         isSubmitting={saveMutation.isPending}
@@ -649,7 +653,7 @@ export default function FfmpegSettingsPage({
         )}
       </SettingsForm>
       <Box sx={{ mt: 3 }}>
-        <FeaturesSettingsPage group={section} />
+        <FeaturesSettingsPage group={section} onDirtyChange={setFlagsDirty} />
       </Box>
       {section === 'playback' && (
         <>
