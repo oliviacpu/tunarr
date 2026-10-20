@@ -66,6 +66,14 @@ you want, or the box in the header to select the whole page. The table then show
 
 The selection clears when the action finishes and when you change page.
 
+## Updating channel relations through the API
+
+`PUT /api/channels/{id}` keeps saved filler attachments and subtitle preferences when
+`fillerCollections` or `subtitlePreferences` is omitted. Send an explicit `[]` to clear that
+relation, or a nonempty array to replace it. The remaining required channel fields are unchanged.
+The channel editor sends a relation only when you edit it, including an empty list when you
+remove the last subtitle preference.
+
 ## Getting Started
 
 1. Create a new channel with [Properties](properties.md)

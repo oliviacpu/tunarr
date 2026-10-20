@@ -200,7 +200,7 @@ export class BasicChannelRepository {
             priority: pref.priority,
           }) satisfies NewChannelSubtitlePreferenceOrm,
       );
-      if (subtitlePreferences) {
+      if (subtitlePreferences !== undefined && subtitlePreferences.length > 0) {
         tx.insert(ChannelSubtitlePreferences).values(subtitlePreferences).run();
       }
 
@@ -259,22 +259,23 @@ export class BasicChannelRepository {
     this.drizzleDB.transaction((tx) => {
       tx.update(Channel).set(update).where(eq(Channel.uuid, id)).run();
 
-      tx.delete(ChannelFillerShow)
-        .where(eq(ChannelFillerShow.channelUuid, channel.uuid))
-        .run();
+      if (updateReq.fillerCollections !== undefined) {
+        tx.delete(ChannelFillerShow)
+          .where(eq(ChannelFillerShow.channelUuid, channel.uuid))
+          .run();
 
-      if (!isEmpty(updateReq.fillerCollections)) {
-        const channelFillerShows = map(
-          updateReq.fillerCollections,
-          (filler) => ({
-            cooldown: filler.cooldownSeconds,
-            channelUuid: channel.uuid,
-            fillerShowUuid: filler.id,
-            weight: filler.weight,
-          }),
-        );
+        if (updateReq.fillerCollections.length > 0) {
+          const channelFillerShows = updateReq.fillerCollections.map(
+            (filler) => ({
+              cooldown: filler.cooldownSeconds,
+              channelUuid: channel.uuid,
+              fillerShowUuid: filler.id,
+              weight: filler.weight,
+            }),
+          );
 
-        tx.insert(ChannelFillerShow).values(channelFillerShows).run();
+          tx.insert(ChannelFillerShow).values(channelFillerShows).run();
+        }
       }
       const subtitlePreferences = updateReq.subtitlePreferences?.map(
         (pref) =>
@@ -288,11 +289,15 @@ export class BasicChannelRepository {
             priority: pref.priority,
           }) satisfies NewChannelSubtitlePreferenceOrm,
       );
-      tx.delete(ChannelSubtitlePreferences)
-        .where(eq(ChannelSubtitlePreferences.channelId, channel.uuid))
-        .run();
-      if (subtitlePreferences) {
-        tx.insert(ChannelSubtitlePreferences).values(subtitlePreferences).run();
+      if (subtitlePreferences !== undefined) {
+        tx.delete(ChannelSubtitlePreferences)
+          .where(eq(ChannelSubtitlePreferences.channelId, channel.uuid))
+          .run();
+        if (subtitlePreferences.length > 0) {
+          tx.insert(ChannelSubtitlePreferences)
+            .values(subtitlePreferences)
+            .run();
+        }
       }
     });
 

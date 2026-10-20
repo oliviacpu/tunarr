@@ -9,15 +9,11 @@ import Paper from '@mui/material/Paper';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import type {
-  Channel,
-  SaveableChannel,
-  SubtitlePreference,
-} from '@tunarr/types';
+import type { Channel, SaveableChannel } from '@tunarr/types';
 import { isEmpty, isEqual, isNil, keys, map, omit, reject } from 'lodash-es';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
-import type { DeepRequired, NonEmptyArray } from 'ts-essentials';
+import type { DeepRequired } from 'ts-essentials';
 import {
   createChannelV2Mutation,
   putApiChannelsByIdMutation,
@@ -176,8 +172,9 @@ export function EditChannelForm({
       (conf) => conf.periodMins <= 0,
     );
 
+    const defaults = form.formState.defaultValues;
     const preferences =
-      !data.subtitlePreferences || data.subtitlePreferences.length === 0
+      !isNew && isEqual(data.subtitlePreferences, defaults?.subtitlePreferences)
         ? undefined
         : map(data.subtitlePreferences, (pref, idx) => ({
             ...pref,
@@ -194,7 +191,10 @@ export function EditChannelForm({
       guideFlexTitle: isNonEmptyString(data.guideFlexTitle)
         ? data.guideFlexTitle
         : undefined,
-      fillerCollections: data.fillerCollections,
+      fillerCollections:
+        !isNew && isEqual(data.fillerCollections, defaults?.fillerCollections)
+          ? undefined
+          : data.fillerCollections,
       watermark: data.watermark
         ? {
             ...data.watermark,
@@ -202,7 +202,7 @@ export function EditChannelForm({
             fadeConfig: isEmpty(fadeConfigs) ? undefined : fadeConfigs,
           }
         : undefined,
-      subtitlePreferences: preferences as NonEmptyArray<SubtitlePreference>,
+      subtitlePreferences: preferences,
     } satisfies SaveableChannel;
 
     if (isNew) {

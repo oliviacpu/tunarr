@@ -1,0 +1,7 @@
+### Channel updates preserve omitted filler and subtitle relations (2026-10-20)
+
+- **What you saw:** a channel update that omitted optional filler attachments or subtitle preferences deleted the saved rows. The bulk stealth UI worked around this by fetching and resending a full channel.
+- **Cause:** the repository deleted both relations unconditionally, while subtitle write validation rejected empty arrays and the editor serialized an intentional clear as omission.
+- **Fix:** approved C7a from design PR #149. Omitted relations keep their exact rows; explicit empty arrays clear, and nonempty arrays replace, within the existing immediate transaction. Accept empty subtitle arrays on writes and skip empty inserts during both creation and update. The editor sends changed relations only and sends an explicit empty array for a deliberate clear. Existing start-time/on-demand behavior and the bulk stealth preservation workaround stay in place. C7b/C7c batching and S5 global defaults remain held.
+- **Tests:** real SQLite repository regressions cover omissions, independent clears/replacements, retained relation IDs, rollback, start-time/on-demand preservation and creation with empty subtitles. Schema/editor/browser regressions cover empty and malformed writes, unrelated edits and clear/save/reload. Current and Latest OpenAPI document the same write change; generated client/routes are checked without rewriting historical specifications.
+- **Upstream:** not sent.

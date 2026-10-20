@@ -138,6 +138,39 @@ describe('SaveableChannelSchema uses the strict variants', () => {
     subtitlesEnabled: false,
   };
 
+  test.each([SaveableChannelSchema, UpdateChannelRequestSchema])(
+    'accepts explicit empty relations on writes',
+    (schema) => {
+      expect(
+        schema.safeParse({
+          ...channel,
+          fillerCollections: [],
+          subtitlePreferences: [],
+        }).success,
+      ).toBe(true);
+    },
+  );
+
+  test.each([
+    {
+      subtitlePreferences: [
+        {
+          langugeCode: 'eng',
+          priority: -1,
+          allowExternal: true,
+          allowImageBased: true,
+        },
+      ],
+    },
+    { subtitlePreferences: [null] },
+    { subtitlePreferences: null },
+    { fillerCollections: [{ id: 'not-an-id', weight: 'bad' }] },
+  ])('rejects malformed channel relation values %j', (invalid) => {
+    expect(
+      UpdateChannelRequestSchema.safeParse({ ...channel, ...invalid }).success,
+    ).toBe(false);
+  });
+
   test('accepts a valid channel', () => {
     expect(SaveableChannelSchema.safeParse(channel).success).toBe(true);
   });
@@ -167,8 +200,8 @@ describe('SaveableChannelSchema uses the strict variants', () => {
 
   test('allows an update to omit startTime', () => {
     const { startTime: _, ...withoutStartTime } = channel;
-    expect(
-      UpdateChannelRequestSchema.safeParse(withoutStartTime).success,
-    ).toBe(true);
+    expect(UpdateChannelRequestSchema.safeParse(withoutStartTime).success).toBe(
+      true,
+    );
   });
 });
