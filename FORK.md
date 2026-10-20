@@ -89,6 +89,42 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
   break its served playlists (report section 3(a)). The ffmpeg side is worth an upstream issue once this has run for a
   while.
 
+### The FFmpeg settings page shows while ffmpeg is probed or broken; failed saves say so (2026-10-19)
+
+- **What you saw:** the FFmpeg settings page stayed blank while `/api/ffmpeg-info` was loading or after it failed, so
+  the executable path that would fix a broken ffmpeg couldn't be reached. A failed save on the FFmpeg or HDHR settings
+  page showed nothing.
+- **Cause:** `FfmpegSettingsPage` returned an empty `<div>` until the ffmpeg probe succeeded, and the FFmpeg and HDHR
+  save mutations had no `onError`.
+- **Fix:** the form always renders. Above the paths, a skeleton stands in while ffmpeg is probed. A warning appears when
+  the probe fails or finds no encoders (the server answers with empty lists when it can't run ffmpeg), and otherwise a
+  line lists the hardware acceleration ffmpeg supports. A failed settings refetch shows an error alert instead of a
+  blank page. Failed saves on both pages show `Could not save settings.` with the server's reason in a snackbar
+  (`FfmpegSettingsPage.tsx`, `HdhrSettingsPage.tsx`).
+- **Tests:** `FfmpegSettingsPage.test.tsx` (form shown while probing, warning on a failed or empty probe, hardware
+  acceleration line, refused save) and `HdhrSettingsPage.test.tsx` (refused save, save failing without a reason).
+- **Upstream:** not sent; upstream `main` has the same code.
+
+### Resetting the HDHomeRun settings gives 2 tuners, and a tuner count below 1 is refused (2026-10-19, PR #93)
+
+- **What you saw:** not reported from the deployment. The fork review of 2026-10-19 (B6) found that the settings
+  page's "Restore Default Settings" and a fresh install give 2 tuners, but the server's reset (`POST
+  /api/hdhr-settings`) saved 1. Any number was accepted as the tuner count, so 0, -1 or 1.5 could be saved and
+  reported to Plex as the device's `TunerCount`.
+- **Cause:** the reset route wrote a hand-written `{ tunerCount: 1, autoDiscoveryEnabled: true }` instead of the
+  schema's defaults, and `HdhrSettingsSchema.tunerCount` was a plain `z.number()`.
+- **Fix:**
+  - `hdhrSettingsApi.ts` resets to `HdhrSettingsSchema.parse({})`, so the reset and the page's defaults can't drift.
+  - `tunerCount` is `z.number().int().min(1)` (`settingsSchemas.ts`), so `PUT /api/hdhr-settings` answers 400 for 0,
+    a negative or a fraction. The OpenAPI spec now says `integer`, `minimum: 1`; the generated web client is
+    unchanged.
+  - The settings page checks `min: 1` on the field ("Tuner Count must be >= 1") instead of waiting for the 400.
+  - A settings file saved before this can hold such a value, and a value the file schema refuses makes the server
+    start on defaults for every setting. `SettingsDB.ts` reads an old one as a whole number of at least 1 (0 or
+    -3 → 1, 2.5 → 2).
+  - Tests: `hdhrSettingsApi.test.ts`, `SettingsDB.test.ts`, `HdhrSettingsPage.test.tsx`.
+- **Upstream:** not sent; upstream `main` has the same code.
+
 ### A new scan interval takes effect when it's saved (2026-10-19)
 
 - **What you saw:** a new **Rescan Interval (hours)** under Settings > Scanner saved, but scans kept the old timing

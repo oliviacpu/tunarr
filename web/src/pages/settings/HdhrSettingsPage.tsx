@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@/helpers/apiError.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
@@ -65,6 +66,15 @@ export default function HdhrSettingsPage() {
         queryKey: getApiHdhrSettingsQueryKey(),
       });
     },
+    onError: (error) => {
+      const message = getApiErrorMessage(error);
+      snackbar.enqueueSnackbar(
+        message !== undefined
+          ? t`Could not save settings. ${message}`
+          : t`Could not save settings`,
+        { variant: 'error' },
+      );
+    },
   });
 
   const updateHdhrSettings: SubmitHandler<HdhrSettings> = (
@@ -112,6 +122,8 @@ export default function HdhrSettingsPage() {
         control={control}
         name="tunerCount"
         prettyFieldName={t`Tuner Count`}
+        // The server refuses fewer than 1 tuner
+        rules={{ min: 1 }}
         TextFieldProps={{
           id: 'tuner-count',
           label: t`Tuner Count`,
