@@ -19,7 +19,11 @@ vi.mock('./useSuspendedStore.ts', () => ({
 const hour = 3_600_000;
 const day = dayjs('2026-10-20').startOf('day');
 
-function preview(durations: number[], start = day) {
+function preview(
+  durations: number[],
+  start = day,
+  savedDurationHours?: number,
+) {
   let offset = 0;
   fixture.programs = durations.map((hours, index) => {
     const program: UIChannelProgramWithOffset = {
@@ -32,7 +36,11 @@ function preview(durations: number[], start = day) {
     offset += program.duration;
     return program;
   });
-  fixture.channel = { startTime: +start, duration: offset };
+  fixture.channel = {
+    startTime: +start,
+    duration:
+      savedDurationHours === undefined ? offset : savedDurationHours * hour,
+  };
   return renderHook(() => useGetProgramsForDayFunc('channel')).result.current(
     day,
   );
@@ -110,4 +118,42 @@ describe('calendar cycle timestamps', () => {
     expect(programs[0]?.howFarIntoDay).toBe(12 * hour);
     expect(programs[0]?.duration).toBe(12 * hour);
   });
+
+  test('uses an appended unsaved program in the cycle length instead of the saved duration', () => {
+    const programs = preview([7, 1], day, 7);
+    expect(
+      programs.map(({ actualStartTime }) => +actualStartTime - +day),
+    ).toEqual([0, 7, 8, 15, 16, 23].map((hours) => hours * hour));
+    expect(
+      new Set(programs.map(({ actualStartTime }) => +actualStartTime)).size,
+    ).toBe(programs.length);
+  });
+
+  test.each([
+    { name: 'appended', durations: [7, 1], elapsedHours: 9, firstDuration: 6 },
+    { name: 'shortened', durations: [3, 1], elapsedHours: 5, firstDuration: 2 },
+  ])(
+    'uses the current $name list for the initial cycle phase',
+    ({ durations, elapsedHours, firstDuration }) => {
+      const programs = preview(
+        durations,
+        day.subtract(elapsedHours, 'hour'),
+        7,
+      );
+      expect(programs[0]?.actualStartTime.valueOf()).toBe(+day - hour);
+      expect(programs[0]?.program).toBe(fixture.programs[0]);
+      expect(programs[0]?.duration).toBe(firstDuration * hour);
+      expect(programs[1]?.howFarIntoDay).toBe(firstDuration * hour);
+      expect(
+        programs.reduce((total, { duration }) => total + duration, 0),
+      ).toBe(24 * hour);
+    },
+  );
+
+  test.each([{ durations: [] }, { durations: [0] }])(
+    'an empty or zero-length current cycle returns no preview: $durations',
+    ({ durations }) => {
+      expect(preview(durations, day, 7)).toEqual([]);
+    },
+  );
 });

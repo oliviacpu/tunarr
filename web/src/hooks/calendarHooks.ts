@@ -67,9 +67,17 @@ export function useGetProgramsForDayFunc(channelId: string) {
     () => programList.map((p) => p.startTimeOffset),
     [programList],
   );
+  const cycleDuration = useMemo(
+    () =>
+      programList.reduce((duration, program) => duration + program.duration, 0),
+    [programList],
+  );
 
   return useCallback(
     (day: dayjs.Dayjs) => {
+      if (cycleDuration <= 0) {
+        return [];
+      }
       let start = day.startOf('day');
       if (
         channel.startTime > +start &&
@@ -77,7 +85,7 @@ export function useGetProgramsForDayFunc(channelId: string) {
       ) {
         start = dayjs(channel.startTime);
       }
-      const channelProgress = (+start - channel.startTime) % channel.duration;
+      const channelProgress = (+start - channel.startTime) % cycleDuration;
 
       const targetIndex =
         offsets.length === 1
@@ -121,7 +129,7 @@ export function useGetProgramsForDayFunc(channelId: string) {
 
         idx = (idx + 1) % programList.length;
         if (idx === 0) {
-          startOfCycle += channel.duration;
+          startOfCycle += cycleDuration;
         }
         t += duration;
         isFirst = false;
@@ -129,7 +137,7 @@ export function useGetProgramsForDayFunc(channelId: string) {
 
       return calendarPrograms;
     },
-    [channel.duration, channel.startTime, offsets, programList],
+    [channel.startTime, cycleDuration, offsets, programList],
   );
 }
 
