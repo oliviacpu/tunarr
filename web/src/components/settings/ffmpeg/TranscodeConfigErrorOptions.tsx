@@ -6,36 +6,38 @@ import type { SelectOption } from '../../util/TypedController.tsx';
 import { SelectFormController } from '../../util/TypedController.tsx';
 import { useTranscodeConfigFormContext } from './useTranscodeConfigForm.ts';
 
-const supportedErrorScreens: SelectOption<TranscodeConfig['errorScreen']>[] = [
-  {
-    value: 'pic',
-    label: 'Default Generic Error Image',
-  },
-  { value: 'blank', label: 'Blank Screen' },
-  { value: 'static', label: 'Static' },
-  {
-    value: 'testsrc',
-    label: 'Test Pattern (color bars + timer)',
-  },
-  {
-    value: 'text',
-    label: 'Detailed error (requires ffmpeg with drawtext)',
-  },
-  {
-    value: 'kill',
-    label: 'Stop stream, show errors in logs',
-  },
-];
-
-const supportedErrorAudio: SelectOption<TranscodeConfig['errorScreenAudio']>[] =
-  [
-    { value: 'whitenoise', label: 'White Noise' },
-    { value: 'sine', label: 'Beep' },
-    { value: 'silent', label: 'No Audio' },
-  ];
-
 export const TranscodeConfigErrorOptions = () => {
   const { t } = useLingui();
+  const supportedErrorScreens: SelectOption<TranscodeConfig['errorScreen']>[] =
+    [
+      {
+        value: 'pic',
+        label: t`Default Generic Error Image`,
+      },
+      { value: 'blank', label: t`Blank Screen` },
+      { value: 'static', label: t`Static` },
+      {
+        value: 'testsrc',
+        label: t`Test Pattern (color bars + timer)`,
+      },
+      {
+        value: 'text',
+        label: t`Detailed error (requires ffmpeg with drawtext)`,
+      },
+      {
+        value: 'kill',
+        label: t`Stop stream, show errors in logs`,
+      },
+    ];
+
+  const supportedErrorAudio: SelectOption<
+    TranscodeConfig['errorScreenAudio']
+  >[] = [
+    { value: 'whitenoise', label: t`White Noise` },
+    { value: 'sine', label: t`Beep` },
+    { value: 'silent', label: t`No Audio` },
+  ];
+
   const { control } = useTranscodeConfigFormContext();
   return (
     <Grid container spacing={2}>

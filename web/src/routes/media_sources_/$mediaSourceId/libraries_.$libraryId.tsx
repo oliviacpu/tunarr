@@ -1,23 +1,23 @@
+import { orNotFound } from '@/helpers/routeLoaders.ts';
 import { PageHeader } from '@/components/base/PageHeader.tsx';
 import { Trans } from '@lingui/react/macro';
 import { Box, Stack } from '@mui/material';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { ProgramViewToggleButton } from '../../../components/base/ProgramViewToggleButton.tsx';
 import { LibraryProgramGrid } from '../../../components/library/LibraryProgramGrid.tsx';
 import { SearchInput } from '../../../components/search/SearchInput.tsx';
-import {
-  MediaSourceLibraryQueryOpts,
-  useMediaSourceLibrary,
-} from '../../../hooks/media-sources/mediaSourceLibraryHooks.ts';
+import { MediaSourceLibraryQueryOpts } from '../../../hooks/media-sources/mediaSourceLibraryHooks.ts';
 import { setSearchRequest } from '../../../store/programmingSelector/actions.ts';
 
 export const Route = createFileRoute(
   '/media_sources_/$mediaSourceId/libraries_/$libraryId',
 )({
+  gcTime: 0,
   component: MediaSourceBrowserPage,
   loader: async ({ context, params: { libraryId } }) => {
-    await context.queryClient.ensureQueryData(
-      MediaSourceLibraryQueryOpts(libraryId),
+    await orNotFound(
+      context.queryClient.fetchQuery(MediaSourceLibraryQueryOpts(libraryId)),
     );
     setSearchRequest(null);
   },
@@ -26,7 +26,10 @@ export const Route = createFileRoute(
 // eslint-disable-next-line react-refresh/only-export-components
 function MediaSourceBrowserPage() {
   const { libraryId } = Route.useParams();
-  const { data: library } = useMediaSourceLibrary(libraryId);
+  const { data: library } = useSuspenseQuery({
+    ...MediaSourceLibraryQueryOpts(libraryId),
+    refetchOnMount: false,
+  });
 
   return (
     <Box>

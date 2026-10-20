@@ -127,12 +127,10 @@ function CustomShowListItem({
 export function CustomShowProgrammingSelector({
   toggleOrSetSelectedProgramsDrawer,
 }: Props) {
-  const { data: customShows, isPending } = useCustomShows();
+  const { data: customShows } = useCustomShows();
   const viewType = useStore((state) => state.theme.programmingSelectorView);
   const [scrollParams, setScrollParams] = useState({ limit: 0, max: -1 });
   const queryClient = useQueryClient();
-
-  const isLoading = isPending;
 
   const { ref } = useIntersectionObserver({
     onChange: (_, entry) => {
@@ -180,14 +178,6 @@ export function CustomShowProgrammingSelector({
 
   return (
     <Box>
-      <LinearProgress
-        sx={{
-          visibility: isLoading ? 'visible' : 'hidden',
-          height: 10,
-          marginTop: 1,
-        }}
-      />
-
       <SelectedProgrammingActions
         toggleOrSetSelectedProgramsDrawer={toggleOrSetSelectedProgramsDrawer}
       />

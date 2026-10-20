@@ -69,7 +69,11 @@ describe('FillerListsPage delete', () => {
 
     const row = (await screen.findByText('Ad Breaks')).closest('tr');
     expect(row).not.toBeNull();
-    await user.click(within(row as HTMLElement).getByTestId('DeleteIcon'));
+    await user.click(
+      within(row as HTMLElement).getByRole('button', {
+        name: 'Delete Filler List "Ad Breaks"',
+      }),
+    );
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Delete Filler List "Ad Breaks"?');
@@ -90,7 +94,11 @@ describe('FillerListsPage delete', () => {
 
     const row = (await screen.findByText('Station IDs')).closest('tr');
     expect(row).not.toBeNull();
-    await user.click(within(row as HTMLElement).getByTestId('DeleteIcon'));
+    await user.click(
+      within(row as HTMLElement).getByRole('button', {
+        name: 'Delete Filler List "Station IDs"',
+      }),
+    );
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
