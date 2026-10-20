@@ -1,6 +1,11 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import { readFixtureIds } from './routes.ts';
+import { api } from '../fixture/api.ts';
+import type {
+  GetChannelsByNumberV2Response as Channel,
+  PutApiChannelsByIdData,
+} from '../../web/src/generated/types.gen.ts';
 
 // Edits to the subtitle preference table must mark the channel form dirty,
 // so Save enables (#2109).
@@ -42,7 +47,7 @@ const setFilter = async (page: Page, from: string, to: string) => {
   await englishRow(page)
     .getByRole('cell', { name: from, exact: true })
     .dblclick();
-  await page.getByRole('combobox').filter({ hasText: from }).click();
+  await page.getByRole('combobox').filter({ hasText: from }).press('ArrowDown');
   await page.getByRole('option', { name: to, exact: true }).click();
 };
 
@@ -96,4 +101,27 @@ test('edited preferences persist after save and reload', async ({ page }) => {
   await expect(
     reloaded.getByRole('cell', { name: 'Default', exact: true }),
   ).toBeVisible();
+});
+
+test('clearing the last subtitle preference persists without changing filler attachments', async ({
+  page,
+}) => {
+  const before = await api<Channel>('GET', `/channels/${channelId()}`);
+  await englishRow(page).getByRole('button').last().click();
+  await expect(englishRow(page)).toHaveCount(0);
+  await expect(saveButton(page)).toBeEnabled();
+  const request = page.waitForRequest(
+    (req) =>
+      req.method() === 'PUT' &&
+      new URL(req.url()).pathname === `/api/channels/${channelId()}`,
+  );
+  await save(page);
+  const sent = (await request).postDataJSON() as PutApiChannelsByIdData['body'];
+  expect(sent.subtitlePreferences).toEqual([]);
+  await openStreamingTab(page);
+  await expect(englishRow(page)).toHaveCount(0);
+  await expect(saveButton(page)).toBeDisabled();
+  const after = await api<Channel>('GET', `/channels/${channelId()}`);
+  expect(after.subtitlePreferences ?? []).toEqual([]);
+  expect(after.fillerCollections).toEqual(before.fillerCollections);
 });

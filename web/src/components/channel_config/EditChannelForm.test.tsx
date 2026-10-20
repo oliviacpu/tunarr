@@ -9,7 +9,7 @@ import {
   Outlet,
   useLocation,
 } from '@tanstack/react-router';
-import type { Channel } from '@tunarr/types';
+import type { Channel, SaveableChannel } from '@tunarr/types';
 import { SnackbarProvider } from 'notistack';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Sdk from '../../generated/sdk.gen.ts';
@@ -57,9 +57,24 @@ vi.mock('./ChannelFlexConfig.tsx', () => ({
 vi.mock('./ChannelEpgConfig.tsx', () => ({
   default: () => <p>Guide fields</p>,
 }));
-vi.mock('./ChannelTranscodingConfig.tsx', () => ({
-  default: () => <p>Streaming fields</p>,
-}));
+vi.mock('./ChannelTranscodingConfig.tsx', async () => {
+  const { useFormContext } = await import('react-hook-form');
+  return {
+    default: () => {
+      const { setValue } = useFormContext<SaveableChannel>();
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            setValue('subtitlePreferences', [], { shouldDirty: true })
+          }
+        >
+          Clear subtitle preferences
+        </button>
+      );
+    },
+  };
+});
 
 vi.mock('./ChannelWatermarkConfig.tsx', async () => {
   const { useFormContext } = await import('react-hook-form');
@@ -98,7 +113,7 @@ const channel: Channel = {
 
 const createdId = 'c0ffee00-0000-4000-8000-000000000002';
 
-function renderEditor(mode: 'edit' | 'new') {
+function renderEditor(mode: 'edit' | 'new', initialChannel: Channel = channel) {
   const rootRoute = createRootRoute();
   const editRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -106,7 +121,7 @@ function renderEditor(mode: 'edit' | 'new') {
     component: function EditRoute() {
       const { data: loadedChannel } = useSuspenseQuery({
         queryKey: ['test-channel'],
-        queryFn: async () => channel,
+        queryFn: async () => initialChannel,
         staleTime: Infinity,
       });
       const pathname = useLocation({ select: (location) => location.pathname });
@@ -139,7 +154,7 @@ function renderEditor(mode: 'edit' | 'new') {
   const newRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/channels/new',
-    component: () => <EditChannelForm channel={channel} isNew={true} />,
+    component: () => <EditChannelForm channel={initialChannel} isNew={true} />,
   });
   const programmingRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -172,7 +187,7 @@ function renderEditor(mode: 'edit' | 'new') {
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
-  queryClient.setQueryData(['test-channel'], channel);
+  queryClient.setQueryData(['test-channel'], initialChannel);
   const rendered = renderWithProviders(
     <SnackbarProvider>
       <RouterProvider router={router} />
@@ -196,6 +211,63 @@ beforeEach(() => {
 });
 
 describe('EditChannelForm, editing a channel', () => {
+  test('an unrelated edit omits saved filler and subtitle relations', async () => {
+    const { user } = renderEditor('edit', {
+      ...channel,
+      fillerCollections: [
+        {
+          id: '00000000-0000-4000-8000-000000000123',
+          weight: 100,
+          cooldownSeconds: 30,
+        },
+      ],
+      subtitlePreferences: [
+        {
+          langugeCode: 'eng',
+          priority: 0,
+          allowExternal: true,
+          allowImageBased: true,
+          filter: 'any',
+        },
+      ],
+    });
+    await user.type(await nameField(), ' Late');
+    await user.tab();
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+    expect(
+      mockUpdate.mock.calls[0]?.[0].body.fillerCollections,
+    ).toBeUndefined();
+    expect(
+      mockUpdate.mock.calls[0]?.[0].body.subtitlePreferences,
+    ).toBeUndefined();
+  });
+
+  test('clearing subtitles sends an explicit empty list and saves cleanly', async () => {
+    const { user } = renderEditor('edit', {
+      ...channel,
+      subtitlePreferences: [
+        {
+          langugeCode: 'eng',
+          priority: 0,
+          allowExternal: true,
+          allowImageBased: true,
+          filter: 'any',
+        },
+      ],
+    });
+    await nameField();
+    await user.click(screen.getByRole('tab', { name: 'Streaming' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Clear subtitle preferences' }),
+    );
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+    expect(mockUpdate.mock.calls[0]?.[0].body.subtitlePreferences).toEqual([]);
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+  });
+
   test('Save is disabled until one valid change, then saves it once', async () => {
     const { user } = renderEditor('edit');
     const name = await nameField();
@@ -411,6 +483,7 @@ describe('EditChannelForm, a new channel', () => {
     await waitFor(() => expect(mockCreate).toHaveBeenCalledOnce());
     expect(mockCreate.mock.calls[0]?.[0].body.channel).toMatchObject({
       name: 'Cartoons',
+      subtitlePreferences: [],
     });
     // An edit now would be lost when the page moves on
     expect(name).toBeDisabled();

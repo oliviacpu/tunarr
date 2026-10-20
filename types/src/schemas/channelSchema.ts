@@ -283,6 +283,7 @@ export const SaveableChannelSchema = ChannelSchema.omit({
     icon: StrictChannelIconSchema,
     watermark: StrictWatermarkSchema.optional(),
     audioTracks: StrictChannelAudioTracksSchema.optional(),
+    subtitlePreferences: z.array(SubtitlePreference).optional(),
   });
 
 // A missing startTime leaves the stored value unchanged. Server-computed

@@ -174,6 +174,185 @@ function createSaveableChannel(
   };
 }
 
+describe('optional channel relations', () => {
+  async function seedRelations(channelDb: IChannelDB, configId: string) {
+    const db = DBAccess.instance.db;
+    if (db === undefined) throw new Error('Test database is not initialized');
+    const fillerId = v4();
+    const replacementFillerId = v4();
+    await db
+      .insertInto('fillerShow')
+      .values([
+        { uuid: fillerId, name: 'Original filler' },
+        { uuid: replacementFillerId, name: 'Replacement filler' },
+      ])
+      .execute();
+    const data = createSaveableChannel(configId, {
+      onDemand: { enabled: true },
+      fillerCollections: [{ id: fillerId, weight: 100, cooldownSeconds: 30 }],
+      subtitlePreferences: [
+        {
+          langugeCode: 'eng',
+          priority: 0,
+          allowExternal: true,
+          allowImageBased: false,
+          filter: 'any',
+        },
+      ],
+    });
+    const created = await channelDb.saveChannel(data);
+    const id = created.channel.uuid;
+    const rows = async () => ({
+      fillers: await db
+        .selectFrom('channelFillerShow')
+        .selectAll()
+        .where('channelUuid', '=', id)
+        .execute(),
+      subtitles: await channelDb.getChannelSubtitlePreferences(id),
+    });
+    const {
+      fillerCollections: _fillers,
+      subtitlePreferences: _subtitles,
+      startTime: _start,
+      onDemand: _onDemand,
+      ...unrelated
+    } = data;
+    return { db, id, data, unrelated, rows, replacementFillerId };
+  }
+
+  test('omitted relations retain exact rows, start time and on-demand position', async ({
+    channelDb,
+    defaultTranscodeConfigId,
+  }) => {
+    const seeded = await seedRelations(channelDb, defaultTranscodeConfigId);
+    const before = await seeded.rows();
+    const lineup = await channelDb.loadLineup(seeded.id);
+    await channelDb.saveLineup(seeded.id, {
+      ...lineup,
+      onDemandConfig: { state: 'paused', cursor: 12345 },
+    });
+    const savedLineup = await channelDb.loadLineup(seeded.id);
+    await channelDb.updateChannel(seeded.id, {
+      ...seeded.unrelated,
+      name: 'Unrelated name edit',
+    });
+    expect(await seeded.rows()).toEqual(before);
+    expect((await channelDb.getChannel(seeded.id))?.startTime).toBe(
+      seeded.data.startTime,
+    );
+    expect((await channelDb.loadLineup(seeded.id)).onDemandConfig).toEqual(
+      savedLineup.onDemandConfig,
+    );
+  });
+
+  for (const field of ['fillerCollections', 'subtitlePreferences'] as const) {
+    test(`explicit empty ${field} clears only that relation`, async ({
+      channelDb,
+      defaultTranscodeConfigId,
+    }) => {
+      const seeded = await seedRelations(channelDb, defaultTranscodeConfigId);
+      const before = await seeded.rows();
+      await channelDb.updateChannel(seeded.id, {
+        ...seeded.unrelated,
+        [field]: [],
+      });
+      const after = await seeded.rows();
+      expect(
+        after[field === 'fillerCollections' ? 'fillers' : 'subtitles'],
+      ).toEqual([]);
+      expect(
+        after[field === 'fillerCollections' ? 'subtitles' : 'fillers'],
+      ).toEqual(
+        before[field === 'fillerCollections' ? 'subtitles' : 'fillers'],
+      );
+    });
+
+    test(`explicit ${field} replaces only that relation`, async ({
+      channelDb,
+      defaultTranscodeConfigId,
+    }) => {
+      const seeded = await seedRelations(channelDb, defaultTranscodeConfigId);
+      const before = await seeded.rows();
+      const replacement =
+        field === 'fillerCollections'
+          ? {
+              fillerCollections: [
+                {
+                  id: seeded.replacementFillerId,
+                  weight: 50,
+                  cooldownSeconds: 10,
+                },
+              ],
+            }
+          : {
+              subtitlePreferences: [
+                {
+                  langugeCode: 'spa',
+                  priority: 0,
+                  allowExternal: false,
+                  allowImageBased: true,
+                  filter: 'forced' as const,
+                },
+              ],
+            };
+      await channelDb.updateChannel(seeded.id, {
+        ...seeded.unrelated,
+        ...replacement,
+      });
+      const after = await seeded.rows();
+      if (field === 'fillerCollections') {
+        expect(after.fillers).toMatchObject([
+          {
+            fillerShowUuid: seeded.replacementFillerId,
+            weight: 50,
+            cooldown: 10,
+          },
+        ]);
+        expect(after.subtitles).toEqual(before.subtitles);
+      } else {
+        expect(after.subtitles).toMatchObject([
+          { languageCode: 'spa', filterType: 'forced' },
+        ]);
+        expect(after.fillers).toEqual(before.fillers);
+      }
+    });
+  }
+
+  test('a failed relation replacement rolls back all relation and channel changes', async ({
+    channelDb,
+    defaultTranscodeConfigId,
+  }) => {
+    const seeded = await seedRelations(channelDb, defaultTranscodeConfigId);
+    const before = await seeded.rows();
+    await expect(
+      channelDb.updateChannel(seeded.id, {
+        ...seeded.unrelated,
+        name: 'Must roll back',
+        fillerCollections: [{ id: v4(), weight: 1, cooldownSeconds: 0 }],
+        subtitlePreferences: [],
+      }),
+    ).rejects.toThrow();
+    expect(await seeded.rows()).toEqual(before);
+    expect((await channelDb.getChannel(seeded.id))?.name).toBe(
+      seeded.data.name,
+    );
+  });
+
+  test('creating an ordinary channel accepts explicit empty subtitle preferences', async ({
+    channelDb,
+    defaultTranscodeConfigId,
+  }) => {
+    const created = await channelDb.saveChannel(
+      createSaveableChannel(defaultTranscodeConfigId, {
+        subtitlePreferences: [],
+      }),
+    );
+    expect(
+      await channelDb.getChannelSubtitlePreferences(created.channel.uuid),
+    ).toEqual([]);
+  });
+});
+
 describe('ChannelDB', () => {
   describe('Channel CRUD Operations', () => {
     test('should create a new channel', async ({
