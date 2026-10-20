@@ -26,6 +26,69 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Live TV's `stream.m3u8` keeps 15 minutes of segments (2026-10-19, PR #96)
+
+- **What you saw:** nothing on screen yet. The cost grew with a session's age. `stream.m3u8` listed every segment since
+  the session started (`hls_list_size 0` with `append_list`). ffmpeg rewrote all of it after each segment, and each
+  program's ffmpeg read it back in when it started. `plans/hls-playlist-growth-2026-10-19.md` measured about 136 GB of
+  playlist rewrites in a day of 2 s segments, and about 585 MB per program's ffmpeg after 24 hours on jellyfin-ffmpeg
+  8.1.3, the image's. On FFmpeg 7.1.1 program starts slowed down quadratically: 8–11 s after 12 hours and 54–76 s after
+  24, past the 30–60 s Tunarr transcodes ahead. Upstream's Docker image runs 7.1.1, so upstream is affected worst.
+- **Cause:** `HlsOutputFormat` and `HlsDirectOutputFormat` wrote a constant `-hls_list_size 0`. The `hlsListSize` in
+  `HlsSession`'s options was never read.
+- **Fix:**
+  - `HlsSession.getHlsOptions` asks for 15 minutes of segments, `ceil(900 / segment seconds)`: 450 at 2 s, and 225 at
+    4 s and in HLS Direct v2 (`HlsPlaylistWindowSeconds` and `hlsPlaylistWindowSize` in `ffmpeg/builder/constants.ts`).
+    Both formats write the options' list size.
+  - A session that `TUNARR_SESSION_STALENESS_MS` keeps alive unread for more than 10 minutes gets a window of its
+    staleness plus 5 minutes instead, so ffmpeg never drops a segment the reader hasn't seen.
+  - `append_list` and `discont_start` stay. `delete_segments` stays off, so `HlsSession` still deletes segment files.
+  - Since #84 the playlist reader keeps the session's history by segment number. The served playlists count segments
+    and program changes from the session's start, as before.
+  - Unchanged: the WebVTT `subs.m3u8`, whose segment muxer already keeps 20 entries and has its own trimmer;
+    `hls_slower`, whose concat output lists a fixed 25 and deletes its own segments; and the troubleshooting stream, one
+    program, still 0.
+- **Tests:**
+  - `HlsOutputFormat.test.ts`, `HlsDirectOutputFormat.test.ts`, `BasePipelineBuilder.test.ts`: `-hls_list_size` comes
+    from the options and defaults to the window; `append_list` stays and `delete_segments` stays off. A concat
+    (`hls_slower`) build still writes its own 25.
+  - `HlsSession.test.ts`: the window for each mode, segment length and staleness, handed to each program's ffmpeg. A
+    45-minute simulated session whose file is ffmpeg's 450-entry window, across 83 programs (each a new ffmpeg) with
+    read-ahead bursts and short last segments, polled like a player while pruning runs. Every served playlist's
+    `MEDIA-SEQUENCE` is its first segment, both sequences only go forward, and each segment's discontinuity number and
+    program date-time are those of the whole session's playlist.
+  - `HlsAppendWindow.local.test.ts` (real ffmpeg, `pnpm test:local`, skipped without ffmpeg): three programs append to
+    one playlist with `-hls_list_size 5` and Tunarr's flags. The numbering continues across each restart,
+    `MEDIA-SEQUENCE` is the first listed segment, and there is no `DISCONTINUITY-SEQUENCE`. One tag precedes each later
+    program's first segment, none sits after the header, and a dropped entry's tag leaves with it. It passes on FFmpeg
+    9.0.2, and the same flags wrote identical playlists on the image's 8.1.3 and 7.1.1. It belongs in the real-binary
+    CI job (T28).
+  - 13 of the 17 new unit tests fail with `main`'s source. The others pin the flags that stay and `hls_slower`'s output.
+- **Measured** with stream-repro, `main` and this change side by side: 30 minutes, 2 s segments, eight clips of 15 to
+  50 s, `--rewind 15`, and the report's playlist poller, now `repro.mjs --poll-playlist`:
+
+  | | `main` | This change |
+  | --- | --- | --- |
+  | Capture | 914 segments, 55 program joins of one tag each, no findings | The same, joins at the same segments |
+  | Poller | 1,724 polls, 0 violations; `MEDIA-SEQUENCE` 0→894, discontinuity sequence 0→54 | 1,732 polls, 0 violations, the same ranges |
+  | Rewind 15 segments | Target found, no 404s | The same |
+  | `stream.m3u8` | 943 entries (134 KB) at minute 30 and growing | 450 entries (64 KB) from minute 15 on |
+  | Written to it, minutes 15–30 | 47 MB, more each minute | 30 MB, 2 MB a minute |
+  | ffmpeg peak RSS (9.0.2), median per 10 minutes | 130–133 MB | 130–132 MB |
+  | Program start to first listed segment, after minute 20 | 2.84 s | 2.83 s |
+  | Cold tune-in, "HLS session ready" (median of 5, interleaved) | 313 ms | 314 ms |
+
+  - FFmpeg 9.0.2 keeps about 170 B per entry, so memory can't show here. The report's benchmark at the window's size,
+    in the fork's image: jellyfin-ffmpeg 8.1.3 peaks at 54 MB (48 MB with an empty playlist, 585 MB at 24 hours
+    before). FFmpeg 7.1.1 peaks at 70 MB (65 MB; 601 MB before), and its first segment comes 10–20 ms after an empty
+    playlist's (54–76 s at 24 hours before). Each rewrite stays at 65 KB.
+  - Also fixed in stream-repro: with `--rewind`, a long capture's analysis (one ffprobe per segment, about 2.5 minutes
+    for 914) blocked the event loop past the server's keep-alive, and the rewind's first request failed with `fetch
+    failed`. It now rewinds before the analysis.
+- **Upstream:** not sent. Upstream's playlist reader parses the whole file on every request, so the flag alone would
+  break its served playlists (report section 3(a)). The ffmpeg side is worth an upstream issue once this has run for a
+  while.
+
 ### The FFmpeg settings page shows while ffmpeg is probed or broken; failed saves say so (2026-10-19)
 
 - **What you saw:** the FFmpeg settings page stayed blank while `/api/ffmpeg-info` was loading or after it failed, so

@@ -1,3 +1,7 @@
+import {
+  HlsPlaylistWindowSeconds,
+  hlsPlaylistWindowSize,
+} from '@/ffmpeg/builder/constants.js';
 import { FrameState } from '@/ffmpeg/builder/state/FrameState.js';
 import { FrameDataLocation, FrameSize } from '@/ffmpeg/builder/types.js';
 import { describe, expect, test } from 'vitest';
@@ -137,6 +141,75 @@ describe('HlsOutputFormat', () => {
         keyintMin: '48',
         forceKeyFrames: 'expr:gte(t,n_forced*2)',
       });
+    });
+  });
+  // The playlist used to list every segment of the session
+  // (plans/hls-playlist-growth-2026-10-19.md)
+  describe('playlist window', () => {
+    function playlistOptions(segmentSeconds?: number, listSize?: number) {
+      const state = new FrameState({
+        isAnamorphic: false,
+        scaledSize: FrameSize.FHD,
+        paddedSize: FrameSize.FHD,
+        frameDataLocation: FrameDataLocation.Software,
+      });
+      const opts = new HlsOutputFormat(
+        state,
+        24,
+        '/some/path/stream.m3u8',
+        '/some/path/data%06d.ts',
+        '/stream/channels/test-uuid/hls/',
+        false,
+        false,
+        false,
+        segmentSeconds,
+        listSize,
+      ).options();
+      const after = (flag: string) => opts[opts.indexOf(flag) + 1];
+      return {
+        listSize: after('-hls_list_size'),
+        flags: after('-hls_flags')?.split('+'),
+      };
+    }
+
+    test('lists as many segments as the options say', () => {
+      expect(playlistOptions(2, 37).listSize).toBe('37');
+      // What TroubleshootService asks for: every segment of its one program
+      expect(playlistOptions(4, 0).listSize).toBe('0');
+    });
+
+    test('lists 15 minutes of segments by default', () => {
+      expect(playlistOptions().listSize).toBe('225');
+      expect(playlistOptions(2).listSize).toBe('450');
+    });
+
+    test('keeps appending to the playlist and leaves segment files alone', () => {
+      const { flags } = playlistOptions(2, 450);
+      expect(flags).toContain('append_list');
+      expect(flags).toContain('discont_start');
+      // HlsSession deletes segment files once no viewer can ask for them
+      expect(flags).not.toContain('delete_segments');
+    });
+
+    test('rounds a window of odd-length segments up', () => {
+      expect(HlsPlaylistWindowSeconds).toBe(900);
+      expect(hlsPlaylistWindowSize(1)).toBe(900);
+      expect(hlsPlaylistWindowSize(2)).toBe(450);
+      expect(hlsPlaylistWindowSize(4)).toBe(225);
+      expect(hlsPlaylistWindowSize(7)).toBe(129);
+      expect(hlsPlaylistWindowSize(10)).toBe(90);
+    });
+
+    // A session nobody asks for lives as long as its staleness. The window
+    // outlasts that, so ffmpeg never drops a segment the reader hasn't seen.
+    test('outlasts a staleness raised past 10 minutes', () => {
+      // The default staleness, two minutes
+      expect(hlsPlaylistWindowSize(2, 120_000)).toBe(450);
+      expect(hlsPlaylistWindowSize(2, 10 * 60_000)).toBe(450);
+      // 30 minutes, plus 5
+      expect(hlsPlaylistWindowSize(2, 30 * 60_000)).toBe(1050);
+      expect(hlsPlaylistWindowSize(4, 30 * 60_000)).toBe(525);
+      expect(hlsPlaylistWindowSize(2, NaN)).toBe(450);
     });
   });
 });

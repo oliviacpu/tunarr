@@ -60,6 +60,17 @@ Its copied video can only be cut at source keyframes, so actual segment lengths
 vary and a 20-segment window does not necessarily span 80 seconds. Alternate HLS
 also retains its fixed four-second segment configuration.
 
+The playlist FFmpeg writes in the transcode directory (`stream.m3u8`) holds the
+last 15 minutes of segments: 225 at the default four seconds, 450 at two. HLS
+Direct v2 keeps 225, which can span longer when its copied segments do. When
+`TUNARR_SESSION_STALENESS_MS` keeps a session nobody watches alive for longer
+than 10 minutes, the playlist holds that long plus 5 minutes instead. Tunarr
+keeps the session's history itself, so the playlists it serves count segments and
+program changes from the start of the session as before. Until 2026-10-19 the file
+listed every segment since the session started, and FFmpeg rewrote all of it after
+each segment and read it back in at each program change, which grew costlier the
+longer a channel played.
+
 ### FFmpeg Transcode Path
 
 Configure the path where FFmpeg writes HLS segments for a channel's stream. For instance, if running the standalone Linux binary, Tunarr can write transcoded segments to RAM by setting this option to `/dev/shm`. 

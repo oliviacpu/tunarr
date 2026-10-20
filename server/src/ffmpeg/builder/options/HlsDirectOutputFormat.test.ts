@@ -45,4 +45,39 @@ describe('HlsDirectOutputFormat', () => {
     expect(later).not.toContain('-mpegts_flags');
     expect(makeFormat(true).options()).not.toContain('-hls_segment_options');
   });
+  // The playlist used to list every segment of the session
+  // (plans/hls-playlist-growth-2026-10-19.md)
+  describe('playlist window', () => {
+    function playlistOptions(listSize?: number) {
+      const opts = new HlsDirectOutputFormat(
+        '/some/path/stream.m3u8',
+        '/some/path/data%06d.ts',
+        '/stream/channels/test-uuid/hls_direct_v2/',
+        false,
+        false,
+        listSize,
+      ).options();
+      const after = (flag: string) => opts[opts.indexOf(flag) + 1];
+      return {
+        listSize: after('-hls_list_size'),
+        flags: after('-hls_flags')?.split('+'),
+      };
+    }
+
+    test('lists as many segments as the options say', () => {
+      expect(playlistOptions(37).listSize).toBe('37');
+      expect(playlistOptions(0).listSize).toBe('0');
+    });
+
+    test('lists 15 minutes of its 4 s segments by default', () => {
+      expect(playlistOptions().listSize).toBe('225');
+    });
+
+    test('keeps appending to the playlist and leaves segment files alone', () => {
+      const { flags } = playlistOptions(225);
+      expect(flags).toContain('append_list');
+      expect(flags).toContain('discont_start');
+      expect(flags).not.toContain('delete_segments');
+    });
+  });
 });

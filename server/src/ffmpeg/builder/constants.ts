@@ -3,7 +3,7 @@ import type { Nullable } from '../../types/util.ts';
 
 export type HlsOptions = {
   hlsTime: number; // Duration of each clip in seconds,
-  hlsListSize: number; // Number of clips to have in the list
+  hlsListSize: number; // Segments ffmpeg's media playlist lists, 0 for all of them
   hlsDeleteThreshold: number;
   segmentBaseDirectory: string;
   streamBasePath: string;
@@ -15,9 +15,47 @@ export type HlsOptions = {
   appendSegments: boolean;
 };
 
+// How much of an HLS session ffmpeg's media playlist (stream.m3u8) lists.
+// With append_list, ffmpeg rewrites the whole list after every segment and
+// reads it back in when each program's ffmpeg starts. A list that kept every
+// segment (-hls_list_size 0) grew for the session's whole life: about 136 GB
+// of rewrites in a day of 2 s segments, about 585 MB per ffmpeg after 24
+// hours on FFmpeg 8.x, and program starts that slow down quadratically on
+// FFmpeg 7.1.x (54-76 s after 24 hours). See
+// plans/hls-playlist-growth-2026-10-19.md. Tunarr runs at most about 90 s
+// ahead of what viewers watch and ends a session nobody has asked for in two
+// minutes, so it reads the file far more often than every 15 minutes.
+// MediaPlaylistReader keeps the session's history itself.
+export const HlsPlaylistWindowSeconds = 15 * 60;
+
+// A session nobody asks for lives until its staleness runs out, then until
+// the cleanup task's next run a minute later, while ffmpeg keeps up to 90 s
+// ahead. With a staleness raised past 10 minutes
+// (TUNARR_SESSION_STALENESS_MS), the window covers that much plus this, so
+// ffmpeg never drops a segment the reader hasn't seen.
+const UnreadSessionMarginSeconds = 5 * 60;
+
+/**
+ * The -hls_list_size that keeps HlsPlaylistWindowSeconds of segments of
+ * `segmentSeconds` each (450 at 2 s, 225 at 4 s), or more when the session's
+ * `stalenessMs` lets it go unread for longer
+ */
+export function hlsPlaylistWindowSize(
+  segmentSeconds: number,
+  stalenessMs?: number,
+) {
+  const unreadSeconds =
+    stalenessMs !== undefined && Number.isFinite(stalenessMs)
+      ? stalenessMs / 1000 + UnreadSessionMarginSeconds
+      : 0;
+  return Math.ceil(
+    Math.max(HlsPlaylistWindowSeconds, unreadSeconds) / segmentSeconds,
+  );
+}
+
 export const defaultHlsOptions: DeepRequired<HlsOptions> = {
   hlsTime: 4,
-  hlsListSize: 3,
+  hlsListSize: hlsPlaylistWindowSize(4),
   hlsDeleteThreshold: 3,
   segmentBaseDirectory: 'streams', // Relative to cwd
   streamBasePath: 'stream_%v',

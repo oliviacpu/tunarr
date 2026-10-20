@@ -63,14 +63,15 @@ type PlaylistHead = { bodyStart: number; bytes: Buffer };
  * in-memory list of segments. Two cases:
  *
  * - While the file starts at the session's first segment
- *   (#EXT-X-MEDIA-SEQUENCE 0, always so with hls_list_size 0), ffmpeg leaves
+ *   (#EXT-X-MEDIA-SEQUENCE 0: HlsSession's first 15 minutes), ffmpeg leaves
  *   the entries it already wrote unchanged, and only its header (before the
  *   first #EXTINF line) changes, when a new process starts. So this keeps the
  *   parsed entries and the body bytes they came from, and on each read checks
  *   that the body still starts and continues with those bytes before parsing
  *   the rest. When it doesn't (the file shrank or was rewritten), it parses
  *   the whole file again.
- * - Once ffmpeg drops its oldest entries (a bounded hls_list_size), the file
+ * - Once ffmpeg drops its oldest entries (HlsSession bounds hls_list_size to
+ *   15 minutes of segments), the file
  *   is a window: #EXT-X-MEDIA-SEQUENCE is its first entry's number, ffmpeg
  *   writes no #EXT-X-DISCONTINUITY-SEQUENCE, and a dropped entry's
  *   discontinuity tag leaves the file with it. Parsing the window again would

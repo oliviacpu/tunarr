@@ -1,3 +1,4 @@
+import { hlsPlaylistWindowSize } from '../constants.ts';
 import { OutputOption } from './OutputOption.ts';
 
 /**
@@ -15,6 +16,10 @@ export class HlsDirectOutputFormat extends OutputOption {
     private baseStreamUrl: string,
     private isFirstTranscode: boolean,
     private emitEndList: boolean = false,
+    // The newest segments the playlist lists (see HlsOutputFormat)
+    private listSize: number = hlsPlaylistWindowSize(
+      HlsDirectOutputFormat.SegmentSeconds,
+    ),
   ) {
     super();
   }
@@ -26,7 +31,7 @@ export class HlsDirectOutputFormat extends OutputOption {
       '-hls_time',
       `${HlsDirectOutputFormat.SegmentSeconds}`,
       '-hls_list_size',
-      '0',
+      `${this.listSize}`,
       '-segment_list_flags',
       '+live',
       '-hls_segment_type',
@@ -40,6 +45,7 @@ export class HlsDirectOutputFormat extends OutputOption {
       'playlist.m3u8',
     ];
 
+    // No delete_segments, as in HlsOutputFormat
     const flags = ['program_date_time', 'append_list', 'independent_segments'];
     if (!this.emitEndList) flags.push('omit_endlist');
     if (!this.isFirstTranscode) flags.push('discont_start');

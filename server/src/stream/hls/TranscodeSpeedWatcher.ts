@@ -5,9 +5,9 @@ import { SegmentNameRegex } from './BaseHlsSession.ts';
 import type { TranscodeSpeedEvent } from './TranscodeSpeedMonitor.ts';
 import { TranscodeSpeedMonitor } from './TranscodeSpeedMonitor.ts';
 
-// The playlist lists every segment of the session, so only its end is read.
-// A segment entry is about 130 bytes; 64 KiB holds the last ~500, minutes
-// more than one poll ever adds.
+// The playlist lists up to 15 minutes of segments (450 at 2 s), so only its
+// end is read. A segment entry is about 130 bytes; 64 KiB holds the last
+// ~500, minutes more than one poll ever adds.
 const PlaylistTailBytes = 64 * 1024;
 
 // Segment times come from file mtimes, so the poll interval only delays

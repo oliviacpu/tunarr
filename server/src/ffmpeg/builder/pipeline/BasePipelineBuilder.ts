@@ -1008,6 +1008,7 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
                 HardwareAccelerationMode.Qsv,
               this.ffmpegState.emitEndList,
               this.ffmpegState.outputFormat.hlsOptions.hlsTime,
+              this.ffmpegState.outputFormat.hlsOptions.hlsListSize,
             ),
           );
           if (this.subtitleInputSource?.method === SubtitleMethods.Convert) {
@@ -1048,6 +1049,7 @@ export abstract class BasePipelineBuilder implements PipelineBuilder {
               this.ffmpegState.hlsBaseStreamUrl,
               isFirst,
               this.ffmpegState.emitEndList,
+              this.ffmpegState.outputFormat.hlsOptions.hlsListSize,
             ),
           );
           if (this.subtitleInputSource?.method === SubtitleMethods.Convert) {

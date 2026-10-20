@@ -32,6 +32,7 @@ const { values: opt } = parseArgs({
     'keep-server': { type: 'boolean', default: false },
     rewind: { type: 'string' },
     'rewind-polls': { type: 'string', default: '8' },
+    'poll-playlist': { type: 'boolean', default: false },
     reanalyze: { type: 'string' },
     'flex-first': { type: 'string' },
     'offline-picture': { type: 'string' },
@@ -102,6 +103,7 @@ if (opt['thread-count'] !== undefined && !/^\d+$/.test(opt['thread-count'])) thr
 const subsStart = Number(opt['subs-start']);
 const isTsCapture = opt.mode === 'mpegts' || opt.mode === 'hdhr';
 if (!(subsStart >= 0)) throw new Error('--subs-start takes seconds');
+if (opt['poll-playlist'] && isTsCapture) throw new Error('--poll-playlist needs an HLS mode');
 const log = (...a) => console.error('[repro]', ...a);
 
 // ---------- helpers ----------
@@ -815,8 +817,91 @@ async function rewindHls(base, channelId, seen) {
   return { n, from, target, targetStatus, segment404s, polls: results };
 }
 
+// --poll-playlist: checks every media playlist the HLS capture fetches for what a player relies on across a
+// session. #EXT-X-MEDIA-SEQUENCE equals the first listed segment and never goes back. The discontinuity sequence
+// never goes back. A segment's discontinuity number (DISCONTINUITY-SEQUENCE plus the tags before it) and its
+// PROGRAM-DATE-TIME never change between polls. Each listed segment starts where the one before it ends (PDT +
+// EXTINF, within 2 ms). It also times each request and counts the entries of the stream.m3u8 ffmpeg writes.
+function playlistChecker(t0) {
+  let seen = new Map();
+  let last = null;
+  const violations = [];
+  const requestMs = [];
+  const range = { mediaSequence: [Infinity, -Infinity], discontinuitySequence: [Infinity, -Infinity] };
+  const entriesByMinute = [];
+  const widen = (r, v) => { r[0] = Math.min(r[0], v); r[1] = Math.max(r[1], v); };
+  const pdtMs = (s) => Date.parse(s.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  // The newest session directory's stream.m3u8, when the server keeps it in the database directory
+  const fileEntries = () => {
+    try {
+      const root = path.join(dbDir, 'streams');
+      const dirs = fs.readdirSync(root).filter((d) => d.startsWith('stream_')).map((d) => path.join(root, d, 'stream.m3u8'));
+      const file = dirs.filter((f) => fs.existsSync(f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+      return file === undefined ? undefined : fs.readFileSync(file, 'utf8').split('\n#EXTINF:').length - 1;
+    } catch {
+      return undefined;
+    }
+  };
+  return {
+    // A restarted session numbers its segments afresh
+    reset: () => { seen = new Map(); last = null; },
+    check(text, ms) {
+      const at = Date.now() - t0;
+      requestMs.push(ms);
+      const v = [];
+      let mseq = null, dseq = 0, disc = 0, dur = null, pdt = null;
+      const segs = [];
+      for (const line of text.split('\n').map((l) => l.trim())) {
+        if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) mseq = Number(line.slice(22));
+        else if (line.startsWith('#EXT-X-DISCONTINUITY-SEQUENCE:')) dseq = Number(line.slice(30));
+        else if (line === '#EXT-X-DISCONTINUITY') disc++;
+        else if (line.startsWith('#EXTINF:')) dur = parseFloat(line.slice(8));
+        else if (line.startsWith('#EXT-X-PROGRAM-DATE-TIME:')) pdt = pdtMs(line.slice(25));
+        else if (line && !line.startsWith('#')) {
+          segs.push({ n: segmentNumber(new URL(line, 'http://x/').toString()), disc: dseq + disc, pdt, dur });
+          // Each segment carries its own; one without is not checked
+          pdt = dur = null;
+        }
+      }
+      if (segs.length && mseq !== segs[0].n) v.push(`media sequence ${mseq} != first segment ${segs[0].n}`);
+      if (last && mseq < last.mseq) v.push(`media sequence went back ${last.mseq} -> ${mseq}`);
+      if (last && dseq < last.dseq) v.push(`discontinuity sequence went back ${last.dseq} -> ${dseq}`);
+      segs.forEach((s, i) => {
+        const before = seen.get(s.n);
+        if (before && before.disc !== s.disc) v.push(`segment ${s.n} discontinuity number ${before.disc} -> ${s.disc}`);
+        if (before?.pdt != null && s.pdt !== null && Math.abs(before.pdt - s.pdt) > 0.5) v.push(`segment ${s.n} PDT changed by ${s.pdt - before.pdt} ms`);
+        seen.set(s.n, s);
+        const p = segs[i - 1];
+        if (p && s.n !== p.n + 1) v.push(`segment ${s.n} follows ${p.n}`);
+        else if (p && p.pdt !== null && p.dur !== null && s.pdt !== null && Math.abs(p.pdt + p.dur * 1000 - s.pdt) > 2) v.push(`segment ${s.n} starts ${(s.pdt - p.pdt - p.dur * 1000).toFixed(1)} ms off its predecessor's end`);
+      });
+      if (mseq !== null) widen(range.mediaSequence, mseq);
+      widen(range.discontinuitySequence, dseq);
+      last = { mseq, dseq };
+      for (const message of v) violations.push({ atMs: at, message });
+      const minute = Math.floor(at / 60_000);
+      const entries = fileEntries();
+      if (entries !== undefined) entriesByMinute[minute] = Math.max(entriesByMinute[minute] ?? 0, entries);
+    },
+    summary() {
+      const sorted = [...requestMs].sort((a, b) => a - b);
+      const q = (f) => sorted.length ? +sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))].toFixed(2) : null;
+      return {
+        polls: requestMs.length,
+        violations: violations.length,
+        firstViolations: violations.slice(0, 50),
+        ...range,
+        requestMs: { median: q(0.5), p95: q(0.95), max: q(1) },
+        // The most entries ffmpeg's stream.m3u8 listed in each minute of the capture
+        fileEntriesByMinute: Array.from(entriesByMinute, (e) => e ?? null),
+      };
+    },
+  };
+}
+
 async function captureHls(base, channelId, onTick) {
   const t0 = Date.now();
+  const checker = opt['poll-playlist'] ? playlistChecker(t0) : undefined;
   await until(
     'hls session',
     async () => (await fetch(`${base}/stream/channels/${channelId}.m3u8?mode=${opt.mode}`)).ok,
@@ -833,13 +918,17 @@ async function captureHls(base, channelId, onTick) {
   const end = Date.now() + (seconds + 90) * 1000;
   while (captured < seconds && Date.now() < end) {
     onTick?.(t0);
+    const requestStart = performance.now();
     const res = await fetch(listUrl);
     if (res.status === 404) {
       // The session died (Tunarr logs why in tunarr.log). Restart it and keep capturing.
       sessionRestarts.push(new Date().toISOString());
+      checker?.reset();
       await fetch(`${base}/stream/channels/${channelId}.m3u8?mode=${opt.mode}`);
     } else if (res.ok) {
-      const lines = (await res.text()).split('\n').map((l) => l.trim());
+      const text = await res.text();
+      checker?.check(text, performance.now() - requestStart);
+      const lines = text.split('\n').map((l) => l.trim());
       let disc = false;
       let dur = 0;
       for (const line of lines) {
@@ -863,7 +952,7 @@ async function captureHls(base, channelId, onTick) {
     }
     await sleep(1000);
   }
-  return { t0, pieces, sessionRestarts, seen };
+  return { t0, pieces, sessionRestarts, seen, playlistContinuity: checker?.summary() };
 }
 
 // ---------- analysis ----------
@@ -1172,15 +1261,27 @@ try {
   report.capturePieces = cap.pieces.map((p) => ({ ...p, file: path.relative(out, p.file) }));
   report.sessionRestarts = cap.sessionRestarts ?? [];
 
-  log('analyzing');
-  Object.assign(report, analyze(cap.pieces));
-  for (const at of report.sessionRestarts) report.findings.push({ kind: 'hls_session_restarted', at });
-  if (opt.mode === 'hdhr') report.captions = captionReport(cap.pieces[0].file);
-
+  // Right after the capture, while the session is live. The analysis blocks the event loop (one ffprobe per segment)
+  // for minutes on a long capture, longer than the server keeps an idle connection open, and a request made after it
+  // went out on a socket the server had closed ("fetch failed").
+  let rewind;
   if (opt.rewind !== undefined) {
     if (isTsCapture) throw new Error('--rewind needs an HLS mode');
     log(`rewinding ${opt.rewind} segments`);
-    report.rewind = await rewindHls(server.base, channel.channelId, cap.seen);
+    rewind = await rewindHls(server.base, channel.channelId, cap.seen);
+  }
+
+  log('analyzing');
+  Object.assign(report, analyze(cap.pieces));
+  for (const at of report.sessionRestarts) report.findings.push({ kind: 'hls_session_restarted', at });
+  if (opt['poll-playlist']) {
+    report.playlistContinuity = cap.playlistContinuity;
+    for (const v of cap.playlistContinuity.firstViolations.slice(0, 20)) report.findings.push({ kind: 'playlist_continuity', ...v });
+  }
+  if (opt.mode === 'hdhr') report.captions = captionReport(cap.pieces[0].file);
+
+  if (rewind !== undefined) {
+    report.rewind = rewind;
     if (report.rewind.targetStatus === 404) {
       report.findings.push({ kind: 'rewind_target_missing', segment: report.rewind.target });
     }
