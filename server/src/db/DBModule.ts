@@ -1,3 +1,4 @@
+import { LibraryUsageService } from './LibraryUsageService.ts';
 import { ChannelDB } from '@/db/ChannelDB.js';
 import { ProgramDB } from '@/db/ProgramDB.js';
 import type { IChannelDB } from '@/db/interfaces/IChannelDB.js';
@@ -69,6 +70,8 @@ const DBModule = new ContainerModule(({ bind }) => {
   bind(KEYS.ChannelReadOpsRepository)
     .to(ChannelReadOpsRepository)
     .inSingletonScope();
+
+  bind(LibraryUsageService).toSelf().inSingletonScope();
 
   // Main DB facades
   bind<IProgramDB>(KEYS.ProgramDB).to(ProgramDB).inSingletonScope();
