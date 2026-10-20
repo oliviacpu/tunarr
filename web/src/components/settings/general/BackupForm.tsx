@@ -34,6 +34,10 @@ export const BackupForm = ({
     control,
     name: `backup.configurations.${configurationIndex}.outputs`,
   });
+  const enabled = useWatch({
+    control,
+    name: `backup.configurations.${configurationIndex}.enabled`,
+  });
 
   function handleArchiveFormatUpdate(ev: SelectChangeEvent) {
     if (ev.target.value === 'zip' || ev.target.value === 'tar') {
@@ -163,6 +167,7 @@ export const BackupForm = ({
           intervalLabel={t`Backup interval`}
           id={`backup-${configurationIndex}-schedule`}
           editableCron
+          cronRequired={enabled && outputs.length > 0}
         />
       </Grid>
     </>

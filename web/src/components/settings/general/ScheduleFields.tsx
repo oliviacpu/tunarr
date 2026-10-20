@@ -61,6 +61,7 @@ type ScheduleFieldsProps = {
   /** Prefix for the inputs' ids. */
   id: string;
   editableCron?: boolean;
+  cronRequired?: boolean;
 };
 
 /**
@@ -74,6 +75,7 @@ export function ScheduleFields({
   intervalLabel,
   id,
   editableCron = false,
+  cronRequired = true,
 }: ScheduleFieldsProps) {
   const { t } = useLingui();
   const { control, setValue, trigger } =
@@ -82,7 +84,7 @@ export function ScheduleFields({
 
   useEffect(() => {
     if (editableCron) void trigger(name);
-  }, [editableCron, name, schedule?.type, trigger]);
+  }, [cronRequired, editableCron, name, schedule?.type, trigger]);
 
   if (schedule === undefined) {
     return null;
@@ -125,7 +127,7 @@ export function ScheduleFields({
         <Controller
           control={control}
           name={`${name}.cron`}
-          rules={{ required: t`Enter a cron expression.` }}
+          rules={{ required: cronRequired && t`Enter a cron expression.` }}
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
