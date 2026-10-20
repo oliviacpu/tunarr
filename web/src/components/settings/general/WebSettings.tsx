@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import DarkModeButton from '@/components/settings/DarkModeButton.tsx';
 import useStore from '@/store/index.ts';
 import { setTimeFormat, setUiLocale } from '@/store/settings/actions.ts';
@@ -38,6 +39,7 @@ export const WebSettings = () => {
         <Typography variant="h2">
           <Trans>Web Settings</Trans>
         </Typography>
+        <AppliesWhen setting="browserPreferences" />
         <Typography variant="subtitle2">
           <Trans>Saved in this browser as you change them.</Trans>
         </Typography>

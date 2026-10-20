@@ -65,9 +65,7 @@ test.each([false, true])(
       screen.queryByText('No channels reference these items.'),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('1 · Old channel')).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Delete' }),
-    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
     resolve({
       data: {
         list: [{ id: 'fresh', name: 'Fresh channel', number: 7, slots: [2] }],

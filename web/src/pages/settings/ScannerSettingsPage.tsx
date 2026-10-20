@@ -1,3 +1,4 @@
+import { AppliesWhen } from '@/components/settings/AppliesWhen.tsx';
 import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { NumericFormControllerText } from '@/components/util/TypedController.tsx';
 import {
@@ -89,6 +90,7 @@ export const ScannerSettingsPage = ({
       isSubmitting={saveMutation.isPending}
     >
       <Stack gap={1}>
+        <AppliesWhen setting="scanner" />
         <NumericFormControllerText
           control={form.control}
           name="rescanIntervalHours"

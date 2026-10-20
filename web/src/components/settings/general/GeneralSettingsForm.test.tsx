@@ -126,6 +126,33 @@ describe('GeneralSettingsForm', () => {
     mockPutSystemSettings.mockResolvedValue({ data: systemSettings });
   });
 
+  test('category timing distinguishes live explicit levels from returning to inheritance', async () => {
+    const { user } = await renderForm({
+      ...systemSettings,
+      logging: {
+        ...systemSettings.logging,
+        categoryLogLevel: { streaming: 'debug', scheduling: 'trace' },
+      },
+    });
+    expect(screen.getAllByLabelText('Category log level: Live')).toHaveLength(
+      2,
+    );
+    await user.click(
+      screen.getByRole('combobox', { name: 'Streaming log level' }),
+    );
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'Inherit default',
+      }),
+    );
+    expect(
+      screen.getByLabelText('Inherited category log level: Restart required'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Category log level: Live')).toHaveLength(
+      1,
+    );
+  });
+
   test('a cleared retention count blocks Save until a valid number is restored', async () => {
     const { user, saveButton } = await renderForm();
     const retention = screen.getByLabelText('Rolled files to keep');
