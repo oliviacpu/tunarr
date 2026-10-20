@@ -1,11 +1,55 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import { SERVER_URL } from '../fixture/env.ts';
+import {
+  save as saveSettings,
+  saveButton,
+  savedSettings,
+} from './settingsForm.ts';
+
+// The General page. Every save sends the whole of the system settings, so the
+// tests here run one at a time: run alongside each other, one save would put
+// back what another just changed.
+
+test.describe.configure({ mode: 'serial' });
+
+const SETTINGS_URL = `${SERVER_URL}/api/system/settings`;
+
+type SystemSettings = {
+  logging: { categoryLogLevel?: Record<string, string | null> };
+};
+
+test('a changed category log level saves, survives a reload and moves nothing else', async ({
+  page,
+}) => {
+  const before = await savedSettings<SystemSettings>(page, SETTINGS_URL);
+  await page.goto('/web/settings/general');
+  const streaming = page.getByRole('combobox', {
+    name: 'Streaming log level',
+  });
+  await expect(streaming).toHaveText('Inherit default');
+  await expect(saveButton(page)).toBeDisabled();
+
+  await streaming.click();
+  await page.getByRole('option', { name: 'debug', exact: true }).click();
+  await saveSettings(page, SETTINGS_URL);
+
+  await page.reload();
+  await expect(streaming).toHaveText('debug');
+  expect(await savedSettings(page, SETTINGS_URL)).toEqual({
+    ...before,
+    logging: {
+      ...before.logging,
+      categoryLogLevel: {
+        ...before.logging.categoryLogLevel,
+        streaming: 'debug',
+      },
+    },
+  });
+});
 
 // Each log roll option must save and survive a reload on its own.
 // Unticking the schedule used to fail validation silently, so Save did nothing.
-
-test.describe.configure({ mode: 'serial' });
 
 const FIFTY_MB = 50 * 1024 * 1024;
 
