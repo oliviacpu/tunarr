@@ -30,7 +30,7 @@ import { invalidateTaggedQueries } from '../../helpers/queryUtil.ts';
 import { useStoreBackedTableSettings } from '../../hooks/useTableSettings.ts';
 import type { Nullable } from '../../types/util.ts';
 
-export default function MediaSourceSettingsPage() {
+export default function MediaSourcesPage() {
   const { t } = useLingui();
   const { data: servers } = useMediaSources();
   const tableState = useStoreBackedTableSettings('MediaSourceSettings');

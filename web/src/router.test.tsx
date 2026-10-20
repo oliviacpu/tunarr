@@ -74,6 +74,16 @@ describe('router', () => {
     },
   );
 
+  test('/settings/sources redirects to the media sources page', async () => {
+    const router = createTestRouter('/settings/sources');
+
+    await router.load();
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe('/media_sources'),
+    );
+  });
+
   test('an address no route matches renders the not-found page', async () => {
     const router = createTestRouter('/does-not-exist');
 

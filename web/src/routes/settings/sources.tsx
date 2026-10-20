@@ -1,18 +1,8 @@
-import { TableSkeleton } from '@/components/base/TableSkeleton.tsx';
-import MediaSourceSettingsPage from '@/pages/settings/MediaSourceSettingsPage';
-import { createFileRoute } from '@tanstack/react-router';
-import {
-  getApiMediaSourcesOptions,
-  getApiSettingsMediaSourceOptions,
-} from '../../generated/@tanstack/react-query.gen.ts';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
+// Media sources used to render here too. Keep old links working.
 export const Route = createFileRoute('/settings/sources')({
-  loader: ({ context }) => {
-    return Promise.all([
-      context.queryClient.ensureQueryData(getApiMediaSourcesOptions()),
-      context.queryClient.ensureQueryData(getApiSettingsMediaSourceOptions()),
-    ]);
+  beforeLoad: () => {
+    throw redirect({ to: '/media_sources', replace: true });
   },
-  component: MediaSourceSettingsPage,
-  pendingComponent: () => <TableSkeleton columns={6} />,
 });

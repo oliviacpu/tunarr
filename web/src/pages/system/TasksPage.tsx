@@ -35,7 +35,7 @@ import {
 import { useDayjs } from '../../hooks/useDayjs.ts';
 import type { Nullable } from '../../types/util.ts';
 
-export default function TaskSettingsPage() {
+export default function TasksPage() {
   const { t } = useLingui();
   const snackbar = useSnackbar();
   const theme = useTheme();

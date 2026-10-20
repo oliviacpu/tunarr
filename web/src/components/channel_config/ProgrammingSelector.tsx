@@ -133,7 +133,7 @@ export const ProgrammingSelector = ({
           <Trans>
             This media source has no enabled or scanned libraries. Enable
             libraries for this source on the{' '}
-            <RouterLink to="/settings/sources">Media Sources</RouterLink> page
+            <RouterLink to="/media_sources">Media Sources</RouterLink> page
             or manually trigger scans on the{' '}
             <RouterLink to="/library">Library</RouterLink> page.
           </Trans>
