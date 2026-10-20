@@ -25,11 +25,17 @@ import { Route as SystemTasksRouteImport } from './routes/system/tasks';
 import { Route as SystemLogsRouteImport } from './routes/system/logs';
 import { Route as SystemDebugRouteImport } from './routes/system/debug';
 import { Route as SettingsXmltvRouteImport } from './routes/settings/xmltv';
+import { Route as SettingsTunerRouteImport } from './routes/settings/tuner';
 import { Route as SettingsScannerRouteImport } from './routes/settings/scanner';
+import { Route as SettingsPlaybackRouteImport } from './routes/settings/playback';
+import { Route as SettingsLibraryRouteImport } from './routes/settings/library';
 import { Route as SettingsHdhrRouteImport } from './routes/settings/hdhr';
+import { Route as SettingsGuideRouteImport } from './routes/settings/guide';
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general';
 import { Route as SettingsFfmpegRouteImport } from './routes/settings/ffmpeg';
 import { Route as SettingsFeaturesRouteImport } from './routes/settings/features';
+import { Route as SettingsExperimentalRouteImport } from './routes/settings/experimental';
+import { Route as SettingsCaptionsAudioRouteImport } from './routes/settings/captions-audio';
 import { Route as LibraryFillersRouteImport } from './routes/library/fillers';
 import { Route as LibraryCustomShowsRouteImport } from './routes/library/custom-shows';
 import { Route as ChannelsTestRouteImport } from './routes/channels_/test';
@@ -39,6 +45,8 @@ import { Route as Media_sourcesMediaSourceIdIndexRouteImport } from './routes/me
 import { Route as LibraryTrashIndexRouteImport } from './routes/library/trash_/index';
 import { Route as LibrarySmart_collectionsIndexRouteImport } from './routes/library/smart_collections/index';
 import { Route as ChannelsChannelIdIndexRouteImport } from './routes/channels_/$channelId/index';
+import { Route as SettingsPlaybackNewRouteImport } from './routes/settings/playback_/new';
+import { Route as SettingsPlaybackConfigIdRouteImport } from './routes/settings/playback_/$configId';
 import { Route as SettingsFfmpegNewRouteImport } from './routes/settings/ffmpeg_/new';
 import { Route as SettingsFfmpegConfigIdRouteImport } from './routes/settings/ffmpeg_/$configId';
 import { Route as MediaProgramTypeProgramIdRouteImport } from './routes/media_/$programType.$programId';
@@ -149,14 +157,34 @@ const SettingsXmltvRoute = SettingsXmltvRouteImport.update({
   path: '/xmltv',
   getParentRoute: () => SettingsRoute,
 } as any);
+const SettingsTunerRoute = SettingsTunerRouteImport.update({
+  id: '/tuner',
+  path: '/tuner',
+  getParentRoute: () => SettingsRoute,
+} as any);
 const SettingsScannerRoute = SettingsScannerRouteImport.update({
   id: '/scanner',
   path: '/scanner',
   getParentRoute: () => SettingsRoute,
 } as any);
+const SettingsPlaybackRoute = SettingsPlaybackRouteImport.update({
+  id: '/playback',
+  path: '/playback',
+  getParentRoute: () => SettingsRoute,
+} as any);
+const SettingsLibraryRoute = SettingsLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => SettingsRoute,
+} as any);
 const SettingsHdhrRoute = SettingsHdhrRouteImport.update({
   id: '/hdhr',
   path: '/hdhr',
+  getParentRoute: () => SettingsRoute,
+} as any);
+const SettingsGuideRoute = SettingsGuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
   getParentRoute: () => SettingsRoute,
 } as any);
 const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
@@ -172,6 +200,16 @@ const SettingsFfmpegRoute = SettingsFfmpegRouteImport.update({
 const SettingsFeaturesRoute = SettingsFeaturesRouteImport.update({
   id: '/features',
   path: '/features',
+  getParentRoute: () => SettingsRoute,
+} as any);
+const SettingsExperimentalRoute = SettingsExperimentalRouteImport.update({
+  id: '/experimental',
+  path: '/experimental',
+  getParentRoute: () => SettingsRoute,
+} as any);
+const SettingsCaptionsAudioRoute = SettingsCaptionsAudioRouteImport.update({
+  id: '/captions-audio',
+  path: '/captions-audio',
   getParentRoute: () => SettingsRoute,
 } as any);
 const LibraryFillersRoute = LibraryFillersRouteImport.update({
@@ -221,6 +259,17 @@ const ChannelsChannelIdIndexRoute = ChannelsChannelIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ChannelsChannelIdRouteRoute,
 } as any);
+const SettingsPlaybackNewRoute = SettingsPlaybackNewRouteImport.update({
+  id: '/playback_/new',
+  path: '/playback/new',
+  getParentRoute: () => SettingsRoute,
+} as any);
+const SettingsPlaybackConfigIdRoute =
+  SettingsPlaybackConfigIdRouteImport.update({
+    id: '/playback_/$configId',
+    path: '/playback/$configId',
+    getParentRoute: () => SettingsRoute,
+  } as any);
 const SettingsFfmpegNewRoute = SettingsFfmpegNewRouteImport.update({
   id: '/ffmpeg_/new',
   path: '/ffmpeg/new',
@@ -403,11 +452,17 @@ export interface FileRoutesByFullPath {
   '/channels/test': typeof ChannelsTestRoute;
   '/library/custom-shows': typeof LibraryCustomShowsRoute;
   '/library/fillers': typeof LibraryFillersRoute;
+  '/settings/captions-audio': typeof SettingsCaptionsAudioRoute;
+  '/settings/experimental': typeof SettingsExperimentalRoute;
   '/settings/features': typeof SettingsFeaturesRoute;
   '/settings/ffmpeg': typeof SettingsFfmpegRoute;
   '/settings/general': typeof SettingsGeneralRoute;
+  '/settings/guide': typeof SettingsGuideRoute;
   '/settings/hdhr': typeof SettingsHdhrRoute;
+  '/settings/library': typeof SettingsLibraryRoute;
+  '/settings/playback': typeof SettingsPlaybackRoute;
   '/settings/scanner': typeof SettingsScannerRoute;
+  '/settings/tuner': typeof SettingsTunerRoute;
   '/settings/xmltv': typeof SettingsXmltvRoute;
   '/system/debug': typeof SystemDebugRoute;
   '/system/logs': typeof SystemLogsRoute;
@@ -428,6 +483,8 @@ export interface FileRoutesByFullPath {
   '/media/$programType/$programId': typeof MediaProgramTypeProgramIdRoute;
   '/settings/ffmpeg/$configId': typeof SettingsFfmpegConfigIdRoute;
   '/settings/ffmpeg/new': typeof SettingsFfmpegNewRoute;
+  '/settings/playback/$configId': typeof SettingsPlaybackConfigIdRoute;
+  '/settings/playback/new': typeof SettingsPlaybackNewRoute;
   '/channels/$channelId/': typeof ChannelsChannelIdIndexRoute;
   '/library/smart_collections': typeof LibrarySmart_collectionsIndexRoute;
   '/library/trash': typeof LibraryTrashIndexRoute;
@@ -461,11 +518,17 @@ export interface FileRoutesByTo {
   '/channels/test': typeof ChannelsTestRoute;
   '/library/custom-shows': typeof LibraryCustomShowsRoute;
   '/library/fillers': typeof LibraryFillersRoute;
+  '/settings/captions-audio': typeof SettingsCaptionsAudioRoute;
+  '/settings/experimental': typeof SettingsExperimentalRoute;
   '/settings/features': typeof SettingsFeaturesRoute;
   '/settings/ffmpeg': typeof SettingsFfmpegRoute;
   '/settings/general': typeof SettingsGeneralRoute;
+  '/settings/guide': typeof SettingsGuideRoute;
   '/settings/hdhr': typeof SettingsHdhrRoute;
+  '/settings/library': typeof SettingsLibraryRoute;
+  '/settings/playback': typeof SettingsPlaybackRoute;
   '/settings/scanner': typeof SettingsScannerRoute;
+  '/settings/tuner': typeof SettingsTunerRoute;
   '/settings/xmltv': typeof SettingsXmltvRoute;
   '/system/debug': typeof SystemDebugRoute;
   '/system/logs': typeof SystemLogsRoute;
@@ -483,6 +546,8 @@ export interface FileRoutesByTo {
   '/media/$programType/$programId': typeof MediaProgramTypeProgramIdRoute;
   '/settings/ffmpeg/$configId': typeof SettingsFfmpegConfigIdRoute;
   '/settings/ffmpeg/new': typeof SettingsFfmpegNewRoute;
+  '/settings/playback/$configId': typeof SettingsPlaybackConfigIdRoute;
+  '/settings/playback/new': typeof SettingsPlaybackNewRoute;
   '/channels/$channelId': typeof ChannelsChannelIdIndexRoute;
   '/library/smart_collections': typeof LibrarySmart_collectionsIndexRoute;
   '/library/trash': typeof LibraryTrashIndexRoute;
@@ -520,11 +585,17 @@ export interface FileRoutesById {
   '/channels_/test': typeof ChannelsTestRoute;
   '/library/custom-shows': typeof LibraryCustomShowsRoute;
   '/library/fillers': typeof LibraryFillersRoute;
+  '/settings/captions-audio': typeof SettingsCaptionsAudioRoute;
+  '/settings/experimental': typeof SettingsExperimentalRoute;
   '/settings/features': typeof SettingsFeaturesRoute;
   '/settings/ffmpeg': typeof SettingsFfmpegRoute;
   '/settings/general': typeof SettingsGeneralRoute;
+  '/settings/guide': typeof SettingsGuideRoute;
   '/settings/hdhr': typeof SettingsHdhrRoute;
+  '/settings/library': typeof SettingsLibraryRoute;
+  '/settings/playback': typeof SettingsPlaybackRoute;
   '/settings/scanner': typeof SettingsScannerRoute;
+  '/settings/tuner': typeof SettingsTunerRoute;
   '/settings/xmltv': typeof SettingsXmltvRoute;
   '/system/debug': typeof SystemDebugRoute;
   '/system/logs': typeof SystemLogsRoute;
@@ -545,6 +616,8 @@ export interface FileRoutesById {
   '/media_/$programType/$programId': typeof MediaProgramTypeProgramIdRoute;
   '/settings/ffmpeg_/$configId': typeof SettingsFfmpegConfigIdRoute;
   '/settings/ffmpeg_/new': typeof SettingsFfmpegNewRoute;
+  '/settings/playback_/$configId': typeof SettingsPlaybackConfigIdRoute;
+  '/settings/playback_/new': typeof SettingsPlaybackNewRoute;
   '/channels_/$channelId/': typeof ChannelsChannelIdIndexRoute;
   '/library/smart_collections/': typeof LibrarySmart_collectionsIndexRoute;
   '/library/trash_/': typeof LibraryTrashIndexRoute;
@@ -583,11 +656,17 @@ export interface FileRouteTypes {
     | '/channels/test'
     | '/library/custom-shows'
     | '/library/fillers'
+    | '/settings/captions-audio'
+    | '/settings/experimental'
     | '/settings/features'
     | '/settings/ffmpeg'
     | '/settings/general'
+    | '/settings/guide'
     | '/settings/hdhr'
+    | '/settings/library'
+    | '/settings/playback'
     | '/settings/scanner'
+    | '/settings/tuner'
     | '/settings/xmltv'
     | '/system/debug'
     | '/system/logs'
@@ -608,6 +687,8 @@ export interface FileRouteTypes {
     | '/media/$programType/$programId'
     | '/settings/ffmpeg/$configId'
     | '/settings/ffmpeg/new'
+    | '/settings/playback/$configId'
+    | '/settings/playback/new'
     | '/channels/$channelId/'
     | '/library/smart_collections'
     | '/library/trash'
@@ -641,11 +722,17 @@ export interface FileRouteTypes {
     | '/channels/test'
     | '/library/custom-shows'
     | '/library/fillers'
+    | '/settings/captions-audio'
+    | '/settings/experimental'
     | '/settings/features'
     | '/settings/ffmpeg'
     | '/settings/general'
+    | '/settings/guide'
     | '/settings/hdhr'
+    | '/settings/library'
+    | '/settings/playback'
     | '/settings/scanner'
+    | '/settings/tuner'
     | '/settings/xmltv'
     | '/system/debug'
     | '/system/logs'
@@ -663,6 +750,8 @@ export interface FileRouteTypes {
     | '/media/$programType/$programId'
     | '/settings/ffmpeg/$configId'
     | '/settings/ffmpeg/new'
+    | '/settings/playback/$configId'
+    | '/settings/playback/new'
     | '/channels/$channelId'
     | '/library/smart_collections'
     | '/library/trash'
@@ -699,11 +788,17 @@ export interface FileRouteTypes {
     | '/channels_/test'
     | '/library/custom-shows'
     | '/library/fillers'
+    | '/settings/captions-audio'
+    | '/settings/experimental'
     | '/settings/features'
     | '/settings/ffmpeg'
     | '/settings/general'
+    | '/settings/guide'
     | '/settings/hdhr'
+    | '/settings/library'
+    | '/settings/playback'
     | '/settings/scanner'
+    | '/settings/tuner'
     | '/settings/xmltv'
     | '/system/debug'
     | '/system/logs'
@@ -724,6 +819,8 @@ export interface FileRouteTypes {
     | '/media_/$programType/$programId'
     | '/settings/ffmpeg_/$configId'
     | '/settings/ffmpeg_/new'
+    | '/settings/playback_/$configId'
+    | '/settings/playback_/new'
     | '/channels_/$channelId/'
     | '/library/smart_collections/'
     | '/library/trash_/'
@@ -890,6 +987,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsXmltvRouteImport;
       parentRoute: typeof SettingsRoute;
     };
+    '/settings/tuner': {
+      id: '/settings/tuner';
+      path: '/tuner';
+      fullPath: '/settings/tuner';
+      preLoaderRoute: typeof SettingsTunerRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
     '/settings/scanner': {
       id: '/settings/scanner';
       path: '/scanner';
@@ -897,11 +1001,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsScannerRouteImport;
       parentRoute: typeof SettingsRoute;
     };
+    '/settings/playback': {
+      id: '/settings/playback';
+      path: '/playback';
+      fullPath: '/settings/playback';
+      preLoaderRoute: typeof SettingsPlaybackRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
+    '/settings/library': {
+      id: '/settings/library';
+      path: '/library';
+      fullPath: '/settings/library';
+      preLoaderRoute: typeof SettingsLibraryRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
     '/settings/hdhr': {
       id: '/settings/hdhr';
       path: '/hdhr';
       fullPath: '/settings/hdhr';
       preLoaderRoute: typeof SettingsHdhrRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
+    '/settings/guide': {
+      id: '/settings/guide';
+      path: '/guide';
+      fullPath: '/settings/guide';
+      preLoaderRoute: typeof SettingsGuideRouteImport;
       parentRoute: typeof SettingsRoute;
     };
     '/settings/general': {
@@ -923,6 +1048,20 @@ declare module '@tanstack/react-router' {
       path: '/features';
       fullPath: '/settings/features';
       preLoaderRoute: typeof SettingsFeaturesRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
+    '/settings/experimental': {
+      id: '/settings/experimental';
+      path: '/experimental';
+      fullPath: '/settings/experimental';
+      preLoaderRoute: typeof SettingsExperimentalRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
+    '/settings/captions-audio': {
+      id: '/settings/captions-audio';
+      path: '/captions-audio';
+      fullPath: '/settings/captions-audio';
+      preLoaderRoute: typeof SettingsCaptionsAudioRouteImport;
       parentRoute: typeof SettingsRoute;
     };
     '/library/fillers': {
@@ -987,6 +1126,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/channels/$channelId/';
       preLoaderRoute: typeof ChannelsChannelIdIndexRouteImport;
       parentRoute: typeof ChannelsChannelIdRouteRoute;
+    };
+    '/settings/playback_/new': {
+      id: '/settings/playback_/new';
+      path: '/playback/new';
+      fullPath: '/settings/playback/new';
+      preLoaderRoute: typeof SettingsPlaybackNewRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
+    '/settings/playback_/$configId': {
+      id: '/settings/playback_/$configId';
+      path: '/playback/$configId';
+      fullPath: '/settings/playback/$configId';
+      preLoaderRoute: typeof SettingsPlaybackConfigIdRouteImport;
+      parentRoute: typeof SettingsRoute;
     };
     '/settings/ffmpeg_/new': {
       id: '/settings/ffmpeg_/new';
@@ -1195,27 +1348,43 @@ declare module '@tanstack/react-router' {
 }
 
 interface SettingsRouteChildren {
+  SettingsCaptionsAudioRoute: typeof SettingsCaptionsAudioRoute;
+  SettingsExperimentalRoute: typeof SettingsExperimentalRoute;
   SettingsFeaturesRoute: typeof SettingsFeaturesRoute;
   SettingsFfmpegRoute: typeof SettingsFfmpegRoute;
   SettingsGeneralRoute: typeof SettingsGeneralRoute;
+  SettingsGuideRoute: typeof SettingsGuideRoute;
   SettingsHdhrRoute: typeof SettingsHdhrRoute;
+  SettingsLibraryRoute: typeof SettingsLibraryRoute;
+  SettingsPlaybackRoute: typeof SettingsPlaybackRoute;
   SettingsScannerRoute: typeof SettingsScannerRoute;
+  SettingsTunerRoute: typeof SettingsTunerRoute;
   SettingsXmltvRoute: typeof SettingsXmltvRoute;
   SettingsIndexRoute: typeof SettingsIndexRoute;
   SettingsFfmpegConfigIdRoute: typeof SettingsFfmpegConfigIdRoute;
   SettingsFfmpegNewRoute: typeof SettingsFfmpegNewRoute;
+  SettingsPlaybackConfigIdRoute: typeof SettingsPlaybackConfigIdRoute;
+  SettingsPlaybackNewRoute: typeof SettingsPlaybackNewRoute;
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsCaptionsAudioRoute: SettingsCaptionsAudioRoute,
+  SettingsExperimentalRoute: SettingsExperimentalRoute,
   SettingsFeaturesRoute: SettingsFeaturesRoute,
   SettingsFfmpegRoute: SettingsFfmpegRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
+  SettingsGuideRoute: SettingsGuideRoute,
   SettingsHdhrRoute: SettingsHdhrRoute,
+  SettingsLibraryRoute: SettingsLibraryRoute,
+  SettingsPlaybackRoute: SettingsPlaybackRoute,
   SettingsScannerRoute: SettingsScannerRoute,
+  SettingsTunerRoute: SettingsTunerRoute,
   SettingsXmltvRoute: SettingsXmltvRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   SettingsFfmpegConfigIdRoute: SettingsFfmpegConfigIdRoute,
   SettingsFfmpegNewRoute: SettingsFfmpegNewRoute,
+  SettingsPlaybackConfigIdRoute: SettingsPlaybackConfigIdRoute,
+  SettingsPlaybackNewRoute: SettingsPlaybackNewRoute,
 };
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(

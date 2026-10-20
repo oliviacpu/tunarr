@@ -2,9 +2,17 @@ import { SettingsForm } from '@/components/form/SettingsForm.tsx';
 import { SwitchFormController } from '@/components/util/TypedController.tsx';
 import { useSettingsMutation } from '@/hooks/useSettingsMutation.ts';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, Chip, Stack, Typography } from '@mui/material';
-import { useSuspenseQuery } from '@tanstack/react-query';
-import { isEqual } from 'lodash-es';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Skeleton,
+  Stack,
+  Typography,
+} from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { isEqual, pick } from 'lodash-es';
 import { useEffect } from 'react';
 import type { Control, SubmitHandler } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
@@ -39,7 +47,7 @@ function FlagSection({
 
   return (
     <Box>
-      <Typography variant="h2" gutterBottom>
+      <Typography variant="h3" gutterBottom>
         {title}
       </Typography>
       <Stack spacing={2}>
@@ -72,18 +80,92 @@ function FlagSection({
   );
 }
 
-export default function FeaturesSettingsPage() {
-  const { t } = useLingui();
-  // The route's loader fetches the flags, and the router's pending and error
-  // components cover loading and failure
-  const { data } = useSuspenseQuery(getApiSystemFeatureFlagsOptions());
+type FlagGroup = 'playback' | 'captions-audio' | 'experimental';
 
+const flagGroups: Partial<Record<FlagKey, FlagGroup>> = {
+  tonemapEnabled: 'playback',
+  disableVulkan: 'playback',
+  disableVaapiPad: 'playback',
+  webvttSidecarEnabled: 'captions-audio',
+};
+
+export default function FeaturesSettingsPage({
+  group = 'experimental',
+  onDirtyChange,
+}: {
+  group?: FlagGroup;
+  onDirtyChange?: (isDirty: boolean) => void;
+}) {
+  const { t } = useLingui();
+  const query = useQuery(getApiSystemFeatureFlagsOptions());
+  if (query.isPending)
+    return (
+      <Skeleton
+        variant="rounded"
+        height={80}
+        aria-label={t`Loading optional features`}
+      />
+    );
+  if (query.data === undefined)
+    return (
+      <Alert
+        severity="warning"
+        action={
+          <Button onClick={() => void query.refetch()}>
+            <Trans>Try again</Trans>
+          </Button>
+        }
+      >
+        <Trans>Optional feature settings could not be loaded.</Trans>
+      </Alert>
+    );
+  return (
+    <>
+      {query.isError && (
+        <Alert
+          severity="warning"
+          action={
+            <Button onClick={() => void query.refetch()}>
+              <Trans>Try again</Trans>
+            </Button>
+          }
+        >
+          <Trans>
+            Optional feature settings could not be refreshed. Your unsaved edits
+            are kept.
+          </Trans>
+        </Alert>
+      )}
+      <FeatureFlagsForm
+        data={query.data}
+        group={group}
+        onDirtyChange={onDirtyChange}
+      />
+    </>
+  );
+}
+
+function FeatureFlagsForm({
+  data,
+  group,
+  onDirtyChange,
+}: {
+  data: GetApiSystemFeatureFlagsResponse;
+  group: FlagGroup;
+  onDirtyChange?: (isDirty: boolean) => void;
+}) {
+  const { t } = useLingui();
   const form = useForm<FlagFormValues>({ defaultValues: data.flags });
   const {
     control,
     reset,
-    formState: { defaultValues },
+    formState: { defaultValues, isDirty },
   } = form;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // Load the saved flags into the form. The reload after a save brings back
   // what the form already compares against, so it is skipped: resetting again
@@ -103,27 +185,41 @@ export default function FeaturesSettingsPage() {
   });
 
   const save: SubmitHandler<FlagFormValues> = (flags) => {
-    saveMutation.mutate({ body: flags });
+    saveMutation.mutate({
+      body: pick(
+        flags,
+        metadata.map((meta) => meta.key),
+      ),
+    });
   };
 
-  const metadata = data.metadata.filter((meta) => isFlagMeta(meta, data.flags));
+  const metadata = data.metadata.filter(
+    (meta): meta is FlagMeta =>
+      isFlagMeta(meta, data.flags) &&
+      (flagGroups[meta.key] ?? 'experimental') === group,
+  );
   const experimental = metadata.filter((m) => m.category === 'experimental');
   const escapeHatches = metadata.filter((m) => m.category === 'escape-hatch');
 
   return (
     <SettingsForm
       form={form}
+      guardNavigation={onDirtyChange === undefined}
       onSubmit={save}
       isSubmitting={saveMutation.isPending}
     >
       <Stack spacing={4}>
         <FlagSection
-          title={t`Experimental Features`}
+          title={
+            group === 'experimental'
+              ? t`Experimental features`
+              : t`Optional features`
+          }
           flags={experimental}
           control={control}
         />
         <FlagSection
-          title={t`Escape Hatches`}
+          title={t`Escape hatches`}
           flags={escapeHatches}
           control={control}
         />

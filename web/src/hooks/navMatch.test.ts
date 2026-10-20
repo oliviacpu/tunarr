@@ -25,6 +25,7 @@ describe('navItemForPath', () => {
   });
 
   test.each([
+    ['/settings/playback/new', '/settings'],
     ['/', '/guide'],
     ['/search', '/library'],
     ['/media/movie/id', '/library'],

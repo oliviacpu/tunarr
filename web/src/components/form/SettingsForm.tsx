@@ -39,6 +39,8 @@ export type SettingsFormProps<
   onRestoreDefaults?: () => void;
   /** Routes the unsaved-changes guard lets the user leave to without asking. */
   exceptTargetPaths?: ExceptTargetPaths;
+  /** Disable only when a containing page owns the combined unsaved guard. */
+  guardNavigation?: boolean;
   /**
    * The form creates something that isn't saved yet, such as a new channel.
    * Save is then enabled whenever the values are valid, changed or not, so
@@ -94,6 +96,7 @@ export function SettingsForm<
   isSubmitting = false,
   onRestoreDefaults,
   exceptTargetPaths,
+  guardNavigation = true,
   isNew = false,
   hasOtherChanges = false,
   onDiscardChanges,
@@ -115,6 +118,7 @@ export function SettingsForm<
           isSubmitting={isSubmitting}
           onRestoreDefaults={onRestoreDefaults}
           exceptTargetPaths={exceptTargetPaths}
+          guardNavigation={guardNavigation}
           isNew={isNew}
           hasOtherChanges={hasOtherChanges}
           onDiscardChanges={onDiscardChanges}
@@ -166,6 +170,7 @@ type SaveBarProps<
   isSubmitting: boolean;
   onRestoreDefaults?: () => void;
   exceptTargetPaths?: ExceptTargetPaths;
+  guardNavigation: boolean;
   isNew: boolean;
   hasOtherChanges: boolean;
   onDiscardChanges?: () => void;
@@ -184,6 +189,7 @@ function SaveBar<
   isSubmitting,
   onRestoreDefaults,
   exceptTargetPaths,
+  guardNavigation,
   isNew,
   hasOtherChanges,
   onDiscardChanges,
@@ -202,11 +208,13 @@ function SaveBar<
 
   return (
     <>
-      <UnsavedNavigationAlert
-        isDirty={isDirty}
-        exceptTargetPaths={exceptTargetPaths}
-        onProceed={onDiscardChanges}
-      />
+      {guardNavigation && (
+        <UnsavedNavigationAlert
+          isDirty={isDirty}
+          exceptTargetPaths={exceptTargetPaths}
+          onProceed={onDiscardChanges}
+        />
+      )}
       <Stack
         direction="row"
         useFlexGap

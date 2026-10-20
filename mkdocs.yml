@@ -63,9 +63,16 @@ nav:
               - Other Video: configure/media_sources/local/other_videos.md
               - Music: configure/media_sources/local/music.md
               - Music Videos: configure/media_sources/local/music_videos.md
-      - FFmpeg:
-          - configure/ffmpeg/index.md
-          - Transcode Configs: configure/ffmpeg/transcode_config.md
+      - Settings:
+          - General: configure/settings/general.md
+          - Playback:
+              - configure/ffmpeg/index.md
+              - Transcode Configs: configure/ffmpeg/transcode_config.md
+          - Captions & audio: configure/settings/captions-audio.md
+          - Guide: configure/settings/guide.md
+          - Tuner: configure/settings/tuner.md
+          - Library: configure/settings/library.md
+          - Experimental: configure/settings/experimental.md
       - Search:
           - misc/search/index.md
       - Channels:

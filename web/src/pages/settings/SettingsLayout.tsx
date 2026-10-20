@@ -1,5 +1,5 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, Paper, Tabs } from '@mui/material';
+import { Box, Paper, Tabs, Typography } from '@mui/material';
 import { Outlet, useRouterState } from '@tanstack/react-router';
 import { last, trimEnd } from 'lodash-es';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
@@ -13,12 +13,48 @@ type Props = {
 function useSettingsTabs() {
   const { t } = useLingui();
   return [
-    { label: t`General`, value: '/general', to: '/settings/general' },
-    { label: t`Guide`, value: '/xmltv', to: '/settings/xmltv' },
-    { label: t`Transcoding`, value: '/ffmpeg', to: '/settings/ffmpeg' },
-    { label: t`Scanner`, value: '/scanner', to: '/settings/scanner' },
-    { label: t`Tuner`, value: '/hdhr', to: '/settings/hdhr' },
-    { label: t`Features`, value: '/features', to: '/settings/features' },
+    {
+      label: t`General`,
+      value: '/general',
+      to: '/settings/general',
+      description: t`Manage web preferences, server access, logging, and backups.`,
+    },
+    {
+      label: t`Playback`,
+      value: '/playback',
+      to: '/settings/playback',
+      description: t`Configure FFmpeg, streaming, and transcoding.`,
+    },
+    {
+      label: t`Captions & audio`,
+      value: '/captions-audio',
+      to: '/settings/captions-audio',
+      description: t`Choose subtitle handling, caption appearance, and preferred audio languages.`,
+    },
+    {
+      label: t`Guide`,
+      value: '/guide',
+      to: '/settings/guide',
+      description: t`Configure XMLTV guide output and refreshes.`,
+    },
+    {
+      label: t`Tuner`,
+      value: '/tuner',
+      to: '/settings/tuner',
+      description: t`Manage HDHomeRun discovery and tuner capacity.`,
+    },
+    {
+      label: t`Library`,
+      value: '/library',
+      to: '/settings/library',
+      description: t`Control how often Tunarr scans your media libraries.`,
+    },
+    {
+      label: t`Experimental`,
+      value: '/experimental',
+      to: '/settings/experimental',
+      description: t`Try optional features and work around server issues.`,
+    },
   ] as const;
 }
 
@@ -69,6 +105,14 @@ export function SettingsLayout({ currentTab = '/general' }: Props) {
         </Box>
 
         <Box sx={{ py: [1, 2] }}>
+          {tab && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h2" gutterBottom>
+                {tab.label}
+              </Typography>
+              <Typography color="text.secondary">{tab.description}</Typography>
+            </Box>
+          )}
           {/* The router's pending and error components show in here */}
           <Outlet />
         </Box>

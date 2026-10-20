@@ -41,7 +41,7 @@ When creating or editing a Custom Show:
 3. Select the **Playlist** from that media source to sync with.
 4. Save the Custom Show.
 
-An initial sync runs immediately when a synced Custom Show is first created. After that, syncs run automatically on the same schedule as library scans, set by the rescan interval under **Settings > Scanner** (see [Scheduled Scans](../media_sources/index.md#scheduled-scans)).
+An initial sync runs immediately when a synced Custom Show is first created. After that, syncs run automatically on the same schedule as library scans, set by the rescan interval under **Settings > Library** (see [Scheduled Scans](../media_sources/index.md#scheduled-scans)).
 
 ### Manual Sync
 
