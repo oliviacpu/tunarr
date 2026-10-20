@@ -9,7 +9,7 @@ export const SettingsApplicationMessages = {
   },
   backendAddress: {
     title: msg`Server address`,
-    description: msg`Saving changes the server this browser connects to immediately.`,
+    description: msg`Reload this browser page after saving the server address so all API clients connect to the saved server.`,
   },
   serverPort: {
     title: msg`Server port`,

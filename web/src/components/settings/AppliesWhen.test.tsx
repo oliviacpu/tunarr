@@ -18,6 +18,7 @@ const labels = {
   live: 'Live',
   'next-session': 'Next session',
   'next-program': 'Next program',
+  reload: 'Reload required',
   restart: 'Restart required',
 };
 
@@ -57,6 +58,7 @@ describe('settings application timing', () => {
     ['logging', 'Live'],
     ['captionsEnabled', 'Next session'],
     ['videoFilters', 'Next program'],
+    ['backendAddress', 'Reload required'],
     ['serverPort', 'Restart required'],
   ] as const)(
     '%s exposes the timing and explanation on keyboard focus',
