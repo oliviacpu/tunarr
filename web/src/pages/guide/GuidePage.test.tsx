@@ -34,8 +34,8 @@ describe('Guide zoom controls', () => {
     const zoomOut = within(group).getByRole('button', { name: 'Zoom out' });
     const duration = within(group).getByText('3 hours');
 
-    expect(duration.previousElementSibling).toBe(zoomIn);
-    expect(duration.nextElementSibling).toBe(zoomOut);
+    expect(duration.previousElementSibling).toBe(zoomOut);
+    expect(duration.nextElementSibling).toBe(zoomIn);
     await user.click(zoomIn);
     expect(within(group).getByText('2 hours')).toBeInTheDocument();
     expect(screen.getByLabelText('Rendered guide hours')).toHaveTextContent(
