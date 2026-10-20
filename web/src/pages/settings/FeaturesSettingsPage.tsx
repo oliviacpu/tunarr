@@ -51,7 +51,7 @@ function FlagSection({
 
   return (
     <Box>
-      <Typography variant="h6" gutterBottom>
+      <Typography variant="h2" gutterBottom>
         {title}
       </Typography>
       <Stack spacing={2}>

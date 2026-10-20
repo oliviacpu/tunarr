@@ -267,7 +267,7 @@ export default function TaskSettingsPage() {
   return (
     <Stack gap={2}>
       <Box>
-        <Typography variant="h4">
+        <Typography variant="h2">
           <Trans>Tasks</Trans>
         </Typography>
         <Typography>
