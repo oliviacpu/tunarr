@@ -55,7 +55,7 @@ export function LibraryUsageDetails({
   const { t } = useLingui();
   const usage = useLibraryUsage(kind, open);
   if (!open) return null;
-  if (usage.isPending)
+  if (usage.isPending || usage.isFetching)
     return (
       <Typography sx={{ mt: 2 }}>
         <Trans>Loading channel references…</Trans>

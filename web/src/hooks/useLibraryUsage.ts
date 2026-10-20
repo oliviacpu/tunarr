@@ -18,14 +18,14 @@ export function useLibraryUsage(kind: LibraryUsageKind, enabled = true) {
       : kind === 'customShows'
         ? getApiCustomShowsUsedByOptions()
         : getApiSmartCollectionsUsedByOptions();
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isFetching, isError } = useQuery({
     ...options,
     enabled,
     staleTime: 0,
     refetchOnMount: 'always',
   });
   return useMemo(
-    () => ({ data, isPending, isError }),
-    [data, isPending, isError],
+    () => ({ data, isPending, isFetching, isError }),
+    [data, isPending, isFetching, isError],
   );
 }
