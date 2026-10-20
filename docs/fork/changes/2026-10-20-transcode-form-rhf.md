@@ -21,7 +21,12 @@ Design: plans/ui-primitives-and-settings-audit-2026-10-19.md, issue C4, approved
   - `useTranscodeConfigForm` (replacing `useTranscodeConfigFormOptions`) saves through `useSettingsMutation`: a new
     config is POSTed without an id, then the page replaces itself with the new config's edit route; an existing one is
     PUT to its id. Both refetch the transcode config queries and toast "Saved" or "Could not save settings" with the
-    server's reason.
+    server's reason. While a create is in flight the fields are locked (a disabled, `inert` fieldset), so nothing
+    typed after Save is lost when the page moves to the new config.
+  - `NumericFormControllerText` takes an opt-in `rawValue`: the field keeps what was typed and the resolver turns it
+    into a number. The transcode form uses it for every number, so an empty field saves as 0, decimals (a 44.1 kHz
+    sample rate) are kept, and text after the digits ("4000k") is refused rather than dropped. Other pages are
+    unchanged.
   - The loudness normalization select follows the form, so "Reset changes" puts it back, and it has an accessible
     name.
   - `SelectFormController` options take `disabled`, for the audio formats FFmpeg lacks an encoder for.

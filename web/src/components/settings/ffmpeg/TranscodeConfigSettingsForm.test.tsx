@@ -441,6 +441,65 @@ describe('TranscodeConfigSettingsForm saving', () => {
     expect(await screen.findByText('Saved')).toBeInTheDocument();
   });
 
+  test('nothing can change while a create is in flight', async () => {
+    let finishCreate: () => void = () => {};
+    mockPost.mockImplementationOnce(
+      (options) =>
+        new Promise((resolve) => {
+          finishCreate = () =>
+            resolve({ data: { ...options.body, id: createdId } });
+        }),
+    );
+    const { user, router } = renderForm('new');
+    const name = await screen.findByLabelText('Name');
+    await user.clear(name);
+    await user.type(name, 'Living room');
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledOnce());
+    const fields = screen.getByRole('group');
+    expect(fields).toHaveAttribute('aria-busy', 'true');
+    // inert also covers the selects, which are not native controls
+    expect(fields).toHaveAttribute('inert');
+    expect(name).toBeDisabled();
+    expect(screen.getByLabelText('Video bitrate')).toBeDisabled();
+    expect(
+      screen.getByRole('checkbox', { name: 'Disable watermarks' }),
+    ).toBeDisabled();
+
+    finishCreate();
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(
+        `/settings/ffmpeg/${createdId}`,
+      ),
+    );
+    expect(await screen.findByLabelText('Name')).toBeEnabled();
+    expect(screen.getByRole('group')).not.toHaveAttribute('inert');
+    expect(screen.getByRole('group')).toHaveAttribute('aria-busy', 'false');
+  });
+
+  test('fields stay editable while an update is in flight', async () => {
+    let finishUpdate: () => void = () => {};
+    mockPut.mockImplementationOnce(
+      (options) =>
+        new Promise((resolve) => {
+          finishUpdate = () => resolve({ data: options.body });
+        }),
+    );
+    const { user } = renderForm('edit');
+    const name = await screen.findByLabelText('Name');
+    await user.type(name, ' 2');
+    await user.click(saveButton());
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalledOnce());
+    expect(name).toBeEnabled();
+    expect(screen.getByRole('group')).not.toHaveAttribute('inert');
+
+    finishUpdate();
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+  });
+
   test('saving an existing config PUTs it to its id', async () => {
     const { user, router } = renderForm('edit');
     const name = await screen.findByLabelText('Name');
