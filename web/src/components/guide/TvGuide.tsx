@@ -228,7 +228,10 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
           ({ title }) => title,
         )
         .with({ type: 'custom' }, () => t`Custom Program`)
-        .with({ type: 'redirect' }, (p) => t`Redirect to Channel ${p.channel}`)
+        .with(
+          { type: 'redirect' },
+          (p) => t`Redirect to Channel ${p.channelName}`,
+        )
         .with({ type: 'flex' }, (p) => p.title ?? flexTitle)
         .exhaustive();
 
@@ -309,24 +312,23 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
             paused={program.isPaused}
             clickable={isProgramCell(cellType)}
           >
-            {(smallViewport && pct > 20) ||
-              (!smallViewport && pct > 8 && (
-                <>
-                  {!program.isPaused && (
-                    <Box
-                      sx={{
-                        fontSize: '12px',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {`${programStart.format('LT')} - ${programEnd.format('LT')}`}
-                    </Box>
-                  )}
-                  <Box sx={{ fontSize: '12px' }}>
-                    {remainingTime ? <Trans>{remainingTime} left</Trans> : null}
+            {(smallViewport ? pct > 20 : pct > 8) && (
+              <>
+                {!program.isPaused && (
+                  <Box
+                    sx={{
+                      fontSize: '12px',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {`${programStart.format('LT')} - ${programEnd.format('LT')}`}
                   </Box>
-                </>
-              ))}
+                )}
+                <Box sx={{ fontSize: '12px' }}>
+                  {remainingTime ? <Trans>{remainingTime} left</Trans> : null}
+                </Box>
+              </>
+            )}
           </TvGuideCell>
           {endOfAvailableProgramming
             ? renderUnavailableProgramming(

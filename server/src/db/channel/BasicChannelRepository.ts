@@ -1,3 +1,4 @@
+import { invalidateLibraryReferences } from '../libraryReferenceRevision.ts';
 import { normalizeChannelCaptions } from '@tunarr/shared/util';
 import { CacheImageService } from '@/services/cacheImageService.js';
 import { ChannelNotFoundError } from '@/types/errors.js';
@@ -209,6 +210,7 @@ export class BasicChannelRepository {
       } satisfies MarkRequired<ChannelOrmWithRelations, 'fillerShows'>;
     });
 
+    invalidateLibraryReferences();
     await this.lineupRepository.createLineup(channel.uuid);
 
     if (isDefined(createReq.onDemand) && createReq.onDemand.enabled) {
@@ -294,6 +296,7 @@ export class BasicChannelRepository {
       }
     });
 
+    invalidateLibraryReferences();
     if (isDefined(updateReq.onDemand)) {
       const db = await this.lineupRepository.getFileDb(id);
       await db.update((lineup) => {
@@ -428,6 +431,7 @@ export class BasicChannelRepository {
       return { ...newChannel, fillerShows };
     });
 
+    invalidateLibraryReferences();
     const newLineup = await this.lineupRepository.saveLineup(
       newChannel.uuid,
       lineup,
@@ -455,6 +459,7 @@ export class BasicChannelRepository {
         tx.delete(Channel).where(eq(Channel.uuid, channelId)).run();
       });
 
+      invalidateLibraryReferences();
       const removeRefs = () =>
         this.lineupRepository.removeRedirectReferences(channelId).catch(() => {
           // Errors are logged inside removeRedirectReferences

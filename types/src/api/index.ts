@@ -605,3 +605,17 @@ export const UpdateFeatureFlagsRequestSchema = z.object({
 export type UpdateFeatureFlagsRequest = z.infer<
   typeof UpdateFeatureFlagsRequestSchema
 >;
+
+export const LibraryUsedBySchema = z.record(
+  z.string(),
+  z.array(
+    z.object({
+      id: z.uuid(),
+      name: z.string(),
+      number: z.number(),
+      slots: z.array(z.number().int().positive()),
+    }),
+  ),
+);
+
+export type LibraryUsedBy = z.infer<typeof LibraryUsedBySchema>;

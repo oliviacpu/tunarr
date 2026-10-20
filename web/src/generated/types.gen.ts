@@ -8391,6 +8391,75 @@ export type GetApiFillerListsByIdProgramsResponses = {
 
 export type GetApiFillerListsByIdProgramsResponse = GetApiFillerListsByIdProgramsResponses[keyof GetApiFillerListsByIdProgramsResponses];
 
+export type GetApiFillerListsUsedByData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/filler-lists/used-by';
+};
+
+export type GetApiFillerListsUsedByResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        [key: string]: Array<{
+            id: string;
+            name: string;
+            number: number;
+            slots: Array<number>;
+        }>;
+    };
+};
+
+export type GetApiFillerListsUsedByResponse = GetApiFillerListsUsedByResponses[keyof GetApiFillerListsUsedByResponses];
+
+export type GetApiCustomShowsUsedByData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/custom-shows/used-by';
+};
+
+export type GetApiCustomShowsUsedByResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        [key: string]: Array<{
+            id: string;
+            name: string;
+            number: number;
+            slots: Array<number>;
+        }>;
+    };
+};
+
+export type GetApiCustomShowsUsedByResponse = GetApiCustomShowsUsedByResponses[keyof GetApiCustomShowsUsedByResponses];
+
+export type GetApiSmartCollectionsUsedByData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/smart_collections/used-by';
+};
+
+export type GetApiSmartCollectionsUsedByResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        [key: string]: Array<{
+            id: string;
+            name: string;
+            number: number;
+            slots: Array<number>;
+        }>;
+    };
+};
+
+export type GetApiSmartCollectionsUsedByResponse = GetApiSmartCollectionsUsedByResponses[keyof GetApiSmartCollectionsUsedByResponses];
+
 export type PostApiProgramsSearchData = {
     body: {
         query: {
