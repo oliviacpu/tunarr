@@ -19,8 +19,10 @@
   - `programColor(palette, key)` picks the step by 32-bit FNV-1a of the key. The key is the show (or artist) for
     episodes and tracks, the program for movies and other videos, and the wrapped program for custom-show entries, so
     a show keeps its colour across reloads.
-  - `typeStyle(palette, type)` encodes the type without relying on colour. Flex gaps and "No programming scheduled"
-    take the page background, `text.secondary` and a dashed divider outline. Redirects are the secondary colour at 16%
+  - `typeStyle(palette, type)` encodes the type without relying on colour. Movies, episodes, tracks and other videos
+    keep their ramp colour and get their `ProgramTypeIcon` (14px) before the title, in any cell wide enough to show
+    text; slivers show neither. Flex gaps and "No programming scheduled" take the page background, `text.secondary`
+    and a dashed divider outline. Redirects are the secondary colour at 16%
     over the paper with an arrow before the title. Only programs open the details dialog, so only they get the hand
     cursor.
   - The now-playing cell gets a 2px primary ring, and the time marker (now `TvGuideNowMarker.tsx`) keeps primary.
@@ -36,8 +38,10 @@
 - **Tests:** `guideColors.test.ts`: 8 distinct steps per scheme; `text.primary` at 4.5:1 or more on every step and
   hover step; no step within 15° of the primary's hue; the same key gives the same step, with the FNV-1a values
   pinned; episodes of one show share a key and movies do not; flex and redirect backgrounds are not ramp steps, carry
-  the dashed outline and the arrow, and keep their text at 4.5:1. `TvGuideItem.test.tsx`: the ramp fill, the primary
-  ring only on the now-playing cell, the dashed flex outline, and the hand cursor only on programs.
+  the dashed outline and the arrow, and keep their text at 4.5:1. `guideCellType` tells movies from episodes and
+  classifies custom-show entries by the program they wrap. `TvGuideItem.test.tsx`: the ramp fill, the primary ring
+  only on the now-playing cell, the dashed flex outline, and the hand cursor only on programs; a movie cell shows the
+  movie icon and an episode cell the TV icon, a redirect the arrow, a flex gap none, and a sliver no icon or text.
   `TvGuideNowMarker.test.tsx`: the marker animates by default, does not under `prefers-reduced-motion`, and is
   primary. `colorHooks.test.tsx`: `system` on a dark OS picks the dark set (fails on the old code), and on a light OS
   the light set. `theme.test.ts` adds `secondary.contrastText` on `secondary.main` at 4.5:1 and a non-text list with

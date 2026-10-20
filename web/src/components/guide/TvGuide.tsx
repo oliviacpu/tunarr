@@ -1,5 +1,4 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import {
   Box,
@@ -32,7 +31,13 @@ import PaddedPaper from '../base/PaddedPaper';
 import { ChannelIconDisplay } from '../channels/ChannelIconDisplay.tsx';
 import { ChannelOptionsMenu } from '../channels/ChannelOptionsMenu.tsx';
 import ProgramDetailsDialog from '../programs/ProgramDetailsDialog.tsx';
-import { guideCellType, guideColorKey, typeStyle } from './guideColors.ts';
+import {
+  guideCellType,
+  guideColorKey,
+  isProgramCell,
+  typeStyle,
+} from './guideColors.ts';
+import { TvGuideCell } from './TvGuideCell.tsx';
 import { TvGuideGridChild } from './TvGuideGridChild.tsx';
 import { TvGuideItem } from './TvGuideItem.tsx';
 import { TvGuideNowMarker } from './TvGuideNowMarker.tsx';
@@ -290,11 +295,12 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
 
       return (
         <Fragment key={key}>
-          <TvGuideItem
+          <TvGuideCell
             left={left}
             width={pct}
             compact={isCompact}
-            title={isCompact ? title : undefined}
+            title={title}
+            subtitle={episodeTitle}
             onClick={() => handleModalOpen(program)}
             cellStyle={typeStyle(
               theme.palette,
@@ -303,58 +309,27 @@ export function TvGuide({ channelId, start, end, showStealth = true }: Props) {
             )}
             nowPlaying={isPlaying}
             paused={program.isPaused}
-            clickable={cellType === 'content'}
+            clickable={isProgramCell(cellType)}
           >
-            {isCompact ? null : (
-              <>
-                <Box
-                  sx={{
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    minWidth: 0,
-                  }}
-                >
-                  {cellType === 'redirect' ? (
-                    <ArrowForwardIcon
-                      sx={{ fontSize: '14px', flexShrink: 0 }}
-                    />
-                  ) : null}
-                  <Box
-                    component="span"
-                    sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  >
-                    {title}
+            {(smallViewport && pct > 20) ||
+              (!smallViewport && pct > 8 && (
+                <>
+                  {!program.isPaused && (
+                    <Box
+                      sx={{
+                        fontSize: '12px',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {`${programStart.format('LT')} - ${programEnd.format('LT')}`}
+                    </Box>
+                  )}
+                  <Box sx={{ fontSize: '12px' }}>
+                    {remainingTime ? <Trans>{remainingTime} left</Trans> : null}
                   </Box>
-                </Box>
-                <Box sx={{ fontSize: '13px', fontStyle: 'italic' }}>
-                  {episodeTitle}
-                </Box>
-                {(smallViewport && pct > 20) ||
-                  (!smallViewport && pct > 8 && (
-                    <>
-                      {!program.isPaused && (
-                        <Box
-                          sx={{
-                            fontSize: '12px',
-                            fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          {`${programStart.format('LT')} - ${programEnd.format('LT')}`}
-                        </Box>
-                      )}
-                      <Box sx={{ fontSize: '12px' }}>
-                        {remainingTime ? (
-                          <Trans>{remainingTime} left</Trans>
-                        ) : null}
-                      </Box>
-                    </>
-                  ))}
-              </>
-            )}
-          </TvGuideItem>
+                </>
+              ))}
+          </TvGuideCell>
           {endOfAvailableProgramming
             ? renderUnavailableProgramming(
                 toPercent(program.stop - +start),

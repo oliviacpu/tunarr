@@ -1,8 +1,9 @@
 import { renderWithProviders, screen } from '@/test/utils';
 import { describe, expect, test } from 'vitest';
 import { schemePalette } from '../../test/contrast.ts';
+import { TvGuideCell } from './TvGuideCell.tsx';
 import { TvGuideItem } from './TvGuideItem.tsx';
-import { typeStyle } from './guideColors.ts';
+import { type GuideCellType, typeStyle } from './guideColors.ts';
 
 const palette = schemePalette('light');
 
@@ -53,5 +54,50 @@ describe('TvGuideItem', () => {
   test('shows the hand cursor only on cells that open details', () => {
     const style = renderItem({ clickable: true });
     expect(style.cursor).toBe('pointer');
+  });
+});
+
+describe('TvGuideCell', () => {
+  function renderCell(type: GuideCellType, compact = false) {
+    return renderWithProviders(
+      <TvGuideCell
+        left={0}
+        width={20}
+        compact={compact}
+        cellStyle={typeStyle(palette, type, 'show.a')}
+        title="The Title"
+        subtitle="S01E01 - Pilot"
+      />,
+    );
+  }
+
+  test('puts a movie icon before a movie title', () => {
+    renderCell('movie');
+    expect(screen.getByTestId('MovieIcon')).toBeInTheDocument();
+    expect(screen.queryByTestId('TvIcon')).not.toBeInTheDocument();
+    expect(screen.getByText('The Title')).toBeInTheDocument();
+  });
+
+  test('puts a TV icon before an episode title', () => {
+    renderCell('episode');
+    expect(screen.getByTestId('TvIcon')).toBeInTheDocument();
+    expect(screen.queryByTestId('MovieIcon')).not.toBeInTheDocument();
+  });
+
+  test('puts an arrow before a redirect title', () => {
+    renderCell('redirect');
+    expect(screen.getByTestId('ArrowForwardIcon')).toBeInTheDocument();
+  });
+
+  test('draws no icon on a flex gap', () => {
+    const { container } = renderCell('flex');
+    expect(container.querySelector('svg')).toBeNull();
+  });
+
+  test('draws no icon or text on a sliver, and keeps the title as a tooltip', () => {
+    const { container } = renderCell('movie', true);
+    expect(container.querySelector('svg')).toBeNull();
+    expect(screen.queryByText('The Title')).not.toBeInTheDocument();
+    expect(screen.getByTitle('The Title')).toBeInTheDocument();
   });
 });

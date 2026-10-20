@@ -14,10 +14,12 @@ import {
 } from '../../test/programFixtures.ts';
 import {
   GuideRampSteps,
+  guideCellType,
   guideColorKey,
   guideHoverRamp,
   guideRamp,
   programColor,
+  isProgramCell,
   rampStep,
   typeStyle,
 } from './guideColors.ts';
@@ -193,4 +195,59 @@ describe('typeStyle', () => {
       }
     },
   );
+});
+
+describe('guideCellType', () => {
+  const show = makeShowGrouping('show-1');
+
+  it('tells movies from episodes', () => {
+    const movie = guideProgram(makeContentProgram(makeMovie(), 1000));
+    const episode = guideProgram(
+      makeContentProgram(makeEpisode({ show }), 1000),
+    );
+    expect(guideCellType(movie)).toBe('movie');
+    expect(guideCellType(episode)).toBe('episode');
+  });
+
+  it('classifies a custom-show entry by the program it wraps', () => {
+    const custom: TvGuideProgram = {
+      type: 'custom',
+      id: 'program-1',
+      customShowId: 'custom-1',
+      index: 0,
+      duration: 1000,
+      program: makeContentProgram(makeMovie(), 1000),
+      start: 0,
+      stop: 1000,
+      isPaused: false,
+    };
+    expect(guideCellType(custom)).toBe('movie');
+    expect(guideCellType({ ...custom, program: undefined })).toBe('content');
+  });
+
+  it('opens details only for programs', () => {
+    for (const type of ['movie', 'episode', 'track', 'content'] as const) {
+      expect(isProgramCell(type)).toBe(true);
+    }
+    expect(isProgramCell('flex')).toBe(false);
+    expect(isProgramCell('redirect')).toBe(false);
+  });
+});
+
+describe('typeStyle for program kinds', () => {
+  const palette = schemePalette('light');
+
+  it('gives movies and episodes the same ramp colour but different glyphs', () => {
+    const movie = typeStyle(palette, 'movie', 'show.a');
+    const episode = typeStyle(palette, 'episode', 'show.a');
+    expect(movie.background).toBe(episode.background);
+    expect(movie.background).toBe(programColor(palette, 'show.a'));
+    expect(movie.glyph).toBe('movie');
+    expect(episode.glyph).toBe('episode');
+    expect(typeStyle(palette, 'track', 'artist.a').glyph).toBe('track');
+  });
+
+  it('draws no glyph when the kind is unknown', () => {
+    expect(typeStyle(palette, 'content', 'show.a').glyph).toBeUndefined();
+  });
 });

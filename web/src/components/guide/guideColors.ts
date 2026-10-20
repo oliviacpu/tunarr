@@ -1,5 +1,5 @@
 import type { Palette } from '@mui/material';
-import type { TvGuideProgram } from '@tunarr/types';
+import type { TerminalProgram, TvGuideProgram } from '@tunarr/types';
 import Color from 'colorjs.io';
 import { extractProgramGrandparent } from '../../helpers/programUtil.ts';
 
@@ -10,8 +10,9 @@ import { extractProgramGrandparent } from '../../helpers/programUtil.ts';
 // keyed by show (or movie) so the same show keeps its colour across reloads.
 // The fill is a grouping aid, not the identity channel: every cell prints its
 // title, neighbours are separated by a gap, and the program type is carried by
-// shape and glyph (dashed outline for flex, an arrow for redirects), so nothing
-// depends on telling two tints apart.
+// shape and glyph (a movie, episode, track or video icon before the title, a
+// dashed outline for flex, an arrow for redirects), so nothing depends on
+// telling two tints apart.
 
 export const GuideRampSteps = 8;
 
@@ -31,7 +32,17 @@ const HueOffsetFromPrimary = 360 / GuideRampSteps / 2;
 // Redirect cells are the secondary colour at this alpha over the paper.
 const RedirectAlpha = 0.16;
 
-export type GuideCellType = 'content' | 'flex' | 'redirect';
+/** What a program cell holds: a movie, an episode, a track or a video. */
+export type GuideProgramKind = TerminalProgram['type'];
+
+/**
+ * A guide cell's type. 'content' is a program whose kind is unknown (a
+ * custom-show entry sent without its program).
+ */
+export type GuideCellType = GuideProgramKind | 'content' | 'flex' | 'redirect';
+
+/** The icon before a cell's title. */
+export type GuideGlyph = GuideProgramKind | 'redirect';
 
 export type GuideCellStyle = {
   background: string;
@@ -40,7 +51,7 @@ export type GuideCellStyle = {
   /** A dashed outline drawn inside the cell, for gaps in the schedule. */
   outline: string | undefined;
   /** A leading glyph that names the type without relying on colour. */
-  glyph: 'redirect' | undefined;
+  glyph: GuideGlyph | undefined;
 };
 
 const toHex = (color: Color) =>
@@ -121,10 +132,16 @@ const blend = (foreground: string, alpha: number, background: string) =>
     }),
   );
 
+/** Programs open the details dialog; flex gaps and redirects do not. */
+export function isProgramCell(type: GuideCellType): boolean {
+  return type !== 'flex' && type !== 'redirect';
+}
+
 /**
- * The cell style for a program type. Content cells take the ramp step for
- * key; flex gaps recede to the page background with a dashed divider; redirects
- * are a light wash of the secondary colour with an arrow glyph.
+ * The cell style for a program type. Programs take the ramp step for key and
+ * an icon for their kind (movie, episode, track, video); flex gaps recede to
+ * the page background with a dashed divider; redirects are a light wash of the
+ * secondary colour with an arrow glyph.
  */
 export function typeStyle(
   palette: Palette,
@@ -132,16 +149,6 @@ export function typeStyle(
   key: string = '',
 ): GuideCellStyle {
   switch (type) {
-    case 'content': {
-      const step = rampStep(key);
-      return {
-        background: guideRamp(palette)[step],
-        hoverBackground: guideHoverRamp(palette)[step],
-        color: palette.text.primary,
-        outline: undefined,
-        glyph: undefined,
-      };
-    }
     case 'flex':
       return {
         background: palette.background.default,
@@ -166,14 +173,25 @@ export function typeStyle(
         outline: undefined,
         glyph: 'redirect',
       };
+    default: {
+      const step = rampStep(key);
+      return {
+        background: guideRamp(palette)[step],
+        hoverBackground: guideHoverRamp(palette)[step],
+        color: palette.text.primary,
+        outline: undefined,
+        glyph: type === 'content' ? undefined : type,
+      };
+    }
   }
 }
 
 export function guideCellType(program: TvGuideProgram): GuideCellType {
   switch (program.type) {
     case 'content':
+      return program.program.type;
     case 'custom':
-      return 'content';
+      return program.program?.program.type ?? 'content';
     case 'flex':
       return 'flex';
     case 'redirect':
