@@ -25,14 +25,14 @@ The separate local calendar findings are addressed by two web-only source PRs, f
 
 - #156: advance repeated-cycle timestamps using the current edited lineup's duration for both
   cycle phase and advancement. This also covers unsaved append/shorten edits whose saved channel
-  duration is stale, and returns no preview for an empty/zero-length current cycle.
+  duration is stale, selects the final item both at and inside its range, and returns no preview for an empty/zero-length current cycle.
 - #157: keep week headers and day columns aligned in one bounded native horizontal viewport,
   with a fixed hour axis/divider and header gutter, keyboard scrolling and all seven days reachable.
   Date selection, navigation, zoom and palette behavior remain covered.
 
-The focused regressions pass: ten hook tests, nine component/palette tests, three timestamp
+The focused regressions pass: twelve hook tests, nine component/palette tests, four timestamp
 browser cases including seed, and two layout browser cases including seed. Old-code runs
-reproduced repeated timestamps/keys, stale-duration errors and the 390px-to-1048px page overflow.
+reproduced repeated timestamps/keys, stale-duration and final-item selection errors, and the 390px-to-1048px page overflow.
 No known-issue exclusions were added. The combined branch still requires full CI, exact-head
 review and the complete seeded browser suite before landing and release.
 
