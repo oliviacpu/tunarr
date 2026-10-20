@@ -1,16 +1,13 @@
 import { ChannelOptionsButton } from '@/components/channels/ChannelOptionsButton.tsx';
 import { Trans } from '@lingui/react/macro';
-import {
-  Box,
-  LinearProgress,
-  Stack,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { Suspense } from 'react';
 import Breadcrumbs from '../../components/Breadcrumbs.tsx';
-import { ChannelNowPlayingCard } from '../../components/channels/ChannelNowPlayingCard.tsx';
+import {
+  ChannelNowPlayingCard,
+  ChannelNowPlayingCardSkeleton,
+} from '../../components/channels/ChannelNowPlayingCard.tsx';
 import { ChannelPrograms } from '../../components/channels/ChannelPrograms.tsx';
 import { ChannelSummaryQuickStats } from '../../components/channels/ChannelSummaryQuickStats.tsx';
 import { ChannelIconDisplay } from '../../components/channels/ChannelIconDisplay.tsx';
@@ -52,7 +49,7 @@ export const ChannelSummaryPage = () => {
         />
       </Stack>
       <Box sx={{ width: '100%' }}>
-        <Suspense fallback={<LinearProgress />}>
+        <Suspense fallback={<ChannelNowPlayingCardSkeleton />}>
           <ChannelNowPlayingCard channelId={channelId} />
         </Suspense>
       </Box>
