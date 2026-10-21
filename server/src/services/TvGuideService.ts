@@ -166,6 +166,7 @@ export class TVGuideService {
   private eventService: EventService;
   private programConverter: ProgramConverter;
   private cachedGuide: Record<ChannelId, ChannelPrograms>;
+  private cachedGuideInitialized = false;
   private runningXmlTvWrite?: Promise<void>;
   private queuedXmlTvWrite?: Promise<void>;
   // Each channel's programmes as the last XMLTV write rendered them, and what
@@ -245,6 +246,7 @@ export class TVGuideService {
       if (isEmpty(this.channelsById)) {
         const placeholderChannel = await this.makePlaceholderChannel();
         this.cachedGuide[placeholderChannel.channel.uuid] = placeholderChannel;
+        this.cachedGuideInitialized = true;
       } else {
         delete this.cachedGuide[PlaceholderChannelId];
         await Promise.all(
@@ -437,7 +439,7 @@ export class TVGuideService {
     }
 
     await this.guideBuildLock.runExclusive(async () => {
-      if (isEmpty(this.cachedGuide)) {
+      if (!this.cachedGuideInitialized) {
         throw new Error('Channel guide is not cached');
       }
       for (const channelId of channelIds) {
@@ -1142,6 +1144,7 @@ export class TVGuideService {
           async () => {
             this.cachedGuide[channelId] =
               await this.buildGuideInternal(channelId);
+            this.cachedGuideInitialized = true;
             if (writeXmlTv && !this.channelsById![channelId]!.channel.stealth) {
               await this.writeXmlTv();
             }
