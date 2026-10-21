@@ -1,6 +1,8 @@
 # Channel update preservation and batched channel actions
 
-Status: **C7a implemented in #152; C7b and C7c approved by Olivia Hunter on 2026-10-21**.
+Status: **C7a implemented in #152; C7b/C7c implementation split across #166–#169, #171 and #172**.
+Olivia Hunter approved both remaining rows on 2026-10-21. #172 supplies the final client and
+source closeout; release/deployment remains separate.
 Olivia first approved "C7a first; hold batching" while reviewing PR #149, then explicitly
 authorized the remaining C7b/C7c work on 2026-10-21. This document is the approved design
 for those follow-ups under the fork approval process. Use separately reviewed PRs for shared
@@ -46,9 +48,9 @@ S5's future channel-mode work must build on and test these omission semantics se
 
 ### C7b: batch stealth changes
 
-Proposed new route: `POST /api/channels/bulk/stealth`, body `{ ids, stealth }`.
+Route: `POST /api/channels/bulk/stealth`, body `{ ids, stealth }`.
 `ids` contains 1–100 distinct UUIDs; duplicates or malformed input reject the entire request
-with HTTP 400 before mutation. The limit is a proposed bound, not an existing API guarantee.
+with HTTP 400 before mutation. The server enforces this bound before mutation.
 
 Update only `channel.stealth`; never synthesize a full channel update. Resolve IDs and update
 existing channels within an immediate transaction. Missing IDs receive per-item failures;
@@ -62,7 +64,7 @@ serialization. No-op batches do not rewrite derived files.
 
 ### C7c: batch channel deletion
 
-Proposed new route: `POST /api/channels/bulk/delete`, body `{ ids }`, with the same validation.
+Route: `POST /api/channels/bulk/delete`, body `{ ids }`, with the same validation.
 Process deletions sequentially through a narrowly scoped checked deletion operation, preserving
 the existing lineup marking/restoration and redirect-reference handling. The current helpers
 suppress some filesystem and redirect-cleanup errors; their resolved promises are insufficient
@@ -79,9 +81,9 @@ behavior; stopping streams or changing deletion recovery is outside this proposa
 
 ### Results and partial failures
 
-Both proposed batch routes return HTTP 200 after a valid batch is processed, with ordered
+Both batch routes return HTTP 200 after a valid batch is processed, with ordered
 per-item results matching input IDs. A result is either `{ id, success: true }` or
-`{ id, success: false, statusCode, message }`. Proposed failure codes are 404 for missing IDs
+`{ id, success: false, statusCode, message }`. Per-item failure codes are 404 for missing IDs
 and 500 for failed operations; messages must be safe for display and omit stack traces and
 credentials. Whole-request validation failures use the existing `{ message }` error shape.
 
@@ -143,4 +145,4 @@ existing Whatbox guard; approving this proposal does not itself deploy anything.
 ## AI use
 
 Codex inspected the current client, routes, repository and guide services, and wrote this
-proposal. No implementation of these proposed contracts is included.
+proposal in #149. The separately authorized implementation is recorded in the PR chain above.

@@ -1,7 +1,0 @@
-### Batched channel deletion controls (2026-10-21, PR #172)
-
-- **What you saw:** The Channels table issued one delete request per selected channel and could not distinguish committed deletion from cleanup/publication failure or an unconfirmed response.
-- **Cause:** The original bulk control used individual endpoints and one success/failure boundary for each promise.
-- **Fix:** Use the dedicated checked deletion API in sequential chunks of at most 100. Freeze IDs and names when the confirmation opens; keep it busy until requests finish. Report committed outcomes, cleanup warnings and publication warnings separately. After an unknown response, retain earlier confirmations, name unknown versus unattempted channels, refetch, and stop without automatic replay. Other list types and single-channel actions retain their behavior.
-- **Tests:** Helper/page and unchanged list suites cover chunking, confirmation/cancel, frozen names across refetch, busy/Escape/duplicate confirmation, cleanup versus committed success, mixed failures and lost/malformed/reordered responses with no retries. Real browser delete and stealth cases pass together, including deleted-channel 404s, retained channels and M3U content. Before/after evidence is in `docs/dev/channel-bulk-actions-gallery.md`.
-- **Upstream:** C7c in the approved `plans/channel-update-and-bulk-followups-2026-10-20.md`; no migration or runtime dependency added.

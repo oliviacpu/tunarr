@@ -26,6 +26,54 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Batched channel deletion controls (2026-10-21, PR #172)
+
+- **What you saw:** The Channels table issued one delete request per selected channel and could not distinguish committed deletion from cleanup/publication failure or an unconfirmed response.
+- **Cause:** The original bulk control used individual endpoints and one success/failure boundary for each promise.
+- **Fix:** Use the dedicated checked deletion API in sequential chunks of at most 100. Freeze IDs and names when the confirmation opens; keep it busy until requests finish. Report committed outcomes, cleanup warnings and publication warnings separately. After an unknown response, retain earlier confirmations, name unknown versus unattempted channels, refetch, and stop without automatic replay. Other list types and single-channel actions retain their behavior.
+- **Tests:** Helper/page and unchanged list suites cover chunking, confirmation/cancel, frozen names across refetch, busy/Escape/duplicate confirmation, cleanup versus committed success, mixed failures and lost/malformed/reordered responses with no retries. Real browser delete and stealth cases pass together, including deleted-channel 404s, retained channels and M3U content. Before/after evidence is in `docs/dev/channel-bulk-actions-gallery.md`.
+- **Upstream:** C7c in the approved `plans/channel-update-and-bulk-followups-2026-10-20.md`; no migration or runtime dependency added.
+
+### Batched channel deletion API (2026-10-21, PR #171)
+
+- **What you saw:** The Channels table deletes selected channels individually, with an XMLTV/M3U refresh for each deletion and no separate result for suppressed cleanup errors.
+- **Cause:** The single-channel endpoint combines committed deletion and derived work behind one promise.
+- **Fix:** Add `POST /api/channels/bulk/delete` for 1–100 distinct UUIDs. Process checked deletions sequentially, continue after individual failures, retain input order and expose cleanup separately from committed removal. Publish XMLTV and M3U independently once after any successful deletion. Existing single-channel routes are unchanged; the table integration follows separately.
+- **Tests:** HTTP cases cover invalid inputs, ordered mixed outcomes, sequential calls, per-item continuation, missing IDs, committed deletion with failed cleanup, and independent publication failures. The checked-deletion prerequisite supplies real SQLite/filesystem failure evidence.
+- **Upstream:** C7c in the approved `plans/channel-update-and-bulk-followups-2026-10-20.md`; no migration or runtime dependency added.
+
+### Checked channel deletion outcomes (2026-10-21, PR #169)
+
+- **What you saw:** Code inspection found that existing deletion helpers log some lineup and redirect-cleanup errors without surfacing them to callers. A resolved delete promise cannot establish which cleanup work succeeded.
+- **Cause:** SQLite deletion, lineup-file marking/restoration and redirect updates have separate failure boundaries.
+- **Fix:** Add a checked deletion operation for the following C7c route. It verifies committed channel-row removal, reports pre-commit failures with any restoration outcome, and keeps deletion successful when later redirect cleanup fails. Checked same-ID calls serialize. Checked filesystem/redirect helpers surface errors after finishing their work; legacy single-channel deletion retains its behavior. This prerequisite adds no route or UI.
+- **Tests:** Real SQLite/filesystem cases cover marking failure, rollback/restoration failure, missing rows, ignored deletes, same-ID concurrency, relation cleanup, and partial redirect-cleanup failure after commit. Existing repository/lineup regressions and typechecks pass.
+- **Upstream:** C7c in the approved `plans/channel-update-and-bulk-followups-2026-10-20.md`; no migration, runtime dependency or stream/session behavior change.
+
+### Batched channel visibility controls (2026-10-21, PR #168)
+
+- **What you saw:** The Channels table sent one full-channel update per selected visibility change, with repeated derived-file work.
+- **Cause:** The bulk control used the single-channel GET/PUT flow and could not distinguish committed changes from a lost batch response or a failed publication.
+- **Fix:** Use the dedicated stealth API in sequential chunks of at most 100, preserving named selection snapshots and busy controls. Report item failures, publication warnings, unknown current-chunk outcomes and unsent later chunks separately. Stop after an unconfirmed response, refetch and never automatically replay the mutation. Existing channel deletion and other list operations stay on their existing paths until C7c.
+- **Tests:** Helper/page/legacy bulk suites cover chunking, mixed results, stale selection names, busy state, exact single invalidation/refetch and no retry after lost or malformed responses. A real seeded browser hide/show/reload case verifies M3U output, unchanged channel data and no whole-channel writes; before/after captures are in `docs/dev/channel-bulk-actions-gallery.md`.
+- **Upstream:** C7b in the approved `plans/channel-update-and-bulk-followups-2026-10-20.md`; no migration or dependency added.
+
+### Batched channel visibility API (2026-10-21, PR pending)
+
+- **What you saw:** Code inspection found that hiding selected channels fetched and replaced whole channel objects and refreshed XMLTV/M3U for each channel.
+- **Cause:** The existing channel update route accepts the whole editable channel, and the bulk table has no dedicated visibility operation.
+- **Fix:** Add `POST /api/channels/bulk/stealth` with 1–100 unique UUIDs. Update only stealth in an immediate transaction, preserve ordered missing/no-op results, and publish XMLTV/M3U independently once after actual changes. A transaction failure reports no committed success; publication errors remain separate from committed changes. This PR adds the contract and server; the table integration follows separately.
+- **Tests:** Real repository checks preserve all unrelated channel columns, filler/subtitle rows, lineup bytes and icons; a SQLite trigger exercises rollback and another proves no-op writes are skipped. HTTP tests cover input bounds, mixed IDs, ordered outcomes, rollback and independent publication failure.
+- **Upstream:** C7b in the approved `plans/channel-update-and-bulk-followups-2026-10-20.md`; no migration or dependency added.
+
+### Checked publication for batched channel changes (2026-10-21, PR #166)
+
+- **What you saw:** Code inspection found that channel bulk actions refreshed derived files once per selected channel. The existing M3U write path logs disk failures instead of reporting them, and a missing disk cache file can leave a stale in-memory playlist.
+- **Cause:** Single-channel refresh methods provide no bounded multi-channel publication operation, and cache invalidation depends on disk-file existence.
+- **Fix:** Add serialized multi-channel XMLTV update/removal operations and a checked M3U refresh for the separately approved C7b/C7c routes. Checked callers receive publication failures; uninitialized guide state fails explicitly, while a legitimately emptied guide can retry a failed publication. Clear stale memory independently of disk-file existence and publish cache files through the existing atomic-write helper, and populate memory only after a successful disk write. Existing single-channel refresh paths remain compatible. This prerequisite adds no batch route or UI itself.
+- **Tests:** Focused guide/cache tests cover overlapping scheduled builds, empty inputs, missing cache state, XMLTV failure, real disk write/unlink failures, recovery after partially written output fails, and stale memory after a missing disk file. Build and changed-file lint pass.
+- **Upstream:** Fork continuation of the channel batching design in `plans/channel-update-and-bulk-followups-2026-10-20.md`, authorized by Olivia Hunter on 2026-10-21.
+
 ### Edit global subtitle defaults and channel exceptions (2026-10-21)
 
 - **Scope:** S5c adds an ordered language/filter/external/image list to Settings > Captions & audio, using the shared Save, Reset changes and error handling. Reorder, remove or clear preferences without changing fixed audio output layouts.
