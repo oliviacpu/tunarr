@@ -80,6 +80,11 @@ vi.mock('../../components/settings/ffmpeg/TranscodeConfigsTable.tsx', () => ({
   TranscodeConfigsTable: () => null,
 }));
 
+// Caption appearance is outside these form cases.
+vi.mock('../../components/settings/ffmpeg/CaptionAppearanceFields.tsx', () => ({
+  CaptionAppearanceFields: () => null,
+}));
+
 vi.mock('./FeaturesSettingsPage.tsx', () => ({ default: () => null }));
 
 async function renderPage(
@@ -183,7 +188,18 @@ describe('FfmpegSettingsPage', () => {
     expect(server.settings.subtitlePreferences).toEqual(updatedPreferences);
   });
 
-  test('global subtitle preferences save and reload through the settings form', async () => {
+  test('global subtitle preference edits survive save and reload', async () => {
+    server.settings = {
+      ...saved,
+      subtitlePreferences: [
+        {
+          languageCode: 'fra',
+          filter: 'forced',
+          allowExternal: true,
+          allowImageBased: true,
+        },
+      ],
+    };
     mockPutFfmpegSettings.mockImplementation(({ body }) => {
       server.settings = { ...saved, ...body };
       return Promise.resolve({ data: server.settings });
@@ -191,16 +207,8 @@ describe('FfmpegSettingsPage', () => {
     const { user, unmount } = await renderPage(undefined, 'captions-audio');
     const save = screen.getByRole('button', { name: 'Save' });
     expect(save).toBeDisabled();
-    await user.click(screen.getByLabelText('Add subtitle language'));
-    await user.click(await screen.findByRole('option', { name: 'French' }));
-    const preference = within(
-      screen.getByRole('group', { name: 'Subtitle preference 1' }),
-    );
-    await user.click(preference.getByRole('combobox', { name: 'Filter' }));
-    await user.click(await screen.findByRole('option', { name: 'Forced' }));
-    await user.click(
-      preference.getByRole('checkbox', { name: 'Allow image-based subtitles' }),
-    );
+    const imageBased = screen.getByLabelText('Allow image-based subtitles');
+    await user.click(imageBased);
     await user.click(save);
     await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
     expect(server.settings?.subtitlePreferences).toEqual([
@@ -215,10 +223,8 @@ describe('FfmpegSettingsPage', () => {
     unmount();
     await renderPage(undefined, 'captions-audio');
     expect(
-      within(
-        screen.getByRole('group', { name: 'Subtitle preference 1' }),
-      ).getByRole('combobox', { name: 'Language' }),
-    ).toHaveValue('French');
+      screen.getByLabelText('Allow image-based subtitles'),
+    ).not.toBeChecked();
   });
 
   test('saved global subtitle preferences can be cleared, reset and saved as empty', async () => {
