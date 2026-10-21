@@ -1,18 +1,18 @@
 import { renderWithProviders, screen, waitFor, within } from '@/test/utils';
 import type { Channel } from '@tunarr/types';
 import { SnackbarProvider } from 'notistack';
-import { Suspense, type ReactNode } from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { Suspense, type AnchorHTMLAttributes, type ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Sdk from '../../generated/sdk.gen.ts';
 import ChannelsPage from './ChannelsPage.tsx';
 
-const { mockDeleteChannel, mockGetChannel, mockPutChannel } = vi.hoisted(
-  () => ({
+const { mockDeleteChannel, mockGetChannel, mockPutChannel, mockNavigate } =
+  vi.hoisted(() => ({
+    mockNavigate: vi.fn<() => Promise<void>>(),
     mockDeleteChannel: vi.fn<(opts: IdOpts) => Promise<unknown>>(),
     mockGetChannel: vi.fn<(opts: IdOpts) => Promise<unknown>>(),
     mockPutChannel: vi.fn<(opts: PutOpts) => Promise<unknown>>(),
-  }),
-);
+  }));
 
 function makeChannel(
   overrides: Partial<Channel> & Pick<Channel, 'id' | 'name' | 'number'>,
@@ -38,7 +38,14 @@ function makeChannel(
 
 // The list's copy of a channel: no filler lists, as GET /api/channels sends it
 const channels = [
-  makeChannel({ id: 'ch-1', name: 'Movie Night', number: 1 }),
+  makeChannel({
+    id: 'ch-1',
+    name: 'Movie Night',
+    number: 1,
+    sessions: [
+      { type: 'hls', state: 'started', numConnections: 1, connections: [] },
+    ],
+  }),
   makeChannel({ id: 'ch-2', name: 'Cartoons', number: 2 }),
   makeChannel({ id: 'ch-3', name: 'Test Pattern', number: 3, stealth: true }),
 ];
@@ -66,10 +73,16 @@ vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   putApiChannelsById: (opts: PutOpts) => mockPutChannel(opts),
 }));
 
-vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children?: ReactNode }) => <a>{children}</a>,
-  useNavigate: () => () => Promise.resolve(),
-}));
+vi.mock('@tanstack/react-router', async () => {
+  const { forwardRef } = await import('react');
+  return {
+    Link: forwardRef<
+      HTMLAnchorElement,
+      AnchorHTMLAttributes<HTMLAnchorElement>
+    >((props, ref) => <a {...props} ref={ref} />),
+    useNavigate: () => mockNavigate,
+  };
+});
 
 vi.mock('../../components/base/RouterButtonLink.tsx', () => ({
   RouterButtonLink: ({ children }: { children?: ReactNode }) => (
@@ -268,5 +281,110 @@ describe('ChannelsPage bulk actions', () => {
         name: 'Show in guide',
       }),
     ).toBeEnabled();
+  });
+});
+
+describe('ChannelsPage mobile card actions', () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    mockNavigate.mockResolvedValue();
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('keeps card navigation and secondary controls separate', async () => {
+    const { container } = renderPage();
+    const title = await screen.findByText('Ch 1 · Movie Night');
+    const navigation = title.closest('button');
+    expect(navigation).not.toBeNull();
+    expect(container.querySelector('button button')).toBeNull();
+    expect(navigation).toHaveAccessibleName('Open channel Movie Night');
+
+    const options = screen.getByRole('button', {
+      name: 'Options for Movie Night',
+    });
+    const sessions = screen.getByRole('button', {
+      name: 'View sessions for Movie Night',
+    });
+    expect(navigation).not.toContainElement(options);
+    expect(navigation).not.toContainElement(sessions);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('1–3 of 3')).toBeInTheDocument();
+  });
+
+  test('opens the channel with pointer, Enter and Space', async () => {
+    const { user } = renderPage();
+    const navigation = await screen.findByRole('button', {
+      name: 'Open channel Movie Night',
+    });
+    await user.click(navigation);
+    navigation.focus();
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(mockNavigate).toHaveBeenCalledTimes(3);
+    expect(mockNavigate).toHaveBeenLastCalledWith({
+      to: '/channels/$channelId',
+      params: { channelId: 'ch-1' },
+    });
+  });
+
+  test('opens and dismisses options without navigating and restores keyboard focus', async () => {
+    const { user } = renderPage();
+    const navigation = await screen.findByRole('button', {
+      name: 'Open channel Movie Night',
+    });
+    const options = screen.getByRole('button', {
+      name: 'Options for Movie Night',
+    });
+    navigation.focus();
+    await user.tab();
+    expect(options).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(options).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+    );
+    expect(options).toHaveFocus();
+    expect(options).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(options);
+    expect(
+      await screen.findByRole('menuitem', { name: 'Watch Channel' }),
+    ).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('opens session details with pointer and keyboard without navigating', async () => {
+    const { user } = renderPage();
+    const sessions = await screen.findByRole('button', {
+      name: 'View sessions for Movie Night',
+    });
+    await user.click(sessions);
+    let dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('"Movie Night" Sessions');
+    expect(dialog).toHaveTextContent('"numConnections": 1');
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+
+    sessions.focus();
+    await user.keyboard(' ');
+    dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('"Movie Night" Sessions');
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

@@ -429,13 +429,23 @@ export default function ChannelsPage() {
         <Tooltip placement="top" title={t`No active sessions`}>
           <Box
             sx={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: red[200],
+              width: 28,
+              height: 28,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               flexShrink: 0,
             }}
-          />
+          >
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                backgroundColor: red[200],
+              }}
+            />
+          </Box>
         </Tooltip>
       );
     }
@@ -463,15 +473,18 @@ export default function ChannelsPage() {
           </Box>
         }
       >
-        <GlowingCircle
-          sx={{ width: '10px', height: '10px', flexShrink: 0 }}
-          color={lameDuck ? yellow[400] : green[400]}
-          glowColor={lameDuck ? yellow[200] : green[200]}
-          onClick={(e) => {
-            e.stopPropagation();
-            setSessionDetailDialog(channel);
-          }}
-        />
+        <IconButton
+          size="small"
+          aria-label={t`View sessions for ${channel.name}`}
+          sx={{ width: 28, height: 28, flexShrink: 0 }}
+          onClick={() => setSessionDetailDialog(channel)}
+        >
+          <GlowingCircle
+            sx={{ width: 10, height: 10 }}
+            color={lameDuck ? yellow[400] : green[400]}
+            glowColor={lameDuck ? yellow[200] : green[200]}
+          />
+        </IconButton>
       </Tooltip>
     );
   };
@@ -487,68 +500,89 @@ export default function ChannelsPage() {
         <Stack spacing={1}>
           {pagedChannels.map((channel) => (
             <Card key={channel.id}>
-              <CardActionArea
-                onClick={() =>
-                  navigate({
-                    to: '/channels/$channelId',
-                    params: { channelId: channel.id },
-                  }).catch(console.error)
-                }
+              <CardContent
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  py: 1.5,
+                  '&:last-child': { pb: 1.5 },
+                }}
               >
-                <CardContent
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    py: 1.5,
-                    '&:last-child': { pb: 1.5 },
-                  }}
+                {renderSessionStatus(channel)}
+                <CardActionArea
+                  aria-label={t`Open channel ${channel.name}`}
+                  sx={{ flex: 1, minWidth: 0, borderRadius: 1 }}
+                  onClick={() =>
+                    navigate({
+                      to: '/channels/$channelId',
+                      params: { channelId: channel.id },
+                    }).catch(console.error)
+                  }
                 >
-                  {renderSessionStatus(channel)}
                   <Box
                     sx={{
-                      flexShrink: 0,
-                      width: 40,
-                      height: 32,
                       display: 'flex',
                       alignItems: 'center',
+                      gap: 1.5,
+                      width: '100%',
                     }}
                   >
-                    <ChannelIconDisplay
-                      icon={channel.icon}
-                      imgStyle={{ maxHeight: '32px', maxWidth: '40px' }}
-                      style={{ width: '40px', height: '32px' }}
-                    />
+                    <Box
+                      sx={{
+                        flexShrink: 0,
+                        width: 40,
+                        height: 32,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <ChannelIconDisplay
+                        icon={channel.icon}
+                        imgStyle={{ maxHeight: '32px', maxWidth: '40px' }}
+                        style={{ width: '40px', height: '32px' }}
+                      />
+                    </Box>
+                    <Box sx={{ flexGrow: 1, minWidth: 0, textAlign: 'left' }}>
+                      <Typography variant="subtitle2" noWrap>
+                        Ch {channel.number} · {channel.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        <Plural
+                          value={channel.programCount}
+                          one="# program"
+                          other="# programs"
+                        />{' '}
+                        ·{' '}
+                        {betterHumanize(dayjs.duration(channel.duration), {
+                          style: 'short',
+                        })}
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle2" noWrap>
-                      Ch {channel.number} · {channel.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      <Plural
-                        value={channel.programCount}
-                        one="# program"
-                        other="# programs"
-                      />{' '}
-                      ·{' '}
-                      {betterHumanize(dayjs.duration(channel.duration), {
-                        style: 'short',
-                      })}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    sx={{ flexShrink: 0 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenMenu(e, channel.id);
-                    }}
-                  >
-                    <MoreVert />
-                  </IconButton>
-                  {renderChannelMenu(channel)}
-                </CardContent>
-              </CardActionArea>
+                </CardActionArea>
+                <IconButton
+                  size="small"
+                  id={
+                    channelMenuOpen === channel.id
+                      ? 'channel-options-button'
+                      : undefined
+                  }
+                  aria-label={t`Options for ${channel.name}`}
+                  aria-haspopup="menu"
+                  aria-expanded={channelMenuOpen === channel.id}
+                  aria-controls={
+                    channelMenuOpen === channel.id
+                      ? 'channel-options-menu'
+                      : undefined
+                  }
+                  sx={{ flexShrink: 0 }}
+                  onClick={(e) => handleOpenMenu(e, channel.id)}
+                >
+                  <MoreVert />
+                </IconButton>
+                {renderChannelMenu(channel)}
+              </CardContent>
             </Card>
           ))}
         </Stack>
