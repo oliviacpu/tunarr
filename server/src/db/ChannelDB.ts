@@ -1,4 +1,5 @@
 import type {
+  BulkChannelStealthUpdateResult,
   ChannelAndLineup,
   ChannelAndRawLineup,
   IChannelDB,
@@ -58,6 +59,13 @@ export class ChannelDB implements IChannelDB {
   ) {}
 
   // --- BasicChannelRepository delegation ---
+
+  setChannelStealth(
+    ids: string[],
+    stealth: boolean,
+  ): BulkChannelStealthUpdateResult {
+    return this.basicChannel.setChannelStealth(ids, stealth);
+  }
 
   channelExists(channelId: string): Promise<boolean> {
     return this.channelReadOps.channelExists(channelId);

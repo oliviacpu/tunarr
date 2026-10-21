@@ -25,7 +25,10 @@ import type {
   SaveableChannel,
   UpdateChannelRequest,
 } from '@tunarr/types';
-import type { UpdateChannelProgrammingRequest } from '@tunarr/types/api';
+import type {
+  BulkChannelItemResult,
+  UpdateChannelProgrammingRequest,
+} from '@tunarr/types/api';
 import type { ContentProgramType } from '@tunarr/types/schemas';
 import type { MarkOptional, MarkRequired } from 'ts-essentials';
 import type { Json } from '../../types/schemas.ts';
@@ -38,7 +41,17 @@ export type ChannelAndLineup<ChannelType = ChannelOrm> = {
 };
 export type ChannelAndRawLineup = { channel: ChannelOrm; lineup: Json };
 
+export type BulkChannelStealthUpdateResult = {
+  results: BulkChannelItemResult[];
+  changedIds: string[];
+};
+
 export interface IChannelDB {
+  setChannelStealth(
+    ids: string[],
+    stealth: boolean,
+  ): BulkChannelStealthUpdateResult;
+
   channelExists(channelId: string): Promise<boolean>;
 
   getChannelOrm(
