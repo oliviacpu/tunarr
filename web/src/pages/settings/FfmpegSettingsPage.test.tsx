@@ -2,12 +2,11 @@ import {
   getApiFfmpegInfoQueryKey,
   getApiSettingsFfmpegQueryKey,
 } from '../../generated/@tanstack/react-query.gen.ts';
-import { renderWithProviders, screen, waitFor } from '@/test/utils';
+import { renderWithProviders, screen, waitFor, within } from '@/test/utils';
 import { QueryClient } from '@tanstack/react-query';
 import type { FfmpegSettings } from '@tunarr/types';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import { AxiosError, AxiosHeaders } from 'axios';
-import { omit } from 'lodash-es';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -133,60 +132,173 @@ describe('FfmpegSettingsPage', () => {
     await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
     expect(mockPutFfmpegSettings.mock.calls[0]?.[0]).toMatchObject({
       body: {
-        ...omit(saved, 'subtitlePreferences'),
+        ...saved,
         enableSubtitleExtraction: !saved.enableSubtitleExtraction,
       },
     });
   });
 
-  test.each(['playback', 'captions-audio'] as const)(
-    '%s saves preserve hidden subtitle preferences and in-progress drafts',
-    async (section) => {
-      const preferences: FfmpegSettings['subtitlePreferences'] = [
-        {
-          languageCode: 'eng',
-          filter: 'any',
-          allowExternal: true,
-          allowImageBased: false,
-        },
-      ];
-      server.settings = { ...saved, subtitlePreferences: preferences };
-      const queryClient = new QueryClient({
-        defaultOptions: { queries: { retry: false } },
-      });
-      mockPutFfmpegSettings.mockImplementation(({ body }) =>
-        Promise.resolve({ data: { ...server.settings, ...body } }),
-      );
-      const { user } = await renderPage(queryClient, section);
-      if (section === 'playback') {
-        await user.clear(screen.getByLabelText('FFmpeg executable path'));
-        await user.type(
-          screen.getByLabelText('FFmpeg executable path'),
-          '/opt/ffmpeg',
-        );
-      } else {
-        await user.click(
-          screen.getByRole('checkbox', { name: 'Extract embedded subtitles' }),
-        );
-      }
-      const updatedPreferences = [{ ...preferences[0], languageCode: 'fra' }];
-      server.settings = { ...saved, subtitlePreferences: updatedPreferences };
-      queryClient.setQueryData(getApiSettingsFfmpegQueryKey(), server.settings);
-      await waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
-      );
-      await user.click(screen.getByRole('button', { name: 'Save' }));
-      await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
-      const body = mockPutFfmpegSettings.mock.calls[0]?.[0].body;
-      expect(body).not.toHaveProperty('subtitlePreferences');
-      expect(body).toMatchObject(
-        section === 'playback'
-          ? { ffmpegExecutablePath: '/opt/ffmpeg' }
-          : { enableSubtitleExtraction: !saved.enableSubtitleExtraction },
-      );
-      expect(server.settings.subtitlePreferences).toEqual(updatedPreferences);
-    },
-  );
+  test('playback saves preserve hidden subtitle preferences and in-progress drafts', async () => {
+    const preferences: FfmpegSettings['subtitlePreferences'] = [
+      {
+        languageCode: 'eng',
+        filter: 'any',
+        allowExternal: true,
+        allowImageBased: false,
+      },
+    ];
+    server.settings = { ...saved, subtitlePreferences: preferences };
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    mockPutFfmpegSettings.mockImplementation(({ body }) =>
+      Promise.resolve({ data: { ...server.settings, ...body } }),
+    );
+    const { user } = await renderPage(queryClient);
+    await user.clear(screen.getByLabelText('FFmpeg executable path'));
+    await user.type(
+      screen.getByLabelText('FFmpeg executable path'),
+      '/opt/ffmpeg',
+    );
+    const updatedPreferences = [{ ...preferences[0], languageCode: 'fra' }];
+    server.settings = { ...saved, subtitlePreferences: updatedPreferences };
+    queryClient.setQueryData(getApiSettingsFfmpegQueryKey(), server.settings);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
+    const body = mockPutFfmpegSettings.mock.calls[0]?.[0].body;
+    expect(body).not.toHaveProperty('subtitlePreferences');
+    expect(body).toMatchObject({ ffmpegExecutablePath: '/opt/ffmpeg' });
+    expect(server.settings.subtitlePreferences).toEqual(updatedPreferences);
+  });
+
+  test('global subtitle preferences save, reload, clear and reset through the settings form', async () => {
+    mockPutFfmpegSettings.mockImplementation(({ body }) => {
+      server.settings = { ...saved, ...body };
+      return Promise.resolve({ data: server.settings });
+    });
+    const { user, unmount } = await renderPage(undefined, 'captions-audio');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.click(
+      screen.getByRole('combobox', { name: 'Add subtitle language' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'French' }));
+    const preference = within(
+      screen.getByRole('group', { name: 'Subtitle preference 1' }),
+    );
+    await user.click(preference.getByRole('combobox', { name: 'Filter' }));
+    await user.click(await screen.findByRole('option', { name: 'Forced' }));
+    await user.click(
+      preference.getByRole('checkbox', { name: 'Allow image-based subtitles' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
+    expect(server.settings?.subtitlePreferences).toEqual([
+      {
+        languageCode: 'fra',
+        filter: 'forced',
+        allowExternal: true,
+        allowImageBased: false,
+      },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
+    );
+    unmount();
+    const reloaded = await renderPage(undefined, 'captions-audio');
+    expect(
+      within(
+        screen.getByRole('group', { name: 'Subtitle preference 1' }),
+      ).getByRole('combobox', { name: 'Language' }),
+    ).toHaveValue('French');
+    await reloaded.user.click(
+      screen.getByRole('button', { name: 'Clear subtitle preferences' }),
+    );
+    expect(
+      screen.queryByRole('group', { name: 'Subtitle preference 1' }),
+    ).not.toBeInTheDocument();
+    await reloaded.user.click(
+      screen.getByRole('button', { name: 'Reset changes' }),
+    );
+    expect(
+      within(
+        screen.getByRole('group', { name: 'Subtitle preference 1' }),
+      ).getByRole('combobox', { name: 'Language' }),
+    ).toHaveValue('French');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await reloaded.user.click(
+      screen.getByRole('button', { name: 'Clear subtitle preferences' }),
+    );
+    await reloaded.user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledTimes(2));
+    expect(
+      mockPutFfmpegSettings.mock.calls[1]?.[0].body.subtitlePreferences,
+    ).toEqual([]);
+  });
+
+  test('a rejected global preference save keeps the draft available to reset', async () => {
+    mockPutFfmpegSettings.mockRejectedValue(
+      serverError('Preferences could not be saved', 400),
+    );
+    const { user } = await renderPage(undefined, 'captions-audio');
+    await user.click(
+      screen.getByRole('combobox', { name: 'Add subtitle language' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'English' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(
+      await screen.findByText(
+        'Could not save settings: Preferences could not be saved',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole('group', { name: 'Subtitle preference 1' }),
+      ).getByRole('combobox', { name: 'Language' }),
+    ).toHaveValue('English');
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(
+      screen.queryByRole('group', { name: 'Subtitle preference 1' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  test('subtitle edits made during a save stay dirty and reset to the saved rows', async () => {
+    let finishSave: ((value: { data: FfmpegSettings }) => void) | undefined;
+    mockPutFfmpegSettings.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    const { user } = await renderPage(undefined, 'captions-audio');
+    await user.click(
+      screen.getByRole('combobox', { name: 'Add subtitle language' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'English' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    const external = () =>
+      within(
+        screen.getByRole('group', { name: 'Subtitle preference 1' }),
+      ).getByRole('checkbox', { name: 'Allow external subtitles' });
+    await user.click(external());
+    const submitted = mockPutFfmpegSettings.mock.calls[0]?.[0].body;
+    if (finishSave === undefined || submitted === undefined)
+      throw new Error('Save must be pending');
+    server.settings = { ...saved, ...submitted };
+    finishSave({ data: server.settings });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
+    );
+    expect(external()).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(external()).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
 
   test('the form is there while ffmpeg is still being probed', async () => {
     server.ffmpegInfo = () => new Promise(() => {});

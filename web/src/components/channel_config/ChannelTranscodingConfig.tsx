@@ -1,7 +1,6 @@
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
-  Collapse,
   Divider,
   FormControl,
   FormControlLabel,
@@ -22,7 +21,7 @@ import { LearnMoreLink } from '../base/LearnMoreLink.tsx';
 import { RouterLink } from '../base/RouterLink.tsx';
 import { ChannelAudioTracksField } from './ChannelAudioTracksField.tsx';
 import { ChannelCaptionsField } from './ChannelCaptionsField.tsx';
-import { ChannelSubtitlePreferencesTable } from './ChannelSubtitlePreferencesTable.tsx';
+import { ChannelSubtitlePreferencesField } from './ChannelSubtitlePreferencesField.tsx';
 
 export default function ChannelTranscodingConfig() {
   const { t } = useLingui();
@@ -55,10 +54,7 @@ export default function ChannelTranscodingConfig() {
   const channel = useStore((s) => s.channelEditor.currentEntity);
   const transcodeConfigs = useTranscodeConfigs();
   const { control, watch } = useChannelFormContext();
-  const [subtitlesEnabled, streamMode] = watch([
-    'subtitlesEnabled',
-    'streamMode',
-  ]);
+  const streamMode = watch('streamMode');
 
   return (
     channel && (
@@ -130,7 +126,8 @@ export default function ChannelTranscodingConfig() {
             </Typography>
             <Typography variant="subtitle1">
               <Trans>
-                Override global audio and subtitle settings for this channel.
+                Choose a fixed audio output layout and subtitle preferences for
+                this channel.
               </Trans>
             </Typography>
             <Divider sx={{ my: 2 }} />
@@ -152,16 +149,8 @@ export default function ChannelTranscodingConfig() {
                 />
               }
             />
-            <Collapse in={subtitlesEnabled}>
-              <Divider sx={{ my: 2 }} />
-              <Typography>
-                <Trans>
-                  Tunarr checks these preferences from the top and uses the
-                  first subtitle track that matches.
-                </Trans>
-              </Typography>
-              <ChannelSubtitlePreferencesTable />
-            </Collapse>
+            <Divider sx={{ my: 2 }} />
+            <ChannelSubtitlePreferencesField />
             <Divider sx={{ my: 2 }} />
             <ChannelCaptionsField />
           </Stack>

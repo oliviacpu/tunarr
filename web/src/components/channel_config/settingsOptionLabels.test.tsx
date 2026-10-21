@@ -43,8 +43,8 @@ vi.mock('./ChannelAudioTracksField.tsx', () => ({
 vi.mock('./ChannelCaptionsField.tsx', () => ({
   ChannelCaptionsField: () => null,
 }));
-vi.mock('./ChannelSubtitlePreferencesTable.tsx', () => ({
-  ChannelSubtitlePreferencesTable: () => null,
+vi.mock('./ChannelSubtitlePreferencesField.tsx', () => ({
+  ChannelSubtitlePreferencesField: () => null,
 }));
 vi.mock('../settings/ImageUploadInput.tsx', () => ({
   ImageUploadInput: () => null,

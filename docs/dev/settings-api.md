@@ -67,8 +67,7 @@ stream, while direct selection tries default or first. Existing explicit profile
 profile-based playback; Direct v2 gains no profile support. Direct output remains text-only.
 
 Preferences do not enable subtitles, extraction, captions or WebVTT capabilities. An active program
-keeps its selected subtitles. Global/channel controls and previews follow in S5c; the API can configure
-the list in this stage. Fixed output audio layouts stay per channel.
+keeps its selected subtitles. The Captions & audio settings page edits the global list; each channel's Streaming tab selects inheritance or a custom list and previews saved globals. Fixed output audio layouts stay per channel.
 
 ## Compatibility window
 

@@ -61,34 +61,39 @@ vi.mock('./ChannelTranscodingConfig.tsx', async () => {
   const { useFormContext } = await import('react-hook-form');
   return {
     default: () => {
-      const { getValues, setValue } = useFormContext<SaveableChannel>();
+      const { getValues, setValue, register } =
+        useFormContext<SaveableChannel>();
+      const editPreferences = (
+        preferences: SaveableChannel['subtitlePreferences'],
+      ) => {
+        setValue('subtitlePreferenceMode', 'custom', { shouldDirty: true });
+        setValue('subtitlePreferences', preferences, { shouldDirty: true });
+      };
       return (
         <>
-          <button
-            type="button"
-            onClick={() =>
-              setValue('subtitlePreferences', [], { shouldDirty: true })
-            }
-          >
+          <label>
+            Subtitle preferences
+            <select {...register('subtitlePreferenceMode')}>
+              <option value="inherit">Use global defaults</option>
+              <option value="custom">Customize for this channel</option>
+            </select>
+          </label>
+          <button type="button" onClick={() => editPreferences([])}>
             Clear subtitle preferences
           </button>
           <button
             type="button"
             onClick={() =>
-              setValue(
-                'subtitlePreferences',
-                [
-                  ...(getValues('subtitlePreferences') ?? []),
-                  {
-                    langugeCode: 'spa',
-                    priority: 0,
-                    allowExternal: true,
-                    allowImageBased: false,
-                    filter: 'forced',
-                  },
-                ],
-                { shouldDirty: true },
-              )
+              editPreferences([
+                ...(getValues('subtitlePreferences') ?? []),
+                {
+                  langugeCode: 'spa',
+                  priority: 0,
+                  allowExternal: true,
+                  allowImageBased: false,
+                  filter: 'forced',
+                },
+              ])
             }
           >
             Add subtitle preference
@@ -96,10 +101,8 @@ vi.mock('./ChannelTranscodingConfig.tsx', async () => {
           <button
             type="button"
             onClick={() =>
-              setValue(
-                'subtitlePreferences',
+              editPreferences(
                 [...(getValues('subtitlePreferences') ?? [])].reverse(),
-                { shouldDirty: true },
               )
             }
           >
@@ -108,13 +111,11 @@ vi.mock('./ChannelTranscodingConfig.tsx', async () => {
           <button
             type="button"
             onClick={() =>
-              setValue(
-                'subtitlePreferences',
+              editPreferences(
                 getValues('subtitlePreferences')?.map((pref) => ({
                   ...pref,
                   allowExternal: !pref.allowExternal,
                 })),
-                { shouldDirty: true },
               )
             }
           >
@@ -391,6 +392,68 @@ describe('EditChannelForm, editing a channel', () => {
       'custom',
     );
     await waitFor(() => expect(saveButton()).toBeDisabled());
+  });
+
+  test('saving inheritance retains an edited custom draft and restores it after save', async () => {
+    const { user } = renderEditor('edit');
+    await nameField();
+    await user.click(screen.getByRole('tab', { name: 'Streaming' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Add subtitle preference' }),
+    );
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Subtitle preferences' }),
+      'inherit',
+    );
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+    expect(mockUpdate.mock.calls[0]?.[0].body).toMatchObject({
+      subtitlePreferenceMode: 'inherit',
+      subtitlePreferences: [{ langugeCode: 'spa', priority: 0 }],
+    });
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Subtitle preferences' }),
+      'custom',
+    );
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+    expect(mockUpdate.mock.calls[1]?.[0].body.subtitlePreferenceMode).toBe(
+      'custom',
+    );
+    expect(
+      mockUpdate.mock.calls[1]?.[0].body.subtitlePreferences,
+    ).toBeUndefined();
+  });
+
+  test('changing only the mode preserves saved custom rows', async () => {
+    const { user } = renderEditor('edit', {
+      ...channel,
+      subtitlePreferenceMode: 'custom',
+      subtitlePreferences: [
+        {
+          langugeCode: 'eng',
+          priority: 0,
+          filter: 'forced',
+          allowExternal: true,
+          allowImageBased: false,
+        },
+      ],
+    });
+    await nameField();
+    await user.click(screen.getByRole('tab', { name: 'Streaming' }));
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: 'Subtitle preferences' }),
+      'inherit',
+    );
+    await user.click(saveButton());
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+    expect(mockUpdate.mock.calls[0]?.[0].body.subtitlePreferenceMode).toBe(
+      'inherit',
+    );
+    expect(
+      mockUpdate.mock.calls[0]?.[0].body.subtitlePreferences,
+    ).toBeUndefined();
   });
 
   test('Save is disabled until one valid change, then saves it once', async () => {

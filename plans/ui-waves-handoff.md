@@ -6,6 +6,21 @@ session, Codex, or a person can continue without the previous session's memory. 
 "Approval gate" paragraph, the row you are about to work on, and this file's "Working rules" before
 starting anything.
 
+## S5c controls and acceptance (2026-10-21)
+
+S5c exposes the global ordered subtitle list in Captions & audio and the channel inherit/custom
+control with saved-global preview. Both modes retain custom rows and drafts; a final explicit
+inherit choice is respected even after editing a custom draft. The existing shared shell handles
+save/reset/errors. Playback still omits subtitle globals on unrelated saves, and unrelated channel
+updates omit untouched mode/rows. Audio output layout remains per channel, with accurate copy.
+Disabled subtitles and Direct v2's text-only limit are explained without enabling capabilities.
+
+S5's three implementation PRs land in dependency order after full CI and exact-head review. The
+next release must follow the existing paired SQLite/settings backup, candidate migration and
+prior-image restore rehearsal, viewer/status checks and guarded Whatbox deployment. Source work
+does not itself deploy; production remains `.20.5`. Apple TV acceptance is manual and unverified.
+C7b/C7c batching stays held.
+
 ## S5b stream selection (2026-10-21)
 
 S5b resolves current global subtitle preferences for inheriting channels. The new `by_preferences`
