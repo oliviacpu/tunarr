@@ -1,5 +1,5 @@
 import { globalOptions } from '@/globals.js';
-import { fileExists } from '@/util/fsUtil.js';
+import { fileExists, writeFileAtomic } from '@/util/fsUtil.js';
 import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
 import NodeCache from 'node-cache';
 import { promises as fs } from 'node:fs';
@@ -24,10 +24,10 @@ export class FileCacheService {
    * `save` a file on cache folder
    */
   async setCache(fullFilePath: string, data: string): Promise<boolean> {
+    await writeFileAtomic(join(this.cachePath, fullFilePath), data);
     if (this.enableInMemoryCache) {
       FileCacheService.cache.set(fullFilePath, data);
     }
-    await fs.writeFile(join(this.cachePath, fullFilePath), data);
     return true;
   }
 
@@ -65,14 +65,15 @@ export class FileCacheService {
   async deleteCache(fullFilePath: string): Promise<boolean> {
     const thePath = join(this.cachePath, fullFilePath);
 
+    if (this.enableInMemoryCache) {
+      FileCacheService.cache.del(fullFilePath);
+    }
+
     if (!(await fileExists(thePath))) {
       return false;
     }
 
     await fs.unlink(thePath);
-    if (this.enableInMemoryCache) {
-      FileCacheService.cache.del(fullFilePath);
-    }
     return true;
   }
 }

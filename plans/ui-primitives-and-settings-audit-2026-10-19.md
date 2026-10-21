@@ -348,14 +348,16 @@ reset endpoint to add. Defaults are submitted through the existing PUT. S5a stor
 playback behavior follows in S5b. Before the migration release, back up SQLite and `settings.json`
 as a pair and rehearse restoring both with the prior image through the existing deploy procedure.
 
-### C7 continuation: C7a approved; batching held
+### C7 continuation: batching approved (2026-10-21)
 
 `plans/channel-update-and-bulk-followups-2026-10-20.md` proposes three separate rows beyond
 the original C7 UI scope: C7a preserves omitted channel relations; C7b batches stealth changes;
 C7c batches channel deletion. Olivia Hunter approved C7a only on 2026-10-20 while reviewing
-PR #149; C7b and C7c remain held pending explicit approval. New bulk
-list endpoints are deferred for lack of the repeated XMLTV/M3U work seen in channel actions.
-This decision does not expand the approval gate for the original rows or authorize S5 implementation.
+PR #149. On 2026-10-21 she explicitly authorized C7b/C7c implementation within that design.
+Use separate reviewed PRs, starting with shared checked publication, then stealth batching,
+then deletion batching; split API and client changes if needed for review size. New bulk list
+endpoints remain deferred for lack of the repeated XMLTV/M3U work seen in channel actions.
+S5 implementation was separately authorized and is now deployed in `oliviacpu-2026.10.21`.
 
 - **Wave 1 status (2026-10-19):** all ten PRs merged (#86–#95), each reviewed by Claude and Codex with CI green.
 - **Wave 2 status (2026-10-20):** D1–D7 merged (#98–#104).

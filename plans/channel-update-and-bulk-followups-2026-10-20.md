@@ -1,9 +1,11 @@
 # Channel update preservation and batched channel actions
 
-Status: **C7a approved by Olivia Hunter on 2026-10-20; C7b and C7c remain proposed and held**.
-Olivia approved "C7a first; hold batching" while reviewing draft PR #149. These are the held
-C7 follow-ups from `ui-waves-handoff.md`, beyond the approved UI-only bulk-action row.
-S5 global subtitle defaults remain a separate feature and design.
+Status: **C7a implemented in #152; C7b and C7c approved by Olivia Hunter on 2026-10-21**.
+Olivia first approved "C7a first; hold batching" while reviewing PR #149, then explicitly
+authorized the remaining C7b/C7c work on 2026-10-21. This document is the approved design
+for those follow-ups under the fork approval process. Use separately reviewed PRs for shared
+publication prerequisites, stealth batching, and deletion batching; split API and client work
+when needed to keep each PR reviewable. S5 is separate and deployed in `oliviacpu-2026.10.21`.
 
 ## Problem
 
@@ -120,7 +122,8 @@ IDs. Single-channel UI paths remain compatible.
 No migration, runtime dependency, new page, global subtitle model or scheduling behavior change
 is proposed. This work changes a cross-package API contract and therefore needs Olivia's
 explicit design approval before implementation under the fork's approval process. That approval
-has been given for C7a only; the batch routes and their supporting changes remain unauthorized.
+was given for C7a on 2026-10-20 and for C7b/C7c on 2026-10-21. The batch routes and
+their supporting changes are authorized within this design; bulk list endpoints remain deferred.
 
 ## PR plan and acceptance
 
