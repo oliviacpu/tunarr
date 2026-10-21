@@ -1,4 +1,4 @@
-### Separate mobile channel card actions (2026-10-21, PR pending)
+### Separate mobile channel card actions (2026-10-21, PR #161)
 
 - **What you saw:** the local 390px channel gallery emitted React's button-nesting warning. The active-session dot was clickable but had no separate keyboard control.
 - **Cause:** the mobile card's navigation `CardActionArea` rendered a button around the options `IconButton` and clickable session status.
