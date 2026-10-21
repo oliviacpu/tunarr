@@ -1,4 +1,4 @@
-### Batched channel deletion controls (2026-10-21, PR pending)
+### Batched channel deletion controls (2026-10-21, PR #172)
 
 - **What you saw:** The Channels table issued one delete request per selected channel and could not distinguish committed deletion from cleanup/publication failure or an unconfirmed response.
 - **Cause:** The original bulk control used individual endpoints and one success/failure boundary for each promise.
