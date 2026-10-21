@@ -1,4 +1,4 @@
-### Checked publication for batched channel changes (2026-10-21, PR pending)
+### Checked publication for batched channel changes (2026-10-21, PR #166)
 
 - **What you saw:** Code inspection found that channel bulk actions refreshed derived files once per selected channel. The existing M3U write path logs disk failures instead of reporting them, and a missing disk cache file can leave a stale in-memory playlist.
 - **Cause:** Single-channel refresh methods provide no bounded multi-channel publication operation, and cache invalidation depends on disk-file existence.
