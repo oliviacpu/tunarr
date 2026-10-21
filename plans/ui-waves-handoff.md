@@ -14,6 +14,8 @@ inherit choice is respected even after editing a custom draft. The existing shar
 save/reset/errors. Playback still omits subtitle globals on unrelated saves, and unrelated channel
 updates omit untouched mode/rows. Audio output layout remains per channel, with accurate copy.
 Disabled subtitles and Direct v2's text-only limit are explained without enabling capabilities.
+The [S5 gallery](../docs/dev/subtitle-defaults-gallery.md) records 20 full-page captures and ten
+phone viewport details with source provenance and a standalone recapture command.
 
 S5's three implementation PRs land in dependency order after full CI and exact-head review. The
 next release must follow the existing paired SQLite/settings backup, candidate migration and

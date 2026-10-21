@@ -22,3 +22,5 @@ only use text subtitles. A program already streaming keeps its selected subtitle
 Choose **Customize for this channel** on a channel's Streaming tab for an exception. Returning to global
 preferences retains its custom list for later. Fixed output audio tracks remain a per-channel choice;
 the input audio language preference list on this page does not create an output track layout.
+
+[View global and channel screenshots](../../dev/subtitle-defaults-gallery.md).

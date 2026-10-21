@@ -1,5 +1,7 @@
 # UI gallery
 
+The [S5 subtitle defaults supplement](subtitle-defaults-gallery.md) shows the subsequent global and channel controls at both widths and themes. The captures below retain their original source boundary.
+
 These screenshots cover 19 canonical page states in light and dark themes at phone (390px) and desktop (1440px) widths. Each capture uses a 1000px-high viewport and includes the full page, so image heights vary.
 
 Captured on 2026-10-21 from source `f837ef4cc221aef5202c4872d00608863842127d`, using the generic seed in the isolated E2E fixture. The screenshots contain no production data. Routes below are relative to `/web`.
