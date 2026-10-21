@@ -1571,6 +1571,25 @@ describe('TVGuideService batch cache publication', () => {
     ).toEqual([t.b.channel.uuid]);
   });
 
+  it('retries publication after deleting every cached channel fails', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    t.write.mockClear();
+    t.write.mockRejectedValueOnce(new Error('XMLTV deletion failure'));
+    const channelIds = [t.a.channel.uuid, t.b.channel.uuid];
+
+    await expect(t.service.removeCachedChannels(channelIds)).rejects.toThrow(
+      'XMLTV deletion failure',
+    );
+    expect(t.write).toHaveBeenCalledExactlyOnceWith([], expect.anything());
+
+    await t.service.removeCachedChannels(channelIds);
+
+    expect(t.write).toHaveBeenCalledTimes(2);
+    expect(t.write.mock.lastCall?.[0]).toEqual([]);
+    expect(t.loadAllLineups).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['update', 'remove'] as const)(
     'a scheduled build cannot restore stale state after batch %s',
     async (operation) => {
