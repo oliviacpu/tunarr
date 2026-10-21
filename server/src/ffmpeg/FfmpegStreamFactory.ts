@@ -43,6 +43,7 @@ import { match, P } from 'ts-pattern';
 import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLineup.ts';
 import type { IChannelDB } from '../db/interfaces/IChannelDB.ts';
 import { FeatureFlagService } from '../services/FeatureFlagService.ts';
+import { resolveEffectiveSubtitlePreferences } from '../services/resolveSubtitlePreferences.ts';
 import { captionTestPattern } from '../stream/captions/CaptionTestPattern.ts';
 import { hdhrCaptionsEnabled } from '../stream/captions/hdhrCaptionsEnabled.ts';
 import {
@@ -1009,14 +1010,27 @@ export class FfmpegStreamFactory {
       const subtitlePreferences =
         await this.channelDB.getChannelSubtitlePreferences(this.channel.uuid);
 
-      const pickedSubtitleStream = await SubtitleStreamPicker.pickSubtitles(
+      const effective = resolveEffectiveSubtitlePreferences(
+        this.channel.subtitlePreferenceMode,
         subtitlePreferences,
-        lineupItem,
-        streamDetails.subtitleDetails,
-        // In passthrough mode, always prefer text-based subs for sidecar
-        // since burn-in is not available.
-        { preferTextBased: true },
+        [...(this.settingsDB.ffmpegSettings().subtitlePreferences ?? [])],
       );
+      const pickedSubtitleStream =
+        effective.source === 'global' && effective.preferences.length > 0
+          ? await SubtitleStreamPicker.pickInheritedSubtitles(
+              effective.preferences,
+              lineupItem,
+              streamDetails.subtitleDetails,
+              { textOnly: true },
+            )
+          : await SubtitleStreamPicker.pickSubtitles(
+              effective.source === 'channel' ? effective.preferences : [],
+              lineupItem,
+              streamDetails.subtitleDetails,
+              // In passthrough mode, always prefer text-based subs for sidecar
+              // since burn-in is not available.
+              { preferTextBased: true },
+            );
 
       if (pickedSubtitleStream) {
         this.logger.trace('Using subtitle stream: %O', pickedSubtitleStream);

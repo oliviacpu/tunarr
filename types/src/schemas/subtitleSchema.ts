@@ -27,3 +27,7 @@ export const GlobalSubtitlePreferenceSchema = z.object({
   allowExternal: z.boolean(),
   allowImageBased: z.boolean(),
 });
+
+export type GlobalSubtitlePreference = z.infer<
+  typeof GlobalSubtitlePreferenceSchema
+>;

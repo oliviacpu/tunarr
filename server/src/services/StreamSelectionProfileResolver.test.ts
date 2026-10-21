@@ -1,4 +1,5 @@
 import type { FfmpegSettings, StreamSelectionProfile } from '@tunarr/types';
+import type { GlobalSubtitlePreference } from '@tunarr/types/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChannelSubtitlePreferences } from '../db/schema/SubtitlePreferences.ts';
 import type { IChannelDB } from '../db/interfaces/IChannelDB.ts';
@@ -53,6 +54,7 @@ function makeProfile(
 function createResolver(opts: {
   ffmpegSettings?: FfmpegSettings;
   subtitlePrefs?: ChannelSubtitlePreferences[];
+  mode?: 'inherit' | 'custom';
   programProfile?: StreamSelectionProfile | undefined;
   fillerProfile?: StreamSelectionProfile | undefined;
   channelProfile?: StreamSelectionProfile | undefined;
@@ -64,6 +66,9 @@ function createResolver(opts: {
   } as unknown as ISettingsDB;
 
   const channelDB = {
+    getChannel: vi
+      .fn()
+      .mockResolvedValue({ subtitlePreferenceMode: opts.mode ?? 'custom' }),
     getChannelSubtitlePreferences: vi
       .fn()
       .mockResolvedValue(opts.subtitlePrefs ?? []),
@@ -232,6 +237,109 @@ describe('StreamSelectionProfileResolver', () => {
       expect(rule.subtitleAction).toEqual({ type: 'default' });
     });
 
+    const globalPreferences: GlobalSubtitlePreference[] = [
+      {
+        languageCode: 'jpn',
+        filter: 'forced',
+        allowExternal: false,
+        allowImageBased: true,
+      },
+      {
+        languageCode: 'eng',
+        filter: 'any',
+        allowExternal: true,
+        allowImageBased: false,
+      },
+    ];
+
+    it('carries inherited rows with their own flags and ignores retained custom rows', async () => {
+      const { resolver } = createResolver({
+        mode: 'inherit',
+        subtitlePrefs: [makeSubtitlePref({ languageCode: 'fra' })],
+        ffmpegSettings: makeFfmpegSettings({
+          subtitlePreferences: globalPreferences,
+        }),
+      });
+      const result = await resolver.resolve({ channelId: 'ch-1' });
+      expect(result.rules[0]?.subtitleAction).toEqual({
+        type: 'by_preferences',
+        preferences: globalPreferences,
+      });
+    });
+
+    it('preserves default-only profile fallback for empty globals with retained custom rows', async () => {
+      const { resolver } = createResolver({
+        mode: 'inherit',
+        subtitlePrefs: [makeSubtitlePref({})],
+        ffmpegSettings: makeFfmpegSettings({ subtitlePreferences: [] }),
+      });
+      const result = await resolver.resolve({ channelId: 'ch-1' });
+      expect(result.rules[0]?.subtitleAction).toEqual({ type: 'default' });
+    });
+
+    it.each([
+      { subtitlePrefs: [] },
+      { subtitlePrefs: [makeSubtitlePref({ filterType: 'none' })] },
+    ])(
+      'preserves the custom empty/all-none default fallback with globals present (%j)',
+      async ({ subtitlePrefs }) => {
+        const { resolver } = createResolver({
+          mode: 'custom',
+          subtitlePrefs,
+          ffmpegSettings: makeFfmpegSettings({
+            subtitlePreferences: globalPreferences,
+          }),
+        });
+        const result = await resolver.resolve({ channelId: 'ch-1' });
+        expect(result.rules[0]?.subtitleAction).toEqual({ type: 'default' });
+      },
+    );
+
+    it('reads updated globals and channel mode for each legacy resolution', async () => {
+      const { resolver, channelDB, settingsDB } = createResolver({
+        mode: 'inherit',
+        subtitlePrefs: [makeSubtitlePref({})],
+      });
+      await resolver.resolve({ channelId: 'ch-1' });
+      vi.mocked(settingsDB.ffmpegSettings).mockReturnValue(
+        makeFfmpegSettings({ subtitlePreferences: globalPreferences }),
+      );
+      const inherited = await resolver.resolve({ channelId: 'ch-1' });
+      expect(inherited.rules[0]?.subtitleAction).toEqual({
+        type: 'by_preferences',
+        preferences: globalPreferences,
+      });
+      vi.mocked(channelDB.getChannel).mockResolvedValue({
+        subtitlePreferenceMode: 'custom',
+      } as Awaited<ReturnType<IChannelDB['getChannel']>>);
+      const custom = await resolver.resolve({ channelId: 'ch-1' });
+      expect(custom.rules[0]?.subtitleAction?.type).toBe('by_language');
+    });
+
+    it.each(['program', 'filler', 'channel'] as const)(
+      'keeps explicit %s profiles ahead of inherited defaults',
+      async (level) => {
+        const profile = makeProfile();
+        const { resolver, channelDB, settingsDB } = createResolver({
+          mode: 'inherit',
+          ffmpegSettings: makeFfmpegSettings({
+            subtitlePreferences: globalPreferences,
+          }),
+          programProfile: level === 'program' ? profile : undefined,
+          fillerProfile: level === 'filler' ? profile : undefined,
+          channelProfile: level === 'channel' ? profile : undefined,
+        });
+        const result = await resolver.resolve({
+          channelId: 'ch-1',
+          programId: 'program',
+          fillerListId: 'filler',
+        });
+        expect(result).toBe(profile);
+        expect(settingsDB.ffmpegSettings).not.toHaveBeenCalled();
+        expect(channelDB.getChannel).not.toHaveBeenCalled();
+      },
+    );
+
     it('creates by_language audio action from ffmpeg language preferences', async () => {
       const { resolver } = createResolver({
         programProfile: undefined,
@@ -264,7 +372,7 @@ describe('StreamSelectionProfileResolver', () => {
           makeSubtitlePref({
             priority: 1,
             languageCode: 'eng',
-            filterType: 'forced',
+            filterType: 'any',
           }),
           makeSubtitlePref({
             priority: 0,

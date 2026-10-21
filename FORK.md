@@ -26,6 +26,15 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Resolve inherited subtitle preferences for future streams (2026-10-21)
+
+- **Scope:** S5b reads current global preferences for inheriting channels during stream selection. Each row keeps its own language, filter and external/image flags, with language aliases supported. `none` rows are skipped; a nonempty unmatched/all-none list selects no subtitle.
+- **Compatibility:** custom channels retain legacy conversion; explicit profile precedence remains unchanged. Empty lists retain profile default-marked-only versus direct default-or-first fallbacks. HLS Direct v2 stays text-only and gains no CEL profile support. Existing subtitle, extraction, captions and WebVTT gates remain in force.
+- **Diagnostics:** inherited-action traces use the shared matcher and report row settings. The existing diagnostic test transcode remains HLS output; this step does not expand its stream-mode coverage.
+- **Timing:** saved globals affect future selections, with no interruption of an already playing program. The settings timing registry and public API notes document this. Global/channel controls follow in S5c.
+- **Tests:** focused resolver, picker, evaluator, direct-factory and troubleshooting regressions cover aliases, independent row flags, extraction, text-only output, disabled subtitles, explicit precedence and both empty fallbacks.
+- **Upstream:** not sent; second separately reviewed step of approved design #114.
+
 ### Store global subtitle preferences and channel inheritance mode (2026-10-21)
 
 - **Scope:** S5a from approved design #114 stores normalized global subtitle preferences and an explicit channel inherit/custom mode. Playback resolution and controls follow in S5b/S5c; audio output layouts remain per channel.

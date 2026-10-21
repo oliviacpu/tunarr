@@ -132,6 +132,11 @@ exports[`settings application timing > the reviewed runtime mapping stays explic
     "title": "Embedded subtitle extraction",
     "when": "live",
   },
+  "subtitlePreferences": {
+    "description": "Future stream selections on inheriting channels use the saved subtitle preferences. A program already streaming keeps its selected subtitles.",
+    "title": "Global subtitle preferences",
+    "when": "next-program",
+  },
   "transcodeConfigs": {
     "description": "Active HLS sessions retain their channel transcode configuration. Stop all viewers of the channel and tune in again to use an edited configuration.",
     "title": "Transcode configurations",
@@ -180,6 +185,7 @@ exports[`settings application timing > the reviewed runtime mapping stays explic
   "languagePreferences": "audioLanguages",
   "logLevel": "ffmpegLogging",
   "scalingAlgorithm": "videoFilters",
+  "subtitlePreferences": "subtitlePreferences",
   "tonemapAlgorithm": "videoFilters",
   "transcodeDirectory": "transcodeDirectory",
 }

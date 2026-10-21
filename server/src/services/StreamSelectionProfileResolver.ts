@@ -15,6 +15,7 @@ import { StreamSelectionProfile as StreamSelectionProfileTable } from '../db/sch
 import { KEYS } from '../types/inject.ts';
 import { InjectLogger } from '../util/inject.ts';
 import type { Logger } from '../util/logging/LoggerFactory.ts';
+import { resolveEffectiveSubtitlePreferences } from './resolveSubtitlePreferences.ts';
 
 export type StreamSelectionContext = {
   channelId: string;
@@ -169,17 +170,30 @@ export class StreamSelectionProfileResolver {
         : { type: 'default' as const };
 
     // Build subtitle action from channel subtitle preferences
-    const subtitlePrefs =
-      await this.channelDB.getChannelSubtitlePreferences(channelId);
+    const [channel, subtitlePrefs] = await Promise.all([
+      this.channelDB.getChannel(channelId),
+      this.channelDB.getChannelSubtitlePreferences(channelId),
+    ]);
+    const effective = resolveEffectiveSubtitlePreferences(
+      channel?.subtitlePreferenceMode ?? 'inherit',
+      subtitlePrefs,
+      [...(ffmpegSettings.subtitlePreferences ?? [])],
+    );
 
     let subtitleAction: StreamSelectionRule['subtitleAction'];
     // Filter out preferences with filterType 'none' — they mean
     // "don't match subtitles for this language", matching the
     // behavior of SubtitleStreamPicker.pickSubtitles.
-    const activeSubtitlePrefs = subtitlePrefs.filter(
-      (p) => p.filterType !== 'none',
-    );
-    if (activeSubtitlePrefs.length > 0) {
+    const activeSubtitlePrefs =
+      effective.source === 'channel'
+        ? effective.preferences.filter((p) => p.filterType !== 'none')
+        : [];
+    if (effective.source === 'global' && effective.preferences.length > 0) {
+      subtitleAction = {
+        type: 'by_preferences',
+        preferences: effective.preferences,
+      };
+    } else if (activeSubtitlePrefs.length > 0) {
       const sorted = orderBy(activeSubtitlePrefs, 'priority', 'asc');
       const topPref = sorted[0]!;
       subtitleAction = {

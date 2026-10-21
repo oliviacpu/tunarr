@@ -15,7 +15,7 @@ import type {
   SubtitleStreamDetails,
 } from '../stream/types.ts';
 import { isImageBasedSubtitle } from '../stream/util.ts';
-import { isDefined } from '../util/index.ts';
+import { isDefined, isNonEmptyArray } from '../util/index.ts';
 import { LoggerFactory } from '../util/logging/LoggerFactory.ts';
 import { SubtitleStreamPicker } from './SubtitleStreamPicker.ts';
 
@@ -202,6 +202,20 @@ async function resolveSubtitleAction(
   switch (action.type) {
     case 'disable':
       return null;
+
+    case 'by_preferences': {
+      if (!isNonEmptyArray(subtitleStreams)) {
+        return null;
+      }
+      return (
+        (await SubtitleStreamPicker.pickInheritedSubtitles(
+          action.preferences,
+          lineupItem,
+          subtitleStreams,
+          { textOnly: false },
+        )) ?? null
+      );
+    }
 
     case 'default': {
       if (!subtitleStreams || subtitleStreams.length === 0) {

@@ -79,6 +79,10 @@ export const SettingsApplicationMessages = {
     title: msg`Caption alignment, appearance and test pattern`,
     description: msg`The next program pipeline reads the saved caption style and test pattern. A program already transcoding keeps its captions.`,
   },
+  subtitlePreferences: {
+    title: msg`Global subtitle preferences`,
+    description: msg`Future stream selections on inheriting channels use the saved subtitle preferences. A program already streaming keeps its selected subtitles.`,
+  },
   audioLanguages: {
     title: msg`Audio language preferences`,
     description: msg`The next program pipeline selects audio using the saved language preferences.`,

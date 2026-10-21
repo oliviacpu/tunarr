@@ -1,5 +1,8 @@
 import z from 'zod/v4';
-import { SubtitleFilterSchema } from './subtitleSchema.js';
+import {
+  GlobalSubtitlePreferenceSchema,
+  SubtitleFilterSchema,
+} from './subtitleSchema.js';
 
 // Audio Actions - discriminated union on `type`
 export const AudioActionByLanguageSchema = z.object({
@@ -42,9 +45,15 @@ export const SubtitleActionDefaultSchema = z.object({
   type: z.literal('default'),
 });
 
+export const SubtitleActionByPreferencesSchema = z.object({
+  type: z.literal('by_preferences'),
+  preferences: z.array(GlobalSubtitlePreferenceSchema),
+});
+
 export const SubtitleActionSchema = z.discriminatedUnion('type', [
   SubtitleActionDisableSchema,
   SubtitleActionByLanguageSchema,
+  SubtitleActionByPreferencesSchema,
   SubtitleActionDefaultSchema,
 ]);
 

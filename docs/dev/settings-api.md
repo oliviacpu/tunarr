@@ -59,8 +59,16 @@ nonempty custom list selects `custom`, otherwise `inherit`. Switching to inherit
 rows. An omitted channel preference list preserves rows; an explicit `[]` clears them. Existing
 channel rows retain the legacy wire key `langugeCode`; global rows use `languageCode`.
 
-S5a introduces persistence and compatibility only. Stream-selection integration follows in S5b,
-and global/channel controls and previews follow in S5c. Fixed output audio layouts stay per channel.
+Inheriting channels resolve the current global list for future stream selections. Each inherited row
+keeps its own language, filter and external/image flags; `none` rows are skipped and an all-none or
+unmatched nonempty list selects no subtitle. Custom rows retain legacy selection behavior. Empty
+effective lists retain each stream path's existing fallback: profile selection requires a default-marked
+stream, while direct selection tries default or first. Existing explicit profiles keep precedence in
+profile-based playback; Direct v2 gains no profile support. Direct output remains text-only.
+
+Preferences do not enable subtitles, extraction, captions or WebVTT capabilities. An active program
+keeps its selected subtitles. Global/channel controls and previews follow in S5c; the API can configure
+the list in this stage. Fixed output audio layouts stay per channel.
 
 ## Compatibility window
 

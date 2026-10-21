@@ -121,6 +121,12 @@ export const SettingsApplicationTiming = {
     description:
       'The next program pipeline reads the saved caption style and test pattern. A program already transcoding keeps its captions.',
   },
+  subtitlePreferences: {
+    title: 'Global subtitle preferences',
+    when: 'next-program',
+    description:
+      'Future stream selections on inheriting channels use the saved subtitle preferences. A program already streaming keeps its selected subtitles.',
+  },
   audioLanguages: {
     title: 'Audio language preferences',
     when: 'next-program',
@@ -207,6 +213,7 @@ export const FfmpegSettingsApplicationGroups = {
   enableFileLogging: 'ffmpegLogging',
   logLevel: 'ffmpegLogging',
   languagePreferences: 'audioLanguages',
+  subtitlePreferences: 'subtitlePreferences',
   transcodeDirectory: 'transcodeDirectory',
   scalingAlgorithm: 'videoFilters',
   deinterlaceFilter: 'videoFilters',
@@ -222,8 +229,7 @@ export const FfmpegSettingsApplicationGroups = {
   hdhrCaptionTestPattern: 'captionStyle',
   enableSubtitleExtraction: 'subtitleExtraction',
 } as const satisfies Record<
-  // S5a persists subtitle defaults; S5b adds their playback behavior and timing.
-  Exclude<keyof FfmpegSettings, 'configVersion' | 'subtitlePreferences'>,
+  Exclude<keyof FfmpegSettings, 'configVersion'>,
   SettingsApplicationKey
 >;
 

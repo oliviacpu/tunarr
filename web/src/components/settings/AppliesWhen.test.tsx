@@ -28,12 +28,10 @@ describe('settings application timing', () => {
     expect(FfmpegSettingsApplicationGroups).toMatchSnapshot();
     expect(FeatureFlagsApplicationGroups).toMatchSnapshot();
   });
-  test('every active FFmpeg field and feature flag is mapped', () => {
+  test('every FFmpeg field and feature flag is mapped', () => {
     expect(Object.keys(FfmpegSettingsApplicationGroups).sort()).toEqual(
       Object.keys(defaultFfmpegSettings)
-        .filter(
-          (key) => key !== 'configVersion' && key !== 'subtitlePreferences',
-        )
+        .filter((key) => key !== 'configVersion')
         .sort(),
     );
     expect(Object.keys(FeatureFlagsApplicationGroups).sort()).toEqual(
@@ -59,6 +57,7 @@ describe('settings application timing', () => {
   test.each([
     ['logging', 'Live'],
     ['captionsEnabled', 'Next session'],
+    ['subtitlePreferences', 'Next program'],
     ['videoFilters', 'Next program'],
     ['hlsDirectOutput', 'Next program'],
     ['backendAddress', 'Reload required'],

@@ -1,7 +1,9 @@
 import type {
+  GlobalSubtitlePreference,
   StreamSelectionProfile,
   StreamSelectionRule,
 } from '@tunarr/types/schemas';
+import { SubtitleActionSchema } from '@tunarr/types/schemas';
 import type { NonEmptyArray } from 'ts-essentials';
 import { describe, expect, it, vi } from 'vitest';
 import type {
@@ -15,20 +17,28 @@ import {
   evaluateStreamSelectionProfile,
   resolveAudioAction,
 } from './StreamSelectionEvaluator.ts';
+import { SubtitleStreamPicker } from './SubtitleStreamPicker.ts';
 
 // Mock SubtitleStreamPicker so we don't hit the filesystem
-vi.mock('./SubtitleStreamPicker.ts', () => ({
-  SubtitleStreamPicker: {
-    getSubtitleDetailsWithExtractedPath: vi
-      .fn()
-      .mockImplementation(
-        (
-          _lineupItem: ContentBackedStreamLineupItem,
-          stream: SubtitleStreamDetails,
-        ) => Promise.resolve({ ...stream, path: '/fake/path.vtt' }),
-      ),
-  },
-}));
+vi.mock('./SubtitleStreamPicker.ts', async () => {
+  const actual = await vi.importActual<{
+    SubtitleStreamPicker: typeof SubtitleStreamPicker;
+  }>('./SubtitleStreamPicker.ts');
+  return {
+    SubtitleStreamPicker: {
+      pickInheritedSubtitles:
+        actual.SubtitleStreamPicker.pickInheritedSubtitles,
+      getSubtitleDetailsWithExtractedPath: vi
+        .fn()
+        .mockImplementation(
+          (
+            _lineupItem: ContentBackedStreamLineupItem,
+            stream: SubtitleStreamDetails,
+          ) => Promise.resolve({ ...stream, path: '/fake/path.vtt' }),
+        ),
+    },
+  };
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -743,6 +753,133 @@ describe('evaluateStreamSelectionProfile', () => {
       // Fallback: default stream
       expect(result.audioStream.index).toBe(1);
     });
+  });
+
+  describe('subtitle action: by_preferences', () => {
+    const preferences: NonEmptyArray<GlobalSubtitlePreference> = [
+      {
+        languageCode: 'deu',
+        filter: 'forced',
+        allowExternal: false,
+        allowImageBased: false,
+      },
+      {
+        languageCode: 'eng',
+        filter: 'default',
+        allowExternal: true,
+        allowImageBased: true,
+      },
+    ];
+
+    async function evaluatePreferences(
+      rows: GlobalSubtitlePreference[],
+      streams: SubtitleStreamDetails[] | undefined,
+    ) {
+      return evaluateStreamSelectionProfile(
+        makeProfile([
+          makeRule({
+            subtitleAction: { type: 'by_preferences', preferences: rows },
+          }),
+        ]),
+        audioStreams,
+        streams,
+        makeCelService(true),
+        celContext,
+        lineupItem,
+      );
+    }
+
+    it('validates the new action with canonical global row schemas', () => {
+      const action = SubtitleActionSchema.parse({
+        type: 'by_preferences',
+        preferences: [{ ...preferences[0], languageCode: 'ger' }],
+      });
+      expect(action).toMatchObject({
+        type: 'by_preferences',
+        preferences: [{ languageCode: 'deu' }],
+      });
+      expect(
+        SubtitleActionSchema.safeParse({
+          type: 'by_preferences',
+          preferences: [{ ...preferences[0], allowExternal: 'true' }],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("preserves each row's filter and flags through evaluation", async () => {
+      const streams = [
+        makeSubtitleStream({
+          index: 2,
+          languageCodeISO6392: 'ger',
+          forced: true,
+          type: 'external',
+        }),
+        makeSubtitleStream({
+          index: 3,
+          languageCodeISO6392: 'deu',
+          forced: true,
+          codec: 'pgs',
+        }),
+        makeSubtitleStream({ index: 4, default: true, type: 'external' }),
+      ];
+      const result = await evaluatePreferences(preferences, streams);
+      expect(result.subtitleStream).toBe(streams[2]);
+    });
+
+    it('uses the extraction check for inherited embedded text', async () => {
+      const stream = makeSubtitleStream({
+        index: 2,
+        languageCodeISO6392: 'ger',
+        forced: true,
+      });
+      const result = await evaluatePreferences(preferences, [stream]);
+      expect(result.subtitleStream).toEqual({
+        ...stream,
+        path: '/fake/path.vtt',
+      });
+    });
+
+    it('continues to the next row if embedded text has not been extracted', async () => {
+      vi.mocked(
+        SubtitleStreamPicker.getSubtitleDetailsWithExtractedPath,
+      ).mockResolvedValueOnce(undefined);
+      const fallback = makeSubtitleStream({
+        index: 3,
+        default: true,
+        type: 'external',
+      });
+      const result = await evaluatePreferences(preferences, [
+        makeSubtitleStream({
+          index: 2,
+          languageCodeISO6392: 'ger',
+          forced: true,
+        }),
+        fallback,
+      ]);
+      expect(result.subtitleStream).toBe(fallback);
+    });
+
+    it.each([undefined, []])(
+      'selects nothing without streams: %o',
+      async (streams) => {
+        const result = await evaluatePreferences(preferences, streams);
+        expect(result.subtitleStream).toBeNull();
+      },
+    );
+
+    it.each([
+      { rows: [] },
+      { rows: [{ ...preferences[0], filter: 'none' as const }] },
+      { rows: [{ ...preferences[0], languageCode: 'jpn' }] },
+    ])(
+      'selects nothing without an active matching row: %o',
+      async ({ rows }) => {
+        const result = await evaluatePreferences(rows, [
+          makeSubtitleStream({ index: 2, default: true }),
+        ]);
+        expect(result.subtitleStream).toBeNull();
+      },
+    );
   });
 
   describe('subtitle action: disable', () => {
