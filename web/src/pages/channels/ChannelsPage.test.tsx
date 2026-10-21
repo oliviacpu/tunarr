@@ -7,7 +7,10 @@ import {
   within,
 } from '@/test/utils';
 import type { Channel } from '@tunarr/types';
-import type { BulkChannelStealthResponse } from '@tunarr/types/api';
+import type {
+  BulkChannelDeleteResponse,
+  BulkChannelStealthResponse,
+} from '@tunarr/types/api';
 import { QueryClient } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
 import { Suspense, type AnchorHTMLAttributes, type ReactNode } from 'react';
@@ -20,10 +23,12 @@ const {
   mockGetChannel,
   mockPutChannel,
   mockBulkStealth,
+  mockBulkDelete,
   mockGetChannels,
   mockNavigate,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn<() => Promise<void>>(),
+  mockBulkDelete: vi.fn<(opts: BulkDeleteOpts) => Promise<{ data: unknown }>>(),
   mockBulkStealth: vi.fn<(opts: BulkOpts) => Promise<{ data: unknown }>>(),
   mockGetChannels: vi.fn<() => Promise<{ data: Channel[] }>>(),
   mockDeleteChannel: vi.fn<(opts: IdOpts) => Promise<unknown>>(),
@@ -81,6 +86,7 @@ vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
   getChannels: () => mockGetChannels(),
   bulkSetChannelStealth: (opts: BulkOpts) => mockBulkStealth(opts),
+  bulkDeleteChannels: (opts: BulkDeleteOpts) => mockBulkDelete(opts),
   getApiTranscodeConfigs: () => Promise.resolve({ data: [] }),
   deleteApiChannelsById: (opts: IdOpts) => mockDeleteChannel(opts),
   getChannelsByNumberV2: (opts: IdOpts) => mockGetChannel(opts),
@@ -113,6 +119,7 @@ vi.mock('../../components/base/RouterLink.tsx', () => ({
 
 type IdOpts = { path: { id: string } };
 type PutOpts = IdOpts & { body: Record<string, unknown> };
+type BulkDeleteOpts = { body: { ids: string[] }; throwOnError: boolean };
 type BulkOpts = {
   body: { ids: string[]; stealth: boolean };
   throwOnError: boolean;
@@ -122,6 +129,19 @@ function success(ids: string[]): { data: BulkChannelStealthResponse } {
   return {
     data: {
       results: ids.map((id) => ({ id, success: true })),
+      refresh: { xmltv: 'succeeded', m3u: 'succeeded' },
+    },
+  };
+}
+
+function deletionSuccess(ids: string[]): { data: BulkChannelDeleteResponse } {
+  return {
+    data: {
+      results: ids.map((id) => ({
+        id,
+        success: true,
+        cleanup: { status: 'succeeded' },
+      })),
       refresh: { xmltv: 'succeeded', m3u: 'succeeded' },
     },
   };
@@ -148,7 +168,7 @@ function renderPage(
   }),
 ) {
   const rendered = renderWithProviders(
-    <SnackbarProvider maxSnack={2}>
+    <SnackbarProvider maxSnack={3}>
       <Suspense fallback={null}>
         <ChannelsPage />
       </Suspense>
@@ -166,6 +186,10 @@ describe('ChannelsPage bulk actions', () => {
     mockPutChannel.mockReset();
     mockGetChannels.mockReset();
     mockGetChannels.mockResolvedValue({ data: channels });
+    mockBulkDelete.mockReset();
+    mockBulkDelete.mockImplementation(({ body }) =>
+      Promise.resolve(deletionSuccess(body.ids)),
+    );
     mockBulkStealth.mockReset();
     mockBulkStealth.mockImplementation(({ body }) =>
       Promise.resolve(success(body.ids)),
@@ -191,17 +215,22 @@ describe('ChannelsPage bulk actions', () => {
         .map((li) => li.textContent),
     ).toEqual(['Movie Night', 'Test Pattern']);
     expect(mockDeleteChannel).not.toHaveBeenCalled();
+    expect(mockBulkDelete).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
-    await waitFor(() => expect(mockDeleteChannel).toHaveBeenCalledTimes(2));
-    const ids = mockDeleteChannel.mock.calls
-      .map(([opts]) => opts.path.id)
-      .sort();
-    expect(ids).toEqual([
-      '00000000-0000-4000-8000-000000000001',
-      '00000000-0000-4000-8000-000000000003',
-    ]);
+    await waitFor(() =>
+      expect(mockBulkDelete).toHaveBeenCalledExactlyOnceWith({
+        body: {
+          ids: [
+            '00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000003',
+          ],
+        },
+        throwOnError: true,
+      }),
+    );
+    expect(mockDeleteChannel).not.toHaveBeenCalled();
     expect(await screen.findByText('Deleted')).toBeInTheDocument();
 
     await waitFor(() =>
@@ -212,6 +241,247 @@ describe('ChannelsPage bulk actions', () => {
     ).not.toBeInTheDocument();
     expect(rowCheckbox('Movie Night')).not.toBeChecked();
   });
+
+  test('cancel closes the confirmation without deleting', async () => {
+    const { user } = renderPage();
+    await screen.findByText('Movie Night');
+    await user.click(rowCheckbox('Movie Night'));
+    await user.click(
+      within(selectionToolbar()).getByRole('button', { name: 'Delete' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(mockBulkDelete).not.toHaveBeenCalled();
+    expect(rowCheckbox('Movie Night')).toBeChecked();
+  });
+
+  test('freezes names on open and keeps the confirmation busy until the request finishes', async () => {
+    const fetched = channels.map((channel) => ({ ...channel }));
+    mockGetChannels.mockResolvedValue({ data: fetched });
+    let finish:
+      | ((response: { data: BulkChannelDeleteResponse }) => void)
+      | undefined;
+    mockBulkDelete.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user, queryClient } = renderPage();
+    await screen.findByText('Movie Night');
+    await user.click(rowCheckbox('Movie Night'));
+    await user.click(
+      within(selectionToolbar()).getByRole('button', { name: 'Delete' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    act(() => {
+      const channel = fetched[0];
+      if (channel === undefined) throw new Error('Missing channel');
+      channel.name = 'Renamed channel';
+      queryClient.setQueryData(
+        getChannelsQueryKey(),
+        fetched.map((channel) => ({
+          ...channel,
+          duration: channel.duration + 1,
+        })),
+      );
+    });
+    await screen.findByText('Renamed channel');
+    expect(within(dialog).getByRole('listitem')).toHaveTextContent(
+      'Movie Night',
+    );
+    const confirm = within(dialog).getByRole('button', { name: 'Delete' });
+    act(() => {
+      confirm.click();
+      confirm.click();
+    });
+    expect(mockBulkDelete).toHaveBeenCalledOnce();
+    expect(confirm).toBeDisabled();
+    expect(
+      within(dialog).getByRole('button', { name: 'Cancel' }),
+    ).toBeDisabled();
+    const toolbar = screen.getByLabelText('Selected rows');
+    for (const button of within(toolbar).getAllByRole('button', {
+      hidden: true,
+    }))
+      expect(button).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    if (finish === undefined) throw new Error('Delete did not start');
+    finish({
+      data: {
+        results: [
+          {
+            id: channels[0]?.id ?? '',
+            success: false,
+            statusCode: 500,
+            message: 'Delete failed',
+            cleanup: { status: 'not_needed' },
+          },
+        ],
+        refresh: { xmltv: 'not_needed', m3u: 'not_needed' },
+      },
+    });
+    expect(
+      await screen.findByText(
+        '0 of 1 deleted; could not delete Movie Night: Delete failed',
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(mockBulkDelete).toHaveBeenCalledExactlyOnceWith({
+      body: { ids: [channels[0]?.id] },
+      throwOnError: true,
+    });
+    expect(mockDeleteChannel).not.toHaveBeenCalled();
+  });
+
+  test('reports committed deletions, failed deletions, cleanup and publication independently', async () => {
+    mockBulkDelete.mockResolvedValue({
+      data: {
+        results: [
+          {
+            id: channels[0]?.id,
+            success: true,
+            cleanup: { status: 'failed', message: 'Redirect cleanup failed' },
+          },
+          {
+            id: channels[1]?.id,
+            success: false,
+            statusCode: 500,
+            message: 'Delete failed',
+            cleanup: { status: 'failed', message: 'Restoration failed' },
+          },
+          {
+            id: channels[2]?.id,
+            success: false,
+            statusCode: 404,
+            message: 'Channel not found',
+            cleanup: { status: 'not_needed' },
+          },
+        ],
+        refresh: { xmltv: 'failed', m3u: 'failed' },
+      },
+    });
+    const { user } = renderPage();
+    await screen.findByText('Movie Night');
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Toggle select all' }),
+    );
+    await user.click(
+      within(selectionToolbar()).getByRole('button', { name: 'Delete' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(
+      await screen.findByText(
+        '1 of 3 deleted; could not delete Cartoons: Delete failed; could not delete Test Pattern: Channel not found',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Deleted Movie Night, but cleanup failed: Redirect cleanup failed; Cleanup failed for Cartoons after deletion failed: Restoration failed',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Channels were deleted, but publication failed for XMLTV guide, M3U playlist. These files may be out of date.',
+      ),
+    ).toBeInTheDocument();
+    expect(mockBulkDelete).toHaveBeenCalledOnce();
+  });
+
+  test('a committed delete with failed cleanup is still a success', async () => {
+    mockBulkDelete.mockResolvedValue({
+      data: {
+        results: [
+          {
+            id: channels[0]?.id,
+            success: true,
+            cleanup: { status: 'failed', message: 'Redirect cleanup failed' },
+          },
+        ],
+        refresh: { xmltv: 'succeeded', m3u: 'succeeded' },
+      },
+    });
+    const { user } = renderPage();
+    await screen.findByText('Movie Night');
+    await user.click(rowCheckbox('Movie Night'));
+    await user.click(
+      within(selectionToolbar()).getByRole('button', { name: 'Delete' }),
+    );
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
+    expect(await screen.findByText('Deleted')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Deleted Movie Night, but cleanup failed: Redirect cleanup failed',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/could not delete/)).not.toBeInTheDocument();
+    expect(mockBulkDelete).toHaveBeenCalledOnce();
+  });
+
+  test.each(['lost', 'malformed', 'missing', 'cleanup', 'reordered'])(
+    'a %s deletion response is uncertain, refetches, and never retries',
+    async (failure) => {
+      if (failure === 'lost') {
+        mockBulkDelete.mockRejectedValue(new Error('Connection lost'));
+      } else {
+        const data = deletionSuccess([
+          channels[0]?.id ?? '',
+          channels[1]?.id ?? '',
+        ]).data;
+        if (failure === 'missing') data.results.pop();
+        if (failure === 'reordered') data.results.reverse();
+        mockBulkDelete.mockResolvedValue({
+          data:
+            failure === 'malformed'
+              ? {}
+              : failure === 'cleanup'
+                ? {
+                    ...data,
+                    results: data.results.map(({ id, success }) => ({
+                      id,
+                      success,
+                    })),
+                  }
+                : data,
+        });
+      }
+      const { user, queryClient } = renderPage();
+      await screen.findByText('Movie Night');
+      await user.click(rowCheckbox('Movie Night'));
+      await user.click(rowCheckbox('Cartoons'));
+      await user.click(
+        within(selectionToolbar()).getByRole('button', { name: 'Delete' }),
+      );
+      await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+      const before = mockGetChannels.mock.calls.length;
+      await user.click(
+        within(await screen.findByRole('dialog')).getByRole('button', {
+          name: 'Delete',
+        }),
+      );
+      expect(
+        await screen.findByText(
+          '0 of 2 confirmed deleted; Outcome unknown for Movie Night, Cartoons. Channels may have been deleted. Refreshing channels to check; no automatic retry.',
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(mockGetChannels).toHaveBeenCalledTimes(before + 1),
+      );
+      expect(mockBulkDelete).toHaveBeenCalledOnce();
+      expect(screen.queryByText('Deleted')).not.toBeInTheDocument();
+    },
+  );
 
   test('Hide from guide sends one stealth-only batch and clears the selection', async () => {
     const queryClient = new QueryClient({

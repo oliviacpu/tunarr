@@ -1,4 +1,7 @@
-import type { BulkChannelStealthResponse } from '@tunarr/types/api';
+import type {
+  BulkChannelDeleteResponse,
+  BulkChannelStealthResponse,
+} from '@tunarr/types/api';
 import { describe, expect, test, vi } from 'vitest';
 import { runChannelBatches } from './channelBatches.ts';
 
@@ -45,6 +48,7 @@ describe('runChannelBatches', () => {
       unknown: [],
       unattempted: [],
       publicationFailures: [],
+      cleanupFailures: [],
     });
   });
 
@@ -129,6 +133,7 @@ describe('runChannelBatches', () => {
         unknown: selection.slice(0, 100),
         unattempted: selection.slice(100),
         publicationFailures: [],
+        cleanupFailures: [],
       });
       expect(send).toHaveBeenCalledOnce();
     },
@@ -142,6 +147,7 @@ describe('runChannelBatches', () => {
       unknown: [],
       unattempted: [],
       publicationFailures: [],
+      cleanupFailures: [],
     });
     expect(send).not.toHaveBeenCalled();
   });
@@ -164,4 +170,106 @@ describe('runChannelBatches', () => {
     expect(outcome.publicationFailures).toEqual([]);
     expect(send).toHaveBeenCalledTimes(3);
   });
+});
+
+function deleted(ids: string[]): BulkChannelDeleteResponse {
+  return {
+    results: ids.map((id) => ({
+      id,
+      success: true,
+      cleanup: { status: 'succeeded' },
+    })),
+    refresh: { xmltv: 'succeeded', m3u: 'succeeded' },
+  };
+}
+
+describe('channel deletion batches', () => {
+  test('combines 205 ordered outcomes while preserving committed deletion and failed restoration cleanup', async () => {
+    const send = vi.fn(
+      async (ids: string[]): Promise<BulkChannelDeleteResponse> => {
+        const response = deleted(ids);
+        response.results = response.results.map((result) => {
+          if (result.id === 'channel-2') {
+            return {
+              id: result.id,
+              success: true,
+              cleanup: { status: 'failed', message: 'Redirect cleanup failed' },
+            };
+          }
+          if (result.id === 'channel-102') {
+            return {
+              id: result.id,
+              success: false,
+              statusCode: 500,
+              message: 'Delete failed',
+              cleanup: { status: 'failed', message: 'Restoration failed' },
+            };
+          }
+          if (result.id === 'channel-201') {
+            return {
+              id: result.id,
+              success: false,
+              statusCode: 404,
+              message: 'Channel not found',
+              cleanup: { status: 'not_needed' },
+            };
+          }
+          return result;
+        });
+        response.refresh.xmltv = ids.includes('channel-2')
+          ? 'failed'
+          : 'succeeded';
+        response.refresh.m3u = ids.includes('channel-201')
+          ? 'failed'
+          : 'succeeded';
+        return response;
+      },
+    );
+    const outcome = await runChannelBatches(channels, send);
+    expect(send.mock.calls.map(([ids]) => ids.length)).toEqual([100, 100, 5]);
+    expect(outcome.succeeded).toEqual(
+      channels.filter(({ id }) => id !== 'channel-102' && id !== 'channel-201'),
+    );
+    expect(outcome.failed).toEqual([
+      { item: channels[102], reason: 'Delete failed' },
+      { item: channels[201], reason: 'Channel not found' },
+    ]);
+    expect(outcome.cleanupFailures).toEqual([
+      { item: channels[2], reason: 'Redirect cleanup failed', deleted: true },
+      { item: channels[102], reason: 'Restoration failed', deleted: false },
+    ]);
+    expect(outcome.publicationFailures).toEqual(['xmltv', 'm3u']);
+    expect(outcome.unknown).toEqual([]);
+    expect(outcome.unattempted).toEqual([]);
+  });
+
+  test.each(['lost', 'reordered'])(
+    'a %s second deletion response retains prior cleanup outcomes and stops without a retry',
+    async (failure) => {
+      const send = vi.fn(
+        async (ids: string[]): Promise<BulkChannelDeleteResponse> => {
+          if (ids.includes('channel-100')) {
+            if (failure === 'lost') throw new Error('Response lost');
+            return deleted([...ids].reverse());
+          }
+          const response = deleted(ids);
+          response.results[0] = {
+            id: ids[0] ?? '',
+            success: true,
+            cleanup: { status: 'failed', message: 'Redirect cleanup failed' },
+          };
+          return response;
+        },
+      );
+      const outcome = await runChannelBatches(channels, send);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(outcome.succeeded).toEqual(channels.slice(0, 100));
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.cleanupFailures).toEqual([
+        { item: channels[0], reason: 'Redirect cleanup failed', deleted: true },
+      ]);
+      expect(outcome.unknown).toEqual(channels.slice(100, 200));
+      expect(outcome.unattempted).toEqual(channels.slice(200));
+    },
+  );
 });

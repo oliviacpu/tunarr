@@ -6,7 +6,7 @@ import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.
 import { ChannelBatchSize } from '@/helpers/channelBatches.ts';
 import { betterHumanize } from '@/helpers/dayjs.ts';
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
-import { useBulkDelete } from '@/hooks/useBulkAction.ts';
+import { useBulkChannelDelete } from '@/hooks/useBulkChannelDelete.ts';
 import { useBulkChannelStealth } from '@/hooks/useBulkChannelStealth.ts';
 import { useTranscodeConfigs } from '@/hooks/settingsHooks.ts';
 import type { Maybe } from '@/types/util.ts';
@@ -66,7 +66,6 @@ import NoChannelsCreated from '../../components/channel_config/NoChannelsCreated
 import { ChannelIconDisplay } from '../../components/channels/ChannelIconDisplay.tsx';
 import { ChannelOptionsMenu } from '../../components/channels/ChannelOptionsMenu.tsx';
 import { ChannelSessionsDialog } from '../../components/channels/ChannelSessionsDialog.tsx';
-import { deleteApiChannelsById } from '../../generated/sdk.gen.ts';
 import { useChannelsSuspense } from '../../hooks/useChannels.ts';
 import { useServerEvents } from '../../hooks/useServerEvents.ts';
 import { useSelectableTableSettings } from '../../hooks/useTableSettings.ts';
@@ -74,7 +73,6 @@ import { useSelectableTableSettings } from '../../hooks/useTableSettings.ts';
 type ChannelRow = Channel;
 
 const channelId = (channel: Channel) => channel.id;
-const channelName = (channel: Channel) => channel.name;
 
 interface GlowingCircleProps extends BoxProps {
   color?: string;
@@ -132,15 +130,9 @@ export default function ChannelsPage() {
       .catch(console.error);
   };
 
-  const bulkDelete = useBulkDelete<Channel>({
-    getId: channelId,
-    getName: channelName,
-    deleteOne: (channel) =>
-      deleteApiChannelsById({ path: { id: channel.id }, throwOnError: true }),
-    onDone: () => {
-      clearSelection();
-      refreshChannels();
-    },
+  const bulkDelete = useBulkChannelDelete(() => {
+    clearSelection();
+    refreshChannels();
   });
 
   const bulkStealth = useBulkChannelStealth(() => {
@@ -633,8 +625,8 @@ export default function ChannelsPage() {
         {selectedRows.length > ChannelBatchSize && (
           <Typography variant="caption" color="text.secondary">
             <Trans>
-              Selections are saved in batches of {ChannelBatchSize}. Guide and
-              playlist publication runs once per changed batch.
+              Selections are processed in batches of {ChannelBatchSize}. Guide
+              and playlist publication runs once per changed batch.
             </Trans>
           </Typography>
         )}

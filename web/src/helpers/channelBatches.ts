@@ -1,6 +1,15 @@
-import type { BulkChannelStealthResponse } from '@tunarr/types/api';
+import type {
+  BulkChannelCleanupResult,
+  BulkChannelItemResult,
+  BulkChannelStealthResponse,
+} from '@tunarr/types/api';
 
 export const ChannelBatchSize = 100;
+
+type ChannelBatchResponse = {
+  results: (BulkChannelItemResult & { cleanup?: BulkChannelCleanupResult })[];
+  refresh: BulkChannelStealthResponse['refresh'];
+};
 
 export type ChannelBatchOutcome<T> = {
   succeeded: T[];
@@ -8,12 +17,13 @@ export type ChannelBatchOutcome<T> = {
   unknown: T[];
   unattempted: T[];
   publicationFailures: ('xmltv' | 'm3u')[];
+  cleanupFailures: { item: T; reason: string; deleted: boolean }[];
 };
 
 /** Stops after an unconfirmed response: replaying a mutation is unsafe. */
 export async function runChannelBatches<T extends { id: string }>(
   items: readonly T[],
-  send: (ids: string[]) => Promise<BulkChannelStealthResponse>,
+  send: (ids: string[]) => Promise<ChannelBatchResponse>,
 ): Promise<ChannelBatchOutcome<T>> {
   const snapshot = [...items];
   const outcome: ChannelBatchOutcome<T> = {
@@ -22,6 +32,7 @@ export async function runChannelBatches<T extends { id: string }>(
     unknown: [],
     unattempted: [],
     publicationFailures: [],
+    cleanupFailures: [],
   };
 
   for (let offset = 0; offset < snapshot.length; offset += ChannelBatchSize) {
@@ -43,6 +54,13 @@ export async function runChannelBatches<T extends { id: string }>(
           outcome.succeeded.push(item);
         } else {
           outcome.failed.push({ item, reason: result.message });
+        }
+        if (result.cleanup?.status === 'failed') {
+          outcome.cleanupFailures.push({
+            item,
+            reason: result.cleanup.message,
+            deleted: result.success,
+          });
         }
       });
       for (const publication of ['xmltv', 'm3u'] as const) {
