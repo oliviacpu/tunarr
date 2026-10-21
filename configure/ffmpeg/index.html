@@ -1,0 +1,3682 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://tunarr.com/configure/ffmpeg/">
+      
+      
+        <link rel="prev" href="../settings/applies-when/">
+      
+      
+        <link rel="next" href="transcode_config/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Playback - Tunarr</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#playback" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Tunarr" class="md-header__button md-logo" aria-label="Tunarr" data-md-component="logo">
+      
+  <img src="../../assets/tunarr.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Tunarr
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Playback
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"></path></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="indigo" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="indigo" aria-label="Switch to system preference" type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__social">
+        
+          <a href="https://discord.gg/nYkb7MhPfD" title="Join the Tunarr Discord" class="md-header__button md-icon" target="_blank" rel="noopener">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M492.5 69.8c-.2-.3-.4-.6-.8-.7-38.1-17.5-78.4-30-119.7-37.1-.4-.1-.8 0-1.1.1s-.6.4-.8.8c-5.5 9.9-10.5 20.2-14.9 30.6-44.6-6.8-89.9-6.8-134.4 0-4.5-10.5-9.5-20.7-15.1-30.6-.2-.3-.5-.6-.8-.8s-.7-.2-1.1-.2C162.5 39 122.2 51.5 84.1 69c-.3.1-.6.4-.8.7C7.1 183.5-13.8 294.6-3.6 404.2c0 .3.1.5.2.8s.3.4.5.6c44.4 32.9 94 58 146.8 74.2.4.1.8.1 1.1 0s.7-.4.9-.7c11.3-15.4 21.4-31.8 30-48.8.1-.2.2-.5.2-.8s0-.5-.1-.8-.2-.5-.4-.6-.4-.3-.7-.4c-15.8-6.1-31.2-13.4-45.9-21.9-.3-.2-.5-.4-.7-.6s-.3-.6-.3-.9 0-.6.2-.9.3-.5.6-.7c3.1-2.3 6.2-4.7 9.1-7.1.3-.2.6-.4.9-.4s.7 0 1 .1c96.2 43.9 200.4 43.9 295.5 0 .3-.1.7-.2 1-.2s.7.2.9.4c2.9 2.4 6 4.9 9.1 7.2.2.2.4.4.6.7s.2.6.2.9-.1.6-.3.9-.4.5-.6.6c-14.7 8.6-30 15.9-45.9 21.8-.2.1-.5.2-.7.4s-.3.4-.4.7-.1.5-.1.8.1.5.2.8c8.8 17 18.8 33.3 30 48.8.2.3.6.6.9.7s.8.1 1.1 0c52.9-16.2 102.6-41.3 147.1-74.2.2-.2.4-.4.5-.6s.2-.5.2-.8c12.3-126.8-20.5-236.9-86.9-334.5zm-302 267.7c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.4 59.2-52.8 59.2m195.4 0c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.2 59.2-52.8 59.2"></path></svg>
+          </a>
+        
+          <a href="https://github.com/sponsors/chrisbenincasa" title="Sponsor Tunarr on GitHub" class="md-header__button md-icon" target="_blank" rel="noopener">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"></path></svg>
+          </a>
+        
+      </div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/chrisbenincasa/tunarr" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    chrisbenincasa/tunarr
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Tunarr" class="md-nav__button md-logo" aria-label="Tunarr" data-md-component="logo">
+      
+  <img src="../../assets/tunarr.png" alt="logo">
+
+    </a>
+    Tunarr
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/chrisbenincasa/tunarr" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    chrisbenincasa/tunarr
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix="">
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-docs.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Docs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4">
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Migration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/migration/migrate-to-1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate to 1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked="">
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configure
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configure
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../media_sources/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Media Sources
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Media Sources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/plex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plex
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/jellyfin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jellyfin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/emby/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Emby
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_5">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../media_sources/local/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_5" id="__nav_4_1_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Local
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/local/movies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/local/shows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/local/other_videos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other Video
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/local/music/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media_sources/local/music_videos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Music Videos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" checked="">
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Settings
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2_1">
+        
+          
+          <label class="md-nav__link" for="__nav_4_2_1" id="__nav_4_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    General
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    General
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/general/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    General
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/applies-when/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When settings take effect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2_2" checked="">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="./" class="md-nav__link md-nav__link--active">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playback
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link md-nav__link--active" for="__nav_4_2_2" id="__nav_4_2_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_2_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Playback
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="transcode_config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transcode Configs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/captions-audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Captions &amp; audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/tuner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/experimental/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Experimental
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../misc/search/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Search
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../channels/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Channels
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Channels
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../channels/properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../channels/flex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../channels/epg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../channels/transcoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transcoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../channels/watermarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Watermarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../channels/programming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Programming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../library/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Library
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Library
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../library/filler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../library/filler-selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Filler Is Chosen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../library/custom-shows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom Shows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../library/smart-collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Smart Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../library/trash/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trash
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../scheduling/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduling
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Scheduling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/random-slots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slot Editor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/time-slots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time Slots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/cyclic-shuffle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cyclic Shuffle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/block-shuffle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Block Shuffle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/mid-roll-breaks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mid-Roll Breaks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/replicate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Replicate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduling/consolidate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consolidate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../clients/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clients
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Clients
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../clients/plex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plex
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../clients/jellyfin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jellyfin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_8">
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../system/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    System
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../system/backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../system/logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5">
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Misc.
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Misc.
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../misc/faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../misc/common-issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../misc/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Troubleshooter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6">
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/settings-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/ui-gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#executable-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executable Paths
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-ffmpeg-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global FFmpeg options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Global FFmpeg options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hls-direct-output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HLS Direct Output Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-and-deinterlacing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaling and deinterlacing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hdr-tone-map-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HDR Tone-map Curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hls-start-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HLS Start-up
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ffmpeg-transcode-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FFmpeg Transcode Path
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FFmpeg Transcode Path">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#transcode-to-ram-in-docker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcode to RAM in Docker
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio &amp; Subtitles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Audio &amp; Subtitles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#subtitle-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subtitle Extraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sidecar-subtitles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sidecar Subtitles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#closed-captions-for-hdhomerun-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed Captions for HDHomeRun Clients
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Closed Captions for HDHomeRun Clients">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#caption-appearance-experimental" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caption appearance (experimental)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-preference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language Preference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation">
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../media_sources/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Configure
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+    
+    
+      
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../settings/general/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Settings
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="./" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Playback
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/chrisbenincasa/tunarr/edit/dev/docs/configure/ffmpeg/index.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"></path></svg>
+    </a>
+  
+  
+    
+      
+    
+    <a href="https://github.com/chrisbenincasa/tunarr/raw/dev/docs/configure/ffmpeg/index.md" title="View source of this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"></path></svg>
+    </a>
+  
+
+
+<h1 id="playback">Playback<a class="headerlink" href="#playback" title="Permanent link">¶</a></h1>
+<p>Tunarr requires FFmpeg for transcoding / remuxing content when outputting channel streams. Settings relating to transcoding and FFmpeg can be found on the Settings &gt; Playback page (<code>/web/settings/playback</code>). The old <code>/web/settings/ffmpeg</code> address and its transcode-config editor links redirect to Playback.</p>
+<h2 id="executable-paths">Executable Paths<a class="headerlink" href="#executable-paths" title="Permanent link">¶</a></h2>
+<p>If Tunarr cannot inspect FFmpeg, capability loading reports an error. Check the configured executable path and its execute permissions before retrying.</p>
+<div class="admonition info">
+<p class="admonition-title">Info</p>
+<p>Only non-Docker installs must provide FFmpeg executable paths. Docker installs come with a bundled version of FFmpeg.</p>
+</div>
+<p>Configure FFmpeg and FFprobe executable paths. Generally, both executables reside in the same directory. We recommend using a <a href="https://github.com/ErsatzTV/ErsatzTV-ffmpeg/releases/tag/7.1.1">specially built FFmpeg 7.1.1</a> provided by ErsatzTV.</p>
+<p>Above the paths, the page shows the hardware acceleration the configured FFmpeg supports. If Tunarr can't run FFmpeg, a warning appears there instead. Correct the path and save, and Tunarr probes FFmpeg again.</p>
+<h2 id="global-ffmpeg-options">Global FFmpeg options<a class="headerlink" href="#global-ffmpeg-options" title="Permanent link">¶</a></h2>
+<h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">¶</a></h3>
+<div class="admonition warn">
+<p class="admonition-title">Warn</p>
+<p>It is recommended to only enable this setting while debugging. If Tunarr experiences an FFmpeg error, it will <em>still</em> generate an error log file that can be used when troubleshooting issues.</p>
+</div>
+<p>Printing or persisting FFmpeg logs to disk is useful when debugging streaming issues. This setting allows for FFmpeg logging to be outputted to Tunarr's stdout stream or to a separate file with a configurable log level. </p>
+<h3 id="hls-direct-output-format">HLS Direct Output Format<a class="headerlink" href="#hls-direct-output-format" title="Permanent link">¶</a></h3>
+<p>When using the HLS Direct stream mode in a channel (see <a href="../channels/transcoding/#hls-direct">channel stream modes</a>), use this setting to change the output container format for the stream.</p>
+<h3 id="scaling-and-deinterlacing">Scaling and deinterlacing<a class="headerlink" href="#scaling-and-deinterlacing" title="Permanent link">¶</a></h3>
+<p><strong>Scaling algorithm</strong> selects how FFmpeg resizes video: Bicubic, Fast bilinear, Lanczos, or Spline. <strong>Deinterlace filter</strong> selects the FFmpeg filter for interlaced video, or None. Both are under <strong>Settings &gt; Playback</strong>.</p>
+<h3 id="hdr-tone-map-curve">HDR Tone-map Curve<a class="headerlink" href="#hdr-tone-map-curve" title="Permanent link">¶</a></h3>
+<p>The curve used to convert HDR programs to SDR when <a href="transcode_config/#hdr-tonemapping">HDR tonemapping</a> is enabled on the software pipeline. It is a matter of taste:</p>
+<table>
+<thead>
+<tr>
+<th>Curve</th>
+<th>Look</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Hable</strong> (default)</td>
+<td>Filmic. Keeps detail in shadows and highlights, but darkens the whole picture a little.</td>
+</tr>
+<tr>
+<td><strong>BT.2390</strong></td>
+<td>The ITU broadcast standard. Brighter than Hable, and closer to the source.</td>
+</tr>
+<tr>
+<td><strong>Möbius</strong></td>
+<td>Keeps in-range colors as they are and compresses only the brightest highlights.</td>
+</tr>
+<tr>
+<td><strong>Reinhard</strong></td>
+<td>A simple, soft curve that can look flat.</td>
+</tr>
+</tbody>
+</table>
+<p>The setting takes effect from the next program; no restart is needed. BT.2390 needs an FFmpeg with jellyfin-ffmpeg's <code>tonemapx</code> filter. Other FFmpeg builds use Hable instead.</p>
+<h3 id="hls-start-up">HLS Start-up<a class="headerlink" href="#hls-start-up" title="Permanent link">¶</a></h3>
+<p>These settings trade a little efficiency for a faster tune-in on channels that use the HLS stream mode. They apply when a channel's stream next starts; a stream that is already running keeps its old values.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>HLS Segment Length (seconds)</strong></td>
+<td>4</td>
+<td>Length of each HLS segment, with a keyframe at every segment start. Shorter segments are ready sooner; their extra keyframes cost a little picture quality at the same bitrate. HLS Direct (v2) channels copy their source's video and use a fixed four-second target, cutting at source keyframes.</td>
+</tr>
+<tr>
+<td><strong>Segments Before Playback</strong></td>
+<td>2</td>
+<td>How many segments must exist before a client gets the playlist. Segment length × this count is roughly the video encoded before the first byte is sent. Tunarr checks for them every 100 ms and waits up to 15 s.</td>
+</tr>
+<tr>
+<td><strong>MPEG-TS Start-up Burst (seconds)</strong></td>
+<td>0</td>
+<td>HDHomeRun clients such as Plex read an HLS channel as one <code>.ts</code> stream, made by reading the channel's playlist at real-time pace. With a burst, that reader first sends up to this many seconds of video as fast as it is available, so the client's buffer fills at once. 0 turns it off.</td>
+</tr>
+<tr>
+<td><strong>Read-ahead Thread Limit</strong></td>
+<td>16</td>
+<td>While HLS prepares video ahead of playback (the first transcode after a viewer tunes in, or one catching up), it raises the transcode config's thread count up to this limit, and no higher than the CPU cores Tunarr may run on, so the first seconds of video arrive sooner. It never lowers a config's count, and an automatic (0) count stays automatic. 0 turns the increase off. Unlike the settings above, it applies from the next program. See <a href="transcode_config/#read-ahead-threads">Read-ahead threads</a>.</td>
+</tr>
+</tbody>
+</table>
+<p>For example, when the encoder runs near real time, 2 s segments with a 10 s burst send a cold channel's first byte in about half the time of the defaults (4 s instead of 8 s), and fill the client's buffer faster after that.</p>
+<p>The served HLS playlist keeps up to 20 segments, with up to 10 segments of history
+before the playback point. For regular HLS, the default four-second segment length
+corresponds to roughly an 80-second window and 40-second history; changing <strong>HLS
+Segment Length</strong> changes these durations.</p>
+<p>HLS Direct v2 uses a fixed four-second target, unaffected by <strong>HLS Segment Length</strong>.
+Its copied video can only be cut at source keyframes, so actual segment lengths
+vary and a 20-segment window does not necessarily span 80 seconds. Alternate HLS
+also retains its fixed four-second segment configuration.</p>
+<p>The playlist FFmpeg writes in the transcode directory (<code>stream.m3u8</code>) holds the
+last 15 minutes of segments: 225 at the default four seconds, 450 at two. HLS
+Direct v2 keeps 225, which can span longer when its copied segments do. When
+<code>TUNARR_SESSION_STALENESS_MS</code> keeps a session nobody watches alive for longer
+than 10 minutes, the playlist holds that long plus 5 minutes instead. Tunarr
+keeps the session's history itself, so the playlists it serves count segments and
+program changes from the start of the session as before. Until 2026-10-19 the file
+listed every segment since the session started, and FFmpeg rewrote all of it after
+each segment and read it back in at each program change, which grew costlier the
+longer a channel played.</p>
+<p>HDHomeRun/MPEG-TS tune-ins have a 20-second deadline for their first output byte. A session that exits before
+producing output fails immediately; a silent startup returns HTTP 504. Disconnecting during startup releases that
+viewer's connection when session acquisition finishes. An unused timed-out wrapper is retired before another tune.
+Tune-in logs include session instance IDs, first-byte timing, and the disconnect reason. Debug logs separate channel
+lock wait, session construction, setup, and readiness. These timings do not include the player's decoding/buffering.
+FFmpeg and ffprobe version probes are shared and cached by executable path for one hour; failed probes are retried.</p>
+<h3 id="ffmpeg-transcode-path">FFmpeg Transcode Path<a class="headerlink" href="#ffmpeg-transcode-path" title="Permanent link">¶</a></h3>
+<p>Configure the path where FFmpeg writes HLS segments for a channel's stream. For instance, if running the standalone Linux binary, Tunarr can write transcoded segments to RAM by setting this option to <code>/dev/shm</code>. </p>
+<h4 id="transcode-to-ram-in-docker">Transcode to RAM in Docker<a class="headerlink" href="#transcode-to-ram-in-docker" title="Permanent link">¶</a></h4>
+<p>Transcoding to RAM when running Tunarr in Docker requires configuring the container to create a <code>tmpfs</code> at startup time:</p>
+<div class="language-yaml highlight"><span class="filename">docker-compose.yml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># ... rest of your docker compose</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">tunarr</span><span class="p">:</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="c1"># ... rest of your Tunarr service</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">tmpfs</span><span class="p">:</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/transcode:size=10G</span>
+</span></code></pre></div>
+<p>Then, in Tunarr, you would set your transcode path to <code>/transcode</code>.</p>
+<h2 id="audio-subtitles">Audio &amp; Subtitles<a class="headerlink" href="#audio-subtitles" title="Permanent link">¶</a></h2>
+<p>These settings are under <strong>Settings &gt; Captions &amp; audio</strong>, separate from the Playback tab.</p>
+<h3 id="subtitle-extraction">Subtitle Extraction<a class="headerlink" href="#subtitle-extraction" title="Permanent link">¶</a></h3>
+<p>If content in your channels have embedded, text-based subtitles, this option enables Tunarr to extract subtitles from media files in order to subsequently burn the subtitles. Extract embedded text-based subtitles is currently a requirement for using said subtitle streams. Each hour Tunarr will scan the guide for upcoming media, find which items have embedded text-based subtitles, and then run extraction. This can be a resource-intensive process, so in general, sidecar text-based subtitles are preferable.</p>
+<h3 id="sidecar-subtitles">Sidecar Subtitles<a class="headerlink" href="#sidecar-subtitles" title="Permanent link">¶</a></h3>
+<p>Tunarr supports sidecar subtitle files (<code>.srt</code>, <code>.ass</code>, <code>.ssa</code> and <code>.vtt</code>) placed alongside your media files. When scanning local libraries, Tunarr automatically discovers external subtitle files and associates them with the corresponding media.</p>
+<p>In a local library, a subtitle file belongs to a video when it sits in the same folder and its name is the video's name, then the subtitle's language and options, separated by dots:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Read as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Movie (2010).en.srt</code></td>
+<td>English</td>
+</tr>
+<tr>
+<td><code>Movie (2010).en.sdh.srt</code></td>
+<td>English, for the deaf and hard of hearing (also <code>.hi</code> or <code>.cc</code>)</td>
+</tr>
+<tr>
+<td><code>Movie (2010).fr.forced.ass</code></td>
+<td>French, forced</td>
+</tr>
+<tr>
+<td><code>Movie (2010).srt</code></td>
+<td>Unknown language</td>
+</tr>
+</tbody>
+</table>
+<p>Language codes can be two or three letters (<code>en</code>, <code>eng</code>), with a region (<code>en-us</code>, <code>en_US</code>). The first part that is a language code is the language, so <code>Movie (2010).hi.srt</code> is Hindi, while the <code>.hi</code> in <code>Movie (2010).en.hi.srt</code> means hard of hearing. Subtitle files added after a scan are found at the library's next scan. Versions before 2026-10-16 never found these files; to pick up the ones already on disk in a folder that hasn't changed since, run <strong>Force Scan</strong> on the library once.</p>
+<p>File and folder names may hold any characters, including apostrophes, colons, commas, semicolons, brackets and backslashes. Before 2026-10-17, a subtitle that was burned in (for example a forced one) stopped its program from playing when its path, or for an embedded track the video's path, held an apostrophe, a colon, a comma, a semicolon or a backslash.</p>
+<p>For Plex, Jellyfin, and Emby sources, external subtitles are always resolved to a local file during scanning, so that starting a stream never waits on the media server:</p>
+<ol>
+<li><strong>Shared storage.</strong> If the subtitle file the media server reported is visible to Tunarr — directly, or through the source's <a href="../media_sources/jellyfin/#configuring-path-replacements">path replacements</a> — it is used as-is. Nothing is copied. When a program starts, this file is preferred over any downloaded copy, so a subtitle that was re-synced or replaced on the server is used straight away.</li>
+<li><strong>Downloaded during scanning.</strong> Otherwise Tunarr fetches the subtitle from the media server and caches it locally.</li>
+</ol>
+<p>Setting up path replacements for a media source therefore benefits subtitles as well as video, and is the only way image-based external subtitles can be used, since those cannot be downloaded as text.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Plex reports where a subtitle file is only when Tunarr connects to it through a <strong>local address</strong> (for example <code>http://127.0.0.1:32400</code> when both run on the same machine). Through a remote address, such as its <code>plex.direct</code> name, Plex leaves the path out, so Tunarr downloads every subtitle even when it could read the file. A Plex library scan says so in the log once: <em>Plex didn't report subtitle file paths…</em>. Change the Plex server's address under <strong>Settings &gt; Media Sources</strong>, then run <strong>Force Scan</strong> on its libraries once.</p>
+</div>
+<p>Every hour, for programs airing in the next hour on channels that have subtitles enabled, Tunarr checks their external subtitles:</p>
+<ul>
+<li><strong>Missing:</strong> a subtitle that could not be resolved during a scan (because the media server was unreachable, for example), or whose cached copy has since been deleted, is fetched, without waiting for a rescan of the whole library.</li>
+<li><strong>Old copies:</strong> a downloaded copy more than 6 hours old is fetched again and replaced only if it changed. The media server can rewrite a subtitle's file under the same stream (a re-sync, a better download). The copy is swapped in whole, so a program that is playing never reads half a file.</li>
+<li><strong>Gone from the media server:</strong> if the media server answers "not found" for a subtitle (its file was replaced or removed), Tunarr reads the program from the media server again at once, saves its subtitles as they are now, and downloads the replacement. It does this once per program per hour. If the media server still lists the subtitle (it hasn't rescanned the item yet), Tunarr keeps what it has until it does. A program the media server no longer has at all is left to the next library scan, which marks it missing.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>External subtitles from Jellyfin and Emby libraries scanned by an older version of Tunarr are picked up by that hourly pass once the program is scheduled, or immediately on the next rescan of the library.</p>
+</div>
+<p>When using the <strong>HLS Direct v2</strong> stream mode, text-based subtitles (embedded or sidecar files) are served as WebVTT tracks in the HLS master playlist, since this mode can't burn them into the picture. Clients that support HLS subtitle renditions (most modern players) will display them as selectable subtitle options. A channel that starts during a stretch without dialogue starts right away, and its subtitle track stays empty until the next line.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>WebVTT subtitle tracks in the <strong>HLS</strong> stream mode are currently experimental. To enable them, go to <strong>Settings &gt; Captions &amp; audio</strong> and turn on WebVTT Sidecar Subtitles.</p>
+</div>
+<h3 id="closed-captions-for-hdhomerun-clients">Closed Captions for HDHomeRun Clients<a class="headerlink" href="#closed-captions-for-hdhomerun-clients" title="Permanent link">¶</a></h3>
+<p>Plex Live TV and other HDHomeRun clients read a channel as one MPEG-TS stream. That stream can't carry a selectable subtitle track, so Tunarr normally burns subtitles into the picture. With <strong>Closed captions for HDHomeRun clients (Plex)</strong> turned on, Tunarr sends them as CEA-608 closed captions instead. Viewers switch them on and off with their player's subtitles or CC button.</p>
+<p>When more than 10% of a subtitle track's cues contain characters CEA-608 cannot
+represent, Tunarr keeps that track for burn-in rather than presenting partial or
+empty captions. A warning reports the affected cue and character counts. CEA-608
+cannot represent Japanese and many other scripts; WebVTT and burn-in do not have
+that character restriction.</p>
+<ul>
+<li><strong>Which subtitles:</strong> the program's full text subtitles become captions. If the channel's subtitle selection picks forced subtitles (for example, only the foreign-language lines of an English program), those stay burned in, and the program's full subtitles in your preferred language become the captions. Before 2026-10-18, Tunarr read every subtitle track inside a video file as not forced: subtitle selection that asks for forced subtitles never found one, and a forced track (an English dub's "Signs &amp; Songs", say) could become the captions instead of the full one. Tunarr now keeps the flag the media server (or, for a local library, the file) reports, and corrects programs scanned before when it starts.</li>
+<li><strong>No longer burned in:</strong> full text subtitles that would have been burned in for the whole program are sent as captions instead, unless the character-support fallback above requires burn-in, so viewers who want captions must turn them on. Tunarr's own players get them as selectable WebVTT subtitles. Full text subtitles that can't become captions (that fallback, a program whose frame rate is unknown, or a file that can't be read) are burned in even with the WebVTT sidecar option on, so HDHomeRun viewers still see them.</li>
+<li><strong>Always burned in:</strong> image-based subtitles (PGS, VobSub) can't become captions and are still burned in.</li>
+<li><strong>Requirements:</strong> text subtitles on disk, either sidecar files or <a href="#subtitle-extraction">extracted</a> ones. The channel must use the <strong>HLS</strong> stream mode and have subtitles enabled, and its <a href="transcode_config/">transcode config</a> must output H.264 video (its <strong>Video Format</strong>). The caption track is only added on those channels: on a channel with subtitles off, the <code>.ts</code> stream is left untouched, as with the switch off. Captions can only be added to H.264 video: with HEVC or MPEG-2 output, the whole channel is treated as with the switch off. Its subtitles are burned in as with captions off, programs without subtitles get no notice, and its <code>.ts</code> stream has no caption track. When the channel's <code>.ts</code> stream starts, the log says so once at info level. A channel whose HLS session was started with captions off keeps them off until that session restarts, even after the switch or the channel's subtitles are turned on, and the log says that instead. Before 2026-10-18, such a channel's full text subtitles were neither burned in nor sent as captions. Until 2026-10-19, its <code>.ts</code> stream still offered a caption track that never showed anything.</li>
+<li><strong>Formatting:</strong> italics and underline from the subtitle file (<code>&lt;i&gt;</code>, <code>&lt;u&gt;</code>, and ASS <code>{\i1}</code>, <code>{\u1}</code>) are kept. Other formatting (bold, colors, fonts) is dropped, and so is the text of ASS vector drawings.</li>
+<li><strong>Placement:</strong> captions go where the subtitle file puts them, in a third of the screen: at the top, in the middle or at the bottom, and at the left, centered or at the right. The first of these that a cue has decides:</li>
+<li>In an ASS file, an exact position (<code>\pos</code>, or where a <code>\move</code> starts): the third of the script's screen it is in.</li>
+<li>An alignment override in the cue (<code>{\an1}</code> to <code>{\an9}</code>, the numpad layout; or SSA's <code>{\a1}</code> to <code>{\a11}</code>).</li>
+<li>In an ASS file, the alignment of the cue's style.</li>
+<li>Otherwise the bottom, centered by <strong>Caption Alignment</strong>.</li>
+</ul>
+<p>Placement and the styles can each be turned off under <a href="#caption-appearance-experimental">Caption appearance</a>.
+- <strong>Overlapping subtitles:</strong> while two subtitles overlap by more than half a second, both are shown in one block, older above newer (up to 4 lines), at the bottom when the file places them apart. <strong>When subtitles overlap</strong> under Caption appearance can show each where the file puts it, or only the newest.
+- <strong>Caption Alignment:</strong> where lines sit across the screen. <strong>Centered block</strong> (the default) starts every line in the same column, with the block centered. <strong>Each line centered</strong> centers each line on its own. <strong>Left</strong> starts every line at the left edge.
+- <strong>Look:</strong> text size and font are the player's, not Tunarr's, and so is the box behind the text unless you choose one under <a href="#caption-appearance-experimental">Caption appearance</a>. Plex Live TV (on Apple TV, for example) burns captions into the picture in its own style, a solid dark box behind the text. The text size follows the Plex app's subtitle size setting. In a test, Plex ignored CEA-608's see-through and transparent box codes.
+- <strong>Format limits:</strong> lines hold up to 32 characters, two lines at a time (both adjustable under <a href="#caption-appearance-experimental">Caption appearance</a>), and long cues are split over time. A style change in the middle of a word takes a column of its own, and so do a text color and a box. Characters outside the caption character set (most non-Latin scripts) are dropped. Accents saved as separate combining marks, as some macOS tools write subtitle files, are joined to their letters first. Before 2026-10-19 such accents were dropped (<code>café</code> became <code>cafe</code>).
+- <strong>Text encoding:</strong> a subtitle file that starts with a byte order mark is read as the UTF-8 or UTF-16 it declares. Otherwise it is read as UTF-8 when it is UTF-8 (or nearly all of it is, with a few broken characters), and as Windows-1252, the Western European code page that also covers Latin-1 (ISO 8859-1), when it isn't. Before 2026-10-19, every file was read as UTF-8, so a Windows-1252 file's accented letters were dropped from the captions (<code>café</code> became <code>caf</code>) and a UTF-16 file gave none. A file in another code page (Central European, Cyrillic, Greek) is read as Windows-1252 and its letters come out wrong; save it as UTF-8. Burned-in subtitles are read by ffmpeg, which leaves out any line of a file without a byte order mark that isn't valid UTF-8, so convert such files to UTF-8 to have them burned in.
+- <strong>Every frame carries caption data,</strong> even when nothing is being said, so players detect the caption track as soon as they tune in. Each two-character pair is sent once and in order: if a frame is missing where one was due, its pair goes out on the frames that follow instead of being lost. The <code>.ts</code> stream keeps every frame where one segment meets the next and where one program meets the next, so no pair is lost there either.
+- <strong>Frame rate:</strong> captions carry two characters per video frame, so while they're on, Tunarr gives each program a fixed, standard output frame rate and lays the captions out at exactly that rate: the program's own (23.976, 25, 29.97...), doubled when the software deinterlacer outputs a frame per field, or 29.97 for a file whose reported rate isn't standard (see <a href="transcode_config/#normalize-frame-rate">Normalize Frame Rate</a>).
+- <strong>Tuning in partway through a subtitle:</strong> its caption shows once it has loaded, a fraction of a second in, when at least a second of it is left. A shorter rest is skipped, so the first caption you see is never the end of a line flashing past. Roll-up keeps it, since its lines stay up while the next ones scroll in.
+- <strong>Tuning in while a caption loads:</strong> a player that tunes in (Plex reading the stream partway through) can only start decoding at a keyframe, which Tunarr puts at the start of every segment, and Plex's caption decoder starts in roll-up mode. So when a pop-on caption was still loading at that keyframe, the rest of it went straight on screen as a fragment (the end of a line, such as "ng the soup" for "Are you eating the soup?") and could stay up for seconds. Tunarr now loads each caption between two keyframes: before the keyframe when there's room, otherwise just after it, which shows the caption up to 300 ms late. Only when that isn't enough does a caption still load across a keyframe. With 2 s segments and back-to-back dialogue, about 1 tune-in in 60 at 29.97 fps (1 in 16 at 23.976 fps) still meets a fragment, against 1 in 3 before, and 1 caption in 15 to 30 shows later than it did, by 0.15 to 0.2 s typically and never more than 0.3 s. At 59.94 fps nothing moves and no fragment is left. Shorter segments leave less room between keyframes, so more captions load across one. Paint-on and roll-up draw text as it arrives and are unchanged, and so are captions on copied video (HLS Direct v2), whose keyframes Tunarr doesn't know. Hardware encoders can add keyframes of their own (Intel QSV puts one every second), which this doesn't plan around.
+- <strong>Programs without subtitles:</strong> players offer captions for the whole stream, so a program with no subtitle track shows a short caption, "No captions for this program", from 1 to 5 seconds into the program (or into the stream, if you tune in partway through), a little later for video below 23.976 fps or when the caption appearance makes it slower to load. A viewer who turns captions on can then tell they work. Filler, flex time and music tracks don't show it, and neither does a program whose subtitles can't become captions (image-based ones are burned in instead).
+- <strong>A program that ends early:</strong> when a program's video stops before its scheduled end (FFmpeg exits early, or the file is shorter than its recorded length), its captions stop there too. Before 2026-10-19, an item after it without captions of its own (flex time, an error screen, filler without subtitles) carried the rest of the program's dialogue. A caption still on screen when the program stops is erased where the next item starts. When the next item has captions of its own, the caption stays up until the next item's first caption replaces it.
+- <strong>Language:</strong> the stream labels the captions with the first language in your <a href="#language-preference">Language Preference</a>, so players such as Plex can name the track by language instead of "Unknown".</p>
+<h4 id="caption-appearance-experimental">Caption appearance (experimental)<a class="headerlink" href="#caption-appearance-experimental" title="Permanent link">¶</a></h4>
+<p>Everything CEA-608 captions can ask for, under <strong>Caption appearance (experimental)</strong> below Caption Alignment. A player may ignore any of it: Plex draws captions with its own decoder. Turn on the <strong>Test pattern</strong> to see what yours shows. Changes take effect from the next program.</p>
+<p>To try a look or the test pattern on one channel without changing every channel, use the channel's own <a href="../channels/transcoding/#captions-for-this-channel">caption settings</a>, then <strong>Copy to all channels</strong> once the look works.</p>
+<ul>
+<li><strong>Text color:</strong> white, green, blue, cyan, red, yellow or magenta. Italic words are always white, which is how CEA-608 defines italics.</li>
+<li><strong>Box behind the text:</strong> the player's own (the default: Tunarr sends nothing), or black, white, green, blue, cyan, red, yellow or magenta. <strong>Box opacity</strong> makes a chosen box solid, see-through, or none at all (the text alone). The box holds to the end of every line: Plex's family of caption decoders turns the box back to black when the previous caption is cleared, so Tunarr loads each boxed line wholly before or after that clear (test pattern sample 39). In very quick dialogue, where a caption only just loads in time, Tunarr keeps the caption on time instead, and the end of a line can still lose its box.</li>
+<li><strong>How captions appear:</strong> <strong>Pop-on</strong> (the default) shows each caption whole, on its start frame. <strong>Roll-up</strong> scrolls lines up from the bottom row with 2, 3 or 4 rows on screen, as live TV captions do; a cue's lines stay together, and the last lines stay up for up to 2 seconds for the next subtitle to scroll. <strong>Paint-on</strong> draws each caption's letters as they arrive.</li>
+<li><strong>Lines per caption:</strong> 2 (the default), 3 or 4. More lines split long subtitles less often. Roll-up uses its own number of rows.</li>
+<li><strong>Line width:</strong> 20 to 32 columns. A narrower line wraps sooner.</li>
+<li><strong>Bottom row and Top row:</strong> the screen has 15 caption rows. Captions end on the bottom row (15, the default); captions the subtitle file places at the top start on the top row (1), and ones it places in the middle sit between the two.</li>
+<li><strong>When subtitles overlap:</strong> <strong>Show both, stacked</strong> (the default) puts both in one block, older above newer; when the file places them apart (a sign at the top over dialogue), the block goes at the bottom, because Plex's family of caption decoders positions only a caption's first line. <strong>Show each where the subtitle file puts it</strong> keeps them apart, for players that place every line (test pattern sample 38 shows whether yours does). <strong>Show the newest</strong> shows one at a time, bringing the earlier back when the newer ends if it lasts at least another second. Roll-up and paint-on always show one at a time.</li>
+<li><strong>All capitals</strong>, and whether to keep the subtitle file's <strong>italics and underline</strong> and its <strong>placement</strong> (top, middle and sides).</li>
+</ul>
+<p>A box, a color or narrower lines make each caption take longer to send, so in fast dialogue a caption can come a little late. Roll-up and paint-on send a caption's text while it is on screen, at two characters a frame, so a long caption with a short time is cut off at its end.</p>
+<p><strong>Test pattern:</strong> replaces every program's captions with 39 numbered samples that loop, one per feature, each saying what it should look like. Turn captions on in your player, note the numbers that look wrong, then turn the test pattern off. Your appearance settings don't change the samples. A channel's own <a href="../channels/transcoding/#captions-for-this-channel"><strong>Test pattern on this channel</strong></a> switch shows it on that channel only.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Sample</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1–7</td>
+<td>Text colors: white, green, blue, cyan, red, yellow, magenta</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Red text with white italics in the middle</td>
+</tr>
+<tr>
+<td>9, 10</td>
+<td>Italics, underline</td>
+</tr>
+<tr>
+<td>11–18</td>
+<td>Boxes: black, red, green, blue, cyan, magenta, then blue text on yellow and on white</td>
+</tr>
+<tr>
+<td>19, 20</td>
+<td>See-through black and blue boxes</td>
+</tr>
+<tr>
+<td>21</td>
+<td>No box at all</td>
+</tr>
+<tr>
+<td>22–25</td>
+<td>Rows 1 and 5 (top), 11 and 13 (bottom)</td>
+</tr>
+<tr>
+<td>26, 27</td>
+<td>Three and four lines</td>
+</tr>
+<tr>
+<td>28, 29</td>
+<td>Left-aligned lines, and each line centered</td>
+</tr>
+<tr>
+<td>30</td>
+<td>Flashing text</td>
+</tr>
+<tr>
+<td>31</td>
+<td>Paint-on</td>
+</tr>
+<tr>
+<td>32–34</td>
+<td>Roll-up with 2, 3 and 4 rows</td>
+</tr>
+<tr>
+<td>35</td>
+<td>Middle of the screen</td>
+</tr>
+<tr>
+<td>36</td>
+<td>Right-aligned</td>
+</tr>
+<tr>
+<td>37</td>
+<td>Two overlapping lines, stacked</td>
+</tr>
+<tr>
+<td>38</td>
+<td>A sign at the top and a line at the bottom at once, each in its place</td>
+</tr>
+<tr>
+<td>39</td>
+<td>A magenta box, then a second line straight after it that keeps the magenta box to its last character (italics and ♪ included)</td>
+</tr>
+</tbody>
+</table>
+<p>The setting takes effect from the next program, and the HDHomeRun stream picks it up the next time it is started.</p>
+<h3 id="language-preference">Language Preference<a class="headerlink" href="#language-preference" title="Permanent link">¶</a></h3>
+<p>Currently, language preferences can only be configured globally. Use this setting to set an ordered list of preferred audio languages. The first matching audio language stream for a given piece of content will be chosen.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>ISO 639-2 gives 20 languages two different three-letter codes — German is both <code>ger</code> and <code>deu</code>, French both <code>fre</code> and <code>fra</code> — and media servers and files use them interchangeably. Tunarr treats the two codes for a language as equivalent, so a preference matches a track regardless of which code the file or media server reports.</p>
+</div>
+<!-- DO NOT FORMAT -->
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer">
+        
+          
+          <a href="../settings/applies-when/" class="md-footer__link md-footer__link--prev" aria-label="Previous: When settings take effect">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                When settings take effect
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="transcode_config/" class="md-footer__link md-footer__link--next" aria-label="Next: Transcode Configs">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Transcode Configs
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"></path></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://discord.gg/nYkb7MhPfD" target="_blank" rel="noopener" title="Join the Tunarr Discord" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M492.5 69.8c-.2-.3-.4-.6-.8-.7-38.1-17.5-78.4-30-119.7-37.1-.4-.1-.8 0-1.1.1s-.6.4-.8.8c-5.5 9.9-10.5 20.2-14.9 30.6-44.6-6.8-89.9-6.8-134.4 0-4.5-10.5-9.5-20.7-15.1-30.6-.2-.3-.5-.6-.8-.8s-.7-.2-1.1-.2C162.5 39 122.2 51.5 84.1 69c-.3.1-.6.4-.8.7C7.1 183.5-13.8 294.6-3.6 404.2c0 .3.1.5.2.8s.3.4.5.6c44.4 32.9 94 58 146.8 74.2.4.1.8.1 1.1 0s.7-.4.9-.7c11.3-15.4 21.4-31.8 30-48.8.1-.2.2-.5.2-.8s0-.5-.1-.8-.2-.5-.4-.6-.4-.3-.7-.4c-15.8-6.1-31.2-13.4-45.9-21.9-.3-.2-.5-.4-.7-.6s-.3-.6-.3-.9 0-.6.2-.9.3-.5.6-.7c3.1-2.3 6.2-4.7 9.1-7.1.3-.2.6-.4.9-.4s.7 0 1 .1c96.2 43.9 200.4 43.9 295.5 0 .3-.1.7-.2 1-.2s.7.2.9.4c2.9 2.4 6 4.9 9.1 7.2.2.2.4.4.6.7s.2.6.2.9-.1.6-.3.9-.4.5-.6.6c-14.7 8.6-30 15.9-45.9 21.8-.2.1-.5.2-.7.4s-.3.4-.4.7-.1.5-.1.8.1.5.2.8c8.8 17 18.8 33.3 30 48.8.2.3.6.6.9.7s.8.1 1.1 0c52.9-16.2 102.6-41.3 147.1-74.2.2-.2.4-.4.5-.6s.2-.5.2-.8c12.3-126.8-20.5-236.9-86.9-334.5zm-302 267.7c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.4 59.2-52.8 59.2m195.4 0c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.2 59.2-52.8 59.2"></path></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/sponsors/chrisbenincasa" target="_blank" rel="noopener" title="Sponsor Tunarr on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"></path></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tracking", "navigation.path", "navigation.sections", "navigation.indexes", "navigation.footer", "content.code.copy", "content.code.select", "content.tooltips", "content.action.edit", "content.action.view"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
