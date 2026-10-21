@@ -1,4 +1,4 @@
-### Checked channel deletion outcomes (2026-10-21, PR pending)
+### Checked channel deletion outcomes (2026-10-21, PR #169)
 
 - **What you saw:** Code inspection found that existing deletion helpers log some lineup and redirect-cleanup errors without surfacing them to callers. A resolved delete promise cannot establish which cleanup work succeeded.
 - **Cause:** SQLite deletion, lineup-file marking/restoration and redirect updates have separate failure boundaries.
