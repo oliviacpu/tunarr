@@ -1,4 +1,4 @@
-### Batched channel deletion API (2026-10-21, PR pending)
+### Batched channel deletion API (2026-10-21, PR #171)
 
 - **What you saw:** The Channels table deletes selected channels individually, with an XMLTV/M3U refresh for each deletion and no separate result for suppressed cleanup errors.
 - **Cause:** The single-channel endpoint combines committed deletion and derived work behind one promise.
