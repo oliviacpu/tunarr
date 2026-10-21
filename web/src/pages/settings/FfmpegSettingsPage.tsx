@@ -44,6 +44,7 @@ import type { Control, SubmitHandler } from 'react-hook-form';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import type { DeepRequired } from 'ts-essentials';
 import { CaptionAppearanceFields } from '../../components/settings/ffmpeg/CaptionAppearanceFields.tsx';
+import { GlobalSubtitlePreferencesEditor } from '../../components/settings/ffmpeg/GlobalSubtitlePreferencesEditor.tsx';
 import { TranscodeConfigsTable } from '../../components/settings/ffmpeg/TranscodeConfigsTable.tsx';
 import {
   getApiFfmpegInfoOptions,
@@ -62,15 +63,21 @@ type FfmpegLogOptions = TupleToUnion<typeof FfmpegLogOptions>;
 
 type FfmpegFormValues = DeepRequired<
   Omit<FfmpegSettings, 'configVersion' | 'subtitlePreferences'>
->;
+> & { subtitlePreferences?: FfmpegSettings['subtitlePreferences'] };
 
 // The form's values for saved settings: every field filled in, and a missing
 // transcode directory as an empty one. The settings' configVersion rides
 // along and is sent back as it came
-function toFormValues(settings: FfmpegSettings): FfmpegFormValues {
+function toFormValues(
+  settings: FfmpegSettings,
+  includeSubtitlePreferences: boolean,
+): FfmpegFormValues {
   return {
     ...omit(defaultFfmpegSettings, 'subtitlePreferences'),
     ...omit(settings, 'subtitlePreferences'),
+    ...(includeSubtitlePreferences
+      ? { subtitlePreferences: settings.subtitlePreferences }
+      : {}),
     transcodeDirectory: settings.transcodeDirectory ?? '',
   };
 }
@@ -214,7 +221,7 @@ export default function FfmpegSettingsPage({
   const captionAlignmentNames = useCaptionAlignmentNames();
 
   const form = useForm<FfmpegFormValues>({
-    defaultValues: toFormValues(ffmpegSettings),
+    defaultValues: toFormValues(ffmpegSettings, section === 'captions-audio'),
     // Save turns off as soon as a value stops being valid; a field says why
     // once it has been left
     mode: 'onTouched',
@@ -230,7 +237,7 @@ export default function FfmpegSettingsPage({
   // what the form already compares against, so it is skipped: resetting again
   // would drop edits made while the save was in flight
   useEffect(() => {
-    const loaded = toFormValues(ffmpegSettings);
+    const loaded = toFormValues(ffmpegSettings, section === 'captions-audio');
     if (!isEqual(loaded, defaultValues)) {
       reset(loaded);
     }
@@ -280,7 +287,8 @@ export default function FfmpegSettingsPage({
   const saveMutation = useSettingsMutation({
     form,
     mutation: putApiSettingsFfmpegMutation(),
-    toFormValues,
+    toFormValues: (settings) =>
+      toFormValues(settings, section === 'captions-audio'),
     // A new executable path is probed again, and the sidebar shows its version
     invalidate: [
       { queryKey: getApiSettingsFfmpegQueryKey(), exact: true },
@@ -293,7 +301,9 @@ export default function FfmpegSettingsPage({
     saveMutation.mutate({
       body: {
         configVersion: defaultFfmpegSettings.configVersion,
-        ...data,
+        ...(section === 'captions-audio'
+          ? data
+          : omit(data, 'subtitlePreferences')),
       },
     });
   };
@@ -527,6 +537,28 @@ export default function FfmpegSettingsPage({
                 <Typography variant="h3">
                   <Trans>Subtitles</Trans>
                 </Typography>
+                <Typography variant="h4">
+                  <Trans>Global subtitle preferences</Trans>
+                </Typography>
+                <AppliesWhen setting="subtitlePreferences" />
+                <Typography variant="body2" color="text.secondary">
+                  <Trans>
+                    Channels that inherit try these preferences in order. This
+                    does not turn subtitles on. Extraction and the channel's
+                    stream mode still determine which subtitles can be used.
+                  </Trans>
+                </Typography>
+                <Controller
+                  control={control}
+                  name="subtitlePreferences"
+                  render={({ field }) => (
+                    <GlobalSubtitlePreferencesEditor
+                      value={field.value ?? []}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+                <Divider />
                 <AppliesWhen setting="subtitleExtraction" />
                 <SwitchFormController
                   control={control}

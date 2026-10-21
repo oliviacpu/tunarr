@@ -84,24 +84,32 @@ export function ChannelAudioTracksField({ disabled }: { disabled: boolean }) {
             disabled={disabled}
           />
           <FormHelperText error={fieldState.error !== undefined}>
-            {fieldState.error?.message ?? (
-              <>
-                <Trans>
-                  Up to four language codes (ISO 639-2, such as eng, jpn), in
-                  order, for switchable audio in Plex Live TV. Leave empty for
-                  one audio track.
-                </Trans>
-                <HelpTooltip about={t`Audio tracks`}>
+            {disabled ? (
+              <Trans>
+                Fixed audio layouts are unavailable in HLS Direct v2, which
+                copies each program's own tracks. The saved layout is retained.
+              </Trans>
+            ) : (
+              (fieldState.error?.message ?? (
+                <>
                   <Trans>
-                    Every program, gap and commercial on this channel carries
-                    exactly these audio tracks, so the audio menu stays the same
-                    all session, and Plex picks each viewer's preferred
-                    language. A program without one of the languages repeats its
-                    main audio there. Not available in HLS Direct v2, which
-                    copies each program's own tracks.
+                    Fixed output layout for this channel, with no global
+                    default. Up to four language codes (ISO 639-2, such as eng,
+                    jpn), in order, for switchable audio in Plex Live TV. Leave
+                    empty for one audio track.
                   </Trans>
-                </HelpTooltip>
-              </>
+                  <HelpTooltip about={t`Audio tracks`}>
+                    <Trans>
+                      Every program, gap and commercial on this channel carries
+                      exactly these audio tracks, so the audio menu stays the
+                      same all session, and Plex picks each viewer's preferred
+                      language. A program without one of the languages repeats
+                      its main audio there. Not available in HLS Direct v2,
+                      which copies each program's own tracks.
+                    </Trans>
+                  </HelpTooltip>
+                </>
+              ))
             )}
           </FormHelperText>
         </FormControl>

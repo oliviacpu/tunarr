@@ -52,6 +52,9 @@ describe('ChannelAudioTracksField', () => {
     const { onValid } = await submit(['eng', 'jpn'], false);
 
     expect(onValid.mock.calls[0]?.[0].audioTracks).toEqual(['eng', 'jpn']);
+    expect(
+      screen.getByText(/Fixed output layout for this channel/),
+    ).toHaveTextContent('no global default');
   });
 
   test('refuses an unknown language code', async () => {
@@ -66,5 +69,8 @@ describe('ChannelAudioTracksField', () => {
 
     expect(onValid).toHaveBeenCalled();
     expect(onValid.mock.calls[0]?.[0].audioTracks).toBeUndefined();
+    expect(
+      screen.getByText(/Fixed audio layouts are unavailable in HLS Direct v2/),
+    ).toHaveTextContent('The saved layout is retained');
   });
 });

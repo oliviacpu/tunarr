@@ -208,9 +208,10 @@ export function EditChannelForm({
           }
         : undefined,
       subtitlePreferences: preferences,
-      subtitlePreferenceMode: subtitlePreferencesChanged
-        ? 'custom'
-        : isNew
+      subtitlePreferenceMode:
+        isNew ||
+        subtitlePreferencesChanged ||
+        data.subtitlePreferenceMode !== defaults?.subtitlePreferenceMode
           ? data.subtitlePreferenceMode
           : undefined,
     } satisfies SaveableChannel;

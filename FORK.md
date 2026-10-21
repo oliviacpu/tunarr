@@ -26,6 +26,14 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Edit global subtitle defaults and channel exceptions (2026-10-21)
+
+- **Scope:** S5c adds an ordered language/filter/external/image list to Settings > Captions & audio, using the shared Save, Reset changes and error handling. Reorder, remove or clear preferences without changing fixed audio output layouts.
+- **Channels:** the Streaming tab chooses global defaults or a custom list, previews current saved globals, and retains custom rows and drafts when switching either way. Saving a final inherit choice keeps that mode even after a custom draft was edited. Disabled subtitles and HLS Direct v2's text-only limit are explained; preferences do not enable playback capabilities.
+- **Compatibility:** unrelated channel saves still omit untouched mode/rows; Playback saves omit the subtitle list. Audio layout copy now explains its per-channel scope and existing Direct v2 limitation.
+- **Tests:** component/form regressions and real seeded browser flows cover save/reload, reset, errors, row ordering/flags, explicit clearing and retained custom rows. Captures cover 390px/1440px in light/dark themes using generic seeded data.
+- **Upstream:** not sent; final UI step of approved S5 design #114. Release/deployment remains separate and must use the paired SQLite/settings migration procedure.
+
 ### Resolve inherited subtitle preferences for future streams (2026-10-21)
 
 - **Scope:** S5b reads current global preferences for inheriting channels during stream selection. Each row keeps its own language, filter and external/image flags, with language aliases supported. `none` rows are skipped; a nonempty unmatched/all-none list selects no subtitle.

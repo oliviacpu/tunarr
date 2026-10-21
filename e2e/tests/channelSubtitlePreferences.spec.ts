@@ -55,6 +55,10 @@ test.beforeAll(async ({ browser }) => {
   const page = await browser.newPage();
   await openStreamingTab(page);
   await page.getByLabel('Enable subtitles').check();
+  await page.getByRole('combobox', { name: /^Subtitle preferences\b/ }).click();
+  await page
+    .getByRole('option', { name: 'Customize for this channel', exact: true })
+    .click();
   await page.getByLabel('Add Language Preference').fill('English');
   await page.getByRole('option', { name: 'English', exact: true }).click();
   await expect(englishRow(page)).toBeVisible();

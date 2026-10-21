@@ -9,7 +9,7 @@ import {
   MaterialReactTable,
   useMaterialReactTable,
 } from 'material-react-table';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Controller, useFieldArray } from 'react-hook-form';
 import { languageBy3LetterCode } from '../../helpers/language.ts';
 import { useChannelFormContext } from '../../hooks/useChannelFormContext.ts';
@@ -23,6 +23,10 @@ export const ChannelSubtitlePreferencesTable = () => {
   const { watch, control, setValue } = useChannelFormContext();
   const prefFields = useFieldArray({ control, name: 'subtitlePreferences' });
   const prefs = watch('subtitlePreferences');
+  const selectCustom = useCallback(
+    () => setValue('subtitlePreferenceMode', 'custom', { shouldDirty: true }),
+    [setValue],
+  );
   const tableSettings = useStoreBackedTableSettings(TableName);
 
   const columns = useMemo<MRT_ColumnDef<SubtitlePreference>[]>(() => {
@@ -55,9 +59,10 @@ export const ChannelSubtitlePreferencesTable = () => {
             <Checkbox
               sx={{ p: 0 }}
               checked={value}
-              onChange={(_, checked) =>
-                setValue(name, checked, { shouldDirty: true })
-              }
+              onChange={(_, checked) => {
+                selectCustom();
+                setValue(name, checked, { shouldDirty: true });
+              }}
             />
           );
         },
@@ -73,9 +78,10 @@ export const ChannelSubtitlePreferencesTable = () => {
           return (
             <Checkbox
               sx={{ p: 0 }}
-              onChange={(_, checked) =>
-                setValue(name, checked, { shouldDirty: true })
-              }
+              onChange={(_, checked) => {
+                selectCustom();
+                setValue(name, checked, { shouldDirty: true });
+              }}
               checked={value}
             />
           );
@@ -125,16 +131,18 @@ export const ChannelSubtitlePreferencesTable = () => {
         })),
         muiEditTextFieldProps: ({ row }) => ({
           select: true,
-          onChange: (ev) =>
+          onChange: (ev) => {
+            selectCustom();
             setValue(
               `subtitlePreferences.${row.index}.filter`,
               ev.target.value as SubtitleFilter,
               { shouldDirty: true },
-            ),
+            );
+          },
         }),
       },
     ];
-  }, [setValue]);
+  }, [setValue, selectCustom, t]);
 
   const renderLanguageAutoComplete = () => {
     return (
@@ -142,15 +150,16 @@ export const ChannelSubtitlePreferencesTable = () => {
         values={[]}
         showValues={false}
         sx={{ width: '50%' }}
-        onSelect={(opt) =>
+        onSelect={(opt) => {
+          selectCustom();
           prefFields.append({
             langugeCode: opt.iso6392,
             priority: prefFields.fields.length,
             allowExternal: true,
             allowImageBased: true,
             filter: 'any',
-          })
-        }
+          });
+        }}
         onRemove={() => {}}
         textFieldProps={{
           label: t`Add Language Preference`,
@@ -181,7 +190,14 @@ export const ChannelSubtitlePreferencesTable = () => {
     renderRowActions: ({ row }) => {
       return (
         <Stack direction="row">
-          <IconButton onClick={() => prefFields.remove(row.index)} size="small">
+          <IconButton
+            aria-label={t`Remove subtitle preference`}
+            onClick={() => {
+              selectCustom();
+              prefFields.remove(row.index);
+            }}
+            size="small"
+          >
             <Delete />
           </IconButton>
         </Stack>
@@ -200,6 +216,7 @@ export const ChannelSubtitlePreferencesTable = () => {
       onDragEnd: () => {
         const { draggingRow, hoveredRow } = table.getState();
         if (hoveredRow && draggingRow && !isUndefined(hoveredRow.index)) {
+          selectCustom();
           prefFields.swap(hoveredRow.index, draggingRow.index);
         }
       },

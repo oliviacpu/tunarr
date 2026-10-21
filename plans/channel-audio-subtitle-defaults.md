@@ -1,9 +1,9 @@
 # Channel audio and subtitle defaults
 
-Status: **approved by Olivia Hunter on 2026-10-20; implementation stays separate**. This is the design deliverable for S5 in the
+Status: **approved by Olivia Hunter on 2026-10-20; separate implementation authorized on 2026-10-21**. This is the design deliverable for S5 in the
 [approved UI audit](ui-primitives-and-settings-audit-2026-10-19.md), approved through
 [PR #85](https://github.com/oliviacpu/tunarr/pull/85). Approval of that audit authorized writing this design,
-not implementing it. No schema, API, playback or UI behavior changes with this document.
+not implementing it. Olivia subsequently authorized the S5a → S5b → S5c implementation after the screenshot/docs closeout (#162). The design decisions below remain the implementation contract.
 
 ## Problem and current behavior
 
@@ -96,10 +96,9 @@ with output structure; copying defaults into channels prevents later global chan
 using absence of channel rows as the only inherit signal cannot represent a custom empty list; routing
 defaults through editable CEL profiles adds an unrelated UI and reopens the approved P1 shelving decision.
 
-## Follow-up PRs, separate implementation
+## Separate implementation PRs
 
-These rows describe the approved design's future implementation split. Add them to the audit when that
-work is scheduled; implementation is outside this documentation PR and the current continuation scope.
+These rows define the approved implementation split, scheduled in the audit's S5 continuation. S5a is #163, S5b is #164, and S5c contains the controls and acceptance evidence. Each step is reviewed and landed separately.
 
 | Row | Change                                                                                                                                                   | Acceptance                                                                                                                                                                                                                                                                                                                                |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -116,5 +115,4 @@ Run focused suites, changed-file lint and typechecks for each code PR, plus the 
 
 Ship S5a → S5b → S5c in that order as separate implementation PRs after their reviews. Back up SQLite and `settings.json` before the
 migration release; downgrade by restoring both together with the prior image. Add fork notes and public
-configuration documentation with the implementation PRs. This design itself needs no runtime tests or
-release. S5's design is approved; its implementation remains future work.
+configuration documentation with the implementation PRs. The original design PR introduced no runtime behavior; the implementation PRs carry tests and public documentation. Release and deployment remain separate from landing the source changes.

@@ -102,6 +102,24 @@ Leave the field empty for one audio track, the program's own, as before.
     HLS Direct v2 copies each program's own tracks unchanged, so it can't offer a fixed set; the field is disabled for
     that mode. HLS, HLS alt and MPEG-TS support it.
 
+## Subtitle preferences
+
+Enable subtitles under **Audio & Subtitles**, then choose whether the channel uses global or custom
+preferences. The global preview shows the saved list from **Settings > Captions & audio**. Global
+changes apply when future streams select subtitles; they do not interrupt a program already playing.
+
+Custom preferences use only this channel's list. Switching to global retains the custom rows, including
+unsaved edits, so switching back restores them. Save persists the selected mode and any edited custom
+rows. An intentionally empty custom list keeps the stream mode's existing fallback and does not use
+the global list. Turn **Enable subtitles** off to disable subtitles for the channel.
+
+A nonempty inherited list tries each row's language, filter and external/image flags independently.
+**None** rows are skipped; no matching row means no subtitle. HLS Direct v2 only supports text output.
+Existing explicit stream-selection profiles keep precedence in profile-based playback; global
+preferences do not enable profile support in Direct v2 or change extraction/caption/WebVTT gates.
+
+The fixed **Audio tracks** layout above stays per channel and has no global default.
+
 ## Captions for this channel
 
 **Captions for this channel** (under *Audio & Subtitles* on the channel's Streaming tab) tries
