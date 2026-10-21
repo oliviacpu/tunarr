@@ -331,6 +331,23 @@ folded into `FORK.md` here. They await a separate release through the existing g
 C7b/C7c batching and S5 implementation remain held. Local calendar timestamp/phone-overflow
 findings are recorded in the handoff and are not implemented by this continuation.
 
+### S5 implementation continuation (2026-10-21)
+
+Olivia authorized implementation after the screenshot/docs closeout in #162. The design approved
+in #114, `plans/channel-audio-subtitle-defaults.md`, governs these separate PRs in dependency order.
+Fixed output audio layouts remain per channel. This does not authorize C7b/C7c batching.
+
+| Row | Scope                                                                                                                                                          | Acceptance                                                                                                                                                                                                                                                                                                                                               |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S5a | Global subtitle schema/settings persistence and omission compatibility; channel mode migration, retained rows and copy; minimal existing-editor compatibility. | Old files and old PUT clients preserve settings; invalid new rows fail without replacing settings; explicit empty lists clear; migration preserves rows and marks their channels custom; omitted modes preserve; intentional editor list edits select custom. Real previous-schema migration, API, persistence, copy/update and editor regressions pass. |
+| S5b | Effective-list helper, inherited-list action/evaluator, direct picker and troubleshooting integration.                                                         | Empty globals preserve the two existing fallback paths; inherited lists respect each row; custom channels and explicit profiles preserve behavior; direct output remains text-only. Add subtitle application timing when preferences become active.                                                                                                      |
+| S5c | Global Captions & audio list, channel inherit/custom control and resolved preview; accurate audio-layout copy.                                                 | Shared form save/reset/dirty/error behavior; reload persistence; mode changes retain custom rows; capability gates are clear; both themes at 390px/1440px and route sweep pass.                                                                                                                                                                          |
+
+The current settings API has GET/PUT canonical routes and compatibility aliases, with no PATCH or
+reset endpoint to add. Defaults are submitted through the existing PUT. S5a stores preferences;
+playback behavior follows in S5b. Before the migration release, back up SQLite and `settings.json`
+as a pair and rehearse restoring both with the prior image through the existing deploy procedure.
+
 ### C7 continuation: C7a approved; batching held
 
 `plans/channel-update-and-bulk-followups-2026-10-20.md` proposes three separate rows beyond

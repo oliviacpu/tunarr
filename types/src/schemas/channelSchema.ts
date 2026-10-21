@@ -1,6 +1,6 @@
-import languages from '@cospired/i18n-iso-languages';
 import z from 'zod/v4';
 import type { TupleToUnion } from '../util.js';
+import { canonicalLanguageCode } from './languageSchema.js';
 import { ResolutionSchema } from './miscSchemas.js';
 import {
   CaptionAlignments,
@@ -183,14 +183,7 @@ export const MaxChannelAudioTracks = 4;
  * for a code that isn't a known language.
  */
 export function canonicalAudioTrackLanguage(code: string): string | null {
-  if (!/^[a-z]{3}$/.test(code)) {
-    return null;
-  }
-  if (languages.getAlpha3TCodes()[code] !== undefined) {
-    return code;
-  }
-  const alpha2 = languages.alpha3BToAlpha2(code);
-  return (alpha2 && languages.alpha2ToAlpha3T(alpha2)) ?? null;
+  return canonicalLanguageCode(code);
 }
 
 export const StrictChannelAudioTracksSchema = z
@@ -238,6 +231,8 @@ export const ChannelCaptionsSchema = z.object({
   appearance: CaptionAppearanceOverridesSchema.optional(),
 });
 
+export const SubtitlePreferenceModeSchema = z.enum(['inherit', 'custom']);
+
 export const ChannelSchema = z.object({
   disableFillerOverlay: z.boolean(),
   duration: z.number(),
@@ -263,6 +258,7 @@ export const ChannelSchema = z.object({
   transcodeConfigId: z.uuid(),
   sessions: z.array(ChannelSessionSchema).optional(),
   subtitlesEnabled: z.boolean(),
+  subtitlePreferenceMode: SubtitlePreferenceModeSchema,
   subtitlePreferences: z.array(SubtitlePreference).nonempty().optional(),
   audioTracks: z.array(z.string()).optional(),
   captions: ChannelCaptionsSchema.nullable().optional(),
@@ -283,6 +279,7 @@ export const SaveableChannelSchema = ChannelSchema.omit({
     icon: StrictChannelIconSchema,
     watermark: StrictWatermarkSchema.optional(),
     audioTracks: StrictChannelAudioTracksSchema.optional(),
+    subtitlePreferenceMode: SubtitlePreferenceModeSchema.optional(),
     subtitlePreferences: z.array(SubtitlePreference).optional(),
   });
 

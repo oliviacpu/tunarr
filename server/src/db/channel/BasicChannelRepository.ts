@@ -81,6 +81,7 @@ function updateRequestToChannel(
     transcodeConfigId: updateReq.transcodeConfigId,
     streamMode: updateReq.streamMode,
     subtitlesEnabled: updateReq.subtitlesEnabled,
+    subtitlePreferenceMode: updateReq.subtitlePreferenceMode,
     // Left out = unchanged (a client from before the field existed); [] = off
     audioTracks:
       updateReq.audioTracks === undefined
@@ -117,6 +118,9 @@ function createRequestToChannel(saveReq: SaveableChannel): NewChannelOrm {
     streamMode: saveReq.streamMode,
     transcodeConfigId: saveReq.transcodeConfigId,
     subtitlesEnabled: saveReq.subtitlesEnabled,
+    subtitlePreferenceMode:
+      saveReq.subtitlePreferenceMode ??
+      (saveReq.subtitlePreferences?.length ? 'custom' : 'inherit'),
     audioTracks: audioTracksToColumn(saveReq.audioTracks),
     captions: captionsToColumn(saveReq.captions),
   } satisfies NewChannelOrm;
@@ -420,6 +424,20 @@ export class BasicChannelRepository {
         )
         .returning()
         .all();
+
+      const subtitlePreferences = tx
+        .select()
+        .from(ChannelSubtitlePreferences)
+        .where(eq(ChannelSubtitlePreferences.channelId, channel.uuid))
+        .all()
+        .map((preference) => ({
+          ...preference,
+          uuid: v4(),
+          channelId: newChannelId,
+        }));
+      if (subtitlePreferences.length > 0) {
+        tx.insert(ChannelSubtitlePreferences).values(subtitlePreferences).run();
+      }
 
       tx.insert(ChannelPrograms)
         .select(

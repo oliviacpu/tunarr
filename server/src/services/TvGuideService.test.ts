@@ -42,6 +42,7 @@ function makeChannelOrm(overrides?: Partial<ChannelOrm>): ChannelOrm {
     transcodeConfigId: v4(),
     watermark: null,
     subtitlesEnabled: false,
+    subtitlePreferenceMode: 'inherit',
     ...overrides,
   };
 }

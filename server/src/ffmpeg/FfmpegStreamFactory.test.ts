@@ -112,6 +112,7 @@ function makeChannel(overrides: Partial<ChannelOrm> = {}): ChannelOrm {
     number: 1,
     streamMode: 'hls',
     subtitlesEnabled: false,
+    subtitlePreferenceMode: 'inherit',
     offline: { mode: 'pic' },
     duration: 0,
     groupTitle: null,

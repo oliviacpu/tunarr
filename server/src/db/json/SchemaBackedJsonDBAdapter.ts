@@ -21,6 +21,7 @@ export class SchemaBackedDbAdapter<T extends z.ZodTypeAny>
     filename: PathLike,
     private defaultValue: Nullable<z.output<T>> = null,
     private adapter: Adapter<string> = new TextFile(filename),
+    private onValidationFailure?: (error: z.ZodError) => void,
   ) {
     this.schema = schema;
     this.path = filename;
@@ -41,6 +42,9 @@ export class SchemaBackedDbAdapter<T extends z.ZodTypeAny>
 
     const parsed: unknown = data ? JSON.parse(data) : {};
     let parseResult = await this.schema.safeParseAsync(parsed);
+    if (!parseResult.success) {
+      this.onValidationFailure?.(parseResult.error);
+    }
     let needsWriteFlush = false;
     let attempts = 0;
     while (!parseResult.success && attempts < 5) {

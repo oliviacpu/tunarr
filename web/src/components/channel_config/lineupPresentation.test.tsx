@@ -88,6 +88,7 @@ const channel: Channel = {
   streamMode: 'hls',
   transcodeConfigId: '00000000-0000-4000-8000-000000000001',
   subtitlesEnabled: false,
+  subtitlePreferenceMode: 'inherit',
 };
 const episode: UIChannelProgram = {
   ...makeContentProgram(

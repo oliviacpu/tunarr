@@ -109,6 +109,145 @@ describe('SettingsDBFactory', () => {
     expect(reloaded.xmlTvSettings().programmingHours).toBe(48);
   });
 
+  test('loads a pre-subtitle settings file with empty preferences and unchanged versions', async () => {
+    const { defaultSettings } = await import('./SettingsDB.ts');
+    const original = defaultSettings(dir);
+    const { subtitlePreferences: _omitted, ...legacyFfmpeg } =
+      original.settings.ffmpeg;
+    const legacy = {
+      ...original,
+      settings: {
+        ...original.settings,
+        ffmpeg: { ...legacyFfmpeg, enableLogging: true },
+      },
+    };
+    await fs.writeFile(settingsPath, JSON.stringify(legacy));
+    const SettingsDBFactory = await loadFactory();
+    const settings = new SettingsDBFactory(options).get();
+    expect(settings.ffmpegSettings().subtitlePreferences).toEqual([]);
+    expect(settings.ffmpegSettings().enableLogging).toBe(true);
+    expect(settings.ffmpegSettings().configVersion).toBe(5);
+    expect(settings.getAll().version).toBe(2);
+    const written = JSON.parse(await fs.readFile(settingsPath, 'utf-8'));
+    expect(written.settings.ffmpeg.subtitlePreferences).toEqual([]);
+    expect(written.settings.clientId).toBe(original.settings.clientId);
+  });
+
+  test('saves and reloads global preference order and row flags', async () => {
+    const SettingsDBFactory = await loadFactory();
+    const settings = new SettingsDBFactory(options).get();
+    const preferences = [
+      {
+        languageCode: 'deu',
+        filter: 'forced' as const,
+        allowExternal: false,
+        allowImageBased: true,
+      },
+      {
+        languageCode: 'eng',
+        filter: 'any' as const,
+        allowExternal: true,
+        allowImageBased: false,
+      },
+    ];
+    await settings.updateFfmpegSettings({
+      ...settings.ffmpegSettings(),
+      subtitlePreferences: preferences,
+    });
+    const written = JSON.parse(await fs.readFile(settingsPath, 'utf-8'));
+    expect(written.settings.ffmpeg.subtitlePreferences).toEqual(preferences);
+    vi.resetModules();
+    const ReloadedFactory = await loadFactory();
+    const reloaded = new ReloadedFactory(options).get();
+    expect(reloaded.ffmpegSettings().subtitlePreferences).toEqual(preferences);
+    expect(reloaded.getAll().version).toBe(2);
+    expect(reloaded.ffmpegSettings().configVersion).toBe(5);
+  });
+
+  test('normalizes saved bibliographic codes without losing unrelated settings', async () => {
+    const { defaultSettings } = await import('./SettingsDB.ts');
+    const original = defaultSettings(dir);
+    original.settings.xmltv.programmingHours = 48;
+    original.settings.ffmpeg.subtitlePreferences = [
+      {
+        languageCode: 'ger',
+        filter: 'default',
+        allowExternal: false,
+        allowImageBased: true,
+      },
+    ];
+    await fs.writeFile(settingsPath, JSON.stringify(original));
+    const SettingsDBFactory = await loadFactory();
+    const settings = new SettingsDBFactory(options).get();
+    expect(settings.ffmpegSettings().subtitlePreferences[0]?.languageCode).toBe(
+      'deu',
+    );
+    expect(settings.xmlTvSettings().programmingHours).toBe(48);
+    const written = JSON.parse(await fs.readFile(settingsPath, 'utf-8'));
+    expect(written.settings.ffmpeg.subtitlePreferences[0].languageCode).toBe(
+      'deu',
+    );
+  });
+
+  test.each([
+    null,
+    {},
+    [
+      {
+        languageCode: 'en',
+        filter: 'any',
+        allowExternal: false,
+        allowImageBased: true,
+      },
+    ],
+    [
+      {
+        languageCode: 'zzx',
+        filter: 'any',
+        allowExternal: false,
+        allowImageBased: true,
+      },
+    ],
+    [
+      {
+        languageCode: 'eng',
+        filter: 'invalid',
+        allowExternal: false,
+        allowImageBased: true,
+      },
+    ],
+    [{ languageCode: 'eng', allowExternal: false, allowImageBased: true }],
+    [
+      {
+        languageCode: 'eng',
+        filter: 'any',
+        allowExternal: 'false',
+        allowImageBased: true,
+      },
+    ],
+    [{ languageCode: 'eng', filter: 'any', allowImageBased: true }],
+    [{ languageCode: 'eng', filter: 'any', allowExternal: false }],
+  ])(
+    'refuses malformed saved preferences without replacing the file: %j',
+    async (subtitlePreferences) => {
+      const { defaultSettings } = await import('./SettingsDB.ts');
+      const original = defaultSettings(dir);
+      const saved = JSON.stringify({
+        ...original,
+        settings: {
+          ...original.settings,
+          ffmpeg: { ...original.settings.ffmpeg, subtitlePreferences },
+        },
+      });
+      await fs.writeFile(settingsPath, saved);
+      const SettingsDBFactory = await loadFactory();
+      expect(() => new SettingsDBFactory(options).get()).toThrow(
+        /subtitlePreferences/,
+      );
+      expect(await fs.readFile(settingsPath, 'utf-8')).toBe(saved);
+    },
+  );
+
   describe('log rolling default', () => {
     type WrittenSettings = {
       migration: Record<string, unknown>;

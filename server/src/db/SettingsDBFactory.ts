@@ -17,6 +17,7 @@ import {
   SettingsDB,
   SettingsFileSchema,
   defaultSettings,
+  rejectInvalidSubtitlePreferences,
 } from './SettingsDB.ts';
 
 @injectable()
@@ -53,6 +54,8 @@ export class SettingsDBFactory {
         SettingsFileSchema,
         actualPath,
         defaultValue,
+        undefined,
+        rejectInvalidSubtitlePreferences,
       ),
       defaultValue,
     );
@@ -91,7 +94,13 @@ export class SettingsDBFactory {
 
     const settingsDB = new SettingsDB(
       new Low<SettingsFile>(
-        new SchemaBackedDbAdapter(SettingsFileSchema, actualPath, defaultValue),
+        new SchemaBackedDbAdapter(
+          SettingsFileSchema,
+          actualPath,
+          defaultValue,
+          undefined,
+          rejectInvalidSubtitlePreferences,
+        ),
         db.data,
       ),
     );

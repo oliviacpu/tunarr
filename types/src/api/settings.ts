@@ -8,6 +8,8 @@ import {
   TonemapAlgorithms,
 } from '../schemas/settingsSchemas.js';
 
+import { GlobalSubtitlePreferenceSchema } from '../schemas/subtitleSchema.js';
+
 // Update bodies intentionally have no defaults: an omitted field stays omitted.
 export const UpdateFfmpegSettingsRequestSchema = z.object({
   configVersion: z.number().optional(),
@@ -21,6 +23,7 @@ export const UpdateFfmpegSettingsRequestSchema = z.object({
       preferences: z.array(LanguagePreferenceSchema).min(1).optional(),
     })
     .optional(),
+  subtitlePreferences: z.array(GlobalSubtitlePreferenceSchema).optional(),
   transcodeDirectory: z.string().optional(),
   scalingAlgorithm: z
     .enum(['bicubic', 'fast_bilinear', 'lanczos', 'spline'])

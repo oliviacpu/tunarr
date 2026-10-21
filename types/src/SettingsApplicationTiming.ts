@@ -222,7 +222,8 @@ export const FfmpegSettingsApplicationGroups = {
   hdhrCaptionTestPattern: 'captionStyle',
   enableSubtitleExtraction: 'subtitleExtraction',
 } as const satisfies Record<
-  Exclude<keyof FfmpegSettings, 'configVersion'>,
+  // S5a persists subtitle defaults; S5b adds their playback behavior and timing.
+  Exclude<keyof FfmpegSettings, 'configVersion' | 'subtitlePreferences'>,
   SettingsApplicationKey
 >;
 

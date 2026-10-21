@@ -1652,6 +1652,7 @@ export class TVGuideService {
           .executeTakeFirstOrThrow()
       ).uuid,
       subtitlesEnabled: false,
+      subtitlePreferenceMode: 'inherit',
       audioTracks: null,
       captions: null,
       streamSelectionProfileId: null,

@@ -92,6 +92,7 @@ const channel: Channel = {
   streamMode: 'hls',
   transcodeConfigId: '00000000-0000-0000-0000-000000000000',
   subtitlesEnabled: false,
+  subtitlePreferenceMode: 'inherit',
   sessions: [],
 };
 

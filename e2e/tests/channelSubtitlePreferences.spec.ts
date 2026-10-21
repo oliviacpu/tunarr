@@ -59,6 +59,8 @@ test.beforeAll(async ({ browser }) => {
   await page.getByRole('option', { name: 'English', exact: true }).click();
   await expect(englishRow(page)).toBeVisible();
   await save(page);
+  const created = await api<Channel>('GET', `/channels/${channelId()}`);
+  expect(created.subtitlePreferenceMode).toBe('custom');
   await page.close();
 });
 
@@ -121,11 +123,13 @@ test('clearing the last subtitle preference persists without changing filler att
       await request
     ).postDataJSON() as PutApiChannelsByIdData['body'];
     expect(sent.subtitlePreferences).toEqual([]);
+    expect(sent.subtitlePreferenceMode).toBe('custom');
     await openStreamingTab(page);
     await expect(englishRow(page)).toHaveCount(0);
     await expect(saveButton(page)).toBeDisabled();
     const after = await api<Channel>('GET', `/channels/${channelId()}`);
     expect(after.subtitlePreferences ?? []).toEqual([]);
+    expect(after.subtitlePreferenceMode).toBe('custom');
     expect(after.fillerCollections).toEqual(before.fillerCollections);
   } finally {
     const {
@@ -139,6 +143,7 @@ test('clearing the last subtitle preference persists without changing filler att
     await api('PUT', `/channels/${channelId()}`, {
       ...current,
       subtitlePreferences: before.subtitlePreferences ?? [],
+      subtitlePreferenceMode: before.subtitlePreferenceMode,
     });
     const restored = await api<Channel>('GET', `/channels/${channelId()}`);
     expect(restored.subtitlePreferences ?? []).toEqual(

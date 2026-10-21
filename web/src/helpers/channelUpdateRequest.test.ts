@@ -45,6 +45,7 @@ describe('toChannelUpdateRequest', () => {
 describe('toStealthUpdateRequest', () => {
   const full: Channel = {
     ...channel,
+    subtitlePreferenceMode: 'inherit',
     programCount: 12,
     onDemand: { enabled: true },
     sessions: [],
@@ -66,6 +67,7 @@ describe('toStealthUpdateRequest', () => {
     expect(request.stealth).toBe(true);
     expect(request.fillerCollections).toEqual(full.fillerCollections);
     expect(request.subtitlePreferences).toEqual(full.subtitlePreferences);
+    expect(request.subtitlePreferenceMode).toBe('inherit');
     expect(request.name).toBe('Test');
   });
 

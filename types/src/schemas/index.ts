@@ -6,6 +6,7 @@ export * from './channelSchema.js';
 export * from './collectionsSchema.js';
 export * from './eventSchema.js';
 export * from './lineups.js';
+export * from './languageSchema.js';
 export * from './miscSchemas.js';
 export * from './programmingSchema.js';
 export * from './SearchRequest.js';

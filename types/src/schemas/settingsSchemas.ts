@@ -1,5 +1,6 @@
 import z from 'zod/v4';
 import { type TupleToUnion } from '../util.js';
+import { GlobalSubtitlePreferenceSchema } from './subtitleSchema.js';
 import { ScheduleSchema } from './utilSchemas.js';
 
 export const XmlTvSettingsSchema = z.object({
@@ -237,6 +238,7 @@ export const FfmpegSettingsSchema = z.object({
   languagePreferences: LanguagePreferencesSchema.default({
     preferences: [{ iso6391: 'en', iso6392: 'eng', displayName: 'English' }],
   }),
+  subtitlePreferences: z.array(GlobalSubtitlePreferenceSchema).default([]),
   transcodeDirectory: z.string().default('').optional(),
   scalingAlgorithm: z
     .enum(['bicubic', 'fast_bilinear', 'lanczos', 'spline'])

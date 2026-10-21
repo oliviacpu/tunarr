@@ -37,7 +37,7 @@ import {
   FfmpegLogLevels,
   TonemapAlgorithms,
 } from '@tunarr/types/schemas';
-import { capitalize, isEmpty, isEqual } from 'lodash-es';
+import { capitalize, isEmpty, isEqual, omit } from 'lodash-es';
 import { useEffect, useState } from 'react';
 import UnsavedNavigationAlert from '@/components/settings/UnsavedNavigationAlert.tsx';
 import type { Control, SubmitHandler } from 'react-hook-form';
@@ -60,15 +60,17 @@ import { useCaptionAlignmentNames } from '../../hooks/useCaptionAlignmentNames.t
 const FfmpegLogOptions = ['disable', 'console', 'file'] as const;
 type FfmpegLogOptions = TupleToUnion<typeof FfmpegLogOptions>;
 
-type FfmpegFormValues = DeepRequired<Omit<FfmpegSettings, 'configVersion'>>;
+type FfmpegFormValues = DeepRequired<
+  Omit<FfmpegSettings, 'configVersion' | 'subtitlePreferences'>
+>;
 
 // The form's values for saved settings: every field filled in, and a missing
 // transcode directory as an empty one. The settings' configVersion rides
 // along and is sent back as it came
 function toFormValues(settings: FfmpegSettings): FfmpegFormValues {
   return {
-    ...defaultFfmpegSettings,
-    ...settings,
+    ...omit(defaultFfmpegSettings, 'subtitlePreferences'),
+    ...omit(settings, 'subtitlePreferences'),
     transcodeDirectory: settings.transcodeDirectory ?? '',
   };
 }

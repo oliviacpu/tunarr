@@ -269,6 +269,9 @@ export class DirectMigrationProvider implements MigrationProvider {
           './sql/0056_program_library_pagination.sql',
         ),
         migration1792507432: Migration1792507432_RetireLegacyExternalSourceIds,
+        migration1792592470: makeMigrationFromSqlFile(
+          './sql/0058_channel_subtitle_preference_mode.sql',
+        ),
       } satisfies Record<string, TunarrDatabaseMigration>,
       wrapWithTransaction,
     );
