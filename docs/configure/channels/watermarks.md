@@ -20,6 +20,4 @@ When using intermittent watermarks, use this option to control whether the water
 
 This option controls the absolute duration the watermark can be displayed for a given program segment of a channel. Its value takes precedence over the 'watermark period' but does not disable it. For instance, you could configure a watermark period of 5 minutes with total duration of 45 mins. On a show that is one hour, the watermark will fade in/out for the first 45 minutes and then be hidden for the final 15 minutes.
 
-## Overrides
-
-Global settings, such as target resolution, bit rate, and buffer size can be overridden per-channel.
+For output resolution, bitrate, and buffer size, choose a [transcode configuration](../ffmpeg/transcode_config.md) on the channel's [Streaming tab](transcoding.md).

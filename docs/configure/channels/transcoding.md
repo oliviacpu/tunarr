@@ -1,4 +1,4 @@
-# Channel Trancoding Settings
+# Channel Transcoding Settings
 
 Open the channel editor's **Streaming** tab for stream mode, transcode config, audio, and subtitles. Logo overlays are configured in the separate [Watermark](watermarks.md) tab.
 
@@ -111,7 +111,7 @@ Settings > Captions & audio; that switch stays the one for every channel. Change
 
 - **Test pattern on this channel:** replaces this channel's captions with the numbered
   [test pattern](../ffmpeg/index.md#caption-appearance-experimental). Other channels keep their captions. When the
-  Transcoding settings' test pattern is on, every channel shows it, whatever this switch says.
+  test pattern under Settings > Captions & audio is on, every channel shows it, whatever this switch says.
 - **Use own caption look:** gives the channel its own caption alignment and
   [caption appearance](../ffmpeg/index.md#caption-appearance-experimental). The fields show the global look; a setting
   you change becomes this channel's own, and only this channel's captions change. Turned off, the channel follows the

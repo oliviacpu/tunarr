@@ -6,6 +6,28 @@ session, Codex, or a person can continue without the previous session's memory. 
 "Approval gate" paragraph, the row you are about to work on, and this file's "Working rules" before
 starting anything.
 
+## Screenshot and docs closeout (2026-10-21)
+
+The [UI gallery](../docs/dev/ui-gallery.md) records the final 19 canonical page states in both
+themes at 390px and 1440px, with source and seeded-fixture provenance and a standalone regeneration
+command. Matching channel and transcode documentation illustrations are refreshed; the older
+external-client and multi-step media-selection tutorials are outside this bounded refresh.
+
+The capture checks exposed two local phone issues, addressed separately: #160 wraps the Trash
+filters and keeps Empty Trash/active-job Cancel reachable; #161 separates channel navigation,
+options and session-detail controls instead of nesting buttons. Both have old-code regressions.
+Their notes are consumed into `FORK.md` here.
+
+Production remains `oliviacpu-2026.10.20.5` from `bdcde70b`, with its verified outcome recorded in
+the [release notes](https://github.com/oliviacpu/tunarr/releases/tag/oliviacpu-2026.10.20.5).
+The two phone follow-ups are not part of that image. This docs closeout creates no release or
+deployment. Apple TV acceptance remains manual and unverified.
+
+Next is the separately approved S5 design in `plans/channel-audio-subtitle-defaults.md`: S5a
+compatibility/persistence and channel mode, then S5b effective preference resolution, then S5c
+global/channel UI and previews. Use fresh scoped agents and separate reviewed PRs in dependency
+order. C7b/C7c batching remains held. The dated snapshots below preserve earlier release boundaries.
+
 ## Calendar continuation after the .20.4 deployment (2026-10-20)
 
 The bounded continuation through `2bdc1ed7` is deployed as `oliviacpu-2026.10.20.4`, reporting

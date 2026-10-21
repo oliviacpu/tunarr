@@ -118,6 +118,7 @@ nav:
   - Development:
       - Contributing: dev/contributing.md
       - Settings API: dev/settings-api.md
+      - UI Gallery: dev/ui-gallery.md
 
 markdown_extensions:
   - admonition
