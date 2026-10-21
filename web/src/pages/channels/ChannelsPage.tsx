@@ -3,10 +3,11 @@ import {
   SelectedNames,
 } from '@/components/base/BulkActionsToolbar.tsx';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog.tsx';
-import { toStealthUpdateRequest } from '@/helpers/channelUpdateRequest.ts';
+import { ChannelBatchSize } from '@/helpers/channelBatches.ts';
 import { betterHumanize } from '@/helpers/dayjs.ts';
 import { invalidateTaggedQueries } from '@/helpers/queryUtil.ts';
-import { useBulkAction, useBulkDelete } from '@/hooks/useBulkAction.ts';
+import { useBulkDelete } from '@/hooks/useBulkAction.ts';
+import { useBulkChannelStealth } from '@/hooks/useBulkChannelStealth.ts';
 import { useTranscodeConfigs } from '@/hooks/settingsHooks.ts';
 import type { Maybe } from '@/types/util.ts';
 import { plural } from '@lingui/core/macro';
@@ -65,11 +66,7 @@ import NoChannelsCreated from '../../components/channel_config/NoChannelsCreated
 import { ChannelIconDisplay } from '../../components/channels/ChannelIconDisplay.tsx';
 import { ChannelOptionsMenu } from '../../components/channels/ChannelOptionsMenu.tsx';
 import { ChannelSessionsDialog } from '../../components/channels/ChannelSessionsDialog.tsx';
-import {
-  deleteApiChannelsById,
-  getChannelsByNumberV2,
-  putApiChannelsById,
-} from '../../generated/sdk.gen.ts';
+import { deleteApiChannelsById } from '../../generated/sdk.gen.ts';
 import { useChannelsSuspense } from '../../hooks/useChannels.ts';
 import { useServerEvents } from '../../hooks/useServerEvents.ts';
 import { useSelectableTableSettings } from '../../hooks/useTableSettings.ts';
@@ -78,23 +75,6 @@ type ChannelRow = Channel;
 
 const channelId = (channel: Channel) => channel.id;
 const channelName = (channel: Channel) => channel.name;
-
-/**
- * Shows or hides one channel in the guide. Reads the whole channel first: the
- * list's copy has no filler lists or subtitle preferences, and the update
- * replaces both.
- */
-async function setChannelStealth(id: string, stealth: boolean) {
-  const { data: channel } = await getChannelsByNumberV2({
-    path: { id },
-    throwOnError: true,
-  });
-  await putApiChannelsById({
-    path: { id },
-    body: toStealthUpdateRequest(channel, stealth),
-    throwOnError: true,
-  });
-}
 
 interface GlowingCircleProps extends BoxProps {
   color?: string;
@@ -163,7 +143,10 @@ export default function ChannelsPage() {
     },
   });
 
-  const bulkStealth = useBulkAction<Channel>('save', channelName);
+  const bulkStealth = useBulkChannelStealth(() => {
+    clearSelection();
+    refreshChannels();
+  });
   const bulkBusy = bulkDelete.busy || bulkStealth.busy;
 
   // Only the channels not already in the wanted state are saved
@@ -171,13 +154,7 @@ export default function ChannelsPage() {
     const changing = selectedRows.filter(
       (channel) => channel.stealth !== stealth,
     );
-    bulkStealth
-      .run(changing, (channel) => setChannelStealth(channel.id, stealth))
-      .then(() => {
-        clearSelection();
-        refreshChannels();
-      })
-      .catch(console.error);
+    bulkStealth.run(changing, stealth).catch(console.error);
   };
 
   useEffect(() => {
@@ -653,6 +630,14 @@ export default function ChannelsPage() {
         >
           <Trans>Show in guide</Trans>
         </Button>
+        {selectedRows.length > ChannelBatchSize && (
+          <Typography variant="caption" color="text.secondary">
+            <Trans>
+              Selections are saved in batches of {ChannelBatchSize}. Guide and
+              playlist publication runs once per changed batch.
+            </Trans>
+          </Typography>
+        )}
       </BulkActionsToolbar>
     ),
     autoResetPageIndex: false,

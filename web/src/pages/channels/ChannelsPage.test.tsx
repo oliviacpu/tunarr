@@ -1,18 +1,35 @@
-import { renderWithProviders, screen, waitFor, within } from '@/test/utils';
+import { getChannelsQueryKey } from '@/generated/@tanstack/react-query.gen.ts';
+import {
+  act,
+  renderWithProviders,
+  screen,
+  waitFor,
+  within,
+} from '@/test/utils';
 import type { Channel } from '@tunarr/types';
+import type { BulkChannelStealthResponse } from '@tunarr/types/api';
+import { QueryClient } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
 import { Suspense, type AnchorHTMLAttributes, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type * as Sdk from '../../generated/sdk.gen.ts';
 import ChannelsPage from './ChannelsPage.tsx';
 
-const { mockDeleteChannel, mockGetChannel, mockPutChannel, mockNavigate } =
-  vi.hoisted(() => ({
-    mockNavigate: vi.fn<() => Promise<void>>(),
-    mockDeleteChannel: vi.fn<(opts: IdOpts) => Promise<unknown>>(),
-    mockGetChannel: vi.fn<(opts: IdOpts) => Promise<unknown>>(),
-    mockPutChannel: vi.fn<(opts: PutOpts) => Promise<unknown>>(),
-  }));
+const {
+  mockDeleteChannel,
+  mockGetChannel,
+  mockPutChannel,
+  mockBulkStealth,
+  mockGetChannels,
+  mockNavigate,
+} = vi.hoisted(() => ({
+  mockNavigate: vi.fn<() => Promise<void>>(),
+  mockBulkStealth: vi.fn<(opts: BulkOpts) => Promise<{ data: unknown }>>(),
+  mockGetChannels: vi.fn<() => Promise<{ data: Channel[] }>>(),
+  mockDeleteChannel: vi.fn<(opts: IdOpts) => Promise<unknown>>(),
+  mockGetChannel: vi.fn<(opts: IdOpts) => Promise<unknown>>(),
+  mockPutChannel: vi.fn<(opts: PutOpts) => Promise<unknown>>(),
+}));
 
 function makeChannel(
   overrides: Partial<Channel> & Pick<Channel, 'id' | 'name' | 'number'>,
@@ -40,34 +57,30 @@ function makeChannel(
 // The list's copy of a channel: no filler lists, as GET /api/channels sends it
 const channels = [
   makeChannel({
-    id: 'ch-1',
+    id: '00000000-0000-4000-8000-000000000001',
     name: 'Movie Night',
     number: 1,
     sessions: [
       { type: 'hls', state: 'started', numConnections: 1, connections: [] },
     ],
   }),
-  makeChannel({ id: 'ch-2', name: 'Cartoons', number: 2 }),
-  makeChannel({ id: 'ch-3', name: 'Test Pattern', number: 3, stealth: true }),
+  makeChannel({
+    id: '00000000-0000-4000-8000-000000000002',
+    name: 'Cartoons',
+    number: 2,
+  }),
+  makeChannel({
+    id: '00000000-0000-4000-8000-000000000003',
+    name: 'Test Pattern',
+    number: 3,
+    stealth: true,
+  }),
 ];
-
-// The full channel, as GET /api/channels/:id sends it
-function fullChannel(id: string): Channel {
-  const listed = channels.find((c) => c.id === id);
-  if (listed === undefined) {
-    throw new Error(`no channel ${id}`);
-  }
-  return {
-    ...listed,
-    fillerCollections: [
-      { id: `filler-of-${id}`, weight: 1, cooldownSeconds: 0 },
-    ],
-  };
-}
 
 vi.mock('../../generated/sdk.gen.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof Sdk>()),
-  getChannels: () => Promise.resolve({ data: channels }),
+  getChannels: () => mockGetChannels(),
+  bulkSetChannelStealth: (opts: BulkOpts) => mockBulkStealth(opts),
   getApiTranscodeConfigs: () => Promise.resolve({ data: [] }),
   deleteApiChannelsById: (opts: IdOpts) => mockDeleteChannel(opts),
   getChannelsByNumberV2: (opts: IdOpts) => mockGetChannel(opts),
@@ -100,6 +113,19 @@ vi.mock('../../components/base/RouterLink.tsx', () => ({
 
 type IdOpts = { path: { id: string } };
 type PutOpts = IdOpts & { body: Record<string, unknown> };
+type BulkOpts = {
+  body: { ids: string[]; stealth: boolean };
+  throwOnError: boolean;
+};
+
+function success(ids: string[]): { data: BulkChannelStealthResponse } {
+  return {
+    data: {
+      results: ids.map((id) => ({ id, success: true })),
+      refresh: { xmltv: 'succeeded', m3u: 'succeeded' },
+    },
+  };
+}
 
 function rowCheckbox(name: string) {
   const row = screen.getByText(name).closest('tr');
@@ -113,14 +139,23 @@ function selectionToolbar() {
   return screen.getByRole('group', { name: 'Selected rows' });
 }
 
-function renderPage() {
-  return renderWithProviders(
-    <SnackbarProvider>
+function renderPage(
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  }),
+) {
+  const rendered = renderWithProviders(
+    <SnackbarProvider maxSnack={2}>
       <Suspense fallback={null}>
         <ChannelsPage />
       </Suspense>
     </SnackbarProvider>,
+    { queryClient },
   );
+  return { ...rendered, queryClient };
 }
 
 describe('ChannelsPage bulk actions', () => {
@@ -128,12 +163,12 @@ describe('ChannelsPage bulk actions', () => {
     mockDeleteChannel.mockReset();
     mockDeleteChannel.mockResolvedValue({ data: undefined });
     mockGetChannel.mockReset();
-    mockGetChannel.mockImplementation(({ path }: IdOpts) =>
-      Promise.resolve({ data: fullChannel(path.id) }),
-    );
     mockPutChannel.mockReset();
-    mockPutChannel.mockImplementation(({ body }: PutOpts) =>
-      Promise.resolve({ data: body }),
+    mockGetChannels.mockReset();
+    mockGetChannels.mockResolvedValue({ data: channels });
+    mockBulkStealth.mockReset();
+    mockBulkStealth.mockImplementation(({ body }) =>
+      Promise.resolve(success(body.ids)),
     );
   });
 
@@ -163,7 +198,10 @@ describe('ChannelsPage bulk actions', () => {
     const ids = mockDeleteChannel.mock.calls
       .map(([opts]) => opts.path.id)
       .sort();
-    expect(ids).toEqual(['ch-1', 'ch-3']);
+    expect(ids).toEqual([
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000003',
+    ]);
     expect(await screen.findByText('Deleted')).toBeInTheDocument();
 
     await waitFor(() =>
@@ -175,78 +213,87 @@ describe('ChannelsPage bulk actions', () => {
     expect(rowCheckbox('Movie Night')).not.toBeChecked();
   });
 
-  test('Hide from guide saves stealth on each full channel and clears the selection', async () => {
-    const { user } = renderPage();
+  test('Hide from guide sends one stealth-only batch and clears the selection', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { user } = renderPage(queryClient);
     await screen.findByText('Movie Night');
-
     await user.click(rowCheckbox('Movie Night'));
     await user.click(rowCheckbox('Cartoons'));
-
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    const channelFetchesBeforeSave = mockGetChannels.mock.calls.length;
     const toolbar = selectionToolbar();
-    // Both are in the guide, so there is nothing to show
     expect(
       within(toolbar).getByRole('button', { name: 'Show in guide' }),
     ).toBeDisabled();
     await user.click(
       within(toolbar).getByRole('button', { name: 'Hide from guide' }),
     );
-
-    await waitFor(() => expect(mockPutChannel).toHaveBeenCalledTimes(2));
-    const puts = mockPutChannel.mock.calls
-      .map(([opts]) => opts)
-      .sort((a, b) => a.path.id.localeCompare(b.path.id));
-    expect(puts.map((p) => p.path.id)).toEqual(['ch-1', 'ch-2']);
-    for (const put of puts) {
-      expect(put.body.stealth).toBe(true);
-      // Built from the full channel, so its filler lists survive the save
-      expect(put.body.fillerCollections).toEqual([
-        { id: `filler-of-${put.path.id}`, weight: 1, cooldownSeconds: 0 },
-      ]);
-      // A server rebase and the on-demand position are left alone
-      expect(put.body).not.toHaveProperty('startTime');
-      expect(put.body).not.toHaveProperty('onDemand');
-      expect(put.body).not.toHaveProperty('sessions');
-      expect(put.body).not.toHaveProperty('programCount');
-    }
-    expect(mockGetChannel).toHaveBeenCalledTimes(2);
+    await waitFor(() =>
+      expect(mockBulkStealth).toHaveBeenCalledExactlyOnceWith({
+        body: {
+          ids: [
+            '00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000002',
+          ],
+          stealth: true,
+        },
+        throwOnError: true,
+      }),
+    );
+    expect(mockGetChannel).not.toHaveBeenCalled();
+    expect(mockPutChannel).not.toHaveBeenCalled();
     expect(await screen.findByText('Saved')).toBeInTheDocument();
-
     await waitFor(() =>
       expect(
         screen.queryByRole('group', { name: 'Selected rows' }),
       ).not.toBeInTheDocument(),
     );
     expect(rowCheckbox('Cartoons')).not.toBeChecked();
+    expect(invalidate).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(mockGetChannels).toHaveBeenCalledTimes(
+        channelFetchesBeforeSave + 1,
+      ),
+    );
   });
 
-  test('Show in guide saves only the channels that are hidden', async () => {
+  test('Show in guide sends only the channels that are hidden', async () => {
     const { user } = renderPage();
     await screen.findByText('Movie Night');
-
     await user.click(rowCheckbox('Cartoons'));
     await user.click(rowCheckbox('Test Pattern'));
     await user.click(
-      within(selectionToolbar()).getByRole('button', {
-        name: 'Show in guide',
+      within(selectionToolbar()).getByRole('button', { name: 'Show in guide' }),
+    );
+    await waitFor(() =>
+      expect(mockBulkStealth).toHaveBeenCalledExactlyOnceWith({
+        body: { ids: ['00000000-0000-4000-8000-000000000003'], stealth: false },
+        throwOnError: true,
       }),
     );
-
-    await waitFor(() => expect(mockPutChannel).toHaveBeenCalledOnce());
-    const put = mockPutChannel.mock.calls[0]?.[0];
-    expect(put?.path.id).toBe('ch-3');
-    expect(put?.body.stealth).toBe(false);
     expect(await screen.findByText('Saved')).toBeInTheDocument();
   });
 
   test('a partial stealth failure names the channel that was not saved', async () => {
-    mockPutChannel.mockImplementation(({ path, body }: PutOpts) =>
-      path.id === 'ch-2'
-        ? Promise.reject(new Error('transcode config not found'))
-        : Promise.resolve({ data: body }),
-    );
+    mockBulkStealth.mockResolvedValue({
+      data: {
+        results: [
+          { id: '00000000-0000-4000-8000-000000000001', success: true },
+          {
+            id: '00000000-0000-4000-8000-000000000002',
+            success: false,
+            statusCode: 404,
+            message: 'Channel not found',
+          },
+        ],
+        refresh: { xmltv: 'succeeded', m3u: 'succeeded' },
+      },
+    });
     const { user } = renderPage();
     await screen.findByText('Movie Night');
-
     await user.click(rowCheckbox('Movie Night'));
     await user.click(rowCheckbox('Cartoons'));
     await user.click(
@@ -254,13 +301,139 @@ describe('ChannelsPage bulk actions', () => {
         name: 'Hide from guide',
       }),
     );
-
     expect(
       await screen.findByText(
-        '1 of 2 saved; could not save Cartoons: transcode config not found',
+        '1 of 2 saved; could not save Cartoons: Channel not found',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Saved')).not.toBeInTheDocument();
+  });
+
+  test('publication failure warns separately from the saved channel outcome', async () => {
+    mockBulkStealth.mockResolvedValue({
+      data: {
+        results: [
+          { id: '00000000-0000-4000-8000-000000000001', success: true },
+        ],
+        refresh: { xmltv: 'failed', m3u: 'succeeded' },
+      },
+    });
+    const { user } = renderPage();
+    await screen.findByText('Movie Night');
+    await user.click(rowCheckbox('Movie Night'));
+    await user.click(
+      within(selectionToolbar()).getByRole('button', {
+        name: 'Hide from guide',
+      }),
+    );
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Channel changes were saved, but publication failed for XMLTV guide. These files may be out of date.',
+      ),
+    ).toBeInTheDocument();
+    expect(mockBulkStealth).toHaveBeenCalledOnce();
+  });
+
+  test.each(['lost', 'malformed', 'missing'])(
+    'a %s response is uncertain, refetches, and never retries',
+    async (failure) => {
+      if (failure === 'lost') {
+        mockBulkStealth.mockRejectedValue(new Error('Connection lost'));
+      } else {
+        mockBulkStealth.mockResolvedValue({
+          data: failure === 'missing' ? success([]).data : {},
+        });
+      }
+      const { user, queryClient } = renderPage();
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      await screen.findByText('Movie Night');
+      await user.click(rowCheckbox('Movie Night'));
+      await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+      const channelFetchesBeforeSave = mockGetChannels.mock.calls.length;
+      await user.click(
+        within(selectionToolbar()).getByRole('button', {
+          name: 'Hide from guide',
+        }),
+      );
+      expect(
+        await screen.findByText(
+          '0 of 1 confirmed saved; Outcome unknown for Movie Night. Changes may have been saved. Refreshing channels to check; no automatic retry.',
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(mockGetChannels).toHaveBeenCalledTimes(
+          channelFetchesBeforeSave + 1,
+        ),
+      );
+      expect(invalidate).toHaveBeenCalledOnce();
+      expect(mockBulkStealth).toHaveBeenCalledOnce();
+      expect(screen.queryByText('Saved')).not.toBeInTheDocument();
+    },
+  );
+
+  test('keeps actions busy and snapshots the selected channel and name', async () => {
+    let finish:
+      | ((response: { data: BulkChannelStealthResponse }) => void)
+      | undefined;
+    mockBulkStealth.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user, queryClient } = renderPage();
+    await screen.findByText('Movie Night');
+    await user.click(rowCheckbox('Movie Night'));
+    await user.click(
+      within(selectionToolbar()).getByRole('button', {
+        name: 'Hide from guide',
+      }),
+    );
+    for (const button of within(selectionToolbar()).getAllByRole('button')) {
+      expect(button).toBeDisabled();
+    }
+    await user.click(rowCheckbox('Cartoons'));
+    act(() => {
+      queryClient.setQueryData(
+        getChannelsQueryKey(),
+        channels.map((channel) =>
+          channel.number === 1
+            ? { ...channel, name: 'Renamed channel' }
+            : channel,
+        ),
+      );
+    });
+    await screen.findByText('Renamed channel');
+    expect(mockBulkStealth).toHaveBeenCalledOnce();
+    if (finish === undefined) throw new Error('request was not started');
+    finish({
+      data: {
+        results: [
+          {
+            id: '00000000-0000-4000-8000-000000000001',
+            success: false,
+            statusCode: 500,
+            message: 'Write failed',
+          },
+        ],
+        refresh: { xmltv: 'not_needed', m3u: 'not_needed' },
+      },
+    });
+    expect(
+      await screen.findByText(
+        '0 of 1 saved; could not save Movie Night: Write failed',
+      ),
+    ).toBeInTheDocument();
+    expect(mockBulkStealth).toHaveBeenCalledExactlyOnceWith({
+      body: { ids: ['00000000-0000-4000-8000-000000000001'], stealth: true },
+      throwOnError: true,
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('group', { name: 'Selected rows' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   test('the select-all checkbox is labelled and selects the page', async () => {
@@ -287,6 +460,8 @@ describe('ChannelsPage bulk actions', () => {
 
 describe('ChannelsPage mobile card actions', () => {
   beforeEach(() => {
+    mockGetChannels.mockReset();
+    mockGetChannels.mockResolvedValue({ data: channels });
     mockNavigate.mockReset();
     mockNavigate.mockResolvedValue();
     vi.stubGlobal(
@@ -336,7 +511,7 @@ describe('ChannelsPage mobile card actions', () => {
     expect(mockNavigate).toHaveBeenCalledTimes(3);
     expect(mockNavigate).toHaveBeenLastCalledWith({
       to: '/channels/$channelId',
-      params: { channelId: 'ch-1' },
+      params: { channelId: '00000000-0000-4000-8000-000000000001' },
     });
   });
 
