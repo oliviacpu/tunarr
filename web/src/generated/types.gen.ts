@@ -3005,6 +3005,7 @@ export type GetChannelsResponses = {
             }>;
         }>;
         subtitlesEnabled: boolean;
+        subtitlePreferenceMode: 'inherit' | 'custom';
         subtitlePreferences?: Array<{
             langugeCode: string;
             priority: number;
@@ -3094,6 +3095,7 @@ export type CreateChannelV2Data = {
             streamMode: 'hls' | 'hls_slower' | 'mpegts' | 'hls_direct' | 'hls_direct_v2';
             transcodeConfigId: string;
             subtitlesEnabled: boolean;
+            subtitlePreferenceMode?: 'inherit' | 'custom';
             subtitlePreferences?: Array<{
                 langugeCode: string;
                 priority: number;
@@ -3247,6 +3249,7 @@ export type CreateChannelV2Responses = {
             }>;
         }>;
         subtitlesEnabled: boolean;
+        subtitlePreferenceMode: 'inherit' | 'custom';
         subtitlePreferences?: Array<{
             langugeCode: string;
             priority: number;
@@ -3421,6 +3424,7 @@ export type GetChannelsByNumberV2Responses = {
             }>;
         }>;
         subtitlesEnabled: boolean;
+        subtitlePreferenceMode: 'inherit' | 'custom';
         subtitlePreferences?: Array<{
             langugeCode: string;
             priority: number;
@@ -3508,6 +3512,7 @@ export type PutApiChannelsByIdData = {
         streamMode: 'hls' | 'hls_slower' | 'mpegts' | 'hls_direct' | 'hls_direct_v2';
         transcodeConfigId: string;
         subtitlesEnabled: boolean;
+        subtitlePreferenceMode?: 'inherit' | 'custom';
         subtitlePreferences?: Array<{
             langugeCode: string;
             priority: number;
@@ -3663,6 +3668,7 @@ export type PutApiChannelsByIdResponses = {
             }>;
         }>;
         subtitlesEnabled: boolean;
+        subtitlePreferenceMode: 'inherit' | 'custom';
         subtitlePreferences?: Array<{
             langugeCode: string;
             priority: number;
@@ -7048,6 +7054,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         }>;
                     }>;
                     subtitlesEnabled: boolean;
+                    subtitlePreferenceMode: 'inherit' | 'custom';
                     subtitlePreferences?: Array<{
                         langugeCode: string;
                         priority: number;
@@ -7473,6 +7480,7 @@ export type GetApiChannelsByIdScheduleResponses = {
                         }>;
                     }>;
                     subtitlesEnabled: boolean;
+                    subtitlePreferenceMode: 'inherit' | 'custom';
                     subtitlePreferences?: Array<{
                         langugeCode: string;
                         priority: number;
@@ -9964,6 +9972,12 @@ export type GetApiFfmpegSettingsResponses = {
                 displayName: string;
             }>;
         };
+        subtitlePreferences: Array<{
+            languageCode: string;
+            filter: 'none' | 'forced' | 'default' | 'any';
+            allowExternal: boolean;
+            allowImageBased: boolean;
+        }>;
         transcodeDirectory?: string;
         scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
@@ -10011,6 +10025,12 @@ export type PutApiFfmpegSettingsData = {
                 displayName: string;
             }>;
         };
+        subtitlePreferences?: Array<{
+            languageCode: string;
+            filter: 'none' | 'forced' | 'default' | 'any';
+            allowExternal: boolean;
+            allowImageBased: boolean;
+        }>;
         transcodeDirectory?: string;
         scalingAlgorithm?: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter?: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
@@ -10079,6 +10099,12 @@ export type PutApiFfmpegSettingsResponses = {
                 displayName: string;
             }>;
         };
+        subtitlePreferences: Array<{
+            languageCode: string;
+            filter: 'none' | 'forced' | 'default' | 'any';
+            allowExternal: boolean;
+            allowImageBased: boolean;
+        }>;
         transcodeDirectory?: string;
         scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
@@ -10153,6 +10179,12 @@ export type GetApiSettingsFfmpegResponses = {
                 displayName: string;
             }>;
         };
+        subtitlePreferences: Array<{
+            languageCode: string;
+            filter: 'none' | 'forced' | 'default' | 'any';
+            allowExternal: boolean;
+            allowImageBased: boolean;
+        }>;
         transcodeDirectory?: string;
         scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
@@ -10200,6 +10232,12 @@ export type PutApiSettingsFfmpegData = {
                 displayName: string;
             }>;
         };
+        subtitlePreferences?: Array<{
+            languageCode: string;
+            filter: 'none' | 'forced' | 'default' | 'any';
+            allowExternal: boolean;
+            allowImageBased: boolean;
+        }>;
         transcodeDirectory?: string;
         scalingAlgorithm?: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter?: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
@@ -10268,6 +10306,12 @@ export type PutApiSettingsFfmpegResponses = {
                 displayName: string;
             }>;
         };
+        subtitlePreferences: Array<{
+            languageCode: string;
+            filter: 'none' | 'forced' | 'default' | 'any';
+            allowExternal: boolean;
+            allowImageBased: boolean;
+        }>;
         transcodeDirectory?: string;
         scalingAlgorithm: 'bicubic' | 'fast_bilinear' | 'lanczos' | 'spline';
         deinterlaceFilter: 'none' | 'bwdif=0' | 'bwdif=1' | 'w3fdif' | 'yadif=0' | 'yadif=1';
@@ -14051,6 +14095,7 @@ export type PostApiTroubleshootResponses = {
                 }>;
             }>;
             subtitlesEnabled: boolean;
+            subtitlePreferenceMode: 'inherit' | 'custom';
             subtitlePreferences?: Array<{
                 langugeCode: string;
                 priority: number;

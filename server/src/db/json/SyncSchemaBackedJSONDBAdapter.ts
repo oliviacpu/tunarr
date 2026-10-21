@@ -21,6 +21,7 @@ export class SyncSchemaBackedDbAdapter<T extends z.ZodTypeAny>
     filename: PathLike,
     private defaultValue: Nullable<z.output<T>> = null,
     private adapter: SyncAdapter<string> = new TextFileSync(filename),
+    private onValidationFailure?: (error: z.ZodError) => void,
   ) {
     this.schema = schema;
     this.path = filename;
@@ -35,6 +36,7 @@ export class SyncSchemaBackedDbAdapter<T extends z.ZodTypeAny>
     let parseResult: z.ZodSafeParseResult<z.output<T>> =
       this.schema.safeParse(parsed);
     if (!parseResult.success) {
+      this.onValidationFailure?.(parseResult.error);
       if (this.defaultValue !== null) {
         const mergedData = merge({}, this.defaultValue, parsed);
         parseResult = this.schema.safeParse(mergedData);

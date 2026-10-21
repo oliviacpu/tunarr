@@ -4,6 +4,8 @@ import {
   CaptionAppearanceOverridesSchema,
   CaptionAppearanceSchema,
   ChannelCaptionsSchema,
+  ChannelSchema,
+  UpdateChannelRequestSchema,
   SaveableChannelSchema,
   StrictChannelAudioTracksSchema,
 } from '@tunarr/types/schemas';
@@ -19,6 +21,10 @@ import { FileSystemService } from '../services/FileSystemService.ts';
 import { LoggerFactory } from '../util/logging/LoggerFactory.ts';
 import { ChannelDB } from './ChannelDB.ts';
 import { ProgramConverter } from './converters/ProgramConverter.ts';
+import {
+  dbChannelToApiChannel,
+  ormChannelToApiChannel,
+} from './converters/channelConverters.ts';
 import { DBAccess } from './DBAccess.ts';
 import { ContentItem } from './derived_types/Lineup.ts';
 import type { IChannelDB } from './interfaces/IChannelDB.ts';
@@ -350,6 +356,197 @@ describe('optional channel relations', () => {
     expect(
       await channelDb.getChannelSubtitlePreferences(created.channel.uuid),
     ).toEqual([]);
+  });
+});
+
+describe('channel subtitle preference mode', () => {
+  const preferences = [
+    {
+      langugeCode: 'eng',
+      priority: 7,
+      allowExternal: true,
+      allowImageBased: false,
+      filter: 'none' as const,
+    },
+    {
+      langugeCode: 'spa',
+      priority: 12,
+      allowExternal: false,
+      allowImageBased: true,
+      filter: 'forced' as const,
+    },
+  ];
+
+  test('write schemas preserve omission while response mode is required', ({
+    defaultTranscodeConfigId,
+  }) => {
+    const data = createSaveableChannel(defaultTranscodeConfigId);
+    expect(SaveableChannelSchema.parse(data)).not.toHaveProperty(
+      'subtitlePreferenceMode',
+    );
+    expect(UpdateChannelRequestSchema.parse(data)).not.toHaveProperty(
+      'subtitlePreferenceMode',
+    );
+    expect(
+      ChannelSchema.safeParse({
+        ...data,
+        programCount: 0,
+        onDemand: { enabled: false },
+      }).success,
+    ).toBe(false);
+    expect(
+      SaveableChannelSchema.safeParse({
+        ...data,
+        subtitlePreferenceMode: 'global',
+      }).success,
+    ).toBe(false);
+  });
+
+  test('create derives omitted mode from rows and honors both explicit modes', async ({
+    channelDb,
+    defaultTranscodeConfigId,
+  }) => {
+    for (const [index, values] of [
+      { expected: 'inherit' },
+      { subtitlePreferences: [], expected: 'inherit' },
+      { subtitlePreferences: preferences, expected: 'custom' },
+      {
+        subtitlePreferenceMode: 'inherit' as const,
+        subtitlePreferences: preferences,
+        expected: 'inherit',
+      },
+      {
+        subtitlePreferenceMode: 'custom' as const,
+        subtitlePreferences: [],
+        expected: 'custom',
+      },
+    ].entries()) {
+      const { expected, ...overrides } = values;
+      const created = await channelDb.saveChannel(
+        createSaveableChannel(defaultTranscodeConfigId, {
+          ...overrides,
+          number: 2000 + index,
+        }),
+      );
+      expect(created.channel.subtitlePreferenceMode).toBe(expected);
+      expect(
+        (await channelDb.getChannel(created.channel.uuid))
+          ?.subtitlePreferenceMode,
+      ).toBe(expected);
+      expect(dbChannelToApiChannel(created).subtitlePreferenceMode).toBe(
+        expected,
+      );
+      expect(ormChannelToApiChannel(created).subtitlePreferenceMode).toBe(
+        expected,
+      );
+    }
+  });
+
+  for (const mode of ['inherit', 'custom'] as const) {
+    test(`omitted update mode preserves ${mode} independently of preference replacement`, async ({
+      channelDb,
+      defaultTranscodeConfigId,
+    }) => {
+      const data = createSaveableChannel(defaultTranscodeConfigId, {
+        subtitlePreferenceMode: mode,
+        subtitlePreferences: preferences,
+      });
+      const created = await channelDb.saveChannel(data);
+      const {
+        subtitlePreferenceMode: _mode,
+        subtitlePreferences: _rows,
+        ...update
+      } = data;
+      const before = await channelDb.getChannelSubtitlePreferences(
+        created.channel.uuid,
+      );
+      await channelDb.updateChannel(created.channel.uuid, {
+        ...update,
+        name: 'Unrelated update',
+      });
+      expect(
+        await channelDb.getChannelSubtitlePreferences(created.channel.uuid),
+      ).toEqual(before);
+      await channelDb.updateChannel(created.channel.uuid, {
+        ...update,
+        subtitlePreferences: [preferences[1]],
+      });
+      expect(
+        await channelDb.getChannelSubtitlePreferences(created.channel.uuid),
+      ).toMatchObject([{ languageCode: 'spa', priority: 12 }]);
+      expect(
+        (await channelDb.getChannel(created.channel.uuid))
+          ?.subtitlePreferenceMode,
+      ).toBe(mode);
+      await channelDb.updateChannel(created.channel.uuid, {
+        ...update,
+        subtitlePreferences: [],
+      });
+      expect(
+        await channelDb.getChannelSubtitlePreferences(created.channel.uuid),
+      ).toEqual([]);
+      expect(
+        (await channelDb.getChannel(created.channel.uuid))
+          ?.subtitlePreferenceMode,
+      ).toBe(mode);
+    });
+
+    test(`copy preserves ${mode} and retained preference values with fresh row IDs`, async ({
+      channelDb,
+      defaultTranscodeConfigId,
+    }) => {
+      const created = await channelDb.saveChannel(
+        createSaveableChannel(defaultTranscodeConfigId, {
+          subtitlePreferenceMode: mode,
+          subtitlePreferences: preferences,
+        }),
+      );
+      const originalRows = await channelDb.getChannelSubtitlePreferences(
+        created.channel.uuid,
+      );
+      const copied = await channelDb.copyChannel(created.channel.uuid);
+      const copiedRows = await channelDb.getChannelSubtitlePreferences(
+        copied.channel.uuid,
+      );
+      expect(copied.channel.subtitlePreferenceMode).toBe(mode);
+      expect(
+        copiedRows.map(({ uuid: _id, channelId: _channel, ...row }) => row),
+      ).toEqual(
+        originalRows.map(({ uuid: _id, channelId: _channel, ...row }) => row),
+      );
+      expect(copiedRows).toHaveLength(preferences.length);
+      copiedRows.forEach((row) => {
+        expect(row.channelId).toBe(copied.channel.uuid);
+        expect(originalRows.map((original) => original.uuid)).not.toContain(
+          row.uuid,
+        );
+      });
+    });
+  }
+
+  test('switching to inherit and back retains exact custom rows', async ({
+    channelDb,
+    defaultTranscodeConfigId,
+  }) => {
+    const data = createSaveableChannel(defaultTranscodeConfigId, {
+      subtitlePreferenceMode: 'custom',
+      subtitlePreferences: preferences,
+    });
+    const created = await channelDb.saveChannel(data);
+    const before = await channelDb.getChannelSubtitlePreferences(
+      created.channel.uuid,
+    );
+    const { subtitlePreferences: _rows, ...update } = data;
+    for (const mode of ['inherit', 'custom'] as const) {
+      const updated = await channelDb.updateChannel(created.channel.uuid, {
+        ...update,
+        subtitlePreferenceMode: mode,
+      });
+      expect(updated.channel.subtitlePreferenceMode).toBe(mode);
+      expect(
+        await channelDb.getChannelSubtitlePreferences(created.channel.uuid),
+      ).toEqual(before);
+    }
   });
 });
 

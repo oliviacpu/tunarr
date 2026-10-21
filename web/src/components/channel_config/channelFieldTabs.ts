@@ -49,6 +49,7 @@ export const ChannelFieldTabs: Record<keyof SaveableChannel, EditChannelTabs> =
     transcodeConfigId: 'streaming',
     watermark: 'watermark',
     subtitlesEnabled: 'streaming',
+    subtitlePreferenceMode: 'streaming',
     subtitlePreferences: 'streaming',
     audioTracks: 'streaming',
     captions: 'streaming',

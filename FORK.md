@@ -26,6 +26,14 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Store global subtitle preferences and channel inheritance mode (2026-10-21)
+
+- **Scope:** S5a from approved design #114 stores normalized global subtitle preferences and an explicit channel inherit/custom mode. Playback resolution and controls follow in S5b/S5c; audio output layouts remain per channel.
+- **Compatibility:** omitted global lists and channel modes preserve saved values; explicit empty lists clear. Migration 0058 marks channels with any saved subtitle rows custom, including all-none lists, and otherwise inherit. Switching modes retains rows, and copies receive fresh row IDs. Existing list edits select custom; unrelated channel and FFmpeg form saves preserve newer server preferences.
+- **Recovery:** malformed saved global rows fail validation before fallback can rewrite the settings file. Settings file version 2 and FFmpeg config version 5 remain unchanged. A release containing this migration requires the established paired SQLite/settings backup and candidate/restore rehearsals.
+- **Tests:** real SQLite migration, channel create/update/copy, settings API and file adapters, editor omission/clear/edit behavior, and hidden-settings form preservation regressions. Current/Latest OpenAPI and the generated client carry the new contracts.
+- **Upstream:** not sent; separately reviewed persistence step in this fork's approved S5 implementation.
+
 ### Separate mobile channel card actions (2026-10-21, PR #161)
 
 - **What you saw:** the local 390px channel gallery emitted React's button-nesting warning. The active-session dot was clickable but had no separate keyboard control.

@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { defaultFfmpegSettings } from '@tunarr/types';
 import Fastify from 'fastify';
 import {
   serializerCompiler,
@@ -174,6 +175,110 @@ describe('settings API contracts', () => {
     expect(settings.ffmpegSettings().enableLogging).toBe(true);
     expect(effects.extract).toHaveBeenCalledOnce();
   });
+
+  describe.each(['/api/settings/ffmpeg', '/api/ffmpeg-settings'])(
+    'subtitle preferences via %s',
+    (url) => {
+      const first = {
+        languageCode: 'eng',
+        filter: 'forced',
+        allowExternal: false,
+        allowImageBased: true,
+      };
+      const second = {
+        languageCode: 'ger',
+        filter: 'any',
+        allowExternal: true,
+        allowImageBased: false,
+      };
+
+      it('normalizes, replaces, preserves omitted lists and clears explicit empty lists', async () => {
+        const write = await app.inject({
+          method: 'PUT',
+          url,
+          payload: { subtitlePreferences: [first, second] },
+        });
+        const expected = [first, { ...second, languageCode: 'deu' }];
+        expect(write.statusCode, write.body).toBe(200);
+        expect(write.json().subtitlePreferences).toEqual(expected);
+        expect(settings.ffmpegSettings().subtitlePreferences).toEqual(expected);
+
+        const { subtitlePreferences: _omitted, ...legacyPut } = write.json();
+        const preserved = await app.inject({
+          method: 'PUT',
+          url,
+          payload: legacyPut,
+        });
+        expect(preserved.statusCode, preserved.body).toBe(200);
+        expect(preserved.json().subtitlePreferences).toEqual(expected);
+        expect((await app.inject(url)).json().subtitlePreferences).toEqual(
+          expected,
+        );
+        const otherUrl =
+          url === '/api/settings/ffmpeg'
+            ? '/api/ffmpeg-settings'
+            : '/api/settings/ffmpeg';
+        expect((await app.inject(otherUrl)).json().subtitlePreferences).toEqual(
+          expected,
+        );
+
+        const replacement = await app.inject({
+          method: 'PUT',
+          url,
+          payload: { subtitlePreferences: [first] },
+        });
+        expect(replacement.statusCode).toBe(200);
+        expect(settings.ffmpegSettings().subtitlePreferences).toEqual([first]);
+        const cleared = await app.inject({
+          method: 'PUT',
+          url,
+          payload: { subtitlePreferences: [] },
+        });
+        expect(cleared.statusCode).toBe(200);
+        expect(settings.ffmpegSettings().subtitlePreferences).toEqual([]);
+      });
+
+      it('restores the existing FFmpeg defaults with an explicit empty preference list', async () => {
+        await app.inject({
+          method: 'PUT',
+          url,
+          payload: { subtitlePreferences: [first] },
+        });
+        const response = await app.inject({
+          method: 'PUT',
+          url,
+          payload: defaultFfmpegSettings,
+        });
+        expect(response.statusCode, response.body).toBe(200);
+        expect(settings.ffmpegSettings().subtitlePreferences).toEqual([]);
+        expect(settings.ffmpegSettings().configVersion).toBe(5);
+      });
+
+      it.each([
+        { ...first, languageCode: 'en' },
+        { ...first, languageCode: 'ENG' },
+        { ...first, languageCode: 'zzx' },
+        { ...first, filter: 'sometimes' },
+        { ...first, filter: undefined },
+        { ...first, allowExternal: 'false' },
+        { ...first, allowExternal: undefined },
+        { ...first, allowImageBased: 1 },
+        { ...first, allowImageBased: undefined },
+      ])('rejects an invalid row without writing: %j', async (row) => {
+        const before = structuredClone(settings.getAll());
+        const update = vi.spyOn(settings, 'updateSettings');
+        const response = await app.inject({
+          method: 'PUT',
+          url,
+          payload: { subtitlePreferences: [row] },
+        });
+        expect(response.statusCode, response.body).toBe(400);
+        expect(response.json()).toEqual({ message: expect.any(String) });
+        expect(settings.getAll()).toEqual(before);
+        expect(update).not.toHaveBeenCalled();
+      });
+    },
+  );
 
   it('preserves nested system values and clears optional values explicitly', async () => {
     const response = await app.inject({

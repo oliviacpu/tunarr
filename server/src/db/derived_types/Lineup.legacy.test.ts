@@ -44,6 +44,7 @@ test('a legacy channel read strips retired transcoding without losing active fie
     streamMode: 'hls',
     transcodeConfigId: '00000000-0000-0000-0000-000000000000',
     subtitlesEnabled: false,
+    subtitlePreferenceMode: 'inherit',
     transcoding: { retiredInvalidValue: true },
   };
   const parsed = ChannelSchema.parse(legacy);

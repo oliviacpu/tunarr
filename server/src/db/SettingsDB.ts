@@ -128,6 +128,21 @@ export const SettingsFileSchema = z.object({
   ),
 });
 
+// Invalid subtitle rows must stop startup before lowdb can replace the file
+// with defaults. Missing legacy fields still receive their schema default.
+export function rejectInvalidSubtitlePreferences(error: z.ZodError) {
+  if (
+    error.issues.some(
+      ({ path }) =>
+        path[0] === 'settings' &&
+        path[1] === 'ffmpeg' &&
+        path[2] === 'subtitlePreferences',
+    )
+  ) {
+    throw error;
+  }
+}
+
 export type SettingsFile = z.infer<typeof SettingsFileSchema>;
 
 export const defaultSettings = (dbBasePath: string): SettingsFile => ({

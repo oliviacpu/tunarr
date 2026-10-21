@@ -6,6 +6,26 @@ session, Codex, or a person can continue without the previous session's memory. 
 "Approval gate" paragraph, the row you are about to work on, and this file's "Working rules" before
 starting anything.
 
+## S5a persistence and compatibility (2026-10-21)
+
+S5 implementation is now authorized within the design approved in #114. S5a stores global
+subtitle preferences, rejects malformed saved rows without replacing the settings file, and
+adds channel `subtitlePreferenceMode`. Migration `1792592470` / SQL `0058` marks any channel
+with saved rows custom, including all-none rows; channels without rows inherit. Mode changes
+retain custom rows, omitted writes preserve them, and channel copies keep rows with fresh IDs.
+The existing editor sends custom mode only for intentional subtitle-list edits. Wire spelling
+`langugeCode` remains on channel rows; global rows use normalized `languageCode`.
+
+Settings file version 2 and FFmpeg config version 5 are unchanged. Current GET/PUT canonical and
+alias routes preserve omitted globals and clear explicit `[]`; no PATCH/reset endpoint is added.
+S5a is storage only, so its new field is excluded from playback timing metadata until S5b.
+
+Next: S5b effective-list resolution and per-row inherited selection, then S5c global/channel UI.
+Use fresh agents and separately reviewed PRs in that order. Production remains `.20.5`; the phone
+follow-ups and S5a are source changes pending a later release. Before the migration release, use
+the existing paired SQLite/settings backup, candidate/restore rehearsals and guarded deployment.
+C7b/C7c batching remains held; Apple TV acceptance remains manual and unverified.
+
 ## Screenshot and docs closeout (2026-10-21)
 
 The [UI gallery](../docs/dev/ui-gallery.md) records the final 19 canonical page states in both

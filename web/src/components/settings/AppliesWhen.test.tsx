@@ -28,10 +28,12 @@ describe('settings application timing', () => {
     expect(FfmpegSettingsApplicationGroups).toMatchSnapshot();
     expect(FeatureFlagsApplicationGroups).toMatchSnapshot();
   });
-  test('every editable FFmpeg field and feature flag is mapped', () => {
+  test('every active FFmpeg field and feature flag is mapped', () => {
     expect(Object.keys(FfmpegSettingsApplicationGroups).sort()).toEqual(
       Object.keys(defaultFfmpegSettings)
-        .filter((key) => key !== 'configVersion')
+        .filter(
+          (key) => key !== 'configVersion' && key !== 'subtitlePreferences',
+        )
         .sort(),
     );
     expect(Object.keys(FeatureFlagsApplicationGroups).sort()).toEqual(

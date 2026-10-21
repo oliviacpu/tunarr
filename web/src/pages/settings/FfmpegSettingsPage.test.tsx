@@ -1,9 +1,13 @@
-import { getApiFfmpegInfoQueryKey } from '../../generated/@tanstack/react-query.gen.ts';
+import {
+  getApiFfmpegInfoQueryKey,
+  getApiSettingsFfmpegQueryKey,
+} from '../../generated/@tanstack/react-query.gen.ts';
 import { renderWithProviders, screen, waitFor } from '@/test/utils';
 import { QueryClient } from '@tanstack/react-query';
 import type { FfmpegSettings } from '@tunarr/types';
 import { defaultFfmpegSettings } from '@tunarr/types';
 import { AxiosError, AxiosHeaders } from 'axios';
+import { omit } from 'lodash-es';
 import { SnackbarProvider } from 'notistack';
 import { Suspense } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -129,11 +133,60 @@ describe('FfmpegSettingsPage', () => {
     await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
     expect(mockPutFfmpegSettings.mock.calls[0]?.[0]).toMatchObject({
       body: {
-        ...saved,
+        ...omit(saved, 'subtitlePreferences'),
         enableSubtitleExtraction: !saved.enableSubtitleExtraction,
       },
     });
   });
+
+  test.each(['playback', 'captions-audio'] as const)(
+    '%s saves preserve hidden subtitle preferences and in-progress drafts',
+    async (section) => {
+      const preferences: FfmpegSettings['subtitlePreferences'] = [
+        {
+          languageCode: 'eng',
+          filter: 'any',
+          allowExternal: true,
+          allowImageBased: false,
+        },
+      ];
+      server.settings = { ...saved, subtitlePreferences: preferences };
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      mockPutFfmpegSettings.mockImplementation(({ body }) =>
+        Promise.resolve({ data: { ...server.settings, ...body } }),
+      );
+      const { user } = await renderPage(queryClient, section);
+      if (section === 'playback') {
+        await user.clear(screen.getByLabelText('FFmpeg executable path'));
+        await user.type(
+          screen.getByLabelText('FFmpeg executable path'),
+          '/opt/ffmpeg',
+        );
+      } else {
+        await user.click(
+          screen.getByRole('checkbox', { name: 'Extract embedded subtitles' }),
+        );
+      }
+      const updatedPreferences = [{ ...preferences[0], languageCode: 'fra' }];
+      server.settings = { ...saved, subtitlePreferences: updatedPreferences };
+      queryClient.setQueryData(getApiSettingsFfmpegQueryKey(), server.settings);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
+      );
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(mockPutFfmpegSettings).toHaveBeenCalledOnce());
+      const body = mockPutFfmpegSettings.mock.calls[0]?.[0].body;
+      expect(body).not.toHaveProperty('subtitlePreferences');
+      expect(body).toMatchObject(
+        section === 'playback'
+          ? { ffmpegExecutablePath: '/opt/ffmpeg' }
+          : { enableSubtitleExtraction: !saved.enableSubtitleExtraction },
+      );
+      expect(server.settings.subtitlePreferences).toEqual(updatedPreferences);
+    },
+  );
 
   test('the form is there while ffmpeg is still being probed', async () => {
     server.ffmpegInfo = () => new Promise(() => {});

@@ -30,6 +30,38 @@ response metadata, such as `dataDirectory` and `environmentLogLevel`, is read-on
 Media rescan intervals must be whole hours, at least one; saving a changed interval
 reschedules scans and collection/custom-show syncs without a restart.
 
+## Subtitle preference storage
+
+`ffmpeg.subtitlePreferences` stores an ordered list of global subtitle defaults. Each row requires
+`languageCode`, `filter`, `allowExternal` and `allowImageBased`. Language codes are known lowercase
+three-letter ISO 639-2 codes; bibliographic aliases such as `ger` normalize to `deu`. Filters are
+`none`, `forced`, `default` and `any`.
+
+```http
+PUT /api/settings/ffmpeg
+Content-Type: application/json
+
+{
+  "subtitlePreferences": [
+    { "languageCode": "eng", "filter": "any", "allowExternal": true, "allowImageBased": false }
+  ]
+}
+```
+
+Omitting this field preserves its saved value, including through the deprecated FFmpeg settings
+alias. An explicit `[]` clears it. Old settings files load with `[]`; malformed saved rows stop
+loading before defaults can replace the file. Settings file version 2 and FFmpeg config version 5
+are unchanged.
+
+Channel responses include `subtitlePreferenceMode: "inherit" | "custom"`. Channel writes may omit
+the mode to preserve it on update. Creation derives an omitted mode from the supplied rows: a
+nonempty custom list selects `custom`, otherwise `inherit`. Switching to inherit retains custom
+rows. An omitted channel preference list preserves rows; an explicit `[]` clears them. Existing
+channel rows retain the legacy wire key `langugeCode`; global rows use `languageCode`.
+
+S5a introduces persistence and compatibility only. Stream-selection integration follows in S5b,
+and global/channel controls and previews follow in S5c. Fixed output audio layouts stay per channel.
+
 ## Compatibility window
 
 The following GET/PUT aliases remain for the release introducing the canonical

@@ -95,6 +95,7 @@ function getDefaultFormValues(
       enabled: channel.onDemand.enabled,
     },
     subtitlesEnabled: channel.subtitlesEnabled,
+    subtitlePreferenceMode: channel.subtitlePreferenceMode,
     subtitlePreferences: channel.subtitlePreferences ?? [],
     audioTracks: channel.audioTracks ?? [],
     captions: channel.captions ?? null,
@@ -173,8 +174,12 @@ export function EditChannelForm({
     );
 
     const defaults = form.formState.defaultValues;
+    const subtitlePreferencesChanged = !isEqual(
+      data.subtitlePreferences,
+      defaults?.subtitlePreferences,
+    );
     const preferences =
-      !isNew && isEqual(data.subtitlePreferences, defaults?.subtitlePreferences)
+      !isNew && !subtitlePreferencesChanged
         ? undefined
         : map(data.subtitlePreferences, (pref, idx) => ({
             ...pref,
@@ -203,6 +208,11 @@ export function EditChannelForm({
           }
         : undefined,
       subtitlePreferences: preferences,
+      subtitlePreferenceMode: subtitlePreferencesChanged
+        ? 'custom'
+        : isNew
+          ? data.subtitlePreferenceMode
+          : undefined,
     } satisfies SaveableChannel;
 
     if (isNew) {

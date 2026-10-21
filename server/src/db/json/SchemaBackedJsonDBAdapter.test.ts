@@ -1,5 +1,10 @@
 import type { Adapter } from 'lowdb';
 import { z } from 'zod/v4';
+import {
+  defaultSettings,
+  rejectInvalidSubtitlePreferences,
+  SettingsFileSchema,
+} from '../SettingsDB.ts';
 import { SchemaBackedDbAdapter } from './SchemaBackedJsonDBAdapter.ts';
 
 const LineupSchema = z.object({
@@ -132,4 +137,70 @@ test('repairs a file that is missing fields by merging the defaults in', async (
     startTimeOffsets: [],
   });
   expect(file.writes).toHaveLength(1);
+});
+
+describe('saved global subtitle preferences', () => {
+  const validRow = {
+    languageCode: 'eng',
+    filter: 'any',
+    allowExternal: true,
+    allowImageBased: false,
+  };
+
+  test.each([
+    { ...validRow, languageCode: 'zzx' },
+    { ...validRow, filter: undefined },
+    { ...validRow, allowExternal: undefined },
+    { ...validRow, allowImageBased: 'false' },
+  ])(
+    'rejects invalid rows before merging defaults or writing: %j',
+    async (row) => {
+      const defaults = defaultSettings('/data');
+      const saved = {
+        ...defaults,
+        settings: {
+          ...defaults.settings,
+          ffmpeg: { ...defaults.settings.ffmpeg, subtitlePreferences: [row] },
+        },
+      };
+      const file = new FakeTextFile(JSON.stringify(saved));
+      const subject = new SchemaBackedDbAdapter(
+        SettingsFileSchema,
+        '/settings.json',
+        defaults,
+        file,
+        rejectInvalidSubtitlePreferences,
+      );
+      await expect(subject.read()).rejects.toThrow();
+      expect(file.writes).toEqual([]);
+    },
+  );
+
+  test('still repairs unrelated missing fields without losing saved preferences', async () => {
+    const defaults = defaultSettings('/data');
+    const { clientId: _omitted, ...partialSettings } = defaults.settings;
+    const file = new FakeTextFile(
+      JSON.stringify({
+        ...defaults,
+        settings: {
+          ...partialSettings,
+          ffmpeg: {
+            ...defaults.settings.ffmpeg,
+            subtitlePreferences: [validRow],
+          },
+        },
+      }),
+    );
+    const subject = new SchemaBackedDbAdapter(
+      SettingsFileSchema,
+      '/settings.json',
+      defaults,
+      file,
+      rejectInvalidSubtitlePreferences,
+    );
+    const result = await subject.read();
+    expect(result?.settings.clientId).toBe(defaults.settings.clientId);
+    expect(result?.settings.ffmpeg.subtitlePreferences).toEqual([validRow]);
+    expect(file.writes).toHaveLength(1);
+  });
 });

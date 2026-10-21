@@ -48,6 +48,9 @@ export const Channel = sqliteTable(
     transcodeConfigId: text().notNull(),
     watermark: text({ mode: 'json' }).$type<ChannelWatermark>(),
     subtitlesEnabled: integer({ mode: 'boolean' }).default(false),
+    subtitlePreferenceMode: text({ enum: ['inherit', 'custom'] })
+      .notNull()
+      .default('inherit'),
     // Fixed audio track layout (switchable audio in Plex Live TV): ISO 639-2
     // codes in output order; null or empty = one audio track, as before
     audioTracks: text({ mode: 'json' }).$type<string[]>(),

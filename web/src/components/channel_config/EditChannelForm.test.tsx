@@ -61,16 +61,66 @@ vi.mock('./ChannelTranscodingConfig.tsx', async () => {
   const { useFormContext } = await import('react-hook-form');
   return {
     default: () => {
-      const { setValue } = useFormContext<SaveableChannel>();
+      const { getValues, setValue } = useFormContext<SaveableChannel>();
       return (
-        <button
-          type="button"
-          onClick={() =>
-            setValue('subtitlePreferences', [], { shouldDirty: true })
-          }
-        >
-          Clear subtitle preferences
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              setValue('subtitlePreferences', [], { shouldDirty: true })
+            }
+          >
+            Clear subtitle preferences
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setValue(
+                'subtitlePreferences',
+                [
+                  ...(getValues('subtitlePreferences') ?? []),
+                  {
+                    langugeCode: 'spa',
+                    priority: 0,
+                    allowExternal: true,
+                    allowImageBased: false,
+                    filter: 'forced',
+                  },
+                ],
+                { shouldDirty: true },
+              )
+            }
+          >
+            Add subtitle preference
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setValue(
+                'subtitlePreferences',
+                [...(getValues('subtitlePreferences') ?? [])].reverse(),
+                { shouldDirty: true },
+              )
+            }
+          >
+            Reorder subtitle preferences
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setValue(
+                'subtitlePreferences',
+                getValues('subtitlePreferences')?.map((pref) => ({
+                  ...pref,
+                  allowExternal: !pref.allowExternal,
+                })),
+                { shouldDirty: true },
+              )
+            }
+          >
+            Change subtitle preference
+          </button>
+        </>
       );
     },
   };
@@ -108,12 +158,25 @@ const channel: Channel = {
   streamMode: 'hls',
   transcodeConfigId: '00000000-0000-0000-0000-000000000000',
   subtitlesEnabled: false,
+  subtitlePreferenceMode: 'inherit',
   sessions: [],
 };
 
 const createdId = 'c0ffee00-0000-4000-8000-000000000002';
 
+let loadedChannel = channel;
+
+function savedChannel(body: Record<string, unknown>) {
+  return {
+    ...loadedChannel,
+    ...Object.fromEntries(
+      Object.entries(body).filter(([, value]) => value !== undefined),
+    ),
+  };
+}
+
 function renderEditor(mode: 'edit' | 'new', initialChannel: Channel = channel) {
+  loadedChannel = initialChannel;
   const rootRoute = createRootRoute();
   const editRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -206,42 +269,101 @@ beforeEach(() => {
   mockCreate.mockReset();
   mockUpdate.mockReset();
   mockUpdate.mockImplementation(({ body }) =>
-    Promise.resolve({ data: { ...channel, ...body } }),
+    Promise.resolve({ data: savedChannel(body) }),
   );
 });
 
 describe('EditChannelForm, editing a channel', () => {
-  test('an unrelated edit omits saved filler and subtitle relations', async () => {
-    const { user } = renderEditor('edit', {
-      ...channel,
-      fillerCollections: [
-        {
-          id: '00000000-0000-4000-8000-000000000123',
-          weight: 100,
-          cooldownSeconds: 30,
-        },
-      ],
-      subtitlePreferences: [
-        {
-          langugeCode: 'eng',
-          priority: 0,
-          allowExternal: true,
-          allowImageBased: true,
-          filter: 'any',
-        },
-      ],
-    });
-    await user.type(await nameField(), ' Late');
-    await user.tab();
-    await user.click(saveButton());
-    await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
-    expect(
-      mockUpdate.mock.calls[0]?.[0].body.fillerCollections,
-    ).toBeUndefined();
-    expect(
-      mockUpdate.mock.calls[0]?.[0].body.subtitlePreferences,
-    ).toBeUndefined();
-  });
+  test.each(['inherit', 'custom'] as const)(
+    'an unrelated edit keeps %s mode and omits saved filler and subtitle relations',
+    async (subtitlePreferenceMode) => {
+      const { user } = renderEditor('edit', {
+        ...channel,
+        subtitlePreferenceMode,
+        fillerCollections: [
+          {
+            id: '00000000-0000-4000-8000-000000000123',
+            weight: 100,
+            cooldownSeconds: 30,
+          },
+        ],
+        subtitlePreferences: [
+          {
+            langugeCode: 'eng',
+            priority: 0,
+            allowExternal: true,
+            allowImageBased: true,
+            filter: 'any',
+          },
+        ],
+      });
+      await user.type(await nameField(), ' Late');
+      await user.tab();
+      await user.click(saveButton());
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+      expect(
+        mockUpdate.mock.calls[0]?.[0].body.fillerCollections,
+      ).toBeUndefined();
+      expect(
+        mockUpdate.mock.calls[0]?.[0].body.subtitlePreferences,
+      ).toBeUndefined();
+      expect(
+        mockUpdate.mock.calls[0]?.[0].body.subtitlePreferenceMode,
+      ).toBeUndefined();
+      expect(mockUpdate.mock.calls[0]?.[0].body).not.toHaveProperty(
+        'startTime',
+      );
+    },
+  );
+
+  test.each([
+    { action: 'Add subtitle preference', languages: ['spa'] },
+    { action: 'Reorder subtitle preferences', languages: ['spa', 'eng'] },
+    { action: 'Change subtitle preference', languages: ['eng', 'spa'] },
+  ])(
+    'a deliberate $action selects custom mode',
+    async ({ action, languages }) => {
+      const { user } = renderEditor('edit', {
+        ...channel,
+        subtitlePreferences:
+          action === 'Add subtitle preference'
+            ? undefined
+            : [
+                {
+                  langugeCode: 'eng',
+                  priority: 0,
+                  allowExternal: true,
+                  allowImageBased: true,
+                  filter: 'any',
+                },
+                {
+                  langugeCode: 'spa',
+                  priority: 1,
+                  allowExternal: true,
+                  allowImageBased: false,
+                  filter: 'forced',
+                },
+              ],
+      });
+      await nameField();
+      await user.click(screen.getByRole('tab', { name: 'Streaming' }));
+      await user.click(await screen.findByRole('button', { name: action }));
+      await waitFor(() => expect(saveButton()).toBeEnabled());
+      await user.click(saveButton());
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
+      expect(mockUpdate.mock.calls[0]?.[0].body).toMatchObject({
+        subtitlePreferenceMode: 'custom',
+        subtitlePreferences: languages.map((langugeCode, priority) => ({
+          langugeCode,
+          priority,
+          ...(action === 'Change subtitle preference'
+            ? { allowExternal: false }
+            : {}),
+        })),
+      });
+      await waitFor(() => expect(saveButton()).toBeDisabled());
+    },
+  );
 
   test('clearing subtitles sends an explicit empty list and saves cleanly', async () => {
     const { user } = renderEditor('edit', {
@@ -265,6 +387,9 @@ describe('EditChannelForm, editing a channel', () => {
     await user.click(saveButton());
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
     expect(mockUpdate.mock.calls[0]?.[0].body.subtitlePreferences).toEqual([]);
+    expect(mockUpdate.mock.calls[0]?.[0].body.subtitlePreferenceMode).toBe(
+      'custom',
+    );
     await waitFor(() => expect(saveButton()).toBeDisabled());
   });
 
@@ -292,7 +417,7 @@ describe('EditChannelForm, editing a channel', () => {
     mockUpdate.mockImplementation(
       ({ body }) =>
         new Promise((resolve) => {
-          finish = () => resolve({ data: { ...channel, ...body } });
+          finish = () => resolve({ data: savedChannel(body) });
         }),
     );
     const { user } = renderEditor('edit');
@@ -335,7 +460,7 @@ describe('EditChannelForm, editing a channel', () => {
       ({ body }) =>
         new Promise((resolve) => {
           finish = () =>
-            resolve({ data: { ...channel, ...body, sessions: undefined } });
+            resolve({ data: { ...savedChannel(body), sessions: undefined } });
         }),
     );
     const { user, queryClient } = renderEditor('edit');
@@ -484,6 +609,7 @@ describe('EditChannelForm, a new channel', () => {
     expect(mockCreate.mock.calls[0]?.[0].body.channel).toMatchObject({
       name: 'Cartoons',
       subtitlePreferences: [],
+      subtitlePreferenceMode: 'inherit',
     });
     // An edit now would be lost when the page moves on
     expect(name).toBeDisabled();
