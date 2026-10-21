@@ -10,6 +10,8 @@ import {
   StrictChannelAudioTracksSchema,
 } from '@tunarr/types/schemas';
 import tmp from 'tmp-promise';
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { copyPreMigratedDb } from '../testing/testDbFactory.ts';
 import { mock } from 'ts-mockito';
 import { v4 } from 'uuid';
@@ -249,6 +251,88 @@ describe('optional channel relations', () => {
     expect((await channelDb.loadLineup(seeded.id)).onDemandConfig).toEqual(
       savedLineup.onDemandConfig,
     );
+  });
+
+  test('bulk stealth preserves every other column, relation row and lineup file', async ({
+    channelDb,
+    defaultTranscodeConfigId,
+    db,
+  }) => {
+    const seeded = await seedRelations(channelDb, defaultTranscodeConfigId);
+    const iconPath = path.join(db, 'channel-icon.png');
+    await writeFile(iconPath, 'icon bytes');
+    await seeded.db
+      .updateTable('channel')
+      .set({ icon: JSON.stringify({ ...seeded.data.icon, path: iconPath }) })
+      .where('uuid', '=', seeded.id)
+      .execute();
+    const lineup = await channelDb.loadLineup(seeded.id);
+    await channelDb.saveLineup(seeded.id, {
+      ...lineup,
+      onDemandConfig: { state: 'paused', cursor: 12345 },
+    });
+    const lineupPath = path.join(db, 'channel-lineups', `${seeded.id}.json`);
+    const beforeFile = await readFile(lineupPath);
+    const before = await channelDb.getChannel(seeded.id);
+    const beforeRows = await seeded.rows();
+    const missing = v4();
+    expect(channelDb.setChannelStealth([missing, seeded.id], true)).toEqual({
+      results: [
+        {
+          id: missing,
+          success: false,
+          statusCode: 404,
+          message: 'Channel not found',
+        },
+        { id: seeded.id, success: true },
+      ],
+      changedIds: [seeded.id],
+    });
+    expect(await channelDb.getChannel(seeded.id)).toEqual({
+      ...before,
+      stealth: true,
+    });
+    expect(await seeded.rows()).toEqual(beforeRows);
+    expect(await readFile(lineupPath)).toEqual(beforeFile);
+    expect(await readFile(iconPath, 'utf8')).toBe('icon bytes');
+
+    const sqlite = DBAccess.instance.getConnection()?.sqlite;
+    if (sqlite === undefined)
+      throw new Error('Test database is not initialized');
+    sqlite.exec(
+      "CREATE TRIGGER reject_stealth_update BEFORE UPDATE OF stealth ON channel BEGIN SELECT RAISE(ABORT, 'unexpected write'); END",
+    );
+    expect(channelDb.setChannelStealth([seeded.id], true)).toEqual({
+      results: [{ id: seeded.id, success: true }],
+      changedIds: [],
+    });
+  });
+
+  test('bulk stealth rolls back earlier changes if the transaction fails', async ({
+    channelDb,
+    defaultTranscodeConfigId,
+  }) => {
+    const first = await seedRelations(channelDb, defaultTranscodeConfigId);
+    const second = await channelDb.saveChannel(
+      createSaveableChannel(defaultTranscodeConfigId, {
+        number: first.data.number + 1000,
+      }),
+    );
+    const sqlite = DBAccess.instance.getConnection()?.sqlite;
+    if (sqlite === undefined)
+      throw new Error('Test database is not initialized');
+    sqlite.exec(
+      "CREATE TRIGGER fail_second_stealth_update AFTER UPDATE OF stealth ON channel WHEN (SELECT COUNT(*) FROM channel WHERE stealth = 1) = 2 BEGIN SELECT RAISE(ABORT, 'second update failed'); END",
+    );
+    const beforeRows = await first.rows();
+    expect(() =>
+      channelDb.setChannelStealth([first.id, second.channel.uuid], true),
+    ).toThrow('second update failed');
+    expect((await channelDb.getChannel(first.id))?.stealth).toBe(false);
+    expect((await channelDb.getChannel(second.channel.uuid))?.stealth).toBe(
+      false,
+    );
+    expect(await first.rows()).toEqual(beforeRows);
   });
 
   for (const field of ['fillerCollections', 'subtitlePreferences'] as const) {

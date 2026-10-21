@@ -3700,6 +3700,50 @@ export type PutApiChannelsByIdResponses = {
 
 export type PutApiChannelsByIdResponse = PutApiChannelsByIdResponses[keyof PutApiChannelsByIdResponses];
 
+export type BulkSetChannelStealthData = {
+    body: {
+        ids: Array<string>;
+        stealth: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/channels/bulk/stealth';
+};
+
+export type BulkSetChannelStealthErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+};
+
+export type BulkSetChannelStealthError = BulkSetChannelStealthErrors[keyof BulkSetChannelStealthErrors];
+
+export type BulkSetChannelStealthResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        results: Array<{
+            id: string;
+            success: true;
+        } | {
+            id: string;
+            success: false;
+            statusCode: 404 | 500;
+            message: string;
+        }>;
+        refresh: {
+            xmltv: 'succeeded' | 'failed' | 'not_needed';
+            m3u: 'succeeded' | 'failed' | 'not_needed';
+        };
+    };
+};
+
+export type BulkSetChannelStealthResponse = BulkSetChannelStealthResponses[keyof BulkSetChannelStealthResponses];
+
 export type GetApiChannelsByIdProgramsData = {
     body?: never;
     path: {

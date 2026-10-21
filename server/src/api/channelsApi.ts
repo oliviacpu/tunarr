@@ -16,6 +16,8 @@ import { type ChannelSession, type CreateChannelRequest } from '@tunarr/types';
 import {
   BasicIdParamSchema,
   BasicPagingSchema,
+  BulkChannelStealthRequestSchema,
+  BulkChannelStealthResponseSchema,
   MaterializedSchedule,
   PagedResult,
   SlotScheduleWithPrograms,
@@ -62,6 +64,8 @@ import { container } from '../container.ts';
 import { sessionToApiSession } from '../db/converters/sessionConverter.ts';
 import { transcodeConfigOrmToDto } from '../db/converters/transcodeConfigConverters.ts';
 import type { ChannelAndLineup } from '../db/interfaces/IChannelDB.ts';
+import type { BulkChannelStealthUpdateResult } from '../db/interfaces/IChannelDB.ts';
+import type { BulkChannelStealthResponse } from '@tunarr/types/api';
 import type { ChannelOrmWithRelations } from '../db/schema/derivedTypes.ts';
 import { findBadRequestError, unwrapError } from '../types/errors.ts';
 import { Result } from '../types/result.ts';
@@ -251,6 +255,70 @@ export const channelsApi: RouterPluginAsyncCallback = async (fastify) => {
       await req.serverCtx.m3uService.regenerateCache();
 
       return res.status(201).send(dbChannelToApiChannel(inserted));
+    },
+  );
+
+  fastify.post(
+    '/channels/bulk/stealth',
+    {
+      attachValidation: true,
+      schema: {
+        operationId: 'bulkSetChannelStealth',
+        tags: ['Channels'],
+        body: BulkChannelStealthRequestSchema,
+        response: {
+          200: BulkChannelStealthResponseSchema,
+          400: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async (req, res) => {
+      if (req.validationError !== undefined) {
+        return res.status(400).send({ message: req.validationError.message });
+      }
+
+      let updated: BulkChannelStealthUpdateResult;
+      try {
+        updated = req.serverCtx.channelDB.setChannelStealth(
+          req.body.ids,
+          req.body.stealth,
+        );
+      } catch (error) {
+        logger.error(error, 'Could not update channel stealth batch');
+        return res.send({
+          results: req.body.ids.map((id) => ({
+            id,
+            success: false as const,
+            statusCode: 500 as const,
+            message: 'Could not update channel stealth',
+          })),
+          refresh: { xmltv: 'not_needed', m3u: 'not_needed' },
+        });
+      }
+
+      const refresh: BulkChannelStealthResponse['refresh'] = {
+        xmltv: 'not_needed',
+        m3u: 'not_needed',
+      };
+      if (updated.changedIds.length > 0) {
+        try {
+          await req.serverCtx.guideService.updateCachedChannels(
+            updated.changedIds,
+          );
+          refresh.xmltv = 'succeeded';
+        } catch (error) {
+          logger.error(error, 'Could not publish XMLTV after stealth batch');
+          refresh.xmltv = 'failed';
+        }
+        try {
+          await req.serverCtx.m3uService.regenerateCacheChecked();
+          refresh.m3u = 'succeeded';
+        } catch (error) {
+          logger.error(error, 'Could not publish M3U after stealth batch');
+          refresh.m3u = 'failed';
+        }
+      }
+      return res.send({ results: updated.results, refresh });
     },
   );
 

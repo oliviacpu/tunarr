@@ -12,14 +12,17 @@ import type {
   UpdateChannelRequest,
   Watermark,
 } from '@tunarr/types';
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { inject, injectable } from 'inversify';
 import type { Kysely } from 'kysely';
 import { isEmpty, isNil, isUndefined, map, sum } from 'lodash-es';
 import type { MarkRequired } from 'ts-essentials';
 import { v4 } from 'uuid';
 import { isDefined, isNonEmptyString } from '../../util/index.ts';
-import type { ChannelAndLineup } from '../interfaces/IChannelDB.ts';
+import type {
+  BulkChannelStealthUpdateResult,
+  ChannelAndLineup,
+} from '../interfaces/IChannelDB.ts';
 import type { NewChannelOrm } from '../schema/Channel.ts';
 import { Channel } from '../schema/Channel.ts';
 import { ChannelFillerShow } from '../schema/ChannelFillerShow.ts';
@@ -152,6 +155,42 @@ export class BasicChannelRepository {
     private channelReadOpsRepo: ChannelReadOpsRepository,
     @inject(KEYS.LineupRepository) private lineupRepository: LineupRepository,
   ) {}
+
+  setChannelStealth(
+    ids: string[],
+    stealth: boolean,
+  ): BulkChannelStealthUpdateResult {
+    return this.drizzleDB.transaction((tx) => {
+      const channels = tx
+        .select({ id: Channel.uuid, stealth: Channel.stealth })
+        .from(Channel)
+        .where(inArray(Channel.uuid, ids))
+        .all();
+      const byId = new Map(channels.map((channel) => [channel.id, channel]));
+      const changedIds = channels
+        .filter((channel) => channel.stealth !== stealth)
+        .map((channel) => channel.id);
+      if (changedIds.length > 0) {
+        tx.update(Channel)
+          .set({ stealth })
+          .where(inArray(Channel.uuid, changedIds))
+          .run();
+      }
+      return {
+        changedIds,
+        results: ids.map((id) =>
+          byId.has(id)
+            ? { id, success: true }
+            : {
+                id,
+                success: false,
+                statusCode: 404,
+                message: 'Channel not found',
+              },
+        ),
+      };
+    });
+  }
 
   async saveChannel(
     createReq: SaveableChannel,
