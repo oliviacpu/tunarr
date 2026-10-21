@@ -26,6 +26,22 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 
 ## Changes in this fork
 
+### Separate mobile channel card actions (2026-10-21, PR #161)
+
+- **What you saw:** the local 390px channel gallery emitted React's button-nesting warning. The active-session dot was clickable but had no separate keyboard control.
+- **Cause:** the mobile card's navigation `CardActionArea` rendered a button around the options `IconButton` and clickable session status.
+- **Fix:** render the channel navigation, labelled options button and labelled active-session button as siblings. Keep the native navigation button's Enter/Space behavior, menu focus restoration, session dialog, compact card layout, pagination and theme colours.
+- **Tests:** all nine focused component tests pass. The new structural regression fails against the old code and reproduces its `validateDOMNesting` warning. Seeded browser checks cover 390px cards in both themes, bounded page width, menu keyboard focus and dismissal, session details without navigation, and pointer/Space channel navigation. Build, monorepo and E2E typechecks, changed-file lint and formatting pass. Existing browser health allowances are reused; no new exclusions were added.
+- **Upstream:** not sent; scoped fix for the existing mobile channel cards.
+
+### Keep Trash filters and actions reachable on phones (2026-10-21, PR #160)
+
+- **What you saw:** the local seeded Trash page expanded to 605px at a 390px viewport, clipping later media-type filters and Empty Trash.
+- **Cause:** all five labeled filters and the action buttons shared one unwrapped row.
+- **Fix:** let the filter buttons wrap with complete individual borders, stack the actions below them on phones, and retain a shared row from the desktop breakpoint. Empty Trash confirmation, multi-select filtering, progress and the active job's Cancel keep their existing behavior.
+- **Tests:** the new Chromium regression fails on the old 605px document. It checks 390px/1440px in light/dark themes, bounded document width and every filter/action's bounds, selecting all five types and independently clearing one, cancelling and confirming the destructive dialog, and reaching Cancel while a drain is active. Trash start/status/cancel responses are intercepted so seeded programs are never deleted. Idle/running screenshots are captured for all four cases. Existing Trash unit tests, web/E2E typechecks, lint and the worktree build pass. The browser test reuses the suite's existing known-issue filter; no exclusions were added.
+- **Upstream:** not sent; bounded web layout correction found during the fork's seeded gallery capture.
+
 ### Keep week-calendar days aligned inside a bounded viewport (2026-10-20, PR #157)
 
 - **What you saw:** in the local seeded preview at phone width, week headers expanded the page to 1048px while the separately scrolling body clipped later days.

@@ -4,11 +4,9 @@ Filler lists are collections of content that are used by [Flex](/configure/chann
 
 There are many places to source filler videos from. [DizqueTV's Wiki](https://github.com/vexorian/dizquetv/wiki) has plenty of filler repositories listed. Many of these are YouTube playlists, so you can use tools like MeTube to rip the playlist, and then add a new library to Plex with these filler videos, which can then be used by Tunarr's Filler lists. 
 
-To get started, from the side panel select "Library", "EDIT FILLERS", then "NEW".
+To get started, open **Library > Filler Lists**, then select **New**.
 
-![Library](/assets/library.png)
-
-![Filler](/assets/library-filler.png)
+![Filler Lists](/assets/ui-closeout/fillers-1440-light.png)
 
 ![Filler new](/assets/library-filler-new.png)
 

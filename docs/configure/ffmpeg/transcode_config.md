@@ -35,7 +35,7 @@ Configure output video parameters including hardware acceleration, format, resol
 
 <figure markdown="span">
     ![](../../assets/transcode_configs_video.png)
-    <figcaption>Video Options as of 0.22.11</figcaption>
+    <figcaption>Video options, captured 2026-10-21 from source f837ef4c.</figcaption>
 </figure>
 
 ### Hardware Acceleration
@@ -144,7 +144,7 @@ Configure output audio parameters including codec, channels, bitrate, and volume
 
 <figure markdown="span">
     ![](../../assets/transcode_configs_audio.png)
-    <figcaption>Audio Options as of 0.22.11</figcaption>
+    <figcaption>Audio options, captured 2026-10-21 from source f837ef4c.</figcaption>
 </figure>
 
 ### Audio Format
@@ -230,7 +230,7 @@ Configure how Tunarr responds when a transcoding error occurs — for example, w
 
 <figure markdown="span">
     ![](../../assets/transcode_configs_error.png)
-    <figcaption>Error Options as of 0.22.11</figcaption>
+    <figcaption>Error options, captured 2026-10-21 from source f837ef4c.</figcaption>
 </figure>
 
 ### Error Video Mode
