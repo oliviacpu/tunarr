@@ -13,6 +13,10 @@ export const BulkChannelStealthRequestSchema = z.object({
   stealth: z.boolean(),
 });
 
+export const BulkChannelDeleteRequestSchema = z.object({
+  ids: BulkChannelIdsSchema,
+});
+
 export const BulkChannelItemResultSchema = z.discriminatedUnion('success', [
   z.object({ id: z.uuid(), success: z.literal(true) }),
   z.object({
@@ -37,6 +41,31 @@ export const BulkChannelStealthResponseSchema = z.object({
   }),
 });
 
+export const BulkChannelCleanupResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.enum(['succeeded', 'not_needed']) }),
+  z.object({ status: z.literal('failed'), message: z.string() }),
+]);
+
+export const BulkChannelDeleteItemResultSchema = z.discriminatedUnion(
+  'success',
+  [
+    BulkChannelItemResultSchema.options[0].extend({
+      cleanup: BulkChannelCleanupResultSchema,
+    }),
+    BulkChannelItemResultSchema.options[1].extend({
+      cleanup: BulkChannelCleanupResultSchema,
+    }),
+  ],
+);
+
+export const BulkChannelDeleteResponseSchema = z.object({
+  results: z.array(BulkChannelDeleteItemResultSchema),
+  refresh: z.object({
+    xmltv: BulkChannelRefreshStatusSchema,
+    m3u: BulkChannelRefreshStatusSchema,
+  }),
+});
+
 export type BulkChannelIds = z.infer<typeof BulkChannelIdsSchema>;
 export type BulkChannelStealthRequest = z.infer<
   typeof BulkChannelStealthRequestSchema
@@ -47,4 +76,16 @@ export type BulkChannelRefreshStatus = z.infer<
 >;
 export type BulkChannelStealthResponse = z.infer<
   typeof BulkChannelStealthResponseSchema
+>;
+export type BulkChannelDeleteRequest = z.infer<
+  typeof BulkChannelDeleteRequestSchema
+>;
+export type BulkChannelCleanupResult = z.infer<
+  typeof BulkChannelCleanupResultSchema
+>;
+export type BulkChannelDeleteItemResult = z.infer<
+  typeof BulkChannelDeleteItemResultSchema
+>;
+export type BulkChannelDeleteResponse = z.infer<
+  typeof BulkChannelDeleteResponseSchema
 >;

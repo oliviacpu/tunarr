@@ -16,6 +16,8 @@ import { type ChannelSession, type CreateChannelRequest } from '@tunarr/types';
 import {
   BasicIdParamSchema,
   BasicPagingSchema,
+  BulkChannelDeleteRequestSchema,
+  BulkChannelDeleteResponseSchema,
   BulkChannelStealthRequestSchema,
   BulkChannelStealthResponseSchema,
   MaterializedSchedule,
@@ -65,7 +67,10 @@ import { sessionToApiSession } from '../db/converters/sessionConverter.ts';
 import { transcodeConfigOrmToDto } from '../db/converters/transcodeConfigConverters.ts';
 import type { ChannelAndLineup } from '../db/interfaces/IChannelDB.ts';
 import type { BulkChannelStealthUpdateResult } from '../db/interfaces/IChannelDB.ts';
-import type { BulkChannelStealthResponse } from '@tunarr/types/api';
+import type {
+  BulkChannelDeleteResponse,
+  BulkChannelStealthResponse,
+} from '@tunarr/types/api';
 import type { ChannelOrmWithRelations } from '../db/schema/derivedTypes.ts';
 import { findBadRequestError, unwrapError } from '../types/errors.ts';
 import { Result } from '../types/result.ts';
@@ -319,6 +324,73 @@ export const channelsApi: RouterPluginAsyncCallback = async (fastify) => {
         }
       }
       return res.send({ results: updated.results, refresh });
+    },
+  );
+
+  fastify.post(
+    '/channels/bulk/delete',
+    {
+      attachValidation: true,
+      schema: {
+        operationId: 'bulkDeleteChannels',
+        tags: ['Channels'],
+        body: BulkChannelDeleteRequestSchema,
+        response: {
+          200: BulkChannelDeleteResponseSchema,
+          400: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async (req, res) => {
+      if (req.validationError !== undefined) {
+        return res.status(400).send({ message: req.validationError.message });
+      }
+
+      const results: BulkChannelDeleteResponse['results'] = [];
+      const deletedIds: string[] = [];
+      for (const id of req.body.ids) {
+        try {
+          const result = await req.serverCtx.channelDB.deleteChannelChecked(id);
+          results.push(result);
+          if (result.success) {
+            deletedIds.push(id);
+          }
+        } catch (error) {
+          logger.error(error, 'Could not delete channel in batch');
+          results.push({
+            id,
+            success: false,
+            statusCode: 500,
+            message: 'Could not delete channel',
+            cleanup: {
+              status: 'failed',
+              message: 'Could not confirm channel cleanup',
+            },
+          });
+        }
+      }
+
+      const refresh: BulkChannelDeleteResponse['refresh'] = {
+        xmltv: 'not_needed',
+        m3u: 'not_needed',
+      };
+      if (deletedIds.length > 0) {
+        try {
+          await req.serverCtx.guideService.removeCachedChannels(deletedIds);
+          refresh.xmltv = 'succeeded';
+        } catch (error) {
+          logger.error(error, 'Could not publish XMLTV after deletion batch');
+          refresh.xmltv = 'failed';
+        }
+        try {
+          await req.serverCtx.m3uService.regenerateCacheChecked();
+          refresh.m3u = 'succeeded';
+        } catch (error) {
+          logger.error(error, 'Could not publish M3U after deletion batch');
+          refresh.m3u = 'failed';
+        }
+      }
+      return res.send({ results, refresh });
     },
   );
 

@@ -46,6 +46,20 @@ export type BulkChannelStealthUpdateResult = {
   changedIds: string[];
 };
 
+export type ChannelDeletionCleanupResult =
+  | { status: 'succeeded' | 'not_needed' }
+  | { status: 'failed'; message: string };
+
+export type CheckedChannelDeletionResult =
+  | { id: string; success: true; cleanup: ChannelDeletionCleanupResult }
+  | {
+      id: string;
+      success: false;
+      statusCode: 404 | 500;
+      message: string;
+      cleanup: ChannelDeletionCleanupResult;
+    };
+
 export interface IChannelDB {
   setChannelStealth(
     ids: string[],
@@ -111,6 +125,10 @@ export interface IChannelDB {
     channelId: string,
     blockOnLineupUpdates?: boolean,
   ): Promise<void>;
+
+  deleteChannelChecked(
+    channelId: string,
+  ): Promise<CheckedChannelDeletionResult>;
 
   updateChannel(
     id: string,
