@@ -1,4 +1,4 @@
-### Batched channel visibility API (2026-10-21, PR pending)
+### Batched channel visibility API (2026-10-21, PR #167)
 
 - **What you saw:** Code inspection found that hiding selected channels fetched and replaced whole channel objects and refreshed XMLTV/M3U for each channel.
 - **Cause:** The existing channel update route accepts the whole editable channel, and the bulk table has no dedicated visibility operation.
