@@ -6,6 +6,8 @@ import { KEYS } from '@/types/inject.js';
 import { Result } from '@/types/result.js';
 import type { Maybe } from '@/types/util.js';
 import dayjs from '@/util/dayjs.js';
+import { LoggerFactory } from '@/util/logging/LoggerFactory.js';
+import { MutexMap } from '@/util/mutexMap.js';
 import type {
   ChannelCaptions,
   SaveableChannel,
@@ -22,6 +24,8 @@ import { isDefined, isNonEmptyString } from '../../util/index.ts';
 import type {
   BulkChannelStealthUpdateResult,
   ChannelAndLineup,
+  ChannelDeletionCleanupResult,
+  CheckedChannelDeletionResult,
 } from '../interfaces/IChannelDB.ts';
 import type { NewChannelOrm } from '../schema/Channel.ts';
 import { Channel } from '../schema/Channel.ts';
@@ -34,6 +38,8 @@ import type { NewChannelSubtitlePreferenceOrm } from '../schema/SubtitlePreferen
 import { ChannelSubtitlePreferences } from '../schema/SubtitlePreferences.ts';
 import type { ChannelReadOpsRepository } from './ChannelReadOpsRepository.ts';
 import type { LineupRepository } from './LineupRepository.ts';
+
+const checkedDeletionLocks = new MutexMap();
 
 function sanitizeChannelWatermark(
   watermark: Maybe<Watermark>,
@@ -147,6 +153,11 @@ export function captionsToColumn(
 
 @injectable()
 export class BasicChannelRepository {
+  private logger = LoggerFactory.child({
+    caller: import.meta,
+    className: this.constructor.name,
+  });
+
   constructor(
     @inject(KEYS.Database) private db: Kysely<DB>,
     @inject(KEYS.DrizzleDB) private drizzleDB: DrizzleDBAccess,
@@ -503,6 +514,115 @@ export class BasicChannelRepository {
       channel: newChannel,
       lineup: newLineup,
     };
+  }
+
+  async deleteChannelChecked(
+    channelId: string,
+  ): Promise<CheckedChannelDeletionResult> {
+    return checkedDeletionLocks.runWithLockId(channelId, async () => {
+      let marked = false;
+      try {
+        const channel = this.drizzleDB
+          .select({ id: Channel.uuid })
+          .from(Channel)
+          .where(eq(Channel.uuid, channelId))
+          .get();
+        if (channel === undefined) {
+          return {
+            id: channelId,
+            success: false,
+            statusCode: 404,
+            message: 'Channel not found',
+            cleanup: { status: 'not_needed' },
+          };
+        }
+        marked =
+          await this.lineupRepository.markLineupFileForDeletionChecked(
+            channelId,
+          );
+        const deleted = this.drizzleDB.transaction((tx) => {
+          if (
+            tx
+              .select({ id: Channel.uuid })
+              .from(Channel)
+              .where(eq(Channel.uuid, channelId))
+              .get() === undefined
+          ) {
+            return false;
+          }
+          tx.delete(ChannelSubtitlePreferences)
+            .where(eq(ChannelSubtitlePreferences.channelId, channelId))
+            .run();
+          const result = tx
+            .delete(Channel)
+            .where(eq(Channel.uuid, channelId))
+            .run();
+          if (result.changes !== 1) {
+            throw new Error('Channel deletion did not remove the channel row');
+          }
+          return true;
+        });
+        if (!deleted) {
+          return {
+            id: channelId,
+            success: false,
+            statusCode: 404,
+            message: 'Channel not found',
+            cleanup: { status: 'not_needed' },
+          };
+        }
+      } catch (error) {
+        this.logger.error(error, 'Unable to delete channel %s', channelId);
+        let cleanup: ChannelDeletionCleanupResult = { status: 'not_needed' };
+        if (marked) {
+          try {
+            await this.lineupRepository.restoreLineupFileChecked(channelId);
+            cleanup = { status: 'succeeded' };
+          } catch (restoreError) {
+            this.logger.error(
+              restoreError,
+              'Unable to restore channel %s lineup',
+              channelId,
+            );
+            cleanup = {
+              status: 'failed',
+              message: 'Unable to restore channel lineup',
+            };
+          }
+        }
+        return {
+          id: channelId,
+          success: false,
+          statusCode: 500,
+          message: 'Unable to delete channel',
+          cleanup,
+        };
+      }
+
+      invalidateLibraryReferences();
+      try {
+        await this.lineupRepository.removeRedirectReferencesChecked(channelId);
+        return {
+          id: channelId,
+          success: true,
+          cleanup: { status: 'succeeded' },
+        };
+      } catch (error) {
+        this.logger.error(
+          error,
+          'Unable to remove redirects to channel %s',
+          channelId,
+        );
+        return {
+          id: channelId,
+          success: true,
+          cleanup: {
+            status: 'failed',
+            message: 'Unable to remove channel redirects',
+          },
+        };
+      }
+    });
   }
 
   async deleteChannel(

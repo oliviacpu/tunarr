@@ -59,6 +59,7 @@ import {
   groupByUniqProp,
   isDefined,
   isNonEmptyString,
+  isNodeError,
   mapReduceAsyncSeq,
   run,
   wait,
@@ -228,7 +229,43 @@ export class LineupRepository {
     return this.markLineupFileForDeletion(channelId, false);
   }
 
+  async markLineupFileForDeletionChecked(channelId: string): Promise<boolean> {
+    return fileDbLocks.runWithLockId(channelId, async () => {
+      const path = this.fileSystemService.getChannelLineupPath(channelId);
+      try {
+        await fs.rename(path, `${path}.bak`);
+      } catch (error) {
+        if (isNodeError(error) && error.code === 'ENOENT') {
+          delete fileDbCache[channelId];
+          return false;
+        }
+        throw error;
+      }
+      delete fileDbCache[channelId];
+      return true;
+    });
+  }
+
+  async restoreLineupFileChecked(channelId: string): Promise<void> {
+    return fileDbLocks.runWithLockId(channelId, async () => {
+      const path = this.fileSystemService.getChannelLineupPath(channelId);
+      await fs.rename(`${path}.bak`, path);
+      delete fileDbCache[channelId];
+    });
+  }
+
   async removeRedirectReferences(toChannel: string): Promise<void> {
+    return this.removeRedirectReferencesInternal(toChannel, false);
+  }
+
+  async removeRedirectReferencesChecked(toChannel: string): Promise<void> {
+    return this.removeRedirectReferencesInternal(toChannel, true);
+  }
+
+  private async removeRedirectReferencesInternal(
+    toChannel: string,
+    checked: boolean,
+  ): Promise<void> {
     const allChannels = await this.drizzleDB.query.channels
       .findMany({
         orderBy: (fields, { asc }) => asc(fields.number),
@@ -259,14 +296,23 @@ export class LineupRepository {
       { concurrency: 2 },
     );
 
+    const failures: Error[] = [];
     for await (const updateResult of ops) {
       if (updateResult.isFailure()) {
         this.logger.error(
+          updateResult.error,
           'Error removing redirect references for channel %s from channel %s',
           toChannel,
           updateResult.error.input.uuid,
         );
+        failures.push(updateResult.error);
       }
+    }
+    if (checked && failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        'Unable to remove redirect references',
+      );
     }
   }
 

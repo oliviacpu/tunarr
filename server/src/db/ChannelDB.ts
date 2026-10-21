@@ -2,6 +2,7 @@ import type {
   BulkChannelStealthUpdateResult,
   ChannelAndLineup,
   ChannelAndRawLineup,
+  CheckedChannelDeletionResult,
   IChannelDB,
   UpdateChannelLineupRequest,
 } from '@/db/interfaces/IChannelDB.js';
@@ -146,6 +147,12 @@ export class ChannelDB implements IChannelDB {
     blockOnLineupUpdates?: boolean,
   ): Promise<void> {
     return this.basicChannel.deleteChannel(channelId, blockOnLineupUpdates);
+  }
+
+  deleteChannelChecked(
+    channelId: string,
+  ): Promise<CheckedChannelDeletionResult> {
+    return this.basicChannel.deleteChannelChecked(channelId);
   }
 
   // --- ChannelProgramRepository delegation ---
