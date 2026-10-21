@@ -89,13 +89,27 @@ export const TrashPage = () => {
         }
       />
       <PaddedPaper>
-        <Stack direction={'row'}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          alignItems="flex-start"
+        >
           <ToggleButtonGroup
             color="primary"
             value={itemTypes}
             onChange={(_, newTypes) => setItemTypes(newTypes as ProgramType[])}
             aria-label="Platform"
-            sx={{ flexGrow: 1 }}
+            sx={{
+              flexGrow: 1,
+              flexWrap: 'wrap',
+              gap: 1,
+              '& .MuiToggleButtonGroup-grouped': {
+                m: 0,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+              },
+            }}
           >
             <ToggleButton value="movie">
               <Movie sx={{ mr: 1 }} /> <Trans>Movies</Trans>
@@ -114,25 +128,30 @@ export const TrashPage = () => {
               <MusicVideo sx={{ mr: 1 }} /> <Trans>Music Videos</Trans>
             </ToggleButton>
           </ToggleButtonGroup>
-          {isDraining && (
-            <Button
-              disabled={isCancelling}
-              onClick={cancel}
-              variant="outlined"
-              sx={{ mr: 1 }}
-            >
-              <Trans>Cancel</Trans>
-            </Button>
-          )}
-          <Button
-            disabled={isStarting || isDraining}
-            onClick={() => setConfirmingEmpty(true)}
-            startIcon={<Delete />}
-            variant="contained"
-            color="error"
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ flexShrink: 0, alignSelf: { xs: 'flex-end', md: 'auto' } }}
           >
-            <Trans>Empty Trash</Trans>
-          </Button>
+            {isDraining && (
+              <Button
+                disabled={isCancelling}
+                onClick={cancel}
+                variant="outlined"
+              >
+                <Trans>Cancel</Trans>
+              </Button>
+            )}
+            <Button
+              disabled={isStarting || isDraining}
+              onClick={() => setConfirmingEmpty(true)}
+              startIcon={<Delete />}
+              variant="contained"
+              color="error"
+            >
+              <Trans>Empty Trash</Trans>
+            </Button>
+          </Stack>
         </Stack>
         {isDraining && status && (
           <Box sx={{ mt: 2 }}>
