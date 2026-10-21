@@ -3744,6 +3744,61 @@ export type BulkSetChannelStealthResponses = {
 
 export type BulkSetChannelStealthResponse = BulkSetChannelStealthResponses[keyof BulkSetChannelStealthResponses];
 
+export type BulkDeleteChannelsData = {
+    body: {
+        ids: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/channels/bulk/delete';
+};
+
+export type BulkDeleteChannelsErrors = {
+    /**
+     * Default Response
+     */
+    400: {
+        message: string;
+    };
+};
+
+export type BulkDeleteChannelsError = BulkDeleteChannelsErrors[keyof BulkDeleteChannelsErrors];
+
+export type BulkDeleteChannelsResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        results: Array<{
+            id: string;
+            success: true;
+            cleanup: {
+                status: 'succeeded' | 'not_needed';
+            } | {
+                status: 'failed';
+                message: string;
+            };
+        } | {
+            id: string;
+            success: false;
+            statusCode: 404 | 500;
+            message: string;
+            cleanup: {
+                status: 'succeeded' | 'not_needed';
+            } | {
+                status: 'failed';
+                message: string;
+            };
+        }>;
+        refresh: {
+            xmltv: 'succeeded' | 'failed' | 'not_needed';
+            m3u: 'succeeded' | 'failed' | 'not_needed';
+        };
+    };
+};
+
+export type BulkDeleteChannelsResponse = BulkDeleteChannelsResponses[keyof BulkDeleteChannelsResponses];
+
 export type GetApiChannelsByIdProgramsData = {
     body?: never;
     path: {

@@ -47,3 +47,40 @@ later chunks that were never sent.
 
 Existing single-channel endpoints remain available. Filler lists, custom shows
 and smart collections keep their existing individual operations.
+
+## Channel deletion
+
+`POST /api/channels/bulk/delete` accepts `{ "ids": [...] }` with the same
+1–100 distinct UUID validation and ordered per-item results. Deletions run
+sequentially. An individual failure does not prevent later IDs from being tried.
+
+Every item also includes a `cleanup` result:
+
+```json
+{
+  "results": [
+    {
+      "id": "e08f348e-3df1-44f3-833b-68e93cb98593",
+      "success": true,
+      "cleanup": {
+        "status": "failed",
+        "message": "Unable to remove channel redirects"
+      }
+    }
+  ],
+  "refresh": { "xmltv": "succeeded", "m3u": "succeeded" }
+}
+```
+
+Here the channel was deleted, but redirect cleanup failed. `success: true`
+means the channel-row removal committed; it does not promise that every later
+cleanup or publication succeeded. Cleanup uses `succeeded`, `failed` with a
+safe message, or `not_needed` when no cleanup was necessary. A pre-commit
+database failure reports a failed item and any separate lineup-restoration
+failure. SQLite and lineup files are not one atomic transaction.
+
+After at least one committed deletion, XMLTV and M3U are each refreshed once,
+independently. When nothing is deleted, both report `not_needed`. A cleanup or
+publication failure is not a reason to automatically replay deletion. After a
+lost response, refetch and distinguish unknown from unattempted channels as
+described above. Existing single-channel deletion remains compatible.
