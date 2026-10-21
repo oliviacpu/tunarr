@@ -1,6 +1,7 @@
 import { zip } from 'lodash-es';
 import { describe, expect, it, vi } from 'vitest';
 import { v4 } from 'uuid';
+import { anything, instance, mock, when } from 'ts-mockito';
 import type { ChannelOrm } from '../db/schema/Channel.ts';
 import type { Lineup, LineupItem } from '../db/derived_types/Lineup.ts';
 import type {
@@ -1425,4 +1426,233 @@ describe('TVGuideService XMLTV writes reuse unchanged channels', () => {
     expect(t.fetchedIds(2)).toEqual(['program-a', 'program-b']);
     expect(t.reused(2)).toEqual([]);
   });
+});
+
+describe('TVGuideService batch cache publication', () => {
+  type ServiceDeps = ConstructorParameters<typeof TVGuideService>;
+
+  function setup() {
+    const a = makeChannelWithLineup({ number: 1, name: 'A' });
+    const b = makeChannelWithLineup({ number: 2, name: 'B' });
+    const channels = new Map(
+      [a, b].map((entry) => [entry.channel.uuid, entry]),
+    );
+    const write = vi
+      .fn<
+        (
+          entries: MaterializedChannelPrograms[],
+          options?: XmlTvWriteOptions,
+        ) => Promise<void>
+      >()
+      .mockResolvedValue(undefined);
+    const loadAllLineups = vi.fn(() =>
+      Promise.resolve(Object.fromEntries(channels)),
+    );
+    const getChannelOrm = vi.fn((id: string) =>
+      Promise.resolve(channels.get(id)?.channel),
+    );
+    const writer = mock<ServiceDeps[0]>();
+    when(writer.write(anything(), anything())).thenCall(
+      (entries: MaterializedChannelPrograms[], options?: XmlTvWriteOptions) =>
+        write(entries, options),
+    );
+    const channelDB = mock<ServiceDeps[2]>();
+    when(channelDB.loadAllLineups()).thenCall(() => loadAllLineups());
+    when(channelDB.getChannelOrm(anything())).thenCall((id: string) =>
+      getChannelOrm(id),
+    );
+    const programDB = mock<ServiceDeps[3]>();
+    when(programDB.getGuideProgramsByIds(anything(), anything())).thenResolve(
+      [],
+    );
+    const service = new TVGuideService(
+      instance(writer),
+      instance(mock<ServiceDeps[1]>()),
+      instance(channelDB),
+      instance(programDB),
+      {} as ServiceDeps[4],
+      {
+        featureFlags: () => ({ xmltvCreditImagesEnabled: false }),
+        xmlTvSettings: () => ({ programmingHours: 4 }),
+      } as ServiceDeps[5],
+      {} as ServiceDeps[6],
+      {} as ServiceDeps[7],
+      {} as ServiceDeps[8],
+    );
+    return { service, a, b, channels, write, loadAllLineups, getChannelOrm };
+  }
+
+  it('updates a metadata batch once without replacing its programs', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    const previous = await t.service.get();
+    const programs = previous[t.a.channel.uuid]?.programs;
+    for (const entry of t.channels.values()) {
+      entry.channel = { ...entry.channel, stealth: true };
+    }
+    t.write.mockClear();
+
+    await t.service.updateCachedChannels([t.a.channel.uuid, t.b.channel.uuid]);
+
+    expect(t.write).toHaveBeenCalledTimes(1);
+    expect(
+      t.write.mock.lastCall?.[0].map(({ channel }) => channel.stealth),
+    ).toEqual([true, true]);
+    expect((await t.service.get())[t.a.channel.uuid]?.programs).toBe(programs);
+  });
+
+  it('removes a deletion batch and publishes once', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    t.write.mockClear();
+
+    await t.service.removeCachedChannels([t.a.channel.uuid, t.b.channel.uuid]);
+
+    expect(t.write).toHaveBeenCalledExactlyOnceWith([], expect.anything());
+  });
+
+  it('does not publish empty batches', async () => {
+    const t = setup();
+    await t.service.updateCachedChannels([]);
+    await t.service.removeCachedChannels([]);
+    expect(t.write).not.toHaveBeenCalled();
+    expect(t.getChannelOrm).not.toHaveBeenCalled();
+  });
+
+  it('reports unavailable guide metadata instead of claiming publication', async () => {
+    const t = setup();
+    await expect(
+      t.service.updateCachedChannels([t.a.channel.uuid]),
+    ).rejects.toThrow('not cached');
+    await expect(
+      t.service.removeCachedChannels([t.a.channel.uuid]),
+    ).rejects.toThrow('not cached');
+    expect(t.write).not.toHaveBeenCalled();
+
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    t.write.mockClear();
+    const uncached = makeChannelWithLineup();
+    t.channels.set(uncached.channel.uuid, uncached);
+    await expect(
+      t.service.updateCachedChannels([t.a.channel.uuid, uncached.channel.uuid]),
+    ).rejects.toThrow('not cached');
+    await expect(t.service.updateCachedChannels([v4()])).rejects.toThrow(
+      'no longer available',
+    );
+    expect(t.write).not.toHaveBeenCalled();
+  });
+
+  it('publishes deletions even if the ID is already absent from the cache', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    t.write.mockClear();
+
+    await t.service.removeCachedChannels([v4()]);
+
+    expect(t.write).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates XMLTV failure and permits the next publication', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    t.write.mockRejectedValueOnce(new Error('XMLTV disk failure'));
+
+    await expect(
+      t.service.updateCachedChannels([t.a.channel.uuid]),
+    ).rejects.toThrow('XMLTV disk failure');
+    t.write.mockRejectedValueOnce(new Error('XMLTV deletion failure'));
+    await expect(
+      t.service.removeCachedChannels([t.a.channel.uuid]),
+    ).rejects.toThrow('XMLTV deletion failure');
+    await t.service.updateCachedChannels([t.b.channel.uuid]);
+
+    expect(
+      t.write.mock.lastCall?.[0].map(({ channel }) => channel.uuid),
+    ).toEqual([t.b.channel.uuid]);
+  });
+
+  it('retries publication after deleting every cached channel fails', async () => {
+    const t = setup();
+    await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+    t.write.mockClear();
+    t.write.mockRejectedValueOnce(new Error('XMLTV deletion failure'));
+    const channelIds = [t.a.channel.uuid, t.b.channel.uuid];
+
+    await expect(t.service.removeCachedChannels(channelIds)).rejects.toThrow(
+      'XMLTV deletion failure',
+    );
+    expect(t.write).toHaveBeenCalledExactlyOnceWith([], expect.anything());
+
+    await t.service.removeCachedChannels(channelIds);
+
+    expect(t.write).toHaveBeenCalledTimes(2);
+    expect(t.write.mock.lastCall?.[0]).toEqual([]);
+    expect(t.loadAllLineups).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['update', 'remove'] as const)(
+    'a scheduled build cannot restore stale state after batch %s',
+    async (operation) => {
+      const t = setup();
+      await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+      t.write.mockClear();
+      // Park after the scheduled build snapshots the old channel objects,
+      // before it can replace the cache entries.
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<Record<string, typeof t.a>>();
+      const oldLineups = Object.fromEntries(t.channels);
+      t.loadAllLineups.mockImplementationOnce(() => {
+        entered.resolve();
+        return release.promise;
+      });
+      const scheduled = t.service.buildAllChannels(
+        dayjs.duration({ hours: 4 }),
+        true,
+      );
+      await entered.promise;
+      if (operation === 'update') {
+        t.channels.set(t.a.channel.uuid, {
+          ...t.a,
+          channel: { ...t.a.channel, stealth: true },
+        });
+      } else {
+        t.channels.delete(t.a.channel.uuid);
+      }
+      const publication =
+        operation === 'update'
+          ? t.service.updateCachedChannels([t.a.channel.uuid])
+          : t.service.removeCachedChannels([t.a.channel.uuid]);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      release.resolve(oldLineups);
+      await Promise.all([scheduled, publication]);
+
+      expect(t.write).toHaveBeenCalledTimes(2);
+      const last = t.write.mock.lastCall?.[0];
+      if (operation === 'update') {
+        expect(
+          last?.find(({ channel }) => channel.uuid === t.a.channel.uuid)
+            ?.channel.stealth,
+        ).toBe(true);
+      } else {
+        expect(last?.map(({ channel }) => channel.uuid)).toEqual([
+          t.b.channel.uuid,
+        ]);
+      }
+      // A later scheduled build reads committed rows, too.
+      await t.service.buildAllChannels(dayjs.duration({ hours: 4 }), true);
+      expect(
+        t.write.mock.lastCall?.[0].map(({ channel }) => [
+          channel.uuid,
+          channel.stealth,
+        ]),
+      ).toEqual(
+        operation === 'update'
+          ? [
+              [t.a.channel.uuid, true],
+              [t.b.channel.uuid, false],
+            ]
+          : [[t.b.channel.uuid, false]],
+      );
+    },
+  );
 });

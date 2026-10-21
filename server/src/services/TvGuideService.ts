@@ -166,6 +166,7 @@ export class TVGuideService {
   private eventService: EventService;
   private programConverter: ProgramConverter;
   private cachedGuide: Record<ChannelId, ChannelPrograms>;
+  private cachedGuideInitialized = false;
   private runningXmlTvWrite?: Promise<void>;
   private queuedXmlTvWrite?: Promise<void>;
   // Each channel's programmes as the last XMLTV write rendered them, and what
@@ -245,6 +246,7 @@ export class TVGuideService {
       if (isEmpty(this.channelsById)) {
         const placeholderChannel = await this.makePlaceholderChannel();
         this.cachedGuide[placeholderChannel.channel.uuid] = placeholderChannel;
+        this.cachedGuideInitialized = true;
       } else {
         delete this.cachedGuide[PlaceholderChannelId];
         await Promise.all(
@@ -389,6 +391,34 @@ export class TVGuideService {
     return await this.writeXmlTv();
   }
 
+  async updateCachedChannels(channelIds: string[]): Promise<void> {
+    if (channelIds.length === 0) {
+      return;
+    }
+
+    // A scheduled build may still hold channel objects from before the commit.
+    await this.guideBuildLock.runExclusive(async () => {
+      const channels = await Promise.all(
+        uniq(channelIds).map((id) => this.channelDB.getChannelOrm(id)),
+      );
+      const updates: { guide: ChannelPrograms; channel: ChannelOrm }[] = [];
+      for (const channel of channels) {
+        if (isNil(channel)) {
+          throw new Error('Updated channel is no longer available');
+        }
+        const cachedLineup = this.cachedGuide[channel.uuid];
+        if (cachedLineup === undefined) {
+          throw new Error('Updated channel guide is not cached');
+        }
+        updates.push({ guide: cachedLineup, channel });
+      }
+      for (const { guide, channel } of updates) {
+        guide.channel = channel;
+      }
+      await this.writeXmlTv();
+    });
+  }
+
   /**
    * Removes a deleted channel from the cached guide and rewrites the XMLTV
    * file immediately. This mirrors updateCachedChannel but for deletion.
@@ -401,6 +431,26 @@ export class TVGuideService {
     delete this.currentEndTime[channelId];
 
     return await this.writeXmlTv();
+  }
+
+  async removeCachedChannels(channelIds: string[]): Promise<void> {
+    if (channelIds.length === 0) {
+      return;
+    }
+
+    await this.guideBuildLock.runExclusive(async () => {
+      if (!this.cachedGuideInitialized) {
+        throw new Error('Channel guide is not cached');
+      }
+      for (const channelId of channelIds) {
+        delete this.cachedGuide[channelId];
+        delete this.lastUpdateTime[channelId];
+        delete this.lastEndTime[channelId];
+        delete this.currentUpdateTime[channelId];
+        delete this.currentEndTime[channelId];
+      }
+      await this.writeXmlTv();
+    });
   }
 
   /**
@@ -1094,6 +1144,7 @@ export class TVGuideService {
           async () => {
             this.cachedGuide[channelId] =
               await this.buildGuideInternal(channelId);
+            this.cachedGuideInitialized = true;
             if (writeXmlTv && !this.channelsById![channelId]!.channel.stealth) {
               await this.writeXmlTv();
             }

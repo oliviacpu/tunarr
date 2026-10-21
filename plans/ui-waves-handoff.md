@@ -1,5 +1,22 @@
 # UI waves: handoff for whoever continues (2026-10-20)
 
+## Current continuation: C7 batching approved (2026-10-21)
+
+Olivia explicitly authorized C7b/C7c implementation on 2026-10-21. The approved scope is
+`plans/channel-update-and-bulk-followups-2026-10-20.md`: bounded stealth/deletion routes,
+truthful per-item outcomes, separate cleanup/publication warnings, sequential client chunks,
+and no automatic retry after a lost mutation response. Use fresh scoped agents and separately
+reviewed PRs for shared publication prerequisites, stealth API/client, and deletion API/client.
+New bulk list endpoints remain deferred. Historical held statements below describe earlier decisions.
+
+S5 and screenshot/docs closeout are deployed as `oliviacpu-2026.10.21` from `bab8e528`.
+The guarded Whatbox deployment became ready in 18 seconds. Paired backup, candidate 82-migration
+and prior-image 81-migration restore rehearsals passed; live data/settings/schedules, exact image
+identity, authenticated APIs/assets, bounded HLS and Plex guide refresh passed. Only the owned
+update pause was cleared. The full observed result is in the release notes and closing PR #165.
+Apple TV acceptance remains manual and unverified. C7 changes require their own later release;
+this authorization does not itself deploy them.
+
 This is the self-contained resume point for the work planned in
 `plans/ui-primitives-and-settings-audit-2026-10-19.md` ("the plan"). It is written so a new Claude
 session, Codex, or a person can continue without the previous session's memory. Read the plan's

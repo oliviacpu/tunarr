@@ -37,7 +37,9 @@ export class M3uService {
   /**
    * Get the channel list in HLS or M3U
    */
-  private async getChannelsM3UInternal(): Promise<string> {
+  private async getChannelsM3UInternal(
+    propagateWriteErrors: boolean = false,
+  ): Promise<string> {
     devAssert(M3uService.lock.isLocked());
 
     const cachedM3U = await attempt(() =>
@@ -77,6 +79,9 @@ export class M3uService {
     try {
       await this.fileCacheService.setCache(M3uService.cacheKey, data);
     } catch (err) {
+      if (propagateWriteErrors) {
+        throw err;
+      }
       this.#logger.error(err, 'Unable to set file cache for channels.m3u');
     }
 
@@ -106,6 +111,13 @@ export class M3uService {
     await M3uService.lock.runExclusive(async () => {
       await this.fileCacheService.deleteCache(M3uService.cacheKey);
       await this.getChannelsM3UInternal();
+    });
+  }
+
+  async regenerateCacheChecked(): Promise<void> {
+    await M3uService.lock.runExclusive(async () => {
+      await this.fileCacheService.deleteCache(M3uService.cacheKey);
+      await this.getChannelsM3UInternal(true);
     });
   }
 }
