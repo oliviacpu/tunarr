@@ -1,6 +1,6 @@
 # UI waves: handoff for whoever continues (2026-10-20)
 
-## Current continuation: C7 batching approved (2026-10-21)
+## Current continuation: C7 batching source closeout (2026-10-21)
 
 Olivia explicitly authorized C7b/C7c implementation on 2026-10-21. The approved scope is
 `plans/channel-update-and-bulk-followups-2026-10-20.md`: bounded stealth/deletion routes,
@@ -8,6 +8,25 @@ truthful per-item outcomes, separate cleanup/publication warnings, sequential cl
 and no automatic retry after a lost mutation response. Use fresh scoped agents and separately
 reviewed PRs for shared publication prerequisites, stealth API/client, and deletion API/client.
 New bulk list endpoints remain deferred. Historical held statements below describe earlier decisions.
+
+The implementation chain is #166 (checked publication), #167/#168 (stealth API/table),
+and #169/#171/#172 (checked deletion, API and table). The final client PR folds their notes into
+`FORK.md`. Both endpoints validate 1–100 distinct UUIDs before writes, report ordered outcomes,
+and separate committed changes from cleanup/publication warnings. Client chunks stop after an
+unconfirmed response without replaying mutations. The API notes and browser gallery are in
+`docs/dev/channel-bulk-actions.md` and `docs/dev/channel-bulk-actions-gallery.md`.
+
+Focused repository/HTTP and client/list regressions, typechecks and both real batch browser
+flows passed. Each PR still lands only after full CI and exact-head review; the final browser
+sweep checks the combined source. This is the last authorized implementation continuation in
+this UI/settings plan. Bulk list endpoints and manual Apple TV acceptance stay separate.
+
+The next release must retain the existing paired-backup, pause ownership, pinned image,
+isolated candidate/restore and guarded Whatbox procedure. C7 adds no migration or settings
+version change: both candidate and prior-image rehearsals must retain the exact same 82-key
+migration ledger, settings version 2 and FFmpeg config version 5, without S5's old 81-to-82
+migration/default allowances. Keep data on the deployment host and record observed deployment
+results afterward. C7 has not been released or deployed by this source closeout.
 
 S5 and screenshot/docs closeout are deployed as `oliviacpu-2026.10.21` from `bab8e528`.
 The guarded Whatbox deployment became ready in 18 seconds. Paired backup, candidate 82-migration

@@ -1,7 +1,0 @@
-### Checked publication for batched channel changes (2026-10-21, PR #166)
-
-- **What you saw:** Code inspection found that channel bulk actions refreshed derived files once per selected channel. The existing M3U write path logs disk failures instead of reporting them, and a missing disk cache file can leave a stale in-memory playlist.
-- **Cause:** Single-channel refresh methods provide no bounded multi-channel publication operation, and cache invalidation depends on disk-file existence.
-- **Fix:** Add serialized multi-channel XMLTV update/removal operations and a checked M3U refresh for the separately approved C7b/C7c routes. Checked callers receive publication failures; uninitialized guide state fails explicitly, while a legitimately emptied guide can retry a failed publication. Clear stale memory independently of disk-file existence and publish cache files through the existing atomic-write helper, and populate memory only after a successful disk write. Existing single-channel refresh paths remain compatible. This prerequisite adds no batch route or UI itself.
-- **Tests:** Focused guide/cache tests cover overlapping scheduled builds, empty inputs, missing cache state, XMLTV failure, real disk write/unlink failures, recovery after partially written output fails, and stale memory after a missing disk file. Build and changed-file lint pass.
-- **Upstream:** Fork continuation of the channel batching design in `plans/channel-update-and-bulk-followups-2026-10-20.md`, authorized by Olivia Hunter on 2026-10-21.

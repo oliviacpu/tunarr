@@ -350,6 +350,10 @@ as a pair and rehearse restoring both with the prior image through the existing 
 
 ### C7 continuation: batching approved (2026-10-21)
 
+Implementation is split across #166–#169, #171 and #172, with API notes and a seeded
+browser gallery in `docs/dev/`. #172 supplies the final client and folds the source notes;
+release/deployment remains separate. No additional implementation row is authorized here.
+
 `plans/channel-update-and-bulk-followups-2026-10-20.md` proposes three separate rows beyond
 the original C7 UI scope: C7a preserves omitted channel relations; C7b batches stealth changes;
 C7c batches channel deletion. Olivia Hunter approved C7a only on 2026-10-20 while reviewing
