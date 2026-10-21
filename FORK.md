@@ -58,7 +58,7 @@ Upstream's own documentation, `CLAUDE.md` and `AGENTS.md` still apply.
 - **Tests:** Helper/page/legacy bulk suites cover chunking, mixed results, stale selection names, busy state, exact single invalidation/refetch and no retry after lost or malformed responses. A real seeded browser hide/show/reload case verifies M3U output, unchanged channel data and no whole-channel writes; before/after captures are in `docs/dev/channel-bulk-actions-gallery.md`.
 - **Upstream:** C7b in the approved `plans/channel-update-and-bulk-followups-2026-10-20.md`; no migration or dependency added.
 
-### Batched channel visibility API (2026-10-21, PR pending)
+### Batched channel visibility API (2026-10-21, PR #167)
 
 - **What you saw:** Code inspection found that hiding selected channels fetched and replaced whole channel objects and refreshed XMLTV/M3U for each channel.
 - **Cause:** The existing channel update route accepts the whole editable channel, and the bulk table has no dedicated visibility operation.
