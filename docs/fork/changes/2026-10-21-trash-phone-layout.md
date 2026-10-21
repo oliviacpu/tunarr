@@ -1,4 +1,4 @@
-### Keep Trash filters and actions reachable on phones (2026-10-21)
+### Keep Trash filters and actions reachable on phones (2026-10-21, PR #160)
 
 - **What you saw:** the local seeded Trash page expanded to 605px at a 390px viewport, clipping later media-type filters and Empty Trash.
 - **Cause:** all five labeled filters and the action buttons shared one unwrapped row.
