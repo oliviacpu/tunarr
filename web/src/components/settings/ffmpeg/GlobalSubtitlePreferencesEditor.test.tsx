@@ -23,7 +23,6 @@ function Editor({
 function option(name: string) {
   return within(screen.getByRole('listbox')).getByRole('option', {
     name,
-    exact: true,
   });
 }
 
