@@ -1,4 +1,4 @@
-### Batched channel visibility controls (2026-10-21, PR pending)
+### Batched channel visibility controls (2026-10-21, PR #168)
 
 - **What you saw:** The Channels table sent one full-channel update per selected visibility change, with repeated derived-file work.
 - **Cause:** The bulk control used the single-channel GET/PUT flow and could not distinguish committed changes from a lost batch response or a failed publication.
