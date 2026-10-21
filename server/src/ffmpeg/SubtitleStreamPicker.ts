@@ -1,3 +1,4 @@
+import type { GlobalSubtitlePreference } from '@tunarr/types/schemas';
 import { orderBy } from 'lodash-es';
 import path from 'path';
 import type { NonEmptyArray } from 'ts-essentials';
@@ -32,6 +33,58 @@ export class SubtitleStreamPicker {
       CacheFolderName,
       SubtitlesCacheFolderName,
     );
+  }
+
+  static async pickInheritedSubtitles(
+    preferences: GlobalSubtitlePreference[],
+    lineupItem: ContentBackedStreamLineupItem,
+    subtitleStreams: NonEmptyArray<SubtitleStreamDetails>,
+    opts: { textOnly?: boolean } = {},
+  ): Promise<Maybe<SubtitleStreamDetails>> {
+    const streams = opts.textOnly
+      ? subtitleStreams.filter((stream) => !isImageBasedSubtitle(stream.codec))
+      : subtitleStreams;
+
+    for (const preference of preferences) {
+      if (preference.filter === 'none') {
+        continue;
+      }
+
+      for (const stream of streams) {
+        const language =
+          stream.languageCodeISO6392 ??
+          stream.languageCodeISO6391 ??
+          stream.language;
+        if (
+          !LanguageService.codesMatch(language, preference.languageCode) ||
+          (preference.filter === 'forced' && !stream.forced) ||
+          (preference.filter === 'default' && !stream.default) ||
+          (!preference.allowExternal && stream.type === 'external') ||
+          (!preference.allowImageBased && isImageBasedSubtitle(stream.codec))
+        ) {
+          continue;
+        }
+
+        if (
+          !opts.textOnly &&
+          stream.type === 'embedded' &&
+          !isImageBasedSubtitle(stream.codec)
+        ) {
+          const extracted = await this.getSubtitleDetailsWithExtractedPath(
+            lineupItem,
+            stream,
+          );
+          if (extracted !== undefined) {
+            return extracted;
+          }
+          continue;
+        }
+
+        return stream;
+      }
+    }
+
+    return;
   }
 
   static async pickSubtitles(

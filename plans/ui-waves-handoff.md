@@ -6,6 +6,20 @@ session, Codex, or a person can continue without the previous session's memory. 
 "Approval gate" paragraph, the row you are about to work on, and this file's "Working rules" before
 starting anything.
 
+## S5b stream selection (2026-10-21)
+
+S5b resolves current global subtitle preferences for inheriting channels. The new `by_preferences`
+action preserves every row's filter and flags; its shared picker is also used by direct output and
+inherited-action diagnostics. Empty globals/custom rows keep their existing path-specific fallback,
+and custom conversion and explicit profile precedence are unchanged. Direct output filters images
+before choosing a text track and retains its existing embedded-text passthrough behavior. Preferences
+do not enable subtitles or other capabilities. Timing metadata now includes subtitle preferences.
+
+The diagnostic test transcode still constructs HLS output regardless of the channel's configured
+stream mode; this preexisting scope limitation is not changed here. S5c is next: global/channel UI,
+retained custom drafts, resolved previews and responsive/theme captures. Production remains `.20.5`;
+source changes require the later paired-backup migration release procedure. C7 batching is held.
+
 ## S5a persistence and compatibility (2026-10-21)
 
 S5 implementation is now authorized within the design approved in #114. S5a stores global

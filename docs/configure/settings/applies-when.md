@@ -25,6 +25,7 @@ Browser preferences apply as they change. The server address is stored in this b
 | Embedded subtitle extraction | Live | Enabling starts an extraction run immediately. Disabling is checked before each queued program; an extraction already running can finish. |
 | HDHomeRun closed captions | Next session | Caption delivery is fixed when an HLS session starts. Stop all viewers of the channel and tune in again to change it. |
 | Caption alignment, appearance and test pattern | Next program | The next program pipeline reads the saved caption style and test pattern. A program already transcoding keeps its captions. |
+| Global subtitle preferences | Next program | Future stream selections on inheriting channels use the saved subtitle preferences. A program already streaming keeps its selected subtitles. |
 | Audio language preferences | Next program | The next program pipeline selects audio using the saved language preferences. |
 | Transcode configurations | Next session | Active HLS sessions retain their channel transcode configuration. Stop all viewers of the channel and tune in again to use an edited configuration. |
 | Guide settings | Live | Saving reschedules guide refreshes and rebuilds the guide immediately using the saved settings. |

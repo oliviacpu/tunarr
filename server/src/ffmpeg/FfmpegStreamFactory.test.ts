@@ -5,6 +5,8 @@ import type {
   ReadableFfmpegSettings,
 } from '@/db/interfaces/ISettingsDB.ts';
 import type { ChannelOrm } from '@/db/schema/Channel.ts';
+import type { ChannelSubtitlePreferences } from '@/db/schema/SubtitlePreferences.ts';
+import type { GlobalSubtitlePreference } from '@tunarr/types/schemas';
 import type { TranscodeConfigOrm } from '@/db/schema/TranscodeConfig.ts';
 import type { OutputFormat } from '@/ffmpeg/builder/constants.ts';
 import {
@@ -2681,6 +2683,166 @@ describe('FfmpegStreamFactory', () => {
 
     describe('passthrough mode (remux / HlsDirectV2)', () => {
       const hlsDirectV2Format = HlsDirectOutputFormat(defaultHlsOptions);
+
+      const globalPreference: GlobalSubtitlePreference = {
+        languageCode: 'eng',
+        filter: 'any',
+        allowExternal: true,
+        allowImageBased: true,
+      };
+      const customPreference: ChannelSubtitlePreferences = {
+        uuid: 'pref',
+        channelId: 'channel-uuid',
+        languageCode: 'fra',
+        priority: 0,
+        filterType: 'any',
+        allowExternal: true,
+        allowImageBased: true,
+      };
+      const frenchStream: SubtitleStreamDetails = {
+        ...textSubtitleStream,
+        default: false,
+        languageCodeISO6392: 'fra',
+        title: 'French',
+      };
+
+      async function runPreferenceSelection(opts: {
+        mode?: 'inherit' | 'custom';
+        globals?: GlobalSubtitlePreference[];
+        custom?: ChannelSubtitlePreferences[];
+        streams?: NonEmptyArray<SubtitleStreamDetails>;
+        enabled?: boolean;
+      }) {
+        const capturing = createCapturingPipelineBuilderFactory();
+        const settingsDB = makeMockSettingsDB(makeFfmpegSettings());
+        const channelDB = makeMockChannelDB();
+        vi.mocked(channelDB.getChannelSubtitlePreferences).mockResolvedValue(
+          opts.custom ?? [],
+        );
+        const sut = new FfmpegStreamFactory(
+          makeMockFfmpegInfo(),
+          settingsDB,
+          capturing.factory,
+          channelDB,
+          makeMockFeatureFlagService(),
+          makeMockStreamSelector(),
+          makeTranscodeConfig(),
+          makeChannel({
+            subtitlesEnabled: opts.enabled ?? true,
+            subtitlePreferenceMode: opts.mode ?? 'inherit',
+          }),
+        );
+        // A settings save after factory creation must affect the next selection.
+        vi.mocked(settingsDB.ffmpegSettings).mockReturnValue({
+          ...makeFfmpegSettings(),
+          subtitlePreferences: opts.globals ?? [],
+        });
+        const details = makeStreamDetails();
+        details.subtitleDetails = opts.streams ?? [
+          textSubtitleStream,
+          frenchStream,
+        ];
+        const result = await sut.createStreamSession({
+          stream: {
+            source: new HttpStreamSource('http://example.com/video.ts'),
+            details,
+          },
+          options: {
+            startTime: dayjs.duration(0),
+            duration: dayjs.duration({ seconds: 30 }),
+            outputFormat: hlsDirectV2Format,
+            ptsOffset: 0,
+            realtime: true,
+            streamMode: 'hls',
+          },
+          lineupItem: makeLineupItem(),
+        });
+        return {
+          rendition: result?.renditions.subtitle,
+          input: capturing.getCapturedSubtitleInput(),
+        };
+      }
+
+      test('reads current inherited preferences and ignores retained custom rows', async () => {
+        const result = await runPreferenceSelection({
+          globals: [{ ...globalPreference, languageCode: 'fra' }],
+          custom: [{ ...customPreference, languageCode: 'eng' }],
+        });
+        expect(result.rendition?.language).toBe('fra');
+        expect(result.input?.method).toBe(SubtitleMethods.Convert);
+      });
+
+      test('inherits only text tracks, searching beyond an image match', async () => {
+        const result = await runPreferenceSelection({
+          globals: [globalPreference],
+          streams: [imageSubtitleStream, textSubtitleStream],
+        });
+        expect(result.rendition?.title).toBe('English SRT');
+      });
+
+      test.each(['none', 'forced'] as const)(
+        'does not default when inherited %s rows fail',
+        async (filter) => {
+          const result = await runPreferenceSelection({
+            globals: [{ ...globalPreference, filter }],
+          });
+          expect(result.rendition).toBeUndefined();
+          expect(result.input).toBeNull();
+        },
+      );
+
+      test('does not default when inherited language has no match', async () => {
+        const result = await runPreferenceSelection({
+          globals: [{ ...globalPreference, languageCode: 'jpn' }],
+        });
+        expect(result.rendition).toBeUndefined();
+      });
+
+      test.each([
+        { mode: 'inherit' as const, custom: [customPreference] },
+        { mode: 'custom' as const, custom: [] },
+      ])(
+        'keeps default-or-first fallback for empty effective lists ($mode)',
+        async ({ mode, custom }) => {
+          const result = await runPreferenceSelection({
+            mode,
+            custom,
+            globals:
+              mode === 'custom'
+                ? [{ ...globalPreference, languageCode: 'jpn' }]
+                : [],
+            streams: [frenchStream, { ...textSubtitleStream, default: false }],
+          });
+          expect(result.rendition?.language).toBe('fra');
+        },
+      );
+
+      test('keeps custom selection independent of global preferences', async () => {
+        const result = await runPreferenceSelection({
+          mode: 'custom',
+          custom: [customPreference],
+          globals: [globalPreference],
+        });
+        expect(result.rendition?.language).toBe('fra');
+      });
+
+      test('keeps custom all-none rows from falling through to globals', async () => {
+        const result = await runPreferenceSelection({
+          mode: 'custom',
+          custom: [{ ...customPreference, filterType: 'none' }],
+          globals: [globalPreference],
+        });
+        expect(result.rendition).toBeUndefined();
+      });
+
+      test('keeps disabled subtitles disabled with matching globals', async () => {
+        const result = await runPreferenceSelection({
+          enabled: false,
+          globals: [globalPreference],
+        });
+        expect(result.rendition).toBeUndefined();
+        expect(result.input).toBeNull();
+      });
 
       test('uses sidecar (Convert) for text-based subtitles', async () => {
         const config = makeTranscodeConfig();

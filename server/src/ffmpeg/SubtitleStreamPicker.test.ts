@@ -1,3 +1,5 @@
+import type { GlobalSubtitlePreference } from '@tunarr/types/schemas';
+import type { NonEmptyArray } from 'ts-essentials';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ContentBackedStreamLineupItem } from '../db/derived_types/StreamLineup.ts';
 import type { ChannelSubtitlePreferences } from '../db/schema/SubtitlePreferences.ts';
@@ -167,5 +169,219 @@ describe('SubtitleStreamPicker language matching', () => {
     );
 
     expect(result?.index).toBe(2);
+  });
+});
+
+describe('SubtitleStreamPicker inherited preferences', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function preference(
+    overrides: Partial<GlobalSubtitlePreference> = {},
+  ): GlobalSubtitlePreference {
+    return {
+      languageCode: 'eng',
+      filter: 'any',
+      allowExternal: true,
+      allowImageBased: true,
+      ...overrides,
+    };
+  }
+
+  function subtitle(
+    overrides: Partial<SubtitleStreamDetails> = {},
+  ): SubtitleStreamDetails {
+    return {
+      type: 'external',
+      codec: 'subrip',
+      index: 1,
+      default: false,
+      forced: false,
+      sdh: false,
+      languageCodeISO6392: 'eng',
+      path: '/subs/en.srt',
+      ...overrides,
+    };
+  }
+
+  it.each([
+    { languageCodeISO6392: 'ger' },
+    { languageCodeISO6392: undefined, languageCodeISO6391: 'de' },
+    { languageCodeISO6392: undefined, language: 'German' },
+  ])('matches language aliases from stream tags: %o', async (tags) => {
+    const stream = subtitle(tags);
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference({ languageCode: 'deu' })],
+        makeLineupItem(),
+        [stream],
+      ),
+    ).toBe(stream);
+  });
+
+  it("uses each row's filter and external/image flags independently", async () => {
+    const streams: NonEmptyArray<SubtitleStreamDetails> = [
+      subtitle({ languageCodeISO6392: 'deu', forced: true }),
+      subtitle({
+        languageCodeISO6392: 'deu',
+        type: 'embedded',
+        codec: 'pgs',
+        forced: true,
+      }),
+      subtitle({ index: 3, forced: true }),
+      subtitle({ index: 4, default: true }),
+    ];
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [
+          preference({
+            languageCode: 'deu',
+            filter: 'forced',
+            allowExternal: false,
+            allowImageBased: false,
+          }),
+          preference({ filter: 'default' }),
+        ],
+        makeLineupItem(),
+        streams,
+      ),
+    ).toBe(streams[3]);
+  });
+
+  it('preserves row order before stream order', async () => {
+    const streams: NonEmptyArray<SubtitleStreamDetails> = [
+      subtitle({ languageCodeISO6392: 'deu' }),
+      subtitle({ index: 2 }),
+    ];
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference(), preference({ languageCode: 'deu' })],
+        makeLineupItem(),
+        streams,
+      ),
+    ).toBe(streams[1]);
+  });
+
+  it.each([
+    { rows: [] },
+    { rows: [preference({ filter: 'none' })] },
+    { rows: [preference({ languageCode: 'jpn' })] },
+  ])(
+    'selects no subtitle without an active matching row: %o',
+    async ({ rows }) => {
+      expect(
+        await SubtitleStreamPicker.pickInheritedSubtitles(
+          rows,
+          makeLineupItem(),
+          [subtitle({ default: true })],
+        ),
+      ).toBeUndefined();
+    },
+  );
+
+  it('skips none rows and does not match untagged streams', async () => {
+    const streams: NonEmptyArray<SubtitleStreamDetails> = [
+      subtitle({ languageCodeISO6392: undefined }),
+      subtitle({ index: 2, languageCodeISO6392: 'deu' }),
+    ];
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference({ filter: 'none' }), preference({ languageCode: 'deu' })],
+        makeLineupItem(),
+        streams,
+      ),
+    ).toBe(streams[1]);
+  });
+
+  it('continues past unextracted embedded text to the next matching stream', async () => {
+    const embedded = subtitle({ type: 'embedded', index: 2 });
+    const external = subtitle({ index: 3 });
+    const extract = vi
+      .spyOn(SubtitleStreamPicker, 'getSubtitleDetailsWithExtractedPath')
+      .mockResolvedValue(undefined);
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference()],
+        makeLineupItem(),
+        [embedded, external],
+      ),
+    ).toBe(external);
+    expect(extract).toHaveBeenCalledWith(makeLineupItem(), embedded);
+  });
+
+  it('continues to a later row when extraction is missing', async () => {
+    vi.spyOn(
+      SubtitleStreamPicker,
+      'getSubtitleDetailsWithExtractedPath',
+    ).mockResolvedValue(undefined);
+    const fallback = subtitle({ languageCodeISO6392: 'deu', index: 3 });
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference(), preference({ languageCode: 'deu' })],
+        makeLineupItem(),
+        [subtitle({ type: 'embedded' }), fallback],
+      ),
+    ).toBe(fallback);
+  });
+
+  it('returns extracted text with its updated path', async () => {
+    const embedded = subtitle({ type: 'embedded', index: 2 });
+    const extracted = subtitle({ index: 0, path: '/cache/extracted.srt' });
+    vi.spyOn(
+      SubtitleStreamPicker,
+      'getSubtitleDetailsWithExtractedPath',
+    ).mockResolvedValue(extracted);
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference({ allowExternal: false })],
+        makeLineupItem(),
+        [embedded],
+      ),
+    ).toBe(extracted);
+  });
+
+  it('allows image subtitles without trying text extraction', async () => {
+    const image = subtitle({ type: 'embedded', codec: 'pgs' });
+    const extract = vi.spyOn(
+      SubtitleStreamPicker,
+      'getSubtitleDetailsWithExtractedPath',
+    );
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference()],
+        makeLineupItem(),
+        [image],
+      ),
+    ).toBe(image);
+    expect(extract).not.toHaveBeenCalled();
+  });
+
+  it('filters images before matching text-only output and uses embedded text directly', async () => {
+    const embedded = subtitle({ type: 'embedded', index: 2 });
+    const extract = vi.spyOn(
+      SubtitleStreamPicker,
+      'getSubtitleDetailsWithExtractedPath',
+    );
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference({ allowExternal: false })],
+        makeLineupItem(),
+        [subtitle({ type: 'embedded', codec: 'pgs' }), embedded],
+        { textOnly: true },
+      ),
+    ).toBe(embedded);
+    expect(extract).not.toHaveBeenCalled();
+  });
+
+  it('selects no subtitle when text-only output has only images', async () => {
+    expect(
+      await SubtitleStreamPicker.pickInheritedSubtitles(
+        [preference()],
+        makeLineupItem(),
+        [subtitle({ type: 'embedded', codec: 'pgs' })],
+        { textOnly: true },
+      ),
+    ).toBeUndefined();
   });
 });

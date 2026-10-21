@@ -1,6 +1,6 @@
 import type { IProgramDB } from '@/db/interfaces/IProgramDB.js';
 
-import type { StreamLineupItem } from '@/db/derived_types/StreamLineup.js';
+import type { ContentBackedStreamLineupItem } from '@/db/derived_types/StreamLineup.js';
 import type { LanguageTaggedStream } from '@/ffmpeg/StreamSelectionEvaluator.js';
 import {
   buildCelContext,
@@ -12,6 +12,7 @@ import {
   HlsOutputFormat,
 } from '@/ffmpeg/builder/constants.js';
 import { FfmpegInfo } from '@/ffmpeg/ffmpegInfo.js';
+import { SubtitleStreamPicker } from '@/ffmpeg/SubtitleStreamPicker.js';
 import { ProgramStreamDetailsFetcher } from '@/stream/ProgramStreamDetailsFetcher.js';
 import type { ProgramStreamResult } from '@/stream/types.js';
 import { isNonEmptyArray } from '@/util/index.js';
@@ -20,6 +21,8 @@ import { getTunarrVersion } from '@/util/version.js';
 import { isNonEmptyString } from '@tunarr/shared/util';
 import type { TroubleshootStreamSelectionTrace } from '@tunarr/types';
 import type {
+  GlobalSubtitlePreference,
+  SubtitleAction,
   TroubleshootRequest,
   TroubleshootResult,
 } from '@tunarr/types/schemas';
@@ -77,6 +80,63 @@ export function findSubtitleForLanguages<T extends LanguageTaggedStream>(
   }
 
   return undefined;
+}
+
+export async function resolveSubtitlePreferenceTrace(
+  preferences: GlobalSubtitlePreference[],
+  subtitleStreams: SubtitleStreamDetails[] | undefined,
+  lineupItem: ContentBackedStreamLineupItem,
+  subtitlesEnabled: boolean,
+): Promise<{ stream: SubtitleStreamDetails | null; reason: string }> {
+  if (!subtitlesEnabled) {
+    return { stream: null, reason: 'Subtitles disabled for channel' };
+  }
+
+  const stream = isNonEmptyArray(subtitleStreams)
+    ? await SubtitleStreamPicker.pickInheritedSubtitles(
+        preferences,
+        lineupItem,
+        subtitleStreams,
+      )
+    : undefined;
+
+  return {
+    stream: stream ?? null,
+    reason: stream
+      ? 'Matched subtitle preference'
+      : 'No available subtitle matched preferences',
+  };
+}
+
+export function describeSubtitleAction(action: SubtitleAction): string {
+  switch (action.type) {
+    case 'disable':
+      return 'Disable subtitles';
+    case 'by_preferences':
+      return `Select subtitles by ordered preferences: [${action.preferences
+        .map(
+          (preference) =>
+            `${preference.languageCode} (filter: ${preference.filter}, external: ${preference.allowExternal ? 'allowed' : 'disabled'}, image-based: ${preference.allowImageBased ? 'allowed' : 'disabled'})`,
+        )
+        .join('; ')}]`;
+    case 'by_language': {
+      const parts = [
+        `Select subtitles by language: [${action.languages.join(', ')}]`,
+      ];
+      if (action.filterType !== 'any') {
+        parts.push(`filter: ${action.filterType}`);
+      }
+      if (action.allowImageBased === false) {
+        parts.push('no image-based');
+      }
+      if (action.allowExternal === false) {
+        parts.push('no external');
+      }
+      return parts.join(', ');
+    }
+    case 'default':
+      return 'Use default subtitle stream';
+  }
 }
 
 @injectable()
@@ -267,6 +327,15 @@ export class TroubleshootService {
     result.transcodeConfig = transcodeConfigOrmToDto(transcodeConfig);
     result.channelConfig = ormChannelToApiChannel({ channel, lineup });
 
+    const lineupItem: ContentBackedStreamLineupItem = {
+      type: 'program',
+      program: { ...program, mediaSourceId: program.mediaSourceId },
+      duration: program.duration,
+      infiniteLoop: false,
+      programBeginMs: +dayjs(),
+      streamDuration: request.testDurationSeconds * 1000,
+    };
+
     // Stage 4: Stream Selection Trace (diagnostic only — the real stream
     // session will perform its own selection through the same code path)
     try {
@@ -307,7 +376,7 @@ export class TroubleshootService {
             celContext,
           );
           const audioActionDesc = this.describeAudioAction(rule.audioAction);
-          const subtitleActionDesc = this.describeSubtitleAction(
+          const subtitleActionDesc = describeSubtitleAction(
             rule.subtitleAction,
           );
 
@@ -332,6 +401,15 @@ export class TroubleshootService {
               subtitleReason = selectedSubtitle
                 ? 'Default subtitle stream'
                 : 'No default subtitle stream found';
+            } else if (rule.subtitleAction.type === 'by_preferences') {
+              const trace = await resolveSubtitlePreferenceTrace(
+                rule.subtitleAction.preferences,
+                subtitleStreams,
+                lineupItem,
+                channel.subtitlesEnabled === true,
+              );
+              selectedSubtitle = trace.stream;
+              subtitleReason = trace.reason;
             } else {
               selectedSubtitle = null;
               subtitleReason = `No subtitle found for languages: ${rule.subtitleAction.languages.join(', ')}`;
@@ -412,15 +490,6 @@ export class TroubleshootService {
 
       const watermark =
         channel.watermark?.enabled === true ? channel.watermark : undefined;
-
-      const lineupItem: StreamLineupItem = {
-        type: 'program',
-        program: { ...program, mediaSourceId: program.mediaSourceId },
-        duration: program.duration,
-        infiniteLoop: false,
-        programBeginMs: +dayjs(),
-        streamDuration: testDurationMs,
-      };
 
       const hlsOutputFormat = HlsOutputFormat({
         ...defaultHlsOptions,
@@ -590,38 +659,6 @@ export class TroubleshootService {
         return `Select audio by title containing: "${action.titleContains}"`;
       case 'default':
         return 'Use default audio stream';
-      default:
-        return `Unknown action: ${action.type}`;
-    }
-  }
-
-  private describeSubtitleAction(action: {
-    type: string;
-    languages?: string[];
-    filterType?: string;
-    allowImageBased?: boolean;
-    allowExternal?: boolean;
-  }): string {
-    switch (action.type) {
-      case 'disable':
-        return 'Disable subtitles';
-      case 'by_language': {
-        const parts = [
-          `Select subtitles by language: [${action.languages?.join(', ')}]`,
-        ];
-        if (action.filterType && action.filterType !== 'any') {
-          parts.push(`filter: ${action.filterType}`);
-        }
-        if (action.allowImageBased === false) {
-          parts.push('no image-based');
-        }
-        if (action.allowExternal === false) {
-          parts.push('no external');
-        }
-        return parts.join(', ');
-      }
-      case 'default':
-        return 'Use default subtitle stream';
       default:
         return `Unknown action: ${action.type}`;
     }
